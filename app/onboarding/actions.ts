@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import {
   normalizeHexColor,
@@ -14,6 +15,7 @@ import {
 import { acceptReferral } from "@/lib/referrals-server";
 import { isPaidPlan } from "@/lib/billing";
 import { validatePublicContactPhone } from "@/lib/public-contact";
+import { SOURCE_COOKIE, parseSourceCookie } from "@/lib/signup-source";
 
 // Org-seeding helpers (clause library + tenant-message templates) now live in
 // lib/org-seeds-server.ts so the provisioning primitive can reuse them with the
@@ -96,6 +98,17 @@ export async function createOrganization(formData: FormData) {
       ...(phone.ok && phone.value ? { public_contact_phone: phone.value } : {}),
     })
     .eq("id", orgId);
+
+  // S723: where this account came from (first-touch cookie set by middleware,
+  // lib/signup-source.ts). Best-effort; a missing column or cookie never blocks.
+  try {
+    const src = parseSourceCookie(cookies().get(SOURCE_COOKIE)?.value);
+    if (src) {
+      await supabase.from("organizations").update({ signup_source: src }).eq("id", orgId);
+    }
+  } catch {
+    // attribution is optional
+  }
 
   // Seed the starter clause library (best-effort; never blocks onboarding).
   await seedClauseLibrary(supabase, orgId);

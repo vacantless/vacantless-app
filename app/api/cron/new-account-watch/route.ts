@@ -1,3 +1,4 @@
+import { describeSource, parseSourceValue } from "@/lib/signup-source";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
 
   const { data: orgs, error } = await admin
     .from("organizations")
-    .select("id, name, plan, subscription_status, created_at, closed_at")
+    .select("id, name, plan, subscription_status, created_at, closed_at, signup_source")
     .gte("created_at", since)
     .order("created_at", { ascending: false });
   if (error) {
@@ -100,6 +101,7 @@ export async function GET(req: NextRequest) {
       viewingTimes: rules + overrides,
       enquiries,
       bookings,
+      source: describeSource(parseSourceValue(o.signup_source)),
     });
   }
 

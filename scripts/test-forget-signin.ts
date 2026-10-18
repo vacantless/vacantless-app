@@ -24,7 +24,9 @@ ok("account marked as needing a new sign-in",
   body.includes('account_status: "needs_login"') && /from\("distribution_channel_accounts"\)[\s\S]*\.eq\("organization_id", org\.id\)\s*\.eq\("channel", channel\)/.test(body));
 ok("action never trusts an org id from the client", !/organizationId|org_id\s*:/.test(body.split("{")[0]));
 ok("kijiji and zumper are sign-in sites", isSiteSigninChannel("kijiji") && isSiteSigninChannel("zumper"));
-ok("other sites are refused", !isSiteSigninChannel("facebook_page") && !isSiteSigninChannel("rentals_ca") && !isSiteSigninChannel("x"));
+// S717: Rentals.ca signs in from the home runner, so it is a sign-in site too.
+ok("rentals.ca is a sign-in site", isSiteSigninChannel("rentals_ca"));
+ok("other sites are refused", !isSiteSigninChannel("facebook_page") && !isSiteSigninChannel("x"));
 
 const vm = readFileSync("app/dashboard/link-portals/view-model.ts", "utf8");
 ok("tile offers it only with an account, on a sign-in site, with a saved sign-in",

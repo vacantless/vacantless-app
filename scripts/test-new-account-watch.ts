@@ -84,5 +84,13 @@ ok("one real login -> customer", !isOwnTestAccount(["noam+stranger5@royallepage.
 ok("no logins -> not assumed ours", !isOwnTestAccount([]));
 ok("missing email -> customer", !isOwnTestAccount(["nmuscovitch+a@hotmail.com", ""]));
 
+// S723: the source line.
+{
+  const base = { name: "Src", createdAt: new Date().toISOString(), plan: "free", subscriptionStatus: null, closedAt: null, rentals: 1, liveRentals: 1, viewingTimes: 1, enquiries: 1, bookings: 1 };
+  const r = buildWatchRows([{ ...base, id: "src", source: "Google ads (campaign x)" }, { ...base, id: "nosrc" }], new Date(), new Set());
+  ok("source shown", r.find((x) => x.id === "src")?.line.endsWith("Came from: Google ads (campaign x).") === true);
+  ok("no source, no line", r.find((x) => x.id === "nosrc")?.line.includes("Came from") === false);
+}
+
 console.log(`\nnew-account-watch: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

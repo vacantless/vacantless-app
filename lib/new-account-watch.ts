@@ -44,6 +44,8 @@ export type AccountCounts = {
   viewingTimes: number; // availability rules + overrides
   enquiries: number;
   bookings: number;
+  // S723: plain line from lib/signup-source describeSource ("Google ads (...)").
+  source?: string;
 };
 
 export const STAGES = [
@@ -144,6 +146,7 @@ export function buildWatchRows(
     // S715: "First booking. It has a booking." said the same thing twice.
     else if (stage === "first_booking") line += "First booking. Nothing to do.";
     else line += `${STAGE_LABELS[stage]}. It ${NEXT_STEP[stage]}.`;
+    if (a.source) line += ` Came from: ${a.source}.`;
     if (stalled) line = `NEEDS A NUDGE. ${line}`;
     rows.push({ id: a.id, name, days, stage, stalled, paid, closed, line });
   }

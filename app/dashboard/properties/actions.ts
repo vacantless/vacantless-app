@@ -183,6 +183,8 @@ import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
 import { sqftToSave } from "@/lib/sqft-estimate-server";
 import { copyBuildingPhotosTo, spreadBuildingPhotos } from "@/lib/building-photos-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
+import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
+import { isUnavailableStatus } from "@/lib/ads-still-up";
 import {
   listChannelTileStatuses as listChannelTileStatusesFromAccounts,
   type ChannelTileStatusRow,
@@ -1144,7 +1146,8 @@ export async function updateProperty(formData: FormData) {
   let orgAfterSave: Org | null = null;
   if (
     (!relistBlocked && !capBlocked && priorStatus !== "available" && effectiveStatus === "available") ||
-    (priorStatus !== "leased" && effectiveStatus === "leased")
+    (priorStatus !== "leased" && effectiveStatus === "leased") ||
+    (!isUnavailableStatus(priorStatus) && isUnavailableStatus(effectiveStatus))
   ) {
     orgAfterSave = await getCurrentOrg();
   }
@@ -1156,6 +1159,11 @@ export async function updateProperty(formData: FormData) {
     orgAfterSave
   ) {
     await maybePrepareAvailableListing(supabase, orgAfterSave, id);
+  }
+
+  // S723: the rental just left the market; email any ads still up (lib/ads-still-up.ts).
+  if (!isUnavailableStatus(priorStatus) && isUnavailableStatus(effectiveStatus) && orgAfterSave) {
+    await notifyAdsStillUp({ supabase, org: orgAfterSave, propertyId: id });
   }
 
   if (priorStatus !== "leased" && effectiveStatus === "leased" && orgAfterSave) {
@@ -1707,6 +1715,12 @@ export async function archiveProperty(formData: FormData) {
     .update(next)
     .eq("id", id)
     .eq("organization_id", org.id);
+
+  // S723: archiving does not delete outside ads; tell the landlord which are
+  // still up (skipped when it was already off the market, so no repeat email).
+  if (!isUnavailableStatus(p.status)) {
+    await notifyAdsStillUp({ supabase, org, propertyId: id });
+  }
 
   // Archiving takes the rental out of circulation, so any request still
   // waiting on the publishing desk closes with it.

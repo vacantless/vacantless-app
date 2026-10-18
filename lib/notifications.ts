@@ -472,6 +472,22 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     defaultAccent: "#d97706",
     active: true,
   },
+  // S723: a rental left the market while ads we know about still show it
+  // (lib/ads-still-up.ts). One email per rental, every site with its link.
+  {
+    key: "leasing.ads_still_up",
+    family: "leasing",
+    audience: "operator",
+    label: "Ads still up after a rental leaves the market",
+    description:
+      "When a rental is leased, paused or taken off the market and its ads are still up on other sites, you get each site and its link so you can delete them.",
+    tokens: [...COMMON_TOKENS, "status_phrase", "ad_count", "ads_list", "dashboard_url"],
+    defaultSubject: "Take down {{ad_count}}: {{property_address}} {{status_phrase}}",
+    defaultBody:
+      "{{property_address}} {{status_phrase}}, but these ads still show it:\n\n{{ads_list}}\n\nOpen each link, sign in to that site and delete the ad. Then press \"I took it down\" on the rental's page so it leaves this list.\n\nOpen the rental: {{dashboard_url}}",
+    defaultAccent: "#d97706",
+    active: true,
+  },
   // Renter-initiated cancellation (S418, KI632). Audience operator; the missing
   // half of the showing loop. A "Cancel this viewing" link in the renter booking
   // confirmation email flips the showing to cancelled and fires THIS event to the
@@ -1219,6 +1235,7 @@ const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   "leasing.relist_radar_autopilot_recap": "listing",
   "leasing.distribution_job_needs_action": "listing",
   "leasing.distribution_takedown_needed": "listing",
+  "leasing.ads_still_up": "listing",
   // owner — landlord / property-owner compliance, assets, rent increases
   "leasing.rent_increase": "owner",
   "leasing.landlord_furnace_service": "owner",

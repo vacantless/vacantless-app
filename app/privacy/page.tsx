@@ -1,6 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { VacantlessMark } from "../../components/vacantless-mark";
+import { adTagConfig, adTagsOn } from "../../lib/ad-conversions";
+
+// S723: the ad-cookie wording follows the real setting. With no ad IDs set,
+// no ad tag loads anywhere and the old "no advertising cookies" line stays true.
+const AD_TAGS_ON = adTagsOn(adTagConfig(process.env));
 
 export const metadata = {
   title: "Privacy Policy - Vacantless",
@@ -12,7 +17,7 @@ export const metadata = {
 // when you have it).
 const LEGAL_ENTITY = "Vacantless";
 const MAILING_ADDRESS = "Ontario, Canada";
-const LAST_UPDATED = "August 8, 2026";
+const LAST_UPDATED = "October 19, 2026";
 const CONTACT_EMAIL = "hello@vacantless.com";
 
 export default function PrivacyPage() {
@@ -63,7 +68,11 @@ export default function PrivacyPage() {
             "Protect against fraud, abuse, and security risks, and comply with legal obligations.",
           ]}
         />
-        <P>We do not sell personal information, and we do not use it for third-party advertising.</P>
+        <P>
+          {AD_TAGS_ON
+            ? "We do not sell personal information. On our own website and sign-up pages (never on renter pages) we use Google and Meta ad tags to learn which of our ads bring landlords to Vacantless; we do not share renter information with them."
+            : "We do not sell personal information, and we do not use it for third-party advertising."}
+        </P>
 
         <H2>Service providers we share with</H2>
         <P>
@@ -139,8 +148,14 @@ export default function PrivacyPage() {
 
         <H2>Cookies</H2>
         <P>
-          We use only the cookies needed to operate the site and keep you signed
-          in. We do not use advertising or cross-site tracking cookies.
+          We use the cookies needed to operate the site and keep you signed in.
+          When you arrive from an ad or another website, we keep a small cookie
+          for up to 90 days noting where you came from (for example, the ad
+          campaign), so we know which ads work. It holds no name, email or
+          phone number.{" "}
+          {AD_TAGS_ON
+            ? "On our own website and sign-up pages we also use Google and Meta advertising cookies to measure our ads. Renter pages never carry them."
+            : "We do not use advertising or cross-site tracking cookies."}
         </P>
 
         <H2>Children</H2>

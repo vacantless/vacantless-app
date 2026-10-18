@@ -6,6 +6,10 @@ import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
 import { DashboardNav } from "./dashboard-nav";
 import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { VacantlessMark } from "@/components/vacantless-mark";
+import { adTagConfig, adTagsOn, conversionsToFire, type ConversionEvent } from "@/lib/ad-conversions";
+import { isOwnAddress } from "@/lib/new-account-watch";
+import { AdConversionFire } from "@/components/ad-tags";
+import { recordAdConversions } from "./ad-conversion-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +43,33 @@ export default async function DashboardLayout({
   // primitive (icon tiles, banners, CTAs) carries the depth, while --brand-color
   // stays the solid for anything that needs a single color.
   const brandGradient = brandGradientCss(org.brand_color, org.brand_color_secondary);
+
+  // S723: one-time ad conversions (sign-up, first rental live). Nothing runs
+  // unless the ad IDs are set in Vercel (lib/ad-conversions.ts).
+  const adCfg = adTagConfig(process.env);
+  let adEvents: ConversionEvent[] = [];
+  if (adTagsOn(adCfg)) {
+    try {
+      const [{ data: orgRow }, { count: liveCount }] = await Promise.all([
+        supabase.from("organizations").select("created_at, ad_conversions").eq("id", org.id).maybeSingle(),
+        supabase
+          .from("properties")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", org.id)
+          .neq("status", "draft"),
+      ]);
+      const row = orgRow as { created_at?: string; ad_conversions?: unknown } | null;
+      adEvents = conversionsToFire({
+        createdAt: row?.created_at,
+        sent: row?.ad_conversions,
+        hasLiveRental: (liveCount ?? 0) > 0,
+        isOwnTest: isOwnAddress(user.email),
+        now: new Date(),
+      });
+    } catch {
+      adEvents = [];
+    }
+  }
 
   return (
     <div
@@ -91,6 +122,9 @@ export default async function DashboardLayout({
         </div>
       </header>
       <main className="relative z-10 mx-auto max-w-5xl px-6 py-8">{children}</main>
+      {adEvents.length > 0 && (
+        <AdConversionFire cfg={adCfg} events={adEvents} record={recordAdConversions} />
+      )}
     </div>
   );
 }

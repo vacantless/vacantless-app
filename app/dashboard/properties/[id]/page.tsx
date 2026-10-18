@@ -164,6 +164,8 @@ import {
 import { LifecycleRail } from "./lifecycle-rail";
 import { deriveNextAction } from "@/lib/rental-next-action";
 import { NextActionCard } from "./next-action-card";
+import { AdsStillUpCard } from "./ads-still-up-card";
+import { adsStillUp, isUnavailableStatus, rentalsCaCapNote, statusPhrase as adsStatusPhrase } from "@/lib/ads-still-up";
 import { CollapsibleSection } from "./collapsible-section";
 import { TabbedSections, TabPanel } from "./tabbed-sections";
 import { MarketRentPanel } from "./market-rent-panel";
@@ -844,6 +846,7 @@ export default async function PropertyDetailPage({
 }: {
   params: { id: string };
   searchParams: {
+    ad?: string;
     pageposts?: string;
     tab?: string;
     saved?: string;
@@ -894,7 +897,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -928,6 +931,17 @@ export default async function PropertyDetailPage({
     (row) => row.status === "live" && Boolean(row.url?.trim()),
   ).length;
   const postCounts = countLeadsByPost(leadRows);
+
+  // S723: Rentals.ca free accounts show 3 ads at a time; warn before a 4th.
+  const { count: rentalsCaLiveElsewhere } = await supabase
+    .from("listing_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", p.organization_id)
+    .eq("portal", "rentals_ca")
+    .eq("status", "live")
+    .neq("property_id", p.id);
+  const rentalsCaNote = rentalsCaCapNote(rentalsCaLiveElsewhere ?? 0);
+  const capNotes: Record<string, string> = rentalsCaNote ? { rentals_ca: rentalsCaNote } : {};
 
   const { data: photos } = await supabase
     .from("property_photos")
@@ -2716,6 +2730,15 @@ export default async function PropertyDetailPage({
         ← Rentals
       </Link>
 
+      {(isUnavailableStatus(p.status) || !!(p as { archived_at?: string | null }).archived_at) && (
+        <AdsStillUpCard
+          propertyId={p.id}
+          statusPhrase={adsStatusPhrase(p.status, !!(p as { archived_at?: string | null }).archived_at)}
+          posts={adsStillUp(postRows)}
+          justMarked={searchParams.ad === "down"}
+        />
+      )}
+
       {searchParams.saved && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Changes saved.
@@ -4321,6 +4344,7 @@ export default async function PropertyDetailPage({
           shownChannelKeys={shownChannelKeys}
           marketplaceKit={marketplaceKit}
           robotPostingAllowed={robotPostingAccess.allowed}
+          capNotes={capNotes}
         />
       </TabPanel>
 

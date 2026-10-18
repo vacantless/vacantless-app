@@ -296,6 +296,7 @@ export function DistributeTab({
   shownChannelKeys = null,
   marketplaceKit = null,
   robotPostingAllowed = false,
+  capNotes = {},
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -322,6 +323,8 @@ export function DistributeTab({
   marketplaceKit?: MarketplaceKitData | null;
   /** S713: the Posting add-on gate (canUseRobotPosting), passed through. */
   robotPostingAllowed?: boolean;
+  /** S723: per-site approval warnings (Rentals.ca free cap), passed through. */
+  capNotes?: Readonly<Record<string, string>>;
 }) {
   const proofPostCount =
     channelCards.reduce((sum, card) => sum + card.posts.length, 0) +
@@ -411,6 +414,7 @@ export function DistributeTab({
         shownChannelKeys={shownChannelKeys}
         marketplaceKit={marketplaceKit}
         robotPostingAllowed={robotPostingAllowed}
+        capNotes={capNotes}
       />
     </div>
   );

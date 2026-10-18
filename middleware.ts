@@ -2,6 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 import { canonicalRedirect } from "@/lib/canonical-host";
+import {
+  SOURCE_COOKIE,
+  SOURCE_COOKIE_DAYS,
+  captureSource,
+  cookieDomainFor,
+  encodeSourceCookie,
+} from "@/lib/signup-source";
 
 // S700 (dress rehearsal F1): the app answered on two hosts with two separate
 // logins, so one browser could be signed in to two different orgs at once.
@@ -22,7 +29,37 @@ export async function middleware(request: NextRequest) {
     canonicalHost: CANONICAL_APP_HOST,
   });
   if (target) return NextResponse.redirect(target, 308);
-  return await updateSession(request);
+  const response = await updateSession(request);
+  rememberFirstTouch(request, response);
+  return response;
+}
+
+// S723: first-touch ad source for page visits (lib/signup-source.ts). Kept only
+// when the visit has ad tags or an outside referrer, and never overwritten.
+function rememberFirstTouch(request: NextRequest, response: NextResponse) {
+  try {
+    if (request.method !== "GET") return;
+    const path = request.nextUrl.pathname;
+    if (path.startsWith("/api")) return;
+    if (request.cookies.get(SOURCE_COOKIE)) return;
+    const src = captureSource({
+      searchParams: request.nextUrl.searchParams,
+      referer: request.headers.get("referer"),
+      path,
+      now: new Date(),
+    });
+    if (!src) return;
+    response.cookies.set(SOURCE_COOKIE, encodeSourceCookie(src), {
+      maxAge: SOURCE_COOKIE_DAYS * 86_400,
+      path: "/",
+      sameSite: "lax",
+      secure: true,
+      httpOnly: true,
+      domain: cookieDomainFor(request.headers.get("host")),
+    });
+  } catch {
+    // Never let attribution break a page.
+  }
 }
 
 export const config = {

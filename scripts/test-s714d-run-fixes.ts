@@ -63,7 +63,7 @@ ok("'live too' only when a site is live", pe.includes('proofSavedCount > 0 ? "Yo
 // 7. Free Facebook Page posting is named.
 ok("homepage Free plan names Facebook Page", read("app/page.tsx").includes('"Posts to your Facebook Page, free"'));
 const wiz = read("lib/onboarding-wizard.ts");
-ok("checklist names Facebook Page and Posting", /Facebook Page for free/.test(wiz) && /With Posting, we post it to Kijiji and Zumper/.test(wiz));
+ok("checklist names Facebook Page and Posting", /Facebook Page for free/.test(wiz) && /With Posting, we post it to Kijiji, Rentals.ca and Zumper/.test(wiz)); // S717: Rentals.ca for every landlord
 ok("checklist step still never names Marketplace (S710 rule)", !/Marketplace/.test(wiz.slice(wiz.indexOf('key: "get_online"'), wiz.indexOf('key: "tenancy"'))));
 ok("checklist no longer promises Kijiji/Zumper to everyone", !wiz.includes("Then we post it to Kijiji or Zumper for you."));
 

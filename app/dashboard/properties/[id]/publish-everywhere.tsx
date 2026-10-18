@@ -369,6 +369,7 @@ export function PublishEverywhere({
   shownChannelKeys = null,
   marketplaceKit = null,
   robotPostingAllowed = false,
+  capNotes = {},
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -401,6 +402,8 @@ export function PublishEverywhere({
   marketplaceKit?: MarketplaceKitData | null;
   /** S713: canUseRobotPosting. False = Kijiji, Rentals.ca and Zumper show the add-on note. */
   robotPostingAllowed?: boolean;
+  /** S723: per-site warning shown in the approval box (Rentals.ca free cap). */
+  capNotes?: Readonly<Record<string, string>>;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDestinations, setConfirmDestinations] = useState<
@@ -699,6 +702,7 @@ export function PublishEverywhere({
             postingBlocker={postingBlocker}
             marketplaceKit={marketplaceKit}
             robotPostingAllowed={robotPostingAllowed}
+            capNotes={capNotes}
           >
             {[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows].map((r) => (
               <ChannelRow
@@ -758,8 +762,10 @@ function ForYouHandoff({
   postingBlocker,
   marketplaceKit = null,
   robotPostingAllowed = false,
+  capNotes = {},
   children,
 }: {
+  capNotes?: Readonly<Record<string, string>>;
   children?: React.ReactNode;
   marketplaceKit?: MarketplaceKitData | null;
   robotPostingAllowed?: boolean;
@@ -810,6 +816,7 @@ function ForYouHandoff({
             postingBlocked={Boolean(postingBlocker)}
             marketplaceKit={row.key === "facebook" ? marketplaceKit : null}
             addonLocked={!robotPostingAllowed && isRobotPostedChannel(row.key)}
+            capNote={capNotes[row.key] ?? null}
           />
         ))}
       </ul>
@@ -844,7 +851,9 @@ function ForYouRow({
   postingBlocked: postingBlockedProp,
   marketplaceKit = null,
   addonLocked = false,
+  capNote = null,
 }: {
+  capNote?: string | null;
   marketplaceKit?: MarketplaceKitData | null;
   /** S713: a robot site and the org has no Posting add-on. */
   addonLocked?: boolean;
@@ -1098,6 +1107,7 @@ function ForYouRow({
           addressLabel={addressLabel}
           paid={paid}
           siteLabel={PAID_SITE_LABEL[row.key] ?? row.label}
+          capNote={capNote}
           onClose={() => setApproveOpen(false)}
         />
       )}
@@ -1117,6 +1127,7 @@ function ApprovalModal({
   addressLabel,
   paid,
   siteLabel,
+  capNote = null,
   onClose,
 }: {
   propertyId: string;
@@ -1125,6 +1136,7 @@ function ApprovalModal({
   addressLabel: string;
   paid: boolean;
   siteLabel: string;
+  capNote?: string | null;
   onClose: () => void;
 }) {
   return (
@@ -1150,6 +1162,12 @@ function ApprovalModal({
           <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12.5px] leading-relaxed text-amber-950">
             {siteLabel} charges its own fee. You pay {siteLabel} with the card
             you keep there.
+          </div>
+        )}
+
+        {capNote && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12.5px] leading-relaxed text-amber-950">
+            {capNote}
           </div>
         )}
 

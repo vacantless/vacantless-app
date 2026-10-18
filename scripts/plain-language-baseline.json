@@ -1,7 +1,7 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-10-15",
+  "generated": "2026-10-18",
   "checksum": "1dca0823d1e87d9349fd680f0633126aefe99ff3dfb871938a3ffc17fdbcaf81",
   "surfaces": [
     "app/agent/[token]/marketplace/[propertyId]/page.tsx",
@@ -17,6 +17,7 @@
     "app/dashboard/link-portals/connect-tiles.tsx",
     "app/dashboard/link-portals/page.tsx",
     "app/dashboard/not-found.tsx",
+    "app/dashboard/properties/[id]/ads-still-up-card.tsx",
     "app/dashboard/properties/[id]/confirm-publish-button.tsx",
     "app/dashboard/properties/[id]/distribute-tab.tsx",
     "app/dashboard/properties/[id]/lifecycle-rail.tsx",
@@ -155,6 +156,7 @@
     "app/dashboard/link-portals/connect-tiles.tsx": 2,
     "app/dashboard/link-portals/page.tsx": 1,
     "app/dashboard/not-found.tsx": 5,
+    "app/dashboard/properties/[id]/ads-still-up-card.tsx": 9,
     "app/dashboard/properties/[id]/confirm-publish-button.tsx": 13,
     "app/dashboard/properties/[id]/distribute-tab.tsx": 78,
     "app/dashboard/properties/[id]/lifecycle-rail.tsx": 4,
@@ -163,7 +165,7 @@
     "app/dashboard/properties/[id]/marketplace-row.tsx": 13,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
     "app/dashboard/properties/[id]/page.tsx": 400,
-    "app/dashboard/properties/[id]/publish-everywhere.tsx": 109,
+    "app/dashboard/properties/[id]/publish-everywhere.tsx": 111,
     "app/dashboard/properties/new/add-property-form.tsx": 99,
     "app/dashboard/properties/new/page.tsx": 5,
     "app/dashboard/properties/page.tsx": 86,

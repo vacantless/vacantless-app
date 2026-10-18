@@ -58,6 +58,7 @@ const SURFACES: Surface[] = [
   { file: "components/marketplace-kit-steps.tsx", mode: "ui" },
   { file: "app/agent/[token]/marketplace/[propertyId]/page.tsx", mode: "ui" },
   { file: "app/dashboard/properties/[id]/next-action-card.tsx", mode: "ui" },
+  { file: "app/dashboard/properties/[id]/ads-still-up-card.tsx", mode: "ui" },
   // S705: the Facebook Page Connect / Disconnect card, moved out of the
   // removed Advanced tools view.
   { file: "app/dashboard/settings/facebook-page-card.tsx", mode: "ui" },
