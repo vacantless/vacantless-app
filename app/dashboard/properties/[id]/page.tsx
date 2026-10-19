@@ -2531,10 +2531,22 @@ export default async function PropertyDetailPage({
         .map((item) => item.channel)
         .filter(isPortalRequirementChannelKey)
     : [];
-  const listingPacketChannels =
-    activeLaunchPortalChannels.length > 0
-      ? activeLaunchPortalChannels
-      : defaultLaunchPortalChannels;
+  // S724 (V251-27): a site the robot can post for this account counts from the
+  // start, so its required details (pet policy for Rentals.ca) show up before
+  // the landlord signs in and adds it, not after.
+  const robotPortalChannels = robotPostingAccess.allowed
+    ? (shownChannelKeys ?? distributeChannelCards.map((card) => card.channel.key as string))
+        .filter((key) => isRobotPostedChannel(key))
+        .filter(isPortalRequirementChannelKey)
+    : [];
+  const listingPacketChannels = Array.from(
+    new Set([
+      ...(activeLaunchPortalChannels.length > 0
+        ? activeLaunchPortalChannels
+        : defaultLaunchPortalChannels),
+      ...robotPortalChannels,
+    ]),
+  );
   // S692 (SPEC-S688 Slice 2 section 4.1): once the question sheet exists
   // (wizard flag on AND migration 0226 applied), the packet facts the sheet can
   // answer come from the sheet's own held-rules, so the card and the sheet

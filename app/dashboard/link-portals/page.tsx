@@ -45,7 +45,7 @@ export default async function LinkPortalsPage({
 
   const locale = await getLocale();
   const [vm, tStage1, tStages, tCommon] = await Promise.all([
-    buildLinkPortalsViewModel(org.id, locale),
+    buildLinkPortalsViewModel(org.id, locale, ownedPropertyId),
     getTranslations("stage1"),
     getTranslations("stages"),
     getTranslations("common"),

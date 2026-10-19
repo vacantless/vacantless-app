@@ -12,6 +12,8 @@ import {
   isSiteSigninChannel,
   siteSigninEnabled,
   siteSigninHref,
+  cleanPropertyId,
+  withQuery,
   siteSigninIsOpen,
 } from "@/lib/site-signin";
 import { triggerSigninWindow } from "@/lib/site-signin-dispatch";
@@ -42,6 +44,7 @@ async function allowed(): Promise<{ orgId: string; userId: string | null } | nul
 /** Start a window (or reuse the one already open for this site). */
 export async function startSiteSignin(formData: FormData): Promise<void> {
   const channel = String(formData.get("channel") ?? "");
+  const propertyId = cleanPropertyId(formData.get("property"));
   if (!isSiteSigninChannel(channel)) redirect("/dashboard/link-portals");
   const who = await allowed();
   if (!who) redirect("/dashboard/link-portals");
@@ -49,10 +52,10 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
   // S713: signing in is for robot posting, which is the paid Posting add-on.
   // No window (and no worker run) without it.
   const access = await readRobotPostingAccess(createClient(), who.orgId);
-  if (!access.allowed) redirect(`${siteSigninHref(channel)}?err=addon`);
+  if (!access.allowed) redirect(withQuery(siteSigninHref(channel, propertyId), "err", "addon"));
 
   const admin = createAdminClient();
-  if (!admin) redirect(`${siteSigninHref(channel)}?err=config`);
+  if (!admin) redirect(withQuery(siteSigninHref(channel, propertyId), "err", "config"));
 
   const { data: open } = await admin
     .from(TABLE)
@@ -63,7 +66,7 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
     .limit(1)
     .maybeSingle();
   if (open && siteSigninIsOpen(open.status as string) && Date.parse(open.expires_at as string) > Date.now()) {
-    redirect(siteSigninHref(channel));
+    redirect(siteSigninHref(channel, propertyId));
   }
 
   const { data: created, error } = await admin
@@ -71,7 +74,7 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
     .insert({ organization_id: who.orgId, channel, requested_by: who.userId, status: "starting" })
     .select("id")
     .single();
-  if (error || !created) redirect(`${siteSigninHref(channel)}?err=save`);
+  if (error || !created) redirect(withQuery(siteSigninHref(channel, propertyId), "err", "save"));
 
   const dispatched = await triggerSigninWindow(created.id as string, channel);
   if (!dispatched) {
@@ -80,7 +83,7 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
       .update({ status: "failed", detail: "dispatch", updated_at: new Date().toISOString() })
       .eq("id", created.id);
   }
-  redirect(siteSigninHref(channel));
+  redirect(siteSigninHref(channel, propertyId));
 }
 
 export type SiteSigninWindowRead = {

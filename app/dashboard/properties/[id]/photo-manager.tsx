@@ -474,13 +474,14 @@ export function PhotoUploadWorkspace({
           {photos.map((photo, i) => (
             <li
               key={photo.id}
+              aria-label={`Photo ${i + 1} of ${photos.length}${photo.is_cover ? ", cover" : ""}`}
               className="overflow-hidden rounded-xl border border-gray-200"
             >
               <div className="relative aspect-[4/3] bg-gray-100">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={photo.url}
-                  alt=""
+                  alt={`Photo ${i + 1}${photo.is_cover ? " (cover)" : ""}`}
                   className="h-full w-full object-cover"
                 />
                 {photo.is_cover && (
@@ -500,7 +501,7 @@ export function PhotoUploadWorkspace({
                     type="button"
                     onClick={() => handleMovePhoto(photo.id, "up")}
                     disabled={i === 0 || photoAction !== null}
-                    aria-label="Move earlier"
+                    aria-label={`Move photo ${i + 1} earlier`}
                     className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     ←
@@ -509,7 +510,7 @@ export function PhotoUploadWorkspace({
                     type="button"
                     onClick={() => handleMovePhoto(photo.id, "down")}
                     disabled={i === photos.length - 1 || photoAction !== null}
-                    aria-label="Move later"
+                    aria-label={`Move photo ${i + 1} later`}
                     className="rounded px-1.5 py-0.5 text-sm text-gray-500 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     →
@@ -521,6 +522,7 @@ export function PhotoUploadWorkspace({
                       type="button"
                       onClick={() => handleSetCoverPhoto(photo.id)}
                       disabled={photoAction !== null}
+                      aria-label={`Set photo ${i + 1} as cover`}
                       className="rounded px-1.5 py-0.5 text-[11px] font-medium text-brand hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       Set cover
@@ -541,7 +543,7 @@ export function PhotoUploadWorkspace({
                     type="button"
                     onClick={() => handleDeletePhoto(photo.id)}
                     disabled={photoAction !== null}
-                    aria-label="Delete photo"
+                    aria-label={`Delete photo ${i + 1}`}
                     className="rounded px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     Delete

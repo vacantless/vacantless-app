@@ -193,8 +193,10 @@ export default async function BillingPage({
       )}
       {checkout === "success" && (
         <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          Thanks! Your subscription is being activated. It can take a few seconds
-          to reflect here. Refresh if it still shows your old plan.
+          {/* S724 (V251-17): once Stripe has confirmed, say it is done. */}
+          {view.isPaid && !addonPending
+            ? `Thanks! ${currentPlanTitle(view.planLabel, addonOffer)} is active.`
+            : "Thanks! Your subscription is being activated. It can take a few seconds to reflect here. Refresh if it still shows your old plan."}
         </div>
       )}
       {checkout === "cancel" && (

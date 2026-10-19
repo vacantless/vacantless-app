@@ -96,6 +96,7 @@ export function linkPortalsProbeEnabled(): boolean {
 export async function buildLinkPortalsViewModel(
   orgId: string,
   locale: string,
+  propertyId: string | null = null,
 ): Promise<LinkPortalsVM> {
   const [rows, t, format, robotAccess] = await Promise.all([
     listChannelTileStatuses(orgId),
@@ -128,7 +129,7 @@ export async function buildLinkPortalsViewModel(
     // window instead of naming the account in Settings.
     const connectHref =
       siteSigninLinksOn() && isSiteSigninChannel(row.channel)
-        ? siteSigninHref(row.channel)
+        ? siteSigninHref(row.channel, propertyId)
         : stage1ConnectHref(row.channel, channel.connectKind);
     const buttonKey = stage1ConnectButtonKey(channel.connectKind);
     let button: LinkPortalTileButton | null = null;

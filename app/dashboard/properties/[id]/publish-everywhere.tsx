@@ -927,8 +927,14 @@ function ForYouRow({
   // S719 (KI1303): right after "Post it for me" a robot item is queued while we
   // fill in the ad. Nothing is posted until the landlord approves it, so this
   // is "getting it ready", not "posting".
+  // S724 (V251-28): until the landlord approves, the robot is only building the
+  // ad (queued, then submitting while it fills the site's form). Say "Getting it
+  // ready" through all of it; "We're posting it" only after Approve.
   const preparing =
-    working && gate === "queued" && item?.approved !== true && isRobotPostedChannel(row.key);
+    working &&
+    (gate === "queued" || gate === "submitting" || gate === "submitted") &&
+    item?.approved !== true &&
+    isRobotPostedChannel(row.key);
   const locked = addonLocked && !isLive;
 
   const stateChip = isLive
@@ -1291,7 +1297,13 @@ function ConfirmModal({
   onClose: () => void;
 }) {
   const preflight = derivePublishPreflight(forYouRows);
-  const instantCount = instantDestinations.length + 2;
+  // S724 (V251-25): count real sites only. The Vacantless page is yours and
+  // inquiry emails go to you; neither is a rental site.
+  const siteCount = instantDestinations.length;
+  const liveNowText =
+    siteCount === 0
+      ? "Your Vacantless page goes live now"
+      : `Your Vacantless page and ${siteCount === 1 ? "1 connected site" : `${siteCount} connected sites`} go live now`;
   const signInText =
     preflight.signInNeeded.length === 1
       ? "1 site needs sign-in"
@@ -1315,7 +1327,7 @@ function ConfirmModal({
           Post {addressLabel}
         </h3>
         <p className="mt-1 text-sm text-gray-500">
-          {instantCount} sites turn on now · {signInText} · {feeText}.
+          {liveNowText} · {signInText} · {feeText}.
         </p>
         <p className="mt-1 text-xs text-gray-400">
           You approve every post. You pay a site only if it asks.
@@ -1329,9 +1341,9 @@ function ConfirmModal({
             </span>
           </div>
           <div className="flex items-center gap-2 border-b border-gray-100 py-2.5 text-[13px]">
-            ✉️ Email alerts
+            ✉️ New inquiries emailed to you
             <span className="ml-auto text-[10px] font-black tracking-wide text-green-700">
-              Instant
+              On
             </span>
           </div>
           {instantDestinationsLoading ? (

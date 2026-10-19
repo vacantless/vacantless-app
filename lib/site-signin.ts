@@ -86,8 +86,22 @@ export const SITE_SIGNIN_ACCOUNT_FIRST: Record<
   },
 };
 
-export function siteSigninHref(channel: SiteSigninChannel): string {
-  return `/dashboard/site-signin/${channel}`;
+// S724 (V251-18): carry the rental the landlord came from, so the way back
+// returns to it. Only a well-formed id is passed on; pages check ownership.
+const PROPERTY_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function cleanPropertyId(v: unknown): string | null {
+  const s = typeof v === "string" ? v.trim() : "";
+  return PROPERTY_ID_RE.test(s) ? s.toLowerCase() : null;
+}
+
+export function siteSigninHref(channel: SiteSigninChannel, propertyId?: string | null): string {
+  const id = cleanPropertyId(propertyId);
+  return `/dashboard/site-signin/${channel}${id ? `?property=${id}` : ""}`;
+}
+
+/** Add a query flag to a site-signin href that may already carry ?property=. */
+export function withQuery(href: string, key: string, value: string): string {
+  return `${href}${href.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(value)}`;
 }
 
 export type SiteSigninStatus =

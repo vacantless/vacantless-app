@@ -7,6 +7,7 @@ import { isAdminEmail } from "@/lib/provisioning";
 import { isHiddenForOrg } from "@/lib/posting-lanes";
 import {
   isSiteSigninChannel,
+  cleanPropertyId,
   siteSigninEnabled,
   siteSigninIsOpen,
   siteSigninView,
@@ -30,7 +31,7 @@ export default async function SiteSigninPage({
   searchParams,
 }: {
   params: { channel: string };
-  searchParams: { err?: string };
+  searchParams: { err?: string; property?: string };
 }) {
   const channel = params.channel;
   if (!isSiteSigninChannel(channel)) notFound();
@@ -56,6 +57,23 @@ export default async function SiteSigninPage({
   const recent =
     latest && Date.now() - Date.parse(latest.created_at as string) < 60 * 60 * 1000 ? latest : null;
   const name = SITE_SIGNIN_LABEL[channel];
+  // S724 (V251-18): keep the rental the landlord came from (checked as theirs).
+  let propertyId: string | null = null;
+  let propertyAddress: string | null = null;
+  const wanted = cleanPropertyId(searchParams.property);
+  if (wanted) {
+    const { data: owned } = await supabase
+      .from("properties")
+      .select("id, address")
+      .eq("id", wanted)
+      .eq("organization_id", org.id)
+      .maybeSingle();
+    if (owned?.id) {
+      propertyId = owned.id as string;
+      propertyAddress = (owned.address as string | null) ?? null;
+    }
+  }
+  const backHref = propertyId ? `/dashboard/link-portals?property=${propertyId}` : "/dashboard/link-portals";
   const intro = siteSigninView(channel, null);
   // S705: a finished window can always be redone (sign in again, or a
   // different account). Only an open window blocks a new one.
@@ -67,9 +85,17 @@ export default async function SiteSigninPage({
   return (
     <div className="mx-auto max-w-2xl space-y-5 py-6">
       <div>
-        <Link href="/dashboard/link-portals" className="text-sm text-brand">
+        <Link href={backHref} className="text-sm text-brand">
           &larr; Your rental sites
         </Link>
+        {propertyId && (
+          <p className="mt-1 text-sm text-gray-500">
+            For this listing:{" "}
+            <Link href={`/dashboard/properties/${propertyId}?tab=market`} className="font-semibold text-gray-800 hover:underline">
+              {propertyAddress ?? "your rental"}
+            </Link>
+          </p>
+        )}
         <h1 className="mt-2 text-2xl font-bold text-gray-900">{intro.title}</h1>
         <p className="mt-2 text-sm text-gray-600">{intro.body}</p>
       </div>
@@ -106,6 +132,7 @@ export default async function SiteSigninPage({
       {canStart && (
         <form action={startSiteSignin} className="rounded-2xl border border-gray-200 bg-white p-5">
           <input type="hidden" name="channel" value={channel} />
+          {propertyId && <input type="hidden" name="property" value={propertyId} />}
           {recent?.status !== "done" && (
             <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
               {SITE_SIGNIN_ACCOUNT_FIRST[channel].text}{" "}
