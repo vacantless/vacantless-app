@@ -26,7 +26,7 @@ import { buildPostingAdvice } from "@/lib/posting-advice";
 export const dynamic = "force-dynamic";
 
 function rent(cents: number | null): string {
-  if (cents == null) return "—";
+  if (cents == null) return "-";
   return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
 }
 
@@ -146,7 +146,7 @@ export default async function ReportsPage({
         />
         <StatCard
           label="Avg days to lease"
-          value={timing.avgDays == null ? "—" : String(timing.avgDays)}
+          value={timing.avgDays == null ? "-" : String(timing.avgDays)}
           hint={
             timing.avgDays == null
               ? "no dated leases yet"
@@ -323,7 +323,7 @@ export default async function ReportsPage({
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
             <Kpi
               label="Avg rating"
-              value={feedbackRep.avgRating == null ? "—" : `${feedbackRep.avgRating}★`}
+              value={feedbackRep.avgRating == null ? "-" : `${feedbackRep.avgRating}★`}
             />
             <Kpi label="Responses" value={feedbackRep.responses} />
             {([5, 4, 3, 2, 1] as const).map((star) => (

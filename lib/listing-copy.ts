@@ -186,7 +186,7 @@ export function truncateTitle(s: string, max: number): string {
 // quality the listing didn't claim. Priority order (most evocative first); the
 // headline takes up to two distinct labels. Hyphen/space variants are matched
 // explicitly so "open concept" and "open-concept" both resolve.
-const LEAD_DESCRIPTORS: Array<{ re: RegExp; label: string }> = [
+const LEAD_DESCRIPTORS: Array<{ re: RegExp; label: string; floor?: boolean }> = [
   { re: /\bbright\b/i, label: "Bright" },
   { re: /\bsunny\b/i, label: "Sunny" },
   { re: /\bspacious\b/i, label: "Spacious" },
@@ -197,9 +197,11 @@ const LEAD_DESCRIPTORS: Array<{ re: RegExp; label: string }> = [
   { re: /\bmodern\b/i, label: "Modern" },
   { re: /\bopen[-\s]?concept\b/i, label: "Open-Concept" },
   { re: /\bcorner\b/i, label: "Corner" },
-  { re: /\bmain[-\s]?floor\b/i, label: "Main-Floor" },
-  { re: /\bground[-\s]?floor\b/i, label: "Ground-Floor" },
-  { re: /\btop[-\s]?floor\b/i, label: "Top-Floor" },
+  // S724 (V251-06): a floor position only describes the UNIT when it is not
+  // naming a room ("main-floor powder room") and the unit is not multi-storey.
+  { re: /\bmain[-\s]?floor\b(?![-\s]+(?:powder|bath|bathroom|washroom|half|laundry|bedroom|den|office|family|living|kitchen|primary|master|guest|room|deck|patio|walkout|walk-out))/i, label: "Main-Floor", floor: true },
+  { re: /\bground[-\s]?floor\b(?![-\s]+(?:powder|bath|bathroom|washroom|half|laundry|bedroom|den|office|family|living|kitchen|primary|master|guest|room|deck|patio|walkout|walk-out))/i, label: "Ground-Floor", floor: true },
+  { re: /\btop[-\s]?floor\b(?![-\s]+(?:powder|bath|bathroom|washroom|half|laundry|bedroom|den|office|family|living|kitchen|primary|master|guest|room|deck|patio|loft))/i, label: "Top-Floor", floor: true },
   { re: /\bpenthouse\b/i, label: "Penthouse" },
   { re: /\bfreshly\s+painted\b/i, label: "Freshly Painted" },
   { re: /\bcharming\b/i, label: "Charming" },
@@ -209,6 +211,10 @@ const LEAD_DESCRIPTORS: Array<{ re: RegExp; label: string }> = [
   { re: /\bbeautiful\b/i, label: "Beautiful" },
   { re: /\bspotless\b/i, label: "Spotless" },
 ];
+
+// A unit on two or more levels has no single floor position for the title.
+const MULTI_STOREY_RE =
+  /\b(?:two|three|2|3)[-\s]?(?:storey|story|level)s?\b|\bmulti[-\s]?(?:level|storey|story)\b|\btown[-\s]?(?:house|home)\b|\bsplit[-\s]?level\b/i;
 
 /**
  * Pull up to `max` factual lead adjectives FROM the operator's own description
@@ -223,9 +229,11 @@ export function extractLeadDescriptors(
   if (typeof description !== "string" || !description.trim()) return [];
   const out: string[] = [];
   const seen = new Set<string>();
-  for (const { re, label } of LEAD_DESCRIPTORS) {
+  const multiStorey = MULTI_STOREY_RE.test(description);
+  for (const { re, label, floor } of LEAD_DESCRIPTORS) {
     if (out.length >= max) break;
     if (seen.has(label)) continue;
+    if (floor && multiStorey) continue;
     if (re.test(description)) {
       out.push(label);
       seen.add(label);

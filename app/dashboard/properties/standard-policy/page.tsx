@@ -187,7 +187,7 @@ function FeaturePolicyFields({
       </div>
       <p className="mt-3 text-xs text-gray-400">
         Applies to dogs when they&apos;re welcome. In Ontario a &ldquo;no
-        pets&rdquo; lease clause is void (RTA s.14) — this is a listing/screening
+        pets&rdquo; lease clause is void (RTA s.14), this is a listing/screening
         preference, not an enforceable rule.
       </p>
     </div>
@@ -291,7 +291,7 @@ export default async function StandardPolicyPage({
       <BrandBanner
         eyebrow="Rentals"
         title="Building standard policy"
-        subtitle="Set your standard policy once. Every unit inherits it on its listings, copy, and rental-site feed — so you only re-enter a value where a building or unit genuinely differs."
+        subtitle="Set your standard policy once. Every unit inherits it on its listings, copy, and rental-site feed, so you only re-enter a value where a building or unit genuinely differs."
         icon={<Icons.building className="h-6 w-6" />}
       />
 

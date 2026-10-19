@@ -307,13 +307,13 @@ export default async function AgentCalendarPage({
         )}
         {recordedAttended && (
           <p className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
-            Thanks — marked as attended. That updates the renter&apos;s status
+            Thanks, marked as attended. That updates the renter&apos;s status
             automatically.
           </p>
         )}
         {recordedNoShow && (
           <p className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
-            Thanks — marked as a no-show. Noted for the lead agent.
+            Thanks, marked as a no-show. Noted for the lead agent.
           </p>
         )}
         {errored && (
@@ -327,7 +327,7 @@ export default async function AgentCalendarPage({
             <h1 className="text-lg font-semibold text-gray-900">No viewings right now</h1>
             <p className="mt-2 text-sm text-gray-600">
               You have no viewings to confirm or wrap up. This page updates
-              automatically as new ones are routed to you — keep the link.
+              automatically as new ones are routed to you, keep the link.
             </p>
           </div>
         ) : (
@@ -339,7 +339,7 @@ export default async function AgentCalendarPage({
                   wrap up
                 </h1>
                 <p className="mt-1 text-sm text-gray-600">
-                  These already happened — mark whether the renter showed.
+                  These already happened, mark whether the renter showed.
                 </p>
                 <div className="mt-5 space-y-4">{needsOutcome.map(renderCard)}</div>
               </section>

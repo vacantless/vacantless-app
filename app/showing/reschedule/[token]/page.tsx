@@ -188,7 +188,7 @@ export default async function RescheduleProposalPage({
                   href={renterUrl}
                   className="block rounded-xl border border-gray-200 px-4 py-3 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
-                  None of these work — see all available times
+                  None of these work, see all available times
                 </a>
               </div>
             </>

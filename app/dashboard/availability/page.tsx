@@ -617,7 +617,7 @@ export default async function AvailabilityPage({
                     ))
                   ) : (
                     <span className="my-auto text-center text-[10px] text-gray-300">
-                      —
+                      -
                     </span>
                   )}
                 </div>
@@ -892,7 +892,7 @@ export default async function AvailabilityPage({
               className="mt-0.5 h-4 w-4 rounded border-gray-300"
             />
             <span className="text-sm font-medium text-gray-700">
-              Open-house booking — allow multiple bookings per time
+              Open-house booking, allow multiple bookings per time
             </span>
           </label>
           <div className="mt-4 text-right">

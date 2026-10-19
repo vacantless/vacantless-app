@@ -87,7 +87,7 @@ export function AddQuestionForm() {
           </select>
           <span className="mt-1 block text-xs text-gray-400">
             When a renter&apos;s answer doesn&apos;t match, you&apos;ll see a soft
-            heads-up on the inquiry — it never rejects or hides anyone.
+            heads-up on the inquiry, it never rejects or hides anyone.
           </span>
         </label>
       )}

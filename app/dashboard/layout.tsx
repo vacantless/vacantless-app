@@ -118,6 +118,7 @@ export default async function DashboardLayout({
               process.env.DISTRIBUTION_WIZARD_ENABLED === "1"
             }
             postLeaseEnabled={postLeaseEnabled}
+            userEmail={user.email ?? null}
           />
         </div>
       </header>

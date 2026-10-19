@@ -116,7 +116,7 @@ export default async function ScreeningSettingsPage({
         {/* --- Status summary (S438) -------------------------------------------
             Leads the page so a first-time operator can see, in plain language,
             whether screening is on, what renters are ASKED, and what auto-FLAGS a
-            possible mismatch — the asked-vs-flagged split is the core confusion
+            possible mismatch, the asked-vs-flagged split is the core confusion
             this page fixes. --- */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5">
           <div className="flex items-center justify-between gap-3">
@@ -151,7 +151,7 @@ export default async function ScreeningSettingsPage({
                 <dd className="mt-0.5 text-gray-500">
                   {status.flagLabels.length > 0
                     ? `${status.flagLabels.join("; ")}.`
-                    : "nothing is set to auto-flag yet — questions are asked, but no answer raises a heads-up."}
+                    : "nothing is set to auto-flag yet, questions are asked, but no answer raises a heads-up."}
                 </dd>
               </div>
             </dl>
@@ -180,7 +180,7 @@ export default async function ScreeningSettingsPage({
               </a>
             ) : (
               <span className="text-xs text-gray-400">
-                Preview the renter form — available once you have a live rental.
+                Preview the renter form, available once you have a live rental.
               </span>
             )}
             <Link
@@ -290,7 +290,7 @@ export default async function ScreeningSettingsPage({
           </div>
           <p className="mt-1 text-sm text-gray-500">
             Add your own questions to the inquiry form. The answers appear on each
-            inquiry — they&apos;re for your reference only and never auto-flag
+            inquiry, they&apos;re for your reference only and never auto-flag
             anyone. Ask only questions that help match the renter to the rental,
             such as move-in timing, pets, parking needs, or unit preference.
           </p>
@@ -328,7 +328,7 @@ export default async function ScreeningSettingsPage({
           {sp === "preference_saved" && (
             <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
               Preference saved. New inquiries that don&apos;t match will show a
-              heads-up — it never rejects anyone.
+              heads-up, it never rejects anyone.
             </div>
           )}
           {sp === "question_prompt" && (
@@ -459,12 +459,12 @@ export default async function ScreeningSettingsPage({
           <AddQuestionForm />
           <p className="mt-2 text-xs text-gray-400">
             A preferred answer applies to yes/no questions only. When an inquiry
-            doesn&apos;t match, you&apos;ll see a soft heads-up on it — it never
+            doesn&apos;t match, you&apos;ll see a soft heads-up on it, it never
             rejects, hides, or auto-flags anyone.
           </p>
 
           <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            Keep questions about the rental, not the person — ask only what helps
+            Keep questions about the rental, not the person, ask only what helps
             you match the right renter to the home, never protected details like
             background, family, or where someone is from.
           </p>
@@ -599,7 +599,7 @@ export default async function ScreeningSettingsPage({
           </label>
 
           <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            Screening uses only ability to pay, timing, and pets — never factors
+            Screening uses only ability to pay, timing, and pets, never factors
             like family size, background, or any protected group.
           </p>
 
@@ -611,7 +611,7 @@ export default async function ScreeningSettingsPage({
             <p className="mt-2 text-xs text-gray-400">
               When an inquiry is flagged, you see a short reason. Reword it to
               match your voice, or leave blank to use the default. Only you see
-              these — renters never do.
+              these, renters never do.
             </p>
             <div className="mt-4 space-y-4">
               <label className="block">

@@ -137,7 +137,7 @@ ok(
 // --- noSuitableTimeBadge ----------------------------------------------------
 ok(
   "no-suitable-time: true gets operator badge",
-  noSuitableTimeBadge(true) === "Wanted to book — no suitable time",
+  noSuitableTimeBadge(true) === "Wanted to book, no suitable time",
 );
 ok("no-suitable-time: false silent", noSuitableTimeBadge(false) === null);
 ok("no-suitable-time: null silent", noSuitableTimeBadge(null) === null);

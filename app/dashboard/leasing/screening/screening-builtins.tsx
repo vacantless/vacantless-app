@@ -36,7 +36,7 @@ export function ScreeningAskToggles({
     {
       name: "screening_ask_occupants",
       label: "Ask number of occupants",
-      hint: "Captured for your context only — occupancy never auto-flags, since it can touch protected family status.",
+      hint: "Captured for your context only, occupancy never auto-flags, since it can touch protected family status.",
       checked: askOccupants,
     },
   ];

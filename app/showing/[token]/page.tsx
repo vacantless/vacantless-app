@@ -107,7 +107,7 @@ export default async function ShowingOutcomePage({
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
           {recorded && currentOutcome ? (
             <>
-              <h1 className="text-xl font-semibold text-gray-900">Thanks — recorded</h1>
+              <h1 className="text-xl font-semibold text-gray-900">Thanks, recorded</h1>
               <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
                 Viewing for <span className="font-medium">{leadName}</span> at{" "}
                 <span className="font-medium">{address}</span> marked{" "}

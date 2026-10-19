@@ -92,12 +92,13 @@ export function resolveLeadSource(input: {
 export function noSuitableTimeBadge(
   noSuitableTime: boolean | null | undefined,
 ): string | null {
-  return noSuitableTime ? "Wanted to book — no suitable time" : null;
+  return noSuitableTime ? "Wanted to book, no suitable time" : null;
 }
 
 export function buildReplyDraft(
   lead: { name: string | null; property: { address: string } | null },
   orgName: string,
+  bookingUrl?: string | null,
 ): { subject: string; body: string } {
   const first = (lead.name ?? "").trim().split(/\s+/)[0] || "there";
   const place = lead.property?.address ?? "the rental";
@@ -105,7 +106,9 @@ export function buildReplyDraft(
   const body =
     `Hi ${first},\n\n` +
     `Thanks for reaching out about ${place}. ` +
-    `Would you like to book a viewing? Reply here and I can share a few times that work.\n\n` +
+    (bookingUrl
+      ? `Would you like to book a viewing? You can pick a time here: ${bookingUrl}\nOr reply and I can share a few times that work.\n\n`
+      : `Would you like to book a viewing? Reply here and I can share a few times that work.\n\n`) +
     `Thanks,\n${orgName}`;
   return { subject, body };
 }

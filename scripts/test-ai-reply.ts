@@ -80,7 +80,20 @@ ok("draft: includes rent", draft.body.includes("$2,450/month"));
 ok("draft: includes beds and baths", draft.body.includes("2 beds, 1.5 baths"));
 ok("draft: includes listing fact only when supplied", draft.body.includes("parking: 1 surface spot"));
 ok("draft: includes inquiry cue", draft.body.includes("I noticed your parking question"));
-ok("draft: includes move-in", draft.body.includes("desired move-in date: 2026-09-01"));
+ok("draft: includes move-in as a friendly date (S724)", draft.body.includes("desired move-in date: Sep 1."));
+{
+  // S724: the booking link rides in every draft that has one.
+  const withLink = buildAiReplyDraft({
+    renterName: "James Park",
+    orgName: "Lakeview Rentals",
+    inquiryText: "Is this available? Could I see it on a weekend?",
+    listing: { address: "100 Lakeview Ave", rentCents: 150000, beds: 1, baths: 1, availableDate: "2026-11-01" },
+    bookingUrl: "https://app.vacantless.com/r/abc",
+  });
+  ok("S724 draft: booking link", withLink.body.includes("pick a time yourself here: https://app.vacantless.com/r/abc"));
+  ok("S724 draft: available as Nov 1", withLink.body.includes("available Nov 1") && !withLink.body.includes("2026-11-01"));
+  ok("S724 draft: no em dash", !withLink.body.includes("\u2014"));
+}
 ok("draft: includes slot offer", draft.slotOffer.includes("viewing slot"));
 ok("draft: signs org name", draft.body.endsWith("Thanks,\nNorth Star Rentals"));
 ok(

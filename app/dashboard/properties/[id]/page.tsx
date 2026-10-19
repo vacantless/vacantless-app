@@ -111,6 +111,7 @@ import {
 import {
   ownComps,
   suggestRentRange,
+  benchmarkClassForUnitType,
   type ActiveListingComp,
   type LeasedOutcomeComp,
   type MarketRentSuggestion,
@@ -1585,12 +1586,15 @@ export default async function PropertyDetailPage({
       leasedRows,
       activeRows,
     );
+    const marketRentClass = benchmarkClassForUnitType(p.unit_type);
     marketRentSuggestion = suggestRentRange({
       subject: {
         country: "CA",
         city: marketRentCity,
         beds: p.beds,
-        unitClass: "purpose_built",
+        unitClass: marketRentClass.unitClass,
+        benchmarkCovers: marketRentClass.covers,
+        unitTypeLabel: p.unit_type ? (unitTypeLabel(p.unit_type) ?? "").toLowerCase() || null : null,
       },
       benchmarks: benchmarkRows,
       own,
@@ -2558,8 +2562,8 @@ export default async function PropertyDetailPage({
           tone: "caution" as const,
           text:
             normalizedStatus === "leased"
-              ? "This rental is marked Leased. The link still works, but anyone who opens it is told the unit is no longer available — they can't inquire or book a viewing."
-              : "This rental is Paused. The link still works, but anyone who opens it is told the unit isn't currently available — they can't inquire or book a viewing.",
+              ? "This rental is marked Leased. The link still works, but anyone who opens it is told the unit is no longer available, they can't inquire or book a viewing."
+              : "This rental is Paused. The link still works, but anyone who opens it is told the unit isn't currently available, they can't inquire or book a viewing.",
         }
       : {
           tone: "warning" as const,
@@ -2885,8 +2889,8 @@ export default async function PropertyDetailPage({
                 Number(searchParams.imported) === 1 ? "field" : "fields"
               } `
             : ""}
-          from your pasted listing. Review everything below — especially the
-          address, rent, and pet policy — then set it Live when it&apos;s right.
+          from your pasted listing. Review everything below, especially the
+          address, rent, and pet policy, then set it Live when it&apos;s right.
           It&apos;s saved as a Draft for now, so renters can&apos;t see it yet.
         </p>
       )}
@@ -2898,7 +2902,7 @@ export default async function PropertyDetailPage({
       {searchParams.imported && photoRows.length === 0 && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
           <strong>Next: add photos.</strong> Your pasted listing didn&apos;t
-          include any — and listings with photos get far more inquiries on
+          include any, and listings with photos get far more inquiries on
           Kijiji, Facebook, and Zumper.{" "}
           <PhotoUploadLink className="font-medium underline">
             Add photos →
@@ -2948,7 +2952,7 @@ export default async function PropertyDetailPage({
           {searchParams.photoskipped && Number(searchParams.photoskipped) > 0
             ? ` ${searchParams.photoskipped} ${
                 searchParams.photoskipped === "1" ? "item" : "items"
-              } couldn't be imported — make sure links are direct, public images and any Dropbox folder is shared so anyone with the link can view.`
+              } couldn't be imported, make sure links are direct, public images and any Dropbox folder is shared so anyone with the link can view.`
             : ""}
         </p>
       )}
@@ -3219,13 +3223,21 @@ export default async function PropertyDetailPage({
               htmlFor="property-parking"
               className="mb-1 block text-xs font-medium text-gray-600"
             >
-              Parking
+              Parking notes
             </label>
             <input
               id="property-parking"
               name="parking"
               defaultValue={p.parking ?? ""}
-              placeholder="1 spot"
+              // S724 (V251-07): the structured type and count live further down;
+              // this box is only extra notes, so say what is already set.
+              placeholder={
+                p.parking_count != null && p.parking_count > 0
+                  ? `${p.parking_count} set below`
+                  : p.parking_type
+                    ? "Set below"
+                    : "1 spot"
+              }
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
@@ -3859,7 +3871,7 @@ export default async function PropertyDetailPage({
             />
             <p className="mt-1 text-xs text-gray-400">
               Advertised pet preference for the listing and feed. In Ontario a
-              &ldquo;no pets&rdquo; lease clause is void (RTA s.14) — this is a
+              &ldquo;no pets&rdquo; lease clause is void (RTA s.14), this is a
               listing/screening field, not an enforceable rule.
             </p>
           </div>

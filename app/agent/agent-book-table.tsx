@@ -73,7 +73,7 @@ function FlagChips({ row }: { row: AgentBookRow }) {
     });
   if (row.flags.notLiveButShould)
     chips.push({
-      label: "Ready — not live",
+      label: "Ready, not live",
       className: "bg-blue-50 text-blue-700 border-blue-200",
     });
   // "Confirm rent" is surfaced as the actionable Confirm rent -> button in the

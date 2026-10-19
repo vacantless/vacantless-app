@@ -53,6 +53,7 @@ import {
   prefillAddPropertyV2,
 } from "../actions";
 import type { GeocodeSuggestion } from "@/lib/geocode";
+import { mergeAddressSuggestion } from "@/lib/address-merge";
 
 const PDF_WORKER_SRC = "/pdf.worker.min.mjs";
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
@@ -204,17 +205,28 @@ function ToggleChip({
   );
 }
 
+// S724 (V251-08): a blank field takes the standard policy, so say what it will be.
+function inheritOptionLabel(policyValue: string | null | undefined): string {
+  return policyValue ? `Standard policy: ${policyValue}` : "Not specified";
+}
+
 export function AddPropertyV2Form({
   availabilityWindowCount,
   replyToEmail,
   contactPhone,
   aiImageImportEnabled,
+  defaultForRentBy = "owner",
+  policyDefaults = {},
   hiddenReadinessChannels = [],
 }: {
   availabilityWindowCount: number;
   replyToEmail: string | null;
   contactPhone: string | null;
   aiImageImportEnabled: boolean;
+  /** S724 (V251-02): the org's "Listed by" setting; agents list as a professional. */
+  defaultForRentBy?: "owner" | "professional";
+  /** S724 (V251-08): the standard policy a blank field inherits, shown before saving. */
+  policyDefaults?: { lease_term?: string | null; smoking?: string | null; ac_type?: string | null };
   /** S705: readiness rows for sites this org cannot use (Marketplace and
    *  Rentals.ca outside Agile), dropped from the panel. */
   hiddenReadinessChannels?: readonly string[];
@@ -235,6 +247,8 @@ export function AddPropertyV2Form({
     latitude: "",
     longitude: "",
   });
+  // S724 (V251-03): what picking a suggestion kept from the typed address.
+  const [addressNote, setAddressNote] = useState<string | null>(null);
   const [addressSuggestions, setAddressSuggestions] = useState<
     GeocodeSuggestion[]
   >([]);
@@ -305,6 +319,7 @@ export function AddPropertyV2Form({
   }
 
   function updateAddress(value: string) {
+    setAddressNote(null);
     setAddressCoords({ latitude: "", longitude: "" });
     update("address", value);
     queueAddressSuggestions(value);
@@ -312,12 +327,20 @@ export function AddPropertyV2Form({
 
   function selectAddressSuggestion(suggestion: GeocodeSuggestion) {
     if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
-    update("address", suggestion.label);
+    const merged = mergeAddressSuggestion(draft.address, suggestion.label);
+    update("address", merged.address);
+    setAddressNote(
+      merged.postalConflict
+        ? `Kept your postal code ${merged.postalConflict.typed}. The suggestion had ${merged.postalConflict.suggested}. Check which is right.`
+        : merged.keptUnit
+          ? `Kept ${merged.keptUnit.word} ${merged.keptUnit.value} from what you typed.`
+          : null,
+    );
     setAddressCoords({
       latitude: suggestion.latitude == null ? "" : String(suggestion.latitude),
       longitude: suggestion.longitude == null ? "" : String(suggestion.longitude),
     });
-    addressQueryRef.current = suggestion.label;
+    addressQueryRef.current = merged.address;
     clearAddressSuggestions();
   }
 
@@ -663,6 +686,11 @@ export function AddPropertyV2Form({
                   )}
                 </div>
               </Field>
+              {addressNote && (
+                <p className="mt-1 text-xs text-amber-700" role="status">
+                  {addressNote}
+                </p>
+              )}
               {geocodeActive && (
                 <p className="mt-1 text-xs text-gray-500">
                   Address search powered by{" "}
@@ -746,6 +774,19 @@ export function AddPropertyV2Form({
                       {unitTypeLabel(opt)}
                     </option>
                   ))}
+                </select>
+              </Field>
+            </div>
+            <div className="sm:col-span-3">
+              <Field label="Listed by" htmlFor="for_rent_by">
+                <select
+                  id="for_rent_by"
+                  name="for_rent_by"
+                  defaultValue={defaultForRentBy}
+                  className={selectClass()}
+                >
+                  <option value="owner">Owner</option>
+                  <option value="professional">Real estate professional</option>
                 </select>
               </Field>
             </div>
@@ -848,7 +889,9 @@ export function AddPropertyV2Form({
                   onChange={(e) => update("lease_term", e.target.value)}
                   className={selectClass()}
                 >
-                  <option value="">Not specified</option>
+                  <option value="">
+                    {inheritOptionLabel(leaseTermLabel(policyDefaults.lease_term))}
+                  </option>
                   {LEASE_TERM_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
                       {leaseTermLabel(opt)}
@@ -925,7 +968,15 @@ export function AddPropertyV2Form({
                   onChange={(e) => update("ac_type", e.target.value)}
                   className={selectClass()}
                 >
-                  <option value="">Not specified</option>
+                  <option value="">
+                    {inheritOptionLabel(
+                      policyDefaults.ac_type === "none"
+                        ? "No air conditioning"
+                        : acTypeLabel(policyDefaults.ac_type)
+                          ? `Air conditioning, ${acTypeLabel(policyDefaults.ac_type)}`
+                          : null,
+                    )}
+                  </option>
                   {AC_TYPE_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
                       {opt === "none" ? "No A/C" : `A/C: ${acTypeLabel(opt)}`}
@@ -1097,7 +1148,9 @@ export function AddPropertyV2Form({
                   onChange={(e) => update("smoking", e.target.value)}
                   className={selectClass()}
                 >
-                  <option value="">Not specified</option>
+                  <option value="">
+                    {inheritOptionLabel(smokingLabel(policyDefaults.smoking))}
+                  </option>
                   {SMOKING_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
                       {smokingLabel(opt)}
@@ -1159,7 +1212,7 @@ export function AddPropertyV2Form({
 
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-gray-900">Description</h2>
+            <h2 id="description-label" className="text-sm font-semibold text-gray-900">Description</h2>
             <button
               type="button"
               onClick={draftDescription}
@@ -1171,6 +1224,7 @@ export function AddPropertyV2Form({
           </div>
           <textarea
             name="description"
+            aria-labelledby="description-label"
             rows={8}
             value={draft.description}
             onChange={(e) => update("description", e.target.value)}

@@ -161,7 +161,7 @@ export default async function ApplyPage({
 
             <Section title="Household">
               <Area name="occupants" label="Other occupants (name, age, relationship)" />
-              <Text name="vehicles" label="Vehicle(s) — make, model, plate" />
+              <Text name="vehicles" label="Vehicle(s): make, model, plate" />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Text name="smoking" label="Do you smoke? (yes / no)" />
                 <Text name="pets" label="Pets (type, breed, weight)" />

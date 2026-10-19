@@ -104,7 +104,7 @@ ok(
 ok(
   "lead-detail: exposes pure noSuitableTimeBadge helper",
   leadDetail.includes("export function noSuitableTimeBadge") &&
-    leadDetail.includes("Wanted to book — no suitable time"),
+    leadDetail.includes("Wanted to book, no suitable time"),
 );
 ok(
   "lead page: selects no_suitable_time",

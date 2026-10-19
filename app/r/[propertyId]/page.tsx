@@ -518,7 +518,7 @@ export default async function PublicListingPage({
           )}
           {/* Bring the booking action above the fold on mobile (Codex design
               audit #6): a renter sees how to act before scrolling past the photos
-              and description. In-flow anchor jump — no JS, desktop unaffected. */}
+              and description. In-flow anchor jump, no JS, desktop unaffected. */}
           {isAvailable && (
             <a
               href="#book"
@@ -725,7 +725,7 @@ export default async function PublicListingPage({
                   Someone booked that slot moments before you. We saved your
                   inquiry, so {l.org_name} can still reach out
                   {canRebookSaved
-                    ? " — just pick another time below."
+                    ? ". Just pick another time below."
                     : ", but you can grab another time right now."}
                 </p>
               </div>

@@ -89,7 +89,7 @@ function Stars({ rating }: { rating: number }) {
 // Format in the org's booking timezone. Without an explicit timeZone the
 // server (UTC on Vercel) renders the wrong wall-clock time.
 function fmt(iso: string | null, timeZone: string): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleString("en-US", {
     timeZone,
     weekday: "short",
@@ -413,7 +413,7 @@ export default async function ShowingsPage({
                 assignedShown === 1 ? "viewing" : "viewings"
               } to your showing agents.`}
           {fullShown > 0 &&
-            ` ${fullShown} left unassigned — every agent was at capacity for that week.`}
+            ` ${fullShown} left unassigned, every agent was at capacity for that week.`}
         </div>
       )}
 
@@ -552,7 +552,7 @@ function AtRiskBoard({
           the operator never has to guess what a click sends. */}
       {rows.length > 0 && (
         <p className="mb-2 text-xs text-gray-500">
-          &ldquo;Mark confirmed&rdquo; only records it — no message.
+          &ldquo;Mark confirmed&rdquo; only records it, no message.
           &ldquo;Nudge renter&rdquo; emails the renter a confirm link now.
           &ldquo;Cancel and reopen time&rdquo; cancels the booking and reopens the slot.
           &ldquo;Email bouncing&rdquo; means the reminder did not reach the renter; call them.

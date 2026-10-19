@@ -92,7 +92,7 @@ export function MarketRentPanel({
       ) : (
         <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
           <p className="text-sm font-medium text-gray-800">
-            Not enough local data yet — this sharpens as you lease units.
+            Not enough local data yet, this sharpens as you lease units.
           </p>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">
             Add local benchmark rows or let Vacantless capture leased outcomes

@@ -102,7 +102,7 @@ export default async function ConfirmShowingPage({
             <>
               <h1 className="text-xl font-semibold text-gray-900">You&apos;re confirmed</h1>
               <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
-                You&apos;re confirmed — see you then!
+                You&apos;re confirmed, see you then!
               </p>
               <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
                 <p className="font-medium text-gray-900">{address}</p>

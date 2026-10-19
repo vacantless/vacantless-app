@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { scrubEmDashes } from "@/lib/email";
+import { listingUrl, scrubEmDashes } from "@/lib/email";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
@@ -215,7 +215,9 @@ export default async function LeadDetailPage({
   const followStatus = followUpStatus(l.next_action_at, today);
   const followText = followUpLabel(l.next_action_at, today);
   const quickStages = suggestedNextStageOptions(l.status);
-  const replyDraft = buildReplyDraft(l, orgName);
+  // S724: every draft carries the rental page so the renter can book alone.
+  const bookingUrl = l.property?.id ? listingUrl(l.property.id) : null;
+  const replyDraft = buildReplyDraft(l, orgName, bookingUrl);
   const canUseAiReply =
     org != null &&
     isFeatureEnabledForOrg(
@@ -247,6 +249,7 @@ export default async function LeadDetailPage({
             }
           : null,
         knowledge: propertyKnowledge,
+        bookingUrl,
       })
     : null;
 
@@ -366,7 +369,7 @@ export default async function LeadDetailPage({
               Possible mismatch
             </span>
             <span className="text-xs text-gray-500">
-              Based on your screening criteria — review before deciding.
+              Based on your screening criteria, review before deciding.
             </span>
           </div>
           <ul className="mt-2 list-disc space-y-0.5 pl-5 text-sm text-amber-900">
@@ -418,13 +421,13 @@ export default async function LeadDetailPage({
               Worth a look
             </span>
             <span className="text-xs text-gray-500">
-              Doesn&apos;t match a preference you set — just a heads-up, not a flag.
+              Doesn&apos;t match a preference you set, just a heads-up, not a flag.
             </span>
           </div>
           <ul className="mt-2 space-y-1 text-sm text-sky-900">
             {preferenceMismatches.map((a) => (
               <li key={a.question_id}>
-                <span className="font-medium">{a.prompt}</span> — answered{" "}
+                <span className="font-medium">{a.prompt}</span>, answered{" "}
                 <span className="font-semibold">
                   {a.answer === "yes" ? "Yes" : "No"}
                 </span>{" "}
@@ -483,7 +486,7 @@ export default async function LeadDetailPage({
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
           <p className="text-sm text-gray-700">
             <span className="font-medium">Ready to lease this renter?</span> You
-            can create the tenancy now — we&apos;ll mark this inquiry Leased.
+            can create the tenancy now, we&apos;ll mark this inquiry Leased.
           </p>
           <Link
             href={`/dashboard/tenancies/new?from=${l.id}`}
@@ -575,7 +578,7 @@ export default async function LeadDetailPage({
       </div>
       {showings.length === 0 ? (
         <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
-          No viewings booked yet. Renters book from your listing page — if
+          No viewings booked yet. Renters book from your listing page. If
           nothing is bookable, check{" "}
           <Link
             href="/dashboard/availability"
@@ -850,7 +853,7 @@ function Field({
             value
           )
         ) : (
-          <span className="text-gray-400">—</span>
+          <span className="text-gray-400">-</span>
         )}
       </div>
     </div>

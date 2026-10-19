@@ -121,7 +121,7 @@ export default async function LeasingHubPage() {
     {
       href: "/dashboard/leads",
       title: "Inquiries",
-      desc: "Every renter inquiry across all your rentals — reply, qualify, and move them through your follow-up list.",
+      desc: "Every renter inquiry across all your rentals, reply, qualify, and move them through your follow-up list.",
       icon: "chat",
       badge: newCount > 0 ? { count: newCount, label: "to reply to" } : null,
       context: newCount === 0 ? "Nothing waiting for a reply" : null,

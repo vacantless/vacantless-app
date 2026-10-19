@@ -40,7 +40,7 @@ export function AssignSelect({
           <input type="hidden" name="agent_id" value={suggestion.agentId} />
           <button
             type="submit"
-            title={`Suggested: ${suggestion.name} — ${suggestion.reason}`}
+            title={`Suggested: ${suggestion.name}: ${suggestion.reason}`}
             className={
               // When the best agent is already at their weekly capacity, don't
               // dress the chip as a clean recommendation — amber + an always-

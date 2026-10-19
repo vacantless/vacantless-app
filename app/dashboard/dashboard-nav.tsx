@@ -139,8 +139,11 @@ export function DashboardNav({
   capturesEnabled = false,
   distributionWizardEnabled = false,
   postLeaseEnabled = true,
+  userEmail = null,
 }: {
   orgName: string;
+  /** S724 (V251-01): which login is signed in, shown at the top of the menu. */
+  userEmail?: string | null;
   orgs?: { id: string; name: string }[];
   currentOrgId?: string;
   agentBookEnabled?: boolean;
@@ -260,6 +263,13 @@ export function DashboardNav({
               role="menu"
               className="absolute right-0 top-full z-30 mt-1 min-w-48 overflow-hidden rounded-lg border border-black/5 bg-white py-1 text-gray-700 shadow-lg"
             >
+              {userEmail && (
+                <div className="border-b border-gray-100 px-4 pb-2 pt-2">
+                  <p className="text-xs text-gray-400">Signed in as</p>
+                  <p className="max-w-[16rem] truncate text-sm font-medium text-gray-800">{userEmail}</p>
+                  <p className="max-w-[16rem] truncate text-xs text-gray-500">{orgName}</p>
+                </div>
+              )}
               {isMultiOrg && (
                 <>
                   <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
@@ -342,6 +352,11 @@ export function DashboardNav({
             <p className="px-3 pb-0.5 pt-1 text-xs uppercase tracking-wider text-white/60">
               More
             </p>
+            {userEmail && (
+              <p className="truncate px-3 pb-1 text-xs text-white/70">
+                Signed in as {userEmail}
+              </p>
+            )}
             {isMultiOrg && (
               <>
                 <p className="px-3 pt-1 text-xs text-white/60">

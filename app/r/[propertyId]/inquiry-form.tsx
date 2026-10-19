@@ -755,7 +755,7 @@ export function InquiryForm({
           </InquirySubmitButton>
           {hasSlots && !selectedSlot && (
             <p className="-mt-2 text-center text-xs text-gray-400">
-              No time selected — we&apos;ll reach out to arrange one.
+              No time selected. We&apos;ll reach out to arrange one.
             </p>
           )}
         </div>

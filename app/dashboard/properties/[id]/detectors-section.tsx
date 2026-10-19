@@ -125,7 +125,7 @@ function DetectorFields({ d }: { d?: DetectorView }) {
 function installLabel(d: DetectorView): string {
   if (d.install_date) return d.install_date;
   if (d.install_year != null) return String(d.install_year);
-  return "—";
+  return "-";
 }
 
 export function DetectorsSection({

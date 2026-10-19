@@ -285,7 +285,7 @@ function ApplianceFields({
 function purchaseLabel(d: ApplianceView): string {
   if (d.purchase_date) return d.purchase_date;
   if (d.install_year != null) return String(d.install_year);
-  return "—";
+  return "-";
 }
 
 /** A small status chip with a prefix label (e.g. "Warranty: Overdue"). */
@@ -464,7 +464,7 @@ function ConsumablesBlock({ d, propertyId }: { d: ApplianceView; propertyId: str
                   {meta.label}
                 </span>
                 <span className="text-xs text-gray-500">
-                  every {c.interval_months ?? "—"} mo
+                  every {c.interval_months ?? "-"} mo
                   {c.due ? ` · due ${c.due}` : ""}
                 </span>
                 <div className="ml-auto flex items-center gap-2">
@@ -530,7 +530,7 @@ const SCAN_NOTE: Record<string, { msg: string; tone: string }> = {
     tone: "bg-gray-100 text-gray-600",
   },
   empty: {
-    msg: "Couldn’t read that photo clearly — try a sharper, straight-on shot of the plate, or enter the details by hand.",
+    msg: "Couldn’t read that photo clearly, try a sharper, straight-on shot of the plate, or enter the details by hand.",
     tone: "bg-amber-100 text-amber-800",
   },
   failed: {
@@ -596,7 +596,7 @@ function ScanExpenseCard({
       {pendingDocId ? <input type="hidden" name="pending_doc_id" value={pendingDocId} /> : null}
       <p className="text-sm font-semibold text-gray-900">Also log this as an expense for this unit?</p>
       <p className="mt-0.5 text-xs text-gray-500">
-        We read {prefill.merchant ? <strong>{prefill.merchant}</strong> : "this receipt"} — confirm
+        We read {prefill.merchant ? <strong>{prefill.merchant}</strong> : "this receipt"}, confirm
         the details and file it as a cost on this unit. The scanned receipt is attached as proof.
       </p>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -787,7 +787,7 @@ export function AppliancesSection({
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900">Scan a plate or receipt</p>
             <p className="mt-0.5 text-xs text-gray-500">
-              Snap the appliance data plate or the purchase receipt — we read the make, model and
+              Snap the appliance data plate or the purchase receipt, we read the make, model and
               serial (and any recommended replacement schedule) and prefill the form for you to
               confirm.
             </p>
@@ -814,7 +814,7 @@ export function AppliancesSection({
         </summary>
         {prefill ? (
           <p className="mt-3 rounded-lg bg-green-100 px-3 py-2 text-xs text-green-800">
-            Scanned the photo — review the details below and save. Anything we couldn’t read is left
+            Scanned the photo, review the details below and save. Anything we couldn’t read is left
             blank.{pendingDocId ? " The photo is saved as this appliance’s receipt when you save." : ""}
           </p>
         ) : null}

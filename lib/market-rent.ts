@@ -20,7 +20,27 @@ export type MarketRentSubject = {
   city?: string | null;
   beds?: number | null;
   unitClass?: BenchmarkUnitClass | null;
+  /** S724 (V251-05): a house or townhouse has no benchmark class of its own. */
+  benchmarkCovers?: boolean;
+  unitTypeLabel?: string | null;
 };
+
+/**
+ * S724 (V251-05): which benchmark class fits the rental. Apartments compare to
+ * purpose-built rentals, condos to condos. Houses, townhouses and plexes have no
+ * CMHC class, so the range is only broad market context for them.
+ */
+export function benchmarkClassForUnitType(unitType: string | null | undefined): {
+  unitClass: BenchmarkUnitClass;
+  covers: boolean;
+} {
+  const t = (unitType ?? "").toLowerCase();
+  if (t === "condo") return { unitClass: "condo", covers: true };
+  if (t === "house" || t === "townhouse" || t === "duplex-triplex") {
+    return { unitClass: "purpose_built", covers: false };
+  }
+  return { unitClass: "purpose_built", covers: true };
+}
 
 export type LeasedOutcomeComp = {
   asking_rent_cents?: number | null;
@@ -140,12 +160,24 @@ export function suggestRentRange({
   const lowCents = Math.min(midCents, Math.round(midCents * (1 - spread)));
   const highCents = Math.max(midCents, Math.round(midCents * (1 + spread)));
   const basis = basisLines({ subject, benchmarks, anchor, own, minSample });
+  const covered = subject.benchmarkCovers !== false;
+  if (!covered && anchor) {
+    basis.unshift(
+      `The benchmarks cover apartments and condos, not a ${
+        subject.unitTypeLabel ?? "house or townhouse"
+      }. Treat this as broad market context, not a price for this rental.`,
+    );
+  }
 
   return {
     lowCents,
     midCents,
     highCents,
-    confidence: confidenceFor(anchor, own, minSample),
+    // An uncovered unit type never reads better than low confidence from benchmarks alone.
+    confidence:
+      covered || (own.sampleSize >= minSample && own.medianAskingCents != null)
+        ? confidenceFor(anchor, own, minSample)
+        : "low",
     anchor: anchor
       ? {
           source: anchor.source,

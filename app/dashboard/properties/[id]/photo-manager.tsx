@@ -650,7 +650,7 @@ export function PhotoUploadWorkspace({
                   <input type="hidden" name="property_id" value={propertyId} />
                   <p className="mb-2 text-xs text-gray-500">
                     Paste one <strong>direct image link</strong> per line (each
-                    should open the image itself — ending in .jpg, .png, .webp,
+                    should open the image itself, ending in .jpg, .png, .webp,
                     or .gif). Gallery pages and login-protected links won&apos;t
                     work.
                   </p>

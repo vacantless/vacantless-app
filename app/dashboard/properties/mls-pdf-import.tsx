@@ -167,7 +167,7 @@ export function MlsPdfImport({ placeholder }: { placeholder: string }) {
         setStatus({
           kind: "error",
           message:
-            "Your clipboard looks empty. Copy the MLS / realtor.ca text first, then try again — or paste below.",
+            "Your clipboard looks empty. Copy the MLS / realtor.ca text first, then try again, or paste below.",
         });
         return;
       }
@@ -213,7 +213,7 @@ export function MlsPdfImport({ placeholder }: { placeholder: string }) {
         </p>
         <p className="mt-1 text-xs text-gray-500">
           The realtor data sheet (Client Full) you downloaded or emailed
-          yourself — we read it on your device, nothing is uploaded.
+          yourself, we read it on your device, nothing is uploaded.
         </p>
         <input
           ref={inputRef}

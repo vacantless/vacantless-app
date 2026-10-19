@@ -470,7 +470,7 @@ export default async function PropertiesPage({
 
       {/* Building standard policy entry point (S275 IA Step 3): the org-level
           defaults every unit inherits live here, with the portfolio they
-          govern — relocated from Settings (G6/G7). Fresh-org audit P3: only
+          govern, relocated from Settings (G6/G7). Fresh-org audit P3: only
           surface it once there's at least one unit to govern; a zero-property
           org shouldn't be fronted with org-wide config before its first add. */}
       {allRows.length > 0 && (
@@ -581,7 +581,7 @@ export default async function PropertiesPage({
                 <span className="text-sm text-gray-500">
                   {p.rent_cents
                     ? `$${(p.rent_cents / 100).toLocaleString()}/mo`
-                    : "—"}
+                    : "-"}
                 </span>
                 <StatusChip tone={propertyStatusTone(p.status)}>
                   {statusLabel}
@@ -647,8 +647,8 @@ export default async function PropertiesPage({
               </span>
               </div>
               {/* Readiness strip (Codex design audit #5): the four signals that
-                  decide whether a rental can actually pull inquiries — link,
-                  photos, viewings, feed — surfaced inline so an operator sees
+                  decide whether a rental can actually pull inquiries, link,
+                  photos, viewings, feed, surfaced inline so an operator sees
                   what's missing without opening the rental. */}
               <ReadinessChips signals={readiness} />
             </li>

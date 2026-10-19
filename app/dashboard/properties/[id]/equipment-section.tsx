@@ -124,7 +124,7 @@ function EquipmentFields({ d }: { d?: EquipmentView }) {
 function installLabel(d: EquipmentView): string {
   if (d.install_date) return d.install_date;
   if (d.install_year != null) return String(d.install_year);
-  return "—";
+  return "-";
 }
 
 export function EquipmentSection({

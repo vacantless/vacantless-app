@@ -19,7 +19,22 @@ export type AiReplyDraftInput = {
   noSuitableTime?: boolean | null;
   listing: AiReplyListing | null;
   knowledge?: readonly PropertyQaEntry[] | null;
+  /** S724: the rental page where the renter books a time themselves. */
+  bookingUrl?: string | null;
 };
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** S724: "2026-11-01" reads "Nov 1" to a renter; anything else passes through. */
+export function friendlyDate(value: string | null | undefined): string | null {
+  const v = (value ?? "").trim();
+  if (!v) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
+  if (!m) return v;
+  const month = MONTHS[Number(m[2]) - 1];
+  const day = Number(m[3]);
+  return month && day >= 1 && day <= 31 ? `${month} ${day}` : v;
+}
 
 export type AiReplyDraft = {
   subject: string;
@@ -85,7 +100,7 @@ function listingFacts(listing: AiReplyListing | null): string[] {
     bedsBaths(listing),
     cleanText(listing.parking) ? `parking: ${cleanText(listing.parking)}` : null,
     cleanText(listing.availableDate)
-      ? `available ${cleanText(listing.availableDate)}`
+      ? `available ${friendlyDate(cleanText(listing.availableDate))}`
       : null,
     laundryLabel(listing.laundry),
     listing.petFriendly === true ? "pet friendly" : null,
@@ -176,8 +191,9 @@ export function buildAiReplyDraft(input: AiReplyDraftInput): AiReplyDraft {
       ? `A few listing details: ${facts.join("; ")}.`
       : "I can help with the details and next steps.";
   const moveIn = cleanText(input.moveInDate)
-    ? `I also saw your desired move-in date: ${cleanText(input.moveInDate)}.`
+    ? `I also saw your desired move-in date: ${friendlyDate(cleanText(input.moveInDate))}.`
     : null;
+  const bookingUrl = cleanText(input.bookingUrl);
   const knowledgeMatch = matchKnowledge(input.inquiryText, input.knowledge);
   const cue = knowledgeMatch
     ? sentence(knowledgeMatch.answerText)
@@ -194,8 +210,11 @@ export function buildAiReplyDraft(input: AiReplyDraftInput): AiReplyDraft {
     cue,
     moveIn,
     offer,
+    bookingUrl ? `You can also pick a time yourself here: ${bookingUrl}` : null,
     "",
-    "Please reply with the window that works best, and I will confirm the next step.",
+    bookingUrl
+      ? "Or reply with the window that works best, and I will confirm the next step."
+      : "Please reply with the window that works best, and I will confirm the next step.",
     "",
     "Thanks,",
     orgName,

@@ -28,6 +28,17 @@ export default async function NewPropertyPage({
   // S710: weekly windows OR dated hours still to come (lib/viewing-times-count).
   const availabilityCount = await countViewingTimes(supabase, org.id, org.booking_timezone || undefined);
 
+  // S724 (V251-02): "Listed by" starts from the org's own setting.
+  const { data: orgListing } = await supabase
+    .from("organizations")
+    .select("for_rent_by")
+    .eq("id", org.id)
+    .maybeSingle();
+  const defaultForRentBy =
+    (orgListing as { for_rent_by?: string | null } | null)?.for_rent_by === "professional"
+      ? "professional"
+      : "owner";
+
   const aiImageImportEnabled =
     !!process.env.LISTING_AI_IMPORT_ENABLED && canUseListingAiImport(org.plan);
 
@@ -56,6 +67,12 @@ export default async function NewPropertyPage({
         replyToEmail={org.reply_to_email}
         contactPhone={org.public_contact_phone}
         aiImageImportEnabled={aiImageImportEnabled}
+        defaultForRentBy={defaultForRentBy}
+        policyDefaults={{
+          lease_term: org.policy_lease_term ?? null,
+          smoking: org.policy_smoking ?? null,
+          ac_type: org.policy_ac_type ?? null,
+        }}
         hiddenReadinessChannels={[
           // The readiness panel names Marketplace "facebook_marketplace".
           ...(isHiddenForOrg(MARKETPLACE_CHANNEL_KEY, org.id) ? ["facebook_marketplace"] : []),

@@ -863,6 +863,8 @@ export async function createPropertyV2(formData: FormData) {
       beds: parseIntOrNull(String(formData.get("beds") ?? "")),
       baths: parseFloatOrNull(String(formData.get("baths") ?? "")),
       unit_type: normalizeUnitType(formData.get("unit_type")),
+      // S724 (V251-02): set at creation, not only after saving.
+      for_rent_by: normalizeForRentBy(formData.get("for_rent_by")),
       structure_type: normalizeStructureType(formData.get("structure_type")),
       address_display_mode: normalizeAddressDisplayMode(
         String(formData.get("address_display_mode") ?? ""),
