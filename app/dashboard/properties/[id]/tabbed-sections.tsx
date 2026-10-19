@@ -72,6 +72,18 @@ export function TabbedSections({
   const validInitial = tabIds.includes(initialTab) ? initialTab : firstTab;
 
   const [active, setActive] = useState(validInitial);
+  // S724 (V251-42): a tab picked by hand is kept in the address (?tab=), so a
+  // save, which reloads the page through the server, comes back to the same tab.
+  const pickTab = useCallback((tabId: string) => {
+    setActive(tabId);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tabId);
+      window.history.replaceState(window.history.state, "", url.toString());
+    } catch {
+      // the tab still switches; only the address is left as it was
+    }
+  }, []);
   const activeRef = useRef(active);
   activeRef.current = active;
   // When a deep-link targets a panel that isn't active yet, we switch tabs
@@ -178,7 +190,7 @@ export function TabbedSections({
               id={`tab-${tabId}`}
               aria-selected={isActive}
               aria-controls={`tabpanel-${tabId}`}
-              onClick={() => setActive(tabId)}
+              onClick={() => pickTab(tabId)}
               className={`-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
                 isActive
                   ? "border-brand text-brand"

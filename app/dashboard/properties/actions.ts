@@ -5,6 +5,8 @@ import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/p
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { tabFromReferer } from "@/lib/return-tab";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg, type Org } from "@/lib/org";
@@ -1181,10 +1183,11 @@ export async function updateProperty(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/properties");
+  const returnTab = tabFromReferer(headers().get("referer"), id);
   redirect(
     `/dashboard/properties/${id}?${relistBlocked ? "relist=confirm" : capBlocked ? "saved=1&publish=plan" : "saved=1"}${
       tourRejected ? "&tourerr=host" : ""
-    }${videoRejected ? "&videoerr=host" : ""}`,
+    }${videoRejected ? "&videoerr=host" : ""}${returnTab ? `&tab=${returnTab}` : ""}`,
   );
 }
 
