@@ -963,6 +963,18 @@ async function liveRentalCapFull(
   return (count ?? 0) >= cap;
 }
 
+// S724 (V251-24): a rental's own minimum notice, 0 to 336 hours; blank = the account's.
+function parseViewingLeadHours(v: FormDataEntryValue | null): number | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const n = Math.round(Number(s));
+  return Number.isFinite(n) && n >= 0 && n <= 336 ? n : null;
+}
+function parseTriBool(v: FormDataEntryValue | null): boolean | null {
+  const s = String(v ?? "").trim();
+  return s === "true" ? true : s === "false" ? false : null;
+}
+
 export async function updateProperty(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const id = String(formData.get("id") ?? "");
@@ -1091,6 +1103,14 @@ export async function updateProperty(formData: FormData) {
       // S471: per-property override of the org showing arrival phone (the number
       // renters text/call on arrival). Blank clears -> falls back to the org default.
       showing_arrival_phone: String(formData.get("showing_arrival_phone") ?? "").trim() || null,
+      // S724 (V251-24): viewing rules for this rental. Blank = the account's.
+      ...(formData.has("viewing_rules_present")
+        ? {
+            viewing_earliest_date: parseDateOrNull(String(formData.get("viewing_earliest_date") ?? "")),
+            viewing_lead_hours: parseViewingLeadHours(formData.get("viewing_lead_hours")),
+            viewing_requires_confirmation: parseTriBool(formData.get("viewing_requires_confirmation")),
+          }
+        : {}),
       status: effectiveStatus,
       address_display_mode: normalizeAddressDisplayMode(
         String(formData.get("address_display_mode") ?? ""),

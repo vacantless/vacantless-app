@@ -17,6 +17,8 @@ export type AdPreviewInput = {
   description: string | null;
   photoCount: number;
   features: UnitFeatures;
+  /** S724 (V251-24): the rental's effective viewing rules. */
+  viewing?: { earliestDate: string | null; leadHours: number | null; confirms: boolean } | null;
 };
 
 export type AdPreviewFact = { label: string; value: string; missing?: boolean };
@@ -67,6 +69,16 @@ export function parkingLine(f: UnitFeatures): AdPreviewFact | null {
   return free ? { label: "Parking", value: free.length > 60 ? free.slice(0, 57) + "..." : free } : null;
 }
 
+export function viewingLine(v: { earliestDate: string | null; leadHours: number | null; confirms: boolean }): AdPreviewFact {
+  const parts: string[] = [];
+  const from = friendlyDate(v.earliestDate);
+  if (from) parts.push(`from ${from}`);
+  if (v.leadHours != null && v.leadHours > 0) parts.push(`${v.leadHours} hours' notice`);
+  parts.push(v.confirms ? "you confirm each one" : "renters book directly");
+  const text = parts.join(", ");
+  return { label: "Viewings", value: text.charAt(0).toUpperCase() + text.slice(1) };
+}
+
 export function buildAdPreview(input: AdPreviewInput): AdPreview {
   const f = input.features ?? {};
   const facts: AdPreviewFact[] = [];
@@ -83,6 +95,7 @@ export function buildAdPreview(input: AdPreviewInput): AdPreview {
   const parking = parkingLine(f);
   if (parking) facts.push(parking);
   if (f.furnished === true) facts.push({ label: "Furnished", value: "Yes" });
+  if (input.viewing) facts.push(viewingLine(input.viewing));
   facts.push(
     input.photoCount > 0
       ? { label: "Photos", value: String(input.photoCount) }

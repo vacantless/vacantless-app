@@ -327,6 +327,9 @@ type Property = {
   description: string | null;
   showing_instructions: string | null;
   showing_arrival_phone: string | null;
+  viewing_earliest_date: string | null;
+  viewing_lead_hours: number | null;
+  viewing_requires_confirmation: boolean | null;
   status: string;
   available_since: string | null;
   price_drop_pending_cents: number | null;
@@ -899,7 +902,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -1073,6 +1076,17 @@ export default async function PropertyDetailPage({
   // S713: Kijiji, Rentals.ca and Zumper are the paid Posting add-on. Without
   // it their rows show the add-on note instead of a post or sign-in button.
   const robotPostingAccess = await readRobotPostingAccess(supabase, org?.id);
+  // S724 (V251-24): the account's viewing notice, for this rental's "blank =
+  // account setting" hints.
+  const { data: bookingCfg } = org
+    ? await supabase
+        .from("organizations")
+        .select("booking_lead_hours, booking_requires_confirmation")
+        .eq("id", org.id)
+        .maybeSingle()
+    : { data: null };
+  const accountLeadHours = (bookingCfg?.booking_lead_hours as number | null | undefined) ?? 0;
+  const accountConfirms = bookingCfg?.booking_requires_confirmation === true;
   // Detector inventory (S359): this unit's logged smoke/CO detectors + each one's
   // computed end-of-life date + status (against the org-local "today"). Shaped
   // here so the section component stays presentational. RLS scopes the read.
@@ -1501,6 +1515,11 @@ export default async function PropertyDetailPage({
     description: p.description,
     photoCount: photoRows.length,
     features: effectiveFeatures,
+    viewing: {
+      earliestDate: p.viewing_earliest_date,
+      leadHours: p.viewing_lead_hours ?? accountLeadHours,
+      confirms: p.viewing_requires_confirmation ?? accountConfirms,
+    },
   });
   // S700i (stranger test 2): the ad wording card showed LinkedIn, WhatsApp and
   // Snapchat tabs although none of them can be posted to yet. Show only copy
@@ -3333,6 +3352,68 @@ export default async function PropertyDetailPage({
             city={marketRentCity}
           />
         )}
+
+        {/* S724 (V251-24): viewing rules for this rental (an occupied unit needs
+            24 hours' notice to the tenant, and often a later first date). */}
+        <details
+          className="rounded-2xl border border-gray-200 bg-white shadow-sm"
+          open={Boolean(p.viewing_earliest_date || p.viewing_lead_hours != null || p.viewing_requires_confirmation != null)}
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-gray-900">
+                Viewing rules for this rental
+              </h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Optional. Use these when a tenant still lives there.
+              </p>
+            </div>
+            <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+              Open
+            </span>
+          </summary>
+          <div className="grid gap-4 border-t border-gray-100 px-5 py-4 sm:grid-cols-3">
+            <input type="hidden" name="viewing_rules_present" value="1" />
+            <label className="block text-xs font-medium text-gray-600">
+              No viewings before
+              <input
+                type="date"
+                name="viewing_earliest_date"
+                defaultValue={p.viewing_earliest_date ?? ""}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <span className="mt-1 block font-normal text-gray-400">Blank: any day you have open</span>
+            </label>
+            <label className="block text-xs font-medium text-gray-600">
+              Hours of notice
+              <input
+                type="number"
+                name="viewing_lead_hours"
+                min={0}
+                max={336}
+                defaultValue={p.viewing_lead_hours ?? ""}
+                placeholder={String(accountLeadHours)}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <span className="mt-1 block font-normal text-gray-400">
+                Blank: your usual {accountLeadHours} hours. A tenant still living there needs 24.
+              </span>
+            </label>
+            <label className="block text-xs font-medium text-gray-600">
+              Confirm each viewing
+              <select
+                name="viewing_requires_confirmation"
+                defaultValue={p.viewing_requires_confirmation == null ? "" : String(p.viewing_requires_confirmation)}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">{accountConfirms ? "Your usual: yes" : "Your usual: no"}</option>
+                <option value="true">Yes, I confirm each one</option>
+                <option value="false">No, booked times are final</option>
+              </select>
+              <span className="mt-1 block font-normal text-gray-400">Renters are told you will confirm.</span>
+            </label>
+          </div>
+        </details>
 
         <details className="rounded-2xl border border-gray-200 bg-white shadow-sm">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">

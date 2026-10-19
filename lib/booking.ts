@@ -29,6 +29,9 @@ export type Availability = {
   timezone: string;
   slot_minutes: number;
   lead_hours: number;
+  // S724 (V251-24): this rental opens no times before this date (YYYY-MM-DD in
+  // the org tz), e.g. while the current tenant is still there. Null = no limit.
+  earliest_date?: string | null;
   horizon_days: number;
   rules: AvailabilityRule[];
   booked: string[]; // ISO timestamps already taken
@@ -261,6 +264,7 @@ export function generateSlots(
     const { year, month, day, weekday } = ymdInTz(anchorMs, tz);
     const dayKey = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     if (daysOff.has(dayKey)) continue; // operator blocked this specific date
+    if (av.earliest_date && dayKey < av.earliest_date) continue; // S724: not before this rental's first viewing date
     const overrideRules = byDate.get(dayKey);
     const rules =
       overrideRules && overrideRules.length > 0

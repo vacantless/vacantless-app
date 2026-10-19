@@ -1302,8 +1302,8 @@ function ConfirmModal({
   const siteCount = instantDestinations.length;
   const liveNowText =
     siteCount === 0
-      ? "Your Vacantless page goes live now"
-      : `Your Vacantless page and ${siteCount === 1 ? "1 connected site" : `${siteCount} connected sites`} go live now`;
+      ? "Posted now: your Vacantless page"
+      : `Posted now: your Vacantless page and ${siteCount === 1 ? "1 connected site" : `${siteCount} connected sites`}`;
   const signInText =
     preflight.signInNeeded.length === 1
       ? "1 site needs sign-in"

@@ -26,7 +26,7 @@ ok("refresh when the window ends", /wasOpen\.current && !siteSigninIsOpen\(win\.
 // 28 + 25: wording on the posting card and the Post box.
 const pe = read("app/dashboard/properties/[id]/publish-everywhere.tsx");
 ok("getting it ready until approved", /gate === "queued" \|\| gate === "submitting" \|\| gate === "submitted"\)[\s\S]{0,60}item\?\.approved !== true/.test(pe));
-ok("no fake site count", !/instantDestinations\.length \+ 2/.test(pe) && /Your Vacantless page goes live now/.test(pe));
+ok("no fake site count", !/instantDestinations\.length \+ 2/.test(pe) && /Posted now: your Vacantless page/.test(pe));
 ok("email row says who gets it", /New inquiries emailed to you/.test(pe) && !/Email alerts/.test(pe));
 
 // 17: success banner follows the real state.

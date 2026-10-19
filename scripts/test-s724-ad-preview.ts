@@ -29,6 +29,12 @@ const long = buildAdPreview({ title: "t", rentCents: 1, beds: 0, baths: 1, descr
 ok("studio", v(long, "Size")?.value === "Studio, 1 bathroom");
 ok("description trimmed", (long.descriptionStart ?? "").length === 180);
 
+// S724 (V251-24): the viewing rules show in the approval box.
+const occ = buildAdPreview({ title: "t", rentCents: 1, beds: 1, baths: 1, description: null, photoCount: 1, features: {}, viewing: { earliestDate: "2026-10-26", leadHours: 24, confirms: true } });
+ok("viewing rules", v(occ, "Viewings")?.value === "From Oct 26, 24 hours' notice, you confirm each one", v(occ, "Viewings"));
+const open_ = buildAdPreview({ title: "t", rentCents: 1, beds: 1, baths: 1, description: null, photoCount: 1, features: {}, viewing: { earliestDate: null, leadHours: 0, confirms: false } });
+ok("viewing open", v(open_, "Viewings")?.value === "Renters book directly");
+
 const pe = readFileSync("app/dashboard/properties/[id]/publish-everywhere.tsx", "utf8");
 ok("modal renders facts", /adPreview\.facts\.map/.test(pe));
 const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
