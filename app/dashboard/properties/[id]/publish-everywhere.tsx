@@ -35,6 +35,7 @@
 // ============================================================================
 
 import { MarketplaceRow, type MarketplaceKitData } from "./marketplace-row";
+import type { AdPreview } from "@/lib/ad-preview";
 import { useState } from "react";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
@@ -373,6 +374,7 @@ export function PublishEverywhere({
   marketplaceKit = null,
   robotPostingAllowed = false,
   capNotes = {},
+  adPreview = null,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -407,6 +409,8 @@ export function PublishEverywhere({
   robotPostingAllowed?: boolean;
   /** S723: per-site warning shown in the approval box (Rentals.ca free cap). */
   capNotes?: Readonly<Record<string, string>>;
+  /** S724 (V251-29): the ad's facts, shown in the approval box. */
+  adPreview?: AdPreview | null;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDestinations, setConfirmDestinations] = useState<
@@ -706,6 +710,7 @@ export function PublishEverywhere({
             marketplaceKit={marketplaceKit}
             robotPostingAllowed={robotPostingAllowed}
             capNotes={capNotes}
+            adPreview={adPreview}
           >
             {[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows].map((r) => (
               <ChannelRow
@@ -766,9 +771,11 @@ function ForYouHandoff({
   marketplaceKit = null,
   robotPostingAllowed = false,
   capNotes = {},
+  adPreview = null,
   children,
 }: {
   capNotes?: Readonly<Record<string, string>>;
+  adPreview?: AdPreview | null;
   children?: React.ReactNode;
   marketplaceKit?: MarketplaceKitData | null;
   robotPostingAllowed?: boolean;
@@ -820,6 +827,7 @@ function ForYouHandoff({
             marketplaceKit={row.key === "facebook" ? marketplaceKit : null}
             addonLocked={!robotPostingAllowed && isRobotPostedChannel(row.key)}
             capNote={capNotes[row.key] ?? null}
+            adPreview={adPreview}
           />
         ))}
       </ul>
@@ -855,8 +863,10 @@ function ForYouRow({
   marketplaceKit = null,
   addonLocked = false,
   capNote = null,
+  adPreview = null,
 }: {
   capNote?: string | null;
+  adPreview?: AdPreview | null;
   marketplaceKit?: MarketplaceKitData | null;
   /** S713: a robot site and the org has no Posting add-on. */
   addonLocked?: boolean;
@@ -1141,6 +1151,7 @@ function ForYouRow({
           paid={paid}
           siteLabel={PAID_SITE_LABEL[row.key] ?? row.label}
           capNote={capNote}
+          adPreview={adPreview}
           onClose={() => setApproveOpen(false)}
         />
       )}
@@ -1161,6 +1172,7 @@ function ApprovalModal({
   paid,
   siteLabel,
   capNote = null,
+  adPreview = null,
   onClose,
 }: {
   propertyId: string;
@@ -1170,6 +1182,7 @@ function ApprovalModal({
   paid: boolean;
   siteLabel: string;
   capNote?: string | null;
+  adPreview?: AdPreview | null;
   onClose: () => void;
 }) {
   return (
@@ -1190,6 +1203,28 @@ function ApprovalModal({
           Your {addressLabel} ad is ready for {channelLabel}. Approve it once.
           The link to your ad comes back here.
         </p>
+
+        {adPreview && (
+          <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+            {adPreview.title && (
+              <p className="text-[13px] font-semibold leading-snug text-gray-900">{adPreview.title}</p>
+            )}
+            <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]">
+              {adPreview.facts.map((fact) => (
+                <div key={fact.label} className="contents">
+                  <dt className="text-gray-500">{fact.label}</dt>
+                  <dd className={fact.missing ? "font-medium text-amber-800" : "text-gray-900"}>{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+            {adPreview.descriptionStart && (
+              <p className="mt-2 text-[12px] leading-relaxed text-gray-600">{adPreview.descriptionStart}</p>
+            )}
+            <p className="mt-2 text-[11px] text-gray-500">
+              Something wrong? Cancel and fix it on this rental first.
+            </p>
+          </div>
+        )}
 
         {paid && (
           <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12.5px] leading-relaxed text-amber-950">

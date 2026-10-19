@@ -1160,3 +1160,32 @@ export function buildBillingView(input: BillingInput): BillingView {
     showDepositCta: planKey === "pilot" && pilot.active && depositStatus === "none",
   };
 }
+
+// ---- S724 (V251-16): the next bill, as Stripe will charge it ----------------
+// The plan card listed $99 + $49 while a 100%-off code made the real bill $0.
+// Show what Stripe will actually charge next, discount included.
+export type NextBillPreview = {
+  amountDueCents: number;
+  subtotalCents: number;
+  dateSec: number | null;
+  discountNames: string[];
+};
+
+export function nextBillLine(p: NextBillPreview | null, timeZone = "America/Toronto"): string | null {
+  if (!p) return null;
+  const amount =
+    "$" +
+    (p.amountDueCents / 100).toLocaleString("en-CA", {
+      minimumFractionDigits: p.amountDueCents % 100 === 0 ? 0 : 2,
+      maximumFractionDigits: 2,
+    });
+  const when = p.dateSec
+    ? new Date(p.dateSec * 1000).toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone })
+    : null;
+  let line = `Next bill: ${amount}${when ? ` on ${when}` : ""}.`;
+  if (p.subtotalCents > p.amountDueCents) {
+    const names = p.discountNames.filter(Boolean);
+    line += names.length ? ` Your discount (${names[0]}) is applied.` : " Your discount is applied.";
+  }
+  return line;
+}

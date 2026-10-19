@@ -69,6 +69,7 @@ import {
   type PortalRequirementFieldKey,
 } from "@/lib/portal-requirements";
 import { PublishEverywhere } from "./publish-everywhere";
+import type { AdPreview } from "@/lib/ad-preview";
 import type { MarketplaceKitData } from "./marketplace-row";
 
 
@@ -298,6 +299,7 @@ export function DistributeTab({
   marketplaceKit = null,
   robotPostingAllowed = false,
   capNotes = {},
+  adPreview = null,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -326,6 +328,8 @@ export function DistributeTab({
   robotPostingAllowed?: boolean;
   /** S723: per-site approval warnings (Rentals.ca free cap), passed through. */
   capNotes?: Readonly<Record<string, string>>;
+  /** S724 (V251-29): the ad's facts, shown in the approval box. */
+  adPreview?: AdPreview | null;
 }) {
   const proofPostCount =
     channelCards.reduce((sum, card) => sum + card.posts.length, 0) +
@@ -417,6 +421,7 @@ export function DistributeTab({
         marketplaceKit={marketplaceKit}
         robotPostingAllowed={robotPostingAllowed}
         capNotes={capNotes}
+        adPreview={adPreview}
       />
     </div>
   );

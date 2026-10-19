@@ -84,3 +84,32 @@ export function isDepositConfigured(): boolean {
 export function postingAddonPriceId(): string | null {
   return process.env[POSTING_ADDON.priceEnv] || null;
 }
+
+// S724 (V251-16): Stripe's own preview of the next invoice for this
+// subscription, discount included. Null on any error: the page then shows
+// nothing rather than a wrong number.
+export async function readNextBill(
+  customerId: string | null | undefined,
+  subscriptionId: string | null | undefined,
+): Promise<import("@/lib/billing").NextBillPreview | null> {
+  const stripe = getStripe();
+  if (!stripe || !customerId || !subscriptionId) return null;
+  try {
+    const inv = await stripe.invoices.createPreview({ customer: customerId, subscription: subscriptionId });
+    const names: string[] = [];
+    for (const d of inv.discounts ?? []) {
+      if (d && typeof d === "object" && "coupon" in d) {
+        const c = (d as unknown as { coupon?: { name?: string | null } }).coupon;
+        if (c?.name) names.push(c.name);
+      }
+    }
+    return {
+      amountDueCents: inv.amount_due ?? 0,
+      subtotalCents: inv.subtotal ?? 0,
+      dateSec: inv.next_payment_attempt ?? inv.period_end ?? null,
+      discountNames: names,
+    };
+  } catch {
+    return null;
+  }
+}

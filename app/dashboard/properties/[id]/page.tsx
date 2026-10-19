@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buildAdPreview } from "@/lib/ad-preview";
 import { showRelistButton } from "@/lib/relist-visibility";
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { orgShowsPostLease } from "@/lib/post-lease-surface";
@@ -1490,6 +1491,17 @@ export default async function PropertyDetailPage({
     title: c.title,
     body: c.body,
   }));
+  // S724 (V251-29): the ad's facts for the approval box, from the same
+  // effective values (unit, then building, then account) the robot posts.
+  const adPreview = buildAdPreview({
+    title: copyTabs.find((t) => t.key === "generic")?.title ?? null,
+    rentCents: p.rent_cents,
+    beds: p.beds,
+    baths: p.baths,
+    description: p.description,
+    photoCount: photoRows.length,
+    features: effectiveFeatures,
+  });
   // S700i (stranger test 2): the ad wording card showed LinkedIn, WhatsApp and
   // Snapchat tabs although none of them can be posted to yet. Show only copy
   // for sites with a working path (plus the generic master copy). copyTabs
@@ -4357,6 +4369,7 @@ export default async function PropertyDetailPage({
           marketplaceKit={marketplaceKit}
           robotPostingAllowed={robotPostingAccess.allowed}
           capNotes={capNotes}
+          adPreview={adPreview}
         />
       </TabPanel>
 

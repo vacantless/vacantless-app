@@ -12,12 +12,14 @@ import {
   postingAddonOffer,
   postingAddonPending,
   currentPlanTitle,
+  nextBillLine,
 } from "@/lib/billing";
 import {
   isBillingConfigured,
   isDepositConfigured,
   postingAddonPriceId,
   priceIdForPlan,
+  readNextBill,
 } from "@/lib/stripe";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { adminEmails } from "@/lib/provisioning-server";
@@ -77,6 +79,14 @@ export default async function BillingPage({
     .eq("status", "available")
     .is("archived_at", null);
   const overCapNotice = overListingCapNotice(org.plan, liveRentalCount ?? 0);
+  // S724 (V251-16): what Stripe will actually charge next, discount included.
+  const nextBill =
+    view.isPaid && !view.cancelsOnLabel && isBillingConfigured()
+      ? nextBillLine(
+          await readNextBill(org.stripe_customer_id, org.stripe_subscription_id),
+          org.booking_timezone ?? "America/Toronto",
+        )
+      : null;
 
   // S713: the Posting add-on card. No price id = no buy button (no fake
   // feature); our own team sees a "Coming soon" note instead.
@@ -261,6 +271,9 @@ export default async function BillingPage({
                 "Free covers one live rental. Choose Growth below for more rentals."
               )}
             </p>
+            {nextBill && (
+              <p className="mt-1 text-sm font-medium text-gray-700">{nextBill}</p>
+            )}
           </div>
           {view.hasSubscription && configured && (
             <form action={openBillingPortal}>
