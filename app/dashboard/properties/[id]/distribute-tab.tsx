@@ -47,6 +47,7 @@ import {
   siteCheckoutUrl,
   siteCheckoutHint,
   siteSetupNotice,
+  photoRefusedNote,
   type PublishMode,
   type PublishStatus,
   type PublishTone,
@@ -407,7 +408,8 @@ export function DistributeTab({
             const checkoutUrl = siteCheckoutUrl(it.publishStatus, it.operatorActionUrl);
             return { checkoutUrl, checkoutHint: checkoutUrl ? siteCheckoutHint(checkoutUrl) : null };
           })(),
-          siteSetup: siteSetupNotice(it.publishStatus, it.errorCode),
+          siteSetup: siteSetupNotice(it.publishStatus, it.errorCode, it.errorMessage),
+          photoNote: photoRefusedNote(it.errorCode, it.errorMessage),
           approved: it.autopilotApproved === true,
         }))}
         postingBlocker={publishEverywherePostingBlocker}

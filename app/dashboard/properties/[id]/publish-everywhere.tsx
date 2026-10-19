@@ -89,6 +89,8 @@ export type PublishEverywhereRunItem = {
   siteSetup?: { message: string; href: string; action: string } | null;
   /** S719 (KI1303): the landlord has clicked Approve for this item. */
   approved?: boolean;
+  /** S724 (V251-36): photos the site turned down on a live ad. */
+  photoNote?: string | null;
 };
 
 export type PublishEverywherePostingBlocker = {
@@ -976,18 +978,25 @@ function ForYouRow({
           details are complete.
         </p>
       ) : isLive ? (
-        liveUrl ? (
-          <a
-            href={liveUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-semibold text-green-700 hover:underline"
-          >
-            View live ad ↗
-          </a>
-        ) : (
-          <p className="mt-2 text-[12px] font-semibold text-green-700">Live.</p>
-        )
+        <>
+          {liveUrl ? (
+            <a
+              href={liveUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-semibold text-green-700 hover:underline"
+            >
+              View live ad ↗
+            </a>
+          ) : (
+            <p className="mt-2 text-[12px] font-semibold text-green-700">Live.</p>
+          )}
+          {item?.photoNote ? (
+            <p className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-950">
+              {item.photoNote}
+            </p>
+          ) : null}
+        </>
       ) : marketplaceKit && linkIsLive ? (
         // S712: Marketplace is posted by the org's own team from the kit, never
         // by the desk or the robot (Facebook has no API for it).

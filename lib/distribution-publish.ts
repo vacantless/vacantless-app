@@ -234,8 +234,21 @@ export type SiteSetupNotice = { message: string; href: string; action: string };
 export function siteSetupNotice(
   publishStatus: string | null | undefined,
   errorCode: string | null | undefined,
+  errorMessage?: string | null,
 ): SiteSetupNotice | null {
   if (publishStatus !== "needs_operator") return null;
+  // S724 (V251-38): the saved Rentals.ca ad did not keep an answer we chose.
+  // The robot names which ones in error_message.
+  if (errorCode === "readback_mismatch") {
+    return {
+      message:
+        errorMessage && errorMessage.trim()
+          ? errorMessage.trim()
+          : "Rentals.ca did not keep some answers, so the ad is still off. Fix them on Rentals.ca, then approve again.",
+      href: "https://rentals.ca/manage/listings",
+      action: "Open Rentals.ca",
+    };
+  }
   // S724 (V251-31/33): the free plan on the landlord's Rentals.ca account is full.
   if (errorCode === "free_limit_reached") {
     return {
@@ -254,6 +267,19 @@ export function siteSetupNotice(
     };
   }
   return null;
+}
+
+/**
+ * S724 (V251-36/43): a live ad the site posted without some photos. The robot
+ * writes error_code photos_refused and the plain reason in error_message.
+ */
+export function photoRefusedNote(
+  errorCode: string | null | undefined,
+  errorMessage: string | null | undefined,
+): string | null {
+  if (errorCode !== "photos_refused") return null;
+  const m = (errorMessage ?? "").trim();
+  return m || "The site turned down some of your photos. The ad is up without them.";
 }
 
 /** Can this run item be handed to the concierge desk? Pure. */
