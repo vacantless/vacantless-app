@@ -236,6 +236,15 @@ export function siteSetupNotice(
   errorCode: string | null | undefined,
 ): SiteSetupNotice | null {
   if (publishStatus !== "needs_operator") return null;
+  // S724 (V251-31/33): the free plan on the landlord's Rentals.ca account is full.
+  if (errorCode === "free_limit_reached") {
+    return {
+      message:
+        "Your Rentals.ca account already has all its free ads up. Turn one off on Rentals.ca, then approve again. We use the ad we already made.",
+      href: "https://rentals.ca/manage/listings",
+      action: "Open Rentals.ca",
+    };
+  }
   if (errorCode === ZUMPER_LANDLORD_SETUP_CODE) {
     return {
       message:

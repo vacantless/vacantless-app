@@ -45,6 +45,7 @@ import {
   authorizeChannelAutomation,
   readInstantPublishDestinations,
   revokeChannelAutomation,
+  stopAutopilotSubmit,
 } from "../distribution-actions";
 import {
   derivePublishPreflight,
@@ -883,9 +884,17 @@ function ForYouRow({
   // S708: the robot built a paid ad and stopped at the site's checkout. The
   // landlord pays there (a saved card still needs its CVV); no approval left.
   const payAtCheckout = !isLive && gate === "needs_payment" && !!item?.checkoutUrl;
+  // S724 (V251-33): once approved, the item is the robot's until it finishes or
+  // the landlord stops it. Offering "Approve" again invited a second post.
+  const approvedRunning =
+    !isLive &&
+    !payAtCheckout &&
+    item?.approved === true &&
+    (gate === "needs_operator" || gate === "needs_payment");
   const needsApproval =
     !isLive &&
     !payAtCheckout &&
+    !approvedRunning &&
     (gate === "needs_operator" || gate === "needs_payment");
   // S713d: the robot found a step only the landlord can do on the site itself.
   const siteSetup = needsApproval ? (item?.siteSetup ?? null) : null;
@@ -902,7 +911,7 @@ function ForYouRow({
     (item.publishStatus === "live" || item.publishStatus === "rejected");
   const working =
     !isLive &&
-    (gate === "queued" || gate === "submitting" || gate === "submitted");
+    (approvedRunning || gate === "queued" || gate === "submitting" || gate === "submitted");
   // S719 (KI1303): right after "Post it for me" a robot item is queued while we
   // fill in the ad. Nothing is posted until the landlord approves it, so this
   // is "getting it ready", not "posting".
@@ -1072,9 +1081,24 @@ function ForYouRow({
           posted. Reload this page in a few minutes.
         </p>
       ) : working ? (
-        <p className="mt-2 text-[12px] text-amber-800">
-          We&apos;re posting this now and will bring back the live link here.
-        </p>
+        <div className="mt-2">
+          <p className="text-[12px] text-amber-800">
+            We&apos;re posting this now and will bring back the live link here.
+          </p>
+          {item?.approved === true && (
+            // S724 (V251-32): the landlord can take the approval back at any time.
+            <form action={stopAutopilotSubmit} className="mt-1.5">
+              <input type="hidden" name="property_id" value={propertyId} />
+              <input type="hidden" name="item_id" value={item.id} />
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Stop this post
+              </button>
+            </form>
+          )}
+        </div>
       ) : (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {conciergeDeskEnabled && item.canConcierge ? (

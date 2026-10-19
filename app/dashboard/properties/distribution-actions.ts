@@ -553,10 +553,45 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
     status_after: attempt.status_after,
     proof_id: attempt.proof_id,
     metadata: attempt.metadata,
+    // S724 (V251-34): an approval is a finished event, not a running one.
+    finished_at: now,
   });
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?autopilot=authorized#distribute-header`);
+}
+
+/**
+ * S724 (V251-32): "Stop this post". Takes back the landlord's approval so the
+ * posting robot drops the item (it only works approved items) and will not
+ * retry. Anything the site already shows stays as it is; the landlord can
+ * approve again later.
+ */
+export async function stopAutopilotSubmit(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyId = String(formData.get("property_id") ?? "");
+  const itemId = String(formData.get("item_id") ?? "");
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  if (!itemId) redirect(propertyId ? `/dashboard/properties/${propertyId}` : "/dashboard/properties");
+  const supabase = createClient();
+  const now = new Date().toISOString();
+  await supabase
+    .from("distribution_run_items")
+    .update({
+      operator_submit_approved_at: null,
+      operator_submit_approved_by: null,
+      publish_status: "needs_operator",
+      audit_message: "Stopped by the landlord. Approve again to post.",
+      updated_at: now,
+    })
+    .eq("id", itemId)
+    .eq("organization_id", org.id)
+    .eq("mode", "concierge")
+    .is("external_url", null)
+    .not("operator_submit_approved_at", "is", null);
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?autopilot=stopped#distribute-header`);
 }
 
 export async function setRelistRadarStandingAutoRefresh(formData: FormData) {
