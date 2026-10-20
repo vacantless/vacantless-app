@@ -89,7 +89,16 @@ check(
 );
 
 // --- channel coordination ---------------------------------------------------
-checkPlan("24h always email-only", channelPlan("24h", { smsDeliverable: true }), {
+// S725: the day-before is texted too when the renter has not confirmed.
+checkPlan("24h unconfirmed texts and emails", channelPlan("24h", { smsDeliverable: true }), {
+  email: true,
+  sms: true,
+});
+checkPlan("24h confirmed stays email-only", channelPlan("24h", { smsDeliverable: true, confirmed: true }), {
+  email: true,
+  sms: false,
+});
+checkPlan("24h unconfirmed without sms is email-only", channelPlan("24h", { smsDeliverable: false, confirmed: false }), {
   email: true,
   sms: false,
 });
@@ -116,6 +125,7 @@ checkPlan("2h sms is controlled by the default-off last-minute flag", channelPla
 for (const kind of ["24h", "sameday", "2h"] as ReminderKind[]) {
   for (const smsDeliverable of [false, true]) {
     const plan = channelPlan(kind, { smsDeliverable });
+    if (kind === "24h") continue; // S725: unconfirmed day-before uses both on purpose
     ok(`${kind} never sends both channels when smsDeliverable=${smsDeliverable}`,
       !(plan.email && plan.sms));
   }
@@ -178,7 +188,8 @@ ok("renter reminder route selects same-day reminder stamps",
   renterRoute.includes("reminder_sameday_sent_at") &&
     renterRoute.includes("reminder_sameday_sms_sent_at"));
 ok("renter reminder route uses channelPlan",
-  renterRoute.includes("channelPlan(kind, { smsDeliverable })"));
+  renterRoute.includes("channelPlan(kind, { smsDeliverable, confirmed: row.confirmed_at != null })") &&
+    renterRoute.includes("scheduled_at, confirmed_at,"));
 ok("renter reminder route hints the showing lead relationship",
   renterRoute.includes("leads:leads!showings_lead_id_fkey(name, email, phone, sms_opt_out)"));
 ok("renter reminder route falls back to direct lead lookup",

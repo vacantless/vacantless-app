@@ -67,7 +67,8 @@ ok("0 viewings today", renderNotification(snap, null, { snapshot_date: "x", new_
 // 6. Ready-to-post email.
 const desk = getNotificationEvent("leasing.distribution_job_needs_action")!;
 const deskOut = renderNotification(desk, null, { channel_label: "Kijiji", property_address: "833 Pillette Rd, Unit 3", next_step: "review and submit", dashboard_url: "u" });
-ok("desk plain subject", deskOut.subject === "Your Kijiji ad for 833 Pillette Rd, Unit 3 is ready to post", deskOut.subject);
+ok("desk plain subject", deskOut.subject === "Your Kijiji ad for 833 Pillette Rd, Unit 3 is waiting on you", deskOut.subject);
+ok("S725 desk body never claims we filled it in", !/We filled in/.test(deskOut.body));
 ok("desk no caps or old words", !/PREPARED|Distribute|Vacantless has not/.test(deskOut.body));
 const td = getNotificationEvent("leasing.distribution_takedown_needed")!;
 ok("take-down subject has no em dash", !td.defaultSubject.includes("—"));

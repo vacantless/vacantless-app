@@ -439,9 +439,12 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     ],
     // S715: plain rewrite (was "Vacantless has PREPARED ... Open Distribute").
     defaultSubject:
-      "Your {{channel_label}} ad for {{property_address}} is ready to post",
+      "Your {{channel_label}} ad for {{property_address}} is waiting on you",
+    // S725: was "We filled in your ad ... and stopped". The backlog sweep also
+    // sends this for items the robot never touched, so the copy must be true
+    // either way.
     defaultBody:
-      "We filled in your {{channel_label}} ad for {{property_address}} and stopped before posting it.\n\nWhat is left: {{next_step}}\n\nNothing has been posted, paid for or sent for you yet.\n\nOpen the rental: {{dashboard_url}}",
+      "Your {{channel_label}} ad for {{property_address}} is not up yet. It needs one step from you.\n\nWhat is left: {{next_step}}\n\nNothing has been posted, paid for or sent for you yet.\n\nOpen the rental: {{dashboard_url}}",
     defaultAccent: "#2563eb",
     active: true,
   },

@@ -46,6 +46,7 @@ import {
   stuckKind,
   STUCK_GATE_LABEL,
   STUCK_NEXT_STEP,
+  stuckNextStep,
   type StuckCandidate,
 } from "@/lib/distribution-stuck-sweep";
 
@@ -285,7 +286,7 @@ async function runStuckSweep(admin: AdminClient): Promise<SweepResult> {
           property_address: address ?? "",
           channel_label: channelByKey(item.channel)?.label ?? item.channel,
           gate_label: STUCK_GATE_LABEL[kind],
-          next_step: `${robotNextStep(kind, item.channel, channelByKey(item.channel)?.label ?? item.channel) ?? STUCK_NEXT_STEP[kind]}. ${waited}`,
+          next_step: `${stuckNextStep(item, kind, isRobotPostedChannel(item.channel), robotNextStep(kind, item.channel, channelByKey(item.channel)?.label ?? item.channel))}. ${waited}`,
           dashboard_url: dashboardUrl,
         },
         operatorFallback: fallback,

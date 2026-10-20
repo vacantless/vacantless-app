@@ -78,11 +78,16 @@ export type ReminderChannelPlan = {
   sms: boolean;
 };
 
+// S725: the day-before reminder is also texted when the renter has not
+// confirmed yet. Measured 2026-10-19 on Agile: 23 of 29 cancelled viewings in
+// 60 days were renters who never confirmed and were released by hand; 20 of
+// them had only the emailed day-before reminder. The text carries the Confirm
+// link. A confirmed renter keeps the quieter email-only day-before touch.
 export function channelPlan(
   kind: ReminderKind,
-  { smsDeliverable }: { smsDeliverable: boolean },
+  { smsDeliverable, confirmed = false }: { smsDeliverable: boolean; confirmed?: boolean },
 ): ReminderChannelPlan {
-  if (kind === "24h") return { email: true, sms: false };
+  if (kind === "24h") return { email: true, sms: smsDeliverable && !confirmed };
   if (kind === "sameday") {
     return smsDeliverable ? { email: false, sms: true } : { email: true, sms: false };
   }

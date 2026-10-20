@@ -185,6 +185,29 @@ export const STUCK_NEXT_STEP: Record<StuckKind, string> = {
     "nobody has picked this up. Check that the channel is set up and authorized for this organization, then re-run it",
 };
 
+/**
+ * S725: what the stuck email tells the landlord to do next.
+ *
+ * Measured 2026-10-19: Agile's Bruce 303 Kijiji item was started from the
+ * Kijiji tile on 2026-10-11 but "Post it for me" was never pressed, so the
+ * robot never touched it (0 attempts). The weekly email still said "sign in
+ * once to Kijiji" while Agile's Kijiji sign-in was alive and fine. On a robot
+ * site, an item that is not a concierge request has one true next step: ask us
+ * to post it. Concierge items keep the robot's own gate wording.
+ */
+export const START_ROBOT_POST_STEP =
+  'click "Post it for me" on the rental\'s page. We fill in the ad and you approve it before anything goes up';
+
+export function stuckNextStep(
+  row: Pick<StuckCandidate, "mode">,
+  kind: StuckKind,
+  isRobotSite: boolean,
+  robotStep: string | null,
+): string {
+  if (isRobotSite && row.mode !== "concierge") return START_ROBOT_POST_STEP;
+  return robotStep ?? STUCK_NEXT_STEP[kind];
+}
+
 /** Short label for the gate token in the email. */
 export const STUCK_GATE_LABEL: Record<StuckKind, string> = {
   needs_login: "needs login",

@@ -18,6 +18,8 @@ import {
   STUCK_AFTER_HOURS,
   STUCK_GATE_LABEL,
   STUCK_NEXT_STEP,
+  START_ROBOT_POST_STEP,
+  stuckNextStep,
   type StuckCandidate,
 } from "../lib/distribution-stuck-sweep";
 
@@ -263,6 +265,18 @@ ok(
   /nobody has picked this up/i.test(STUCK_NEXT_STEP.unclaimed_concierge) &&
     /authoriz/i.test(STUCK_NEXT_STEP.unclaimed_concierge),
 );
+
+
+// --- S725: next step on robot sites -----------------------------------------
+ok("robot site, never asked us to post -> Post it for me",
+  stuckNextStep({ mode: "browser_copilot" }, "needs_login", true, "sign in once to Kijiji from the rental's page. Then we post it for you") === START_ROBOT_POST_STEP);
+ok("robot site, mode null -> Post it for me",
+  stuckNextStep({ mode: null }, "needs_login", true, "x") === START_ROBOT_POST_STEP);
+ok("robot site concierge keeps robot gate wording",
+  stuckNextStep({ mode: "concierge" }, "needs_login", true, "sign in once") === "sign in once");
+ok("person site keeps the generic step",
+  stuckNextStep({ mode: "browser_copilot" }, "needs_login", false, null) === STUCK_NEXT_STEP.needs_login);
+ok("Post it for me step has no em dash", !START_ROBOT_POST_STEP.includes("\u2014"));
 
 console.log(`\ndistribution-stuck-sweep: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

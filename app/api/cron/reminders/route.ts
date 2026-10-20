@@ -270,7 +270,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await admin
     .from("showings")
     .select(
-      "id, cancel_token, scheduled_at, reminder_24h_sent_at, reminder_sameday_sent_at, reminder_2h_sent_at, " +
+      "id, cancel_token, scheduled_at, confirmed_at, reminder_24h_sent_at, reminder_sameday_sent_at, reminder_2h_sent_at, " +
         "reminder_24h_sms_sent_at, reminder_sameday_sms_sent_at, reminder_2h_sms_sent_at, organization_id, lead_id, " +
         "leads:leads!showings_lead_id_fkey(name, email, phone, sms_opt_out), properties(address, showing_arrival_phone), " +
         "organizations(name, brand_color, logo_url, mail_alias, reply_to_email, booking_timezone, sms_enabled, plan, showing_arrival_phone, public_contact_phone)",
@@ -415,7 +415,9 @@ export async function GET(req: NextRequest) {
         row.reminder_sameday_sms_sent_at != null,
       sent2h: row.reminder_2h_sent_at != null || row.reminder_2h_sms_sent_at != null,
     });
-    const plan = kind ? channelPlan(kind, { smsDeliverable }) : { email: false, sms: false };
+    const plan = kind
+      ? channelPlan(kind, { smsDeliverable, confirmed: row.confirmed_at != null })
+      : { email: false, sms: false };
     if (kind && plan.email && !renterEmail) {
       skippedReason = "missing_renter_email";
     } else if (kind && plan.sms && !normalizedPhone) {
