@@ -2121,8 +2121,8 @@ export default async function SettingsPage({
                     Automatically follow up with renters who haven&apos;t booked
                   </span>
                   <span className="block text-xs text-gray-400">
-                    Sends a gentle, branded sequence of up to 3 reminders (around 2,
-                    5, and 10 days after the inquiry) inviting them to book a
+                    Sends a gentle, branded sequence of up to 2 reminders (around 2
+                    and 5 days after the inquiry) inviting them to book a
                     viewing. It stops automatically the moment a renter books, is
                     marked lost, or moves further along.
                   </span>

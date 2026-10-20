@@ -1,3 +1,4 @@
+import { foundingStampMetadata } from "@/lib/founding-price";
 import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { getStripe, postingAddonPriceId, priceMap } from "@/lib/stripe";
@@ -499,6 +500,24 @@ export async function POST(req: NextRequest) {
           // org moves onto a plan that includes them (every subscription
           // event, not only this one). They can still turn it off in Settings.
           await applySubscription(admin, sub, false);
+          // S726h: founding-price stamp. A FOUNDING10 checkout locks the
+          // price for 12 months from sign-up, written on the subscription.
+          try {
+            const withDiscounts = await stripe.subscriptions.retrieve(subId, { expand: ["discounts"] });
+            const stamp = foundingStampMetadata({
+              subscription: withDiscounts,
+              session,
+              createdSec: withDiscounts.created,
+              existingMetadata: withDiscounts.metadata as Record<string, string>,
+            });
+            if (stamp) {
+              await stripe.subscriptions.update(subId, {
+                metadata: { ...(withDiscounts.metadata ?? {}), ...(sub.metadata ?? {}), ...stamp },
+              });
+            }
+          } catch (err) {
+            console.error("[stripe-webhook] founding stamp failed", err instanceof Error ? err.message : err);
+          }
         }
         break;
       }

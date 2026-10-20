@@ -9,14 +9,19 @@
 // time, the lead's pipeline status, how many steps already went out, when the
 // last one was sent, and the org's on/off switch, it returns WHICH step (1..3)
 // is due right now, or 0 for "nothing to send".
+//
+// S726h: two steps, not three. The third follow-up had the highest unsubscribe
+// rate of any renter email (2 of 73), and its "we'll keep you posted" line
+// repeats the new-times notice. renterNurtureGate below sends one renter one
+// drip, however many enquiries they made.
 
 export const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
 // Cumulative cadence, measured from the inquiry (lead.created_at). Step N is
 // eligible once at least STEP_THRESHOLD_HOURS[N-1] have elapsed since the
-// inquiry. Gentle by design: ~2 days, ~5 days, ~10 days.
-export const STEP_THRESHOLD_HOURS = [2 * 24, 5 * 24, 10 * 24] as const;
+// inquiry. Gentle by design: ~2 days, then ~5 days.
+export const STEP_THRESHOLD_HOURS = [2 * 24, 5 * 24] as const;
 export const NURTURE_STEPS = STEP_THRESHOLD_HOURS.length;
 
 // Minimum spacing between two nurture sends to the same lead. When an org turns
@@ -27,7 +32,7 @@ export const MIN_GAP_HOURS = 24;
 
 // Don't start (or continue) a drip for a lead who inquired a long time ago —
 // e.g. when a newly created org imports/enables the feature over historical
-// leads. A normal lead completes the whole 10-day sequence well inside this
+// leads. A normal lead completes the whole 5-day sequence well inside this
 // window; anything older is considered cold and skipped entirely.
 export const NURTURE_MAX_AGE_MS = 30 * DAY_MS;
 
@@ -125,11 +130,6 @@ const STEP_COPY: Record<number, NurtureCopy> = {
     lead: "Just checking back in - the listing you inquired about could still be a fit. Booking a quick viewing is the best way to know.",
     cta: "See it & book a viewing",
   },
-  3: {
-    subject: "One last note about that listing",
-    lead: "We don't want you to miss out. If you're still looking, we'd love to show you around - and if the timing isn't right, just let us know.",
-    cta: "Take a look",
-  },
 };
 
 const NO_SUITABLE_TIME_STEP_COPY: Record<number, NurtureCopy> = {
@@ -143,11 +143,6 @@ const NO_SUITABLE_TIME_STEP_COPY: Record<number, NurtureCopy> = {
     lead: "We're still keeping an eye on viewing times for the home you asked about. As soon as more options open, we'll let you know.",
     cta: "View the listing",
   },
-  3: {
-    subject: "We'll keep you posted on viewing times",
-    lead: "One last note for now: we have your details and will let you know when a workable viewing time opens. If your timing changes, just reply and tell us what works.",
-    cta: "View the listing",
-  },
 };
 
 /**
@@ -157,4 +152,79 @@ const NO_SUITABLE_TIME_STEP_COPY: Record<number, NurtureCopy> = {
 export function nurtureCopy(step: number, noSuitableTime = false): NurtureCopy {
   const copy = noSuitableTime ? NO_SUITABLE_TIME_STEP_COPY : STEP_COPY;
   return copy[step] ?? copy[1];
+}
+
+// S726h: one renter, one drip. A renter who enquired about several rentals (or
+// the same one twice) used to get a full drip per enquiry: one Agile renter got
+// 18 emails. `siblings` is every lead the same renter has in the same org (same
+// email), this lead included.
+export const ADVANCED_STATUSES = ["booked", "showed", "applied", "leased"] as const;
+
+export type RenterSibling = {
+  id: string;
+  status: string | null;
+  createdAtMs: number | null;
+  lastSentAtMs: number | null;
+};
+
+export type RenterGate = "ok" | "newer_enquiry" | "renter_advanced" | "renter_recent_send";
+
+export function renterNurtureGate(input: {
+  leadId: string;
+  nowMs: number;
+  siblings: RenterSibling[];
+}): RenterGate {
+  const others = input.siblings.filter((s) => s.id !== input.leadId);
+  const self = input.siblings.find((s) => s.id === input.leadId);
+  // They already booked (or got further) on another enquiry: no "still
+  // interested?" email about this one.
+  if (others.some((s) => (ADVANCED_STATUSES as readonly string[]).includes(s.status ?? ""))) {
+    return "renter_advanced";
+  }
+  // Only the newest enquiry carries the drip. Ties go to the larger id, so
+  // exactly one lead wins.
+  const selfMs = self?.createdAtMs ?? 0;
+  const newer = others.some((s) => {
+    const ms = s.createdAtMs ?? 0;
+    return ms > selfMs || (ms === selfMs && s.id > input.leadId);
+  });
+  if (newer) return "newer_enquiry";
+  // Pacing across all their enquiries, so a new-times notice on one lead
+  // holds back a follow-up on another the same day.
+  const lastAny = Math.max(0, ...others.map((s) => s.lastSentAtMs ?? 0));
+  if (lastAny && input.nowMs - lastAny < MIN_GAP_HOURS * HOUR_MS) return "renter_recent_send";
+  return "ok";
+}
+
+/**
+ * S726h: one new-times notice per renter per run. Returns the leads to send
+ * to (the newest enquiry per renter) and, for each, the other leads it covers
+ * (stamped as notified without a second email). Renters are keyed by email,
+ * else by phone digits; a lead with neither stands alone.
+ */
+export function onePerRenter<T extends { id: string; email?: string | null; phone?: string | null; created_at?: string | null }>(
+  rows: T[],
+): { send: T[]; covered: Map<string, T[]> } {
+  const key = (r: T): string => {
+    const e = (r.email ?? "").trim().toLowerCase();
+    if (e.includes("@")) return `e:${e}`;
+    const d = (r.phone ?? "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+    return d.length >= 10 ? `p:${d}` : `id:${r.id}`;
+  };
+  const ms = (r: T) => (r.created_at ? Date.parse(r.created_at) || 0 : 0);
+  const groups = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = key(r);
+    const g = groups.get(k);
+    if (g) g.push(r);
+    else groups.set(k, [r]);
+  }
+  const send: T[] = [];
+  const covered = new Map<string, T[]>();
+  for (const g of groups.values()) {
+    g.sort((a, b) => ms(b) - ms(a) || (a.id < b.id ? 1 : -1));
+    send.push(g[0]);
+    if (g.length > 1) covered.set(g[0].id, g.slice(1));
+  }
+  return { send, covered };
 }

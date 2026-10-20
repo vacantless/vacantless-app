@@ -1,4 +1,5 @@
 // Unit tests for the Stripe webhook route. Run: npx tsx scripts/test-stripe-webhook.ts
+import * as foundingPrice from "../lib/founding-price";
 import { readFileSync } from "node:fs";
 import { createContext, Script } from "node:vm";
 import ts from "typescript";
@@ -226,6 +227,9 @@ function loadRoute(event: FakeEvent, admin: unknown, subscriptions: Record<strin
       }
       if (id === "@/lib/supabase/admin") {
         return { createAdminClient: () => admin };
+      }
+      if (id === "@/lib/founding-price") {
+        return foundingPrice;
       }
       if (id === "@/lib/billing") {
         return billing;

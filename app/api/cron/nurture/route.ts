@@ -6,6 +6,8 @@ import {
   nurtureStepDue,
   NURTURABLE_STATUSES,
   NURTURE_STEPS,
+  renterNurtureGate,
+  type RenterSibling,
   NURTURE_MAX_AGE_MS,
 } from "@/lib/nurture";
 
@@ -88,6 +90,33 @@ export async function GET(req: NextRequest) {
   // S726: Brevo drops email to a renter on its blocklist; skip those.
   const blockedEmails = await loadBlockedRenterEmails(admin, (rows as any[]).map((r) => r.email));
 
+  // S726h: every lead each renter has in the org (any status), so one renter
+  // gets one drip however many enquiries they made.
+  const siblingsByRenter = new Map<string, RenterSibling[]>();
+  {
+    const emails = Array.from(new Set((rows as any[]).map((r) => (r.email ?? "").trim()).filter(Boolean)));
+    const variants = Array.from(new Set(emails.flatMap((e) => [e, e.toLowerCase()])));
+    for (let i = 0; i < variants.length; i += 100) {
+      const { data: sib } = await admin
+        .from("leads")
+        .select("id, organization_id, email, status, created_at, nurture_last_sent_at")
+        .in("email", variants.slice(i, i + 100));
+      for (const s of (sib ?? []) as any[]) {
+        const k = `${s.organization_id}|${normEmail(s.email) ?? ""}`;
+        const list = siblingsByRenter.get(k) ?? [];
+        if (!list.some((x) => x.id === s.id)) {
+          list.push({
+            id: s.id,
+            status: s.status ?? null,
+            createdAtMs: s.created_at ? Date.parse(s.created_at) : null,
+            lastSentAtMs: s.nurture_last_sent_at ? Date.parse(s.nurture_last_sent_at) : null,
+          });
+        }
+        siblingsByRenter.set(k, list);
+      }
+    }
+  }
+
   for (const row of rows as any[]) {
    // Per-row isolation (audit C2): one row's thrown error must not abort the
    // rest of the sweep.
@@ -121,6 +150,17 @@ export async function GET(req: NextRequest) {
     if (blockedEmails.has(normEmail(renterEmail) ?? "")) {
       summary.skipped++;
       summary.details.push({ lead: row.id, skipped: "email_blocked" });
+      continue;
+    }
+
+    const gate = renterNurtureGate({
+      leadId: row.id,
+      nowMs,
+      siblings: siblingsByRenter.get(`${row.organization_id}|${normEmail(renterEmail) ?? ""}`) ?? [],
+    });
+    if (gate !== "ok") {
+      summary.skipped++;
+      summary.details.push({ lead: row.id, skipped: gate });
       continue;
     }
 

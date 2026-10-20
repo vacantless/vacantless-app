@@ -8,6 +8,7 @@ import type {
 import { limitAvailabilityToWeekdays, unionBuildingWeekdays } from "@/lib/booking";
 import { loadBuildingDayScope } from "@/lib/building-days-server";
 import { loadBlockedRenterEmails, normEmail } from "@/lib/renter-email-block";
+import { onePerRenter } from "@/lib/nurture";
 import { countOpenBookableSlots } from "@/lib/availability-tripwire";
 import {
   isReopenLeadEligible,
@@ -332,7 +333,8 @@ export async function GET(req: NextRequest) {
       skippedCount += eligible.length - toNotify.length;
 
       if (dry) {
-        summary.sent += toNotify.length;
+        const drySend = onePerRenter(toNotify as any[]).send;
+        summary.sent += drySend.length;
         summary.skipped += skippedCount;
         logOrgReopenResult({
           orgId,
@@ -340,7 +342,7 @@ export async function GET(req: NextRequest) {
           eligible: eligibleCount,
           open,
           toNotify: toNotifyCount,
-          sent: toNotify.length,
+          sent: drySend.length,
           skipped: skippedCount,
           errors: 0,
           force,
@@ -353,8 +355,8 @@ export async function GET(req: NextRequest) {
           reopened_at: org.availability_reopened_at,
           eligible: eligible.length,
           open,
-          would_send: toNotify.length,
-          lead_ids: toNotify.map((row) => row.id),
+          would_send: drySend.length,
+          lead_ids: drySend.map((row: any) => row.id),
         });
         continue;
       }
@@ -383,9 +385,13 @@ export async function GET(req: NextRequest) {
       }
 
       stage = "send_leads";
+      // S726h: one notice per renter. A renter with several enquiries used to
+      // get one copy each (three identical notices in four seconds). Send for
+      // the newest enquiry; stamp the rest as told so later runs skip them.
+      const { send: toSend, covered } = onePerRenter(toNotify as any[]);
       // S726: Brevo drops email to a renter on its blocklist; do not send it.
-      const blockedEmails = await loadBlockedRenterEmails(admin, toNotify.map((r: any) => r.email));
-      for (const row of toNotify) {
+      const blockedEmails = await loadBlockedRenterEmails(admin, toSend.map((r: any) => r.email));
+      for (const row of toSend) {
         try {
           const property = firstRelation(row.properties);
           if (!row.property_id || !property) {
@@ -470,10 +476,21 @@ export async function GET(req: NextRequest) {
             summary.details.push({ lead: row.id, error: `timeline_failed:${messageErr.message}` });
           }
 
+          const coveredRows = covered.get(row.id) ?? [];
+          if (coveredRows.length) {
+            await admin
+              .from("leads")
+              .update({ reopen_notified_at: sentAt, nurture_last_sent_at: sentAt })
+              .in("id", coveredRows.map((c: any) => c.id));
+            skippedCount += coveredRows.length;
+            summary.skipped += coveredRows.length;
+          }
+
           sentCount++;
           summary.sent++;
           summary.details.push({
             lead: row.id,
+            covers: coveredRows.map((c: any) => c.id),
             sent: true,
             emailed: result.sent,
             texted,
