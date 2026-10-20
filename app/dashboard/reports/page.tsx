@@ -22,6 +22,7 @@ import {
   type FeedbackLite,
 } from "@/lib/reports";
 import { buildPostingAdvice } from "@/lib/posting-advice";
+import { buildRentalAdvice, type RentalLite } from "@/lib/rental-advice";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export default async function ReportsPage({
       .eq("organization_id", org.id),
     supabase
       .from("properties")
-      .select("id, address, status, rent_cents, created_at")
+      .select("id, address, status, rent_cents, created_at, available_since")
       .eq("organization_id", org.id),
     supabase
       .from("feedback")
@@ -83,6 +84,9 @@ export default async function ReportsPage({
   const funnel = buildFunnel(leads);
   const channels = buildChannelReport(leads);
   const advice = buildPostingAdvice(channels);
+  // S727: per-rental advice uses its own two-week look-back (rentals list at
+  // different times), so it reads the unwindowed leads.
+  const rentalAdvice = buildRentalAdvice(properties as RentalLite[], allLeads, nowMs);
   const propertyRows = filterReportableProperties(
     buildPropertyReport(properties, leads, showings),
   );
@@ -220,6 +224,35 @@ export default async function ReportsPage({
                 }`}
               >
                 {a.text}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {/* S727: which listed rental is lagging, from this landlord's own enquiries */}
+      {rentalAdvice.length > 0 && (
+        <Section
+          title="Rentals that need a look"
+          subtitle="From enquiries over the last two weeks, for rentals listed at least a week."
+        >
+          <ul className="space-y-2">
+            {rentalAdvice.map((a) => (
+              <li
+                key={a.text}
+                className={`rounded-xl border px-4 py-3 text-base ${
+                  a.tone === "good"
+                    ? "border-green-200 bg-green-50 text-green-900"
+                    : "border-amber-200 bg-amber-50 text-amber-900"
+                }`}
+              >
+                {a.text}{" "}
+                <Link
+                  href={`/dashboard/properties/${a.propertyId}`}
+                  className="font-semibold underline"
+                >
+                  Open the rental
+                </Link>
               </li>
             ))}
           </ul>
