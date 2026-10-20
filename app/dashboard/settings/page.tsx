@@ -959,7 +959,7 @@ export default async function SettingsPage({
             {searchParams.feed === "phone" && (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
                 That phone number didn&apos;t look valid. Use a format like
-                226-773-7555, or leave it blank.
+                519-555-0123, or leave it blank.
               </div>
             )}
             {searchParams.feed === "email" && (
@@ -994,7 +994,7 @@ export default async function SettingsPage({
                   name="public_contact_phone"
                   type="tel"
                   inputMode="tel"
-                  placeholder="226-773-7555"
+                  placeholder="519-555-0123"
                   defaultValue={org.public_contact_phone ?? ""}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />

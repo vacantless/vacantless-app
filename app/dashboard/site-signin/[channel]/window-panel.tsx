@@ -56,6 +56,17 @@ export function WindowPanel({
     return () => clearInterval(timer);
   }, [win.id, win.status]);
 
+  // S724 (V251-20): show the minutes left, so the window never closes by surprise.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!siteSigninIsOpen(win.status) || !win.expiresAt) return;
+    const t = setInterval(() => setNowMs(Date.now()), 15000);
+    return () => clearInterval(t);
+  }, [win.status, win.expiresAt]);
+  const minutesLeft = win.expiresAt
+    ? Math.max(0, Math.ceil((Date.parse(win.expiresAt) - nowMs) / 60000))
+    : null;
+
   const view = siteSigninView(channel, win.status, win.detail);
   const link = siteSigninSafeViewUrl(win.viewUrl);
   const password = siteSigninPassword(win.viewUrl);
@@ -85,8 +96,12 @@ export function WindowPanel({
             <p className="text-xs text-gray-500">
               The window stays open until{" "}
               {new Date(win.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.
+              {minutesLeft != null ? ` ${minutesLeft === 1 ? "1 minute" : `${minutesLeft} minutes`} left.` : ""}
             </p>
           )}
+          <p className="text-xs text-gray-500">
+            We run this window for you. Its web address looks unusual because it is made just for this sign-in. That is expected.
+          </p>
           {password && (
             <p className="text-xs text-gray-500">
               If the window asks for a password, it is <span className="font-mono font-semibold text-gray-800">{password}</span>. It works only for this window.
