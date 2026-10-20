@@ -83,6 +83,8 @@ export function decideOnboardingEmail(args: {
         "Thanks for signing up. Here is how to get your first renter booked.",
         steps,
         "After that, every renter gets an answer right away. They book a viewing on their own, and you get an email.",
+        // S726: one link to the six how-to videos.
+        "Prefer to watch? Six short videos, under a minute each: https://www.vacantless.com/how-to",
         nextLine,
         "Reply to this email if you get stuck. I read every one.",
         "Noam, founder of Vacantless",

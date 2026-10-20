@@ -537,7 +537,10 @@ export function checkPlainLanguage(text: string): PlainLanguageFinding[] {
       text: trimmed,
       detail: 'no "&" in landlord copy; write "and"',
     });
-  } else if (/[A-Za-z]\s*\/\s*[A-Za-z]|[0-9]\/[A-Za-z]/.test(trimmed)) {
+  } else if (
+    // S726: a link (https://...) is not a slash used in a sentence.
+    /[A-Za-z]\s*\/\s*[A-Za-z]|[0-9]\/[A-Za-z]/.test(trimmed.replace(/https?:\/\/\S+/g, ""))
+  ) {
     findings.push({
       rule: "ampersand_or_slash",
       text: trimmed,
