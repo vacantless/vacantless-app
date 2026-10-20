@@ -7,6 +7,7 @@ import type {
 } from "@/lib/booking";
 import { limitAvailabilityToWeekdays, unionBuildingWeekdays } from "@/lib/booking";
 import { loadBuildingDayScope } from "@/lib/building-days-server";
+import { loadBlockedRenterEmails, normEmail } from "@/lib/renter-email-block";
 import { countOpenBookableSlots } from "@/lib/availability-tripwire";
 import {
   isReopenLeadEligible,
@@ -382,6 +383,8 @@ export async function GET(req: NextRequest) {
       }
 
       stage = "send_leads";
+      // S726: Brevo drops email to a renter on its blocklist; do not send it.
+      const blockedEmails = await loadBlockedRenterEmails(admin, toNotify.map((r: any) => r.email));
       for (const row of toNotify) {
         try {
           const property = firstRelation(row.properties);
@@ -391,7 +394,10 @@ export async function GET(req: NextRequest) {
             continue;
           }
 
-          const result = await sendViewingTimesOpenedEmail({
+          const emailBlocked = blockedEmails.has(normEmail(row.email) ?? "");
+          const result = emailBlocked
+            ? { sent: false, reason: "email_blocked", subject: undefined }
+            : await sendViewingTimesOpenedEmail({
             lead_id: row.id,
             property_id: row.property_id,
             renter_name: row.name ?? null,
@@ -420,6 +426,12 @@ export async function GET(req: NextRequest) {
             address: property.address ?? null,
           });
 
+          if (!result.sent && !texted && emailBlocked) {
+            skippedCount++;
+            summary.skipped++;
+            summary.details.push({ lead: row.id, skipped: "email_blocked" });
+            continue;
+          }
           if (!result.sent && !texted) {
             errorCount++;
             summary.errors++;

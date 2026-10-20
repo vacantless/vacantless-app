@@ -6,6 +6,14 @@ import {
   teamAddressesToUnblock,
   type BrevoBlockedContact,
 } from "@/lib/team-unsubscribe-guard";
+import {
+  BLOCKLIST_CLEARED_KIND,
+  BLOCKLIST_KIND,
+  blocklistRowsToRecord,
+  normEmail,
+  type DeliveryRow,
+  type LeadEmailRow,
+} from "@/lib/renter-email-block";
 
 // S717: takes team addresses back off Brevo's blocklist after a stray
 // one-click unsubscribe (lib/team-unsubscribe-guard.ts, KI1289). Runs in the
@@ -106,8 +114,47 @@ export async function GET(req: NextRequest) {
     if (unblocked.length > 0) console.warn("[team-unsubscribe-guard] unblocked", unblocked);
   }
 
+  // S726: record blocked RENTER addresses (and ones that left the list) so
+  // automatic renter emails skip them and the renter page says so.
+  let renterRecorded = 0;
+  try {
+    const blockedEmails = new Set(
+      blocked.map((b) => normEmail(b.email)).filter((e): e is string => !!e && !team.has(e)),
+    );
+    const { data: prior } = await admin
+      .from("email_delivery_events")
+      .select("email, event, kind, occurred_at")
+      .in("kind", [BLOCKLIST_KIND, BLOCKLIST_CLEARED_KIND]);
+    const recorded = (prior ?? []) as DeliveryRow[];
+    const watch = new Set<string>(blockedEmails);
+    for (const r of recorded) { const e = normEmail(r.email); if (e) watch.add(e); }
+    const list = Array.from(watch);
+    const leads: LeadEmailRow[] = [];
+    for (let i = 0; i < list.length; i += 200) {
+      const { data: rows } = await admin
+        .from("leads")
+        .select("id, organization_id, email")
+        .in("email", list.slice(i, i + 200));
+      leads.push(...((rows ?? []) as LeadEmailRow[]));
+    }
+    const toRecord = blocklistRowsToRecord({
+      blocked,
+      team,
+      leads,
+      recorded,
+      nowIso: new Date().toISOString(),
+    });
+    if (!dry && toRecord.length > 0) {
+      const { error: insErr } = await admin.from("email_delivery_events").insert(toRecord);
+      if (insErr) console.error("[team-unsubscribe-guard] renter record failed", insErr.message);
+      else renterRecorded = toRecord.length;
+    } else if (dry) renterRecorded = toRecord.length;
+  } catch (e) {
+    console.error("[team-unsubscribe-guard] renter record error", (e as Error).message);
+  }
+
   console.log(
-    `[team-unsubscribe-guard] blocked=${blocked.length} team=${team.size} toUnblock=${toUnblock.length} unblocked=${unblocked.length} failed=${failed.length} dry=${dry}`,
+    `[team-unsubscribe-guard] blocked=${blocked.length} team=${team.size} toUnblock=${toUnblock.length} unblocked=${unblocked.length} failed=${failed.length} renterRecorded=${renterRecorded} dry=${dry}`,
   );
   return NextResponse.json({
     ok: failed.length === 0,
@@ -117,5 +164,6 @@ export async function GET(req: NextRequest) {
     wouldUnblock: dry ? toUnblock : undefined,
     unblocked,
     failed,
+    renterRecorded,
   }, { status: failed.length === 0 ? 200 : 500 });
 }

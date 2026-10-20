@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNurtureEmail } from "@/lib/email";
+import { loadBlockedRenterEmails, normEmail } from "@/lib/renter-email-block";
 import {
   nurtureStepDue,
   NURTURABLE_STATUSES,
@@ -84,6 +85,9 @@ export async function GET(req: NextRequest) {
   const rows = data ?? [];
   const summary: Summary = { ok: true, scanned: rows.length, sent: 0, skipped: 0, errors: 0, details: [] };
 
+  // S726: Brevo drops email to a renter on its blocklist; skip those.
+  const blockedEmails = await loadBlockedRenterEmails(admin, (rows as any[]).map((r) => r.email));
+
   for (const row of rows as any[]) {
    // Per-row isolation (audit C2): one row's thrown error must not abort the
    // rest of the sweep.
@@ -111,6 +115,12 @@ export async function GET(req: NextRequest) {
     if (!renterEmail) {
       summary.skipped++;
       summary.details.push({ lead: row.id, skipped: "no_email" });
+      continue;
+    }
+
+    if (blockedEmails.has(normEmail(renterEmail) ?? "")) {
+      summary.skipped++;
+      summary.details.push({ lead: row.id, skipped: "email_blocked" });
       continue;
     }
 

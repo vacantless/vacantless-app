@@ -1,3 +1,4 @@
+import { blockReasonWords, blockedFromEvents, normEmail, type DeliveryRow } from "@/lib/renter-email-block";
 import Link from "next/link";
 import { listingUrl, scrubEmDashes } from "@/lib/email";
 import { notFound } from "next/navigation";
@@ -129,6 +130,18 @@ export default async function LeadDetailPage({
 
   if (!lead) notFound();
   const l = lead as unknown as Lead;
+
+  // S726: is this renter's email on Brevo's blocklist (unsubscribed, spam, bounce)?
+  let emailBlock: { since: string; reason: string | null } | null = null;
+  const blockKey = normEmail(l.email);
+  if (blockKey) {
+    const { data: delivery } = await supabase
+      .from("email_delivery_events")
+      .select("email, event, kind, reason, occurred_at")
+      .eq("email", blockKey)
+      .in("event", ["blocked", "spam", "delivered", "other"]);
+    emailBlock = blockedFromEvents((delivery ?? []) as DeliveryRow[]).get(blockKey) ?? null;
+  }
 
   const { data: msgs } = await supabase
     .from("messages")
@@ -507,6 +520,17 @@ export default async function LeadDetailPage({
         printUrl={`/dashboard/leads/${l.id}/application/print`}
         filedDownloadUrl={applicationFiledDownloadUrl}
       />
+
+      {emailBlock && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <p className="font-medium">Emails to this renter are not delivered.</p>
+          <p className="mt-1">
+            Since {new Date(emailBlock.since).toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: timeZone })},{" "}
+            {blockReasonWords(emailBlock.reason)}, so the email service drops every email to{" "}
+            {l.email}. Automatic emails to them are paused. Text or call them instead.
+          </p>
+        </div>
+      )}
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
