@@ -4,6 +4,7 @@ import {
   aiReplyEnabled,
   buildAiReplyDraft,
   suggestedCaptureQuestion,
+  preferredWindow,
 } from "../lib/ai-reply";
 
 let passed = 0;
@@ -94,7 +95,7 @@ ok("draft: includes move-in as a friendly date (S724)", draft.body.includes("des
   ok("S724 draft: available as Nov 1", withLink.body.includes("available Nov 1") && !withLink.body.includes("2026-11-01"));
   ok("S724 draft: no em dash", !withLink.body.includes("\u2014"));
 }
-ok("draft: includes slot offer", draft.slotOffer.includes("viewing slot"));
+ok("draft: includes slot offer", draft.slotOffer === "I will look for an evening viewing time for you.");
 ok("draft: signs org name", draft.body.endsWith("Thanks,\nNorth Star Rentals"));
 ok(
   "draft: suggests capture question",
@@ -128,5 +129,31 @@ if (failed > 0) {
   console.error(`\nai-reply: ${passed} passed, ${failed} failed`);
   process.exit(1);
 }
+
+
+// S726: the James Park demo enquiry.
+{
+  const d = buildAiReplyDraft({
+    renterName: "James Park",
+    orgName: "Lakeview Rentals",
+    inquiryText: "Hi, is this still available? I work evenings, could I see it on a weekend?",
+    noSuitableTime: true,
+    listing: { address: "100 Lakeview Ave", rentCents: 150000, beds: 1, baths: 1, availableDate: "2026-11-01" },
+    bookingUrl: "https://app.vacantless.com/r/x",
+  });
+  ok("S726: still available answers yes", d.body.includes("Yes, it is still available."));
+  ok("S726: still available is not a move-in question", !d.body.includes("move-in window"));
+  ok("S726: no generic read-your-note after a yes", !d.body.includes("I read your note"));
+  ok("S726: named weekend is offered back", d.body.includes("I will look for a weekend time."));
+  ok("S726: no three-way window question", !d.body.includes("weekday evening, weekend, or daytime"));
+  ok("S726: date reads Nov 1", d.body.includes("available Nov 1"));
+  ok("S726: closing does not re-ask the window", d.body.includes("Or reply here, and I will confirm the time.") && !d.body.includes("window that works best"));
+}
+ok("S726: work evenings is not an evening window", preferredWindow("I work evenings") === null);
+ok("S726: after work is evening", preferredWindow("can I come after work?") === "evening");
+ok("S726: saturday is weekend", preferredWindow("Saturday works") === "weekend");
+ok("S726: no window", preferredWindow("Is parking included?") === null);
+ok("S726: when available is still timing", buildAiReplyDraft({renterName:"A",orgName:"O",inquiryText:"When is it available to move in?",listing:null}).body.includes("move-in window"));
+ok("S726: pets after still available keeps pet cue", buildAiReplyDraft({renterName:"A",orgName:"O",inquiryText:"Is this still available? Do you allow cats?",listing:null}).body.includes("Yes, it is still available. I noticed your pet question"));
 
 console.log(`\nai-reply: ${passed} passed, 0 failed`);

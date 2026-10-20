@@ -583,7 +583,7 @@ const PACKET_FIELD_HREF: Partial<Record<PortalRequirementFieldKey, string>> = {
   utilities: "#rental-details",
   parking: "#property-parking",
   amenities: "#rental-details",
-  pets: "#rental-details",
+  pets: "#property-pets",
   laundry: "#property-laundry",
   air_conditioning: "#rental-details",
   furnished: "#rental-details",

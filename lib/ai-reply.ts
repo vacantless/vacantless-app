@@ -109,11 +109,33 @@ function listingFacts(listing: AiReplyListing | null): string[] {
   return facts.filter((x): x is string => Boolean(x));
 }
 
+/** S726: "is this still available?" is a yes, not a move-in timing question. */
+const STILL_AVAILABLE = /\b(?:still available|is (?:it|this|the (?:unit|place|apartment|rental)) available)\b/;
+
+/** S726: the viewing window the renter named, if any ("I work evenings" is not one). */
+export function preferredWindow(inquiryText: string | null | undefined): string | null {
+  const lower = (cleanText(inquiryText) ?? "").toLowerCase();
+  if (!lower) return null;
+  if (/\b(weekend|weekends|saturday|sunday)\b/.test(lower)) return "weekend";
+  if (/\bmornings?\b/.test(lower) && !/\bwork (?:in the )?mornings?\b/.test(lower)) return "morning";
+  if (/\bafternoons?\b/.test(lower) && !/\bwork (?:in the )?afternoons?\b/.test(lower)) return "afternoon";
+  if (/\b(evenings?|after work)\b/.test(lower) && !/\bwork (?:in the )?evenings?\b/.test(lower)) return "evening";
+  return null;
+}
+
 function inquiryCue(inquiryText: string | null): string | null {
   const text = cleanText(inquiryText);
   if (!text) return null;
 
-  const lower = text.toLowerCase();
+  const raw = text.toLowerCase();
+  const stillAvailable = STILL_AVAILABLE.test(raw);
+  const lower = raw.replace(STILL_AVAILABLE, " ");
+  const yes = stillAvailable ? "Yes, it is still available." : null;
+  const topic = topicCue(lower, Boolean(yes));
+  return [yes, topic].filter(Boolean).join(" ") || null;
+}
+
+function topicCue(lower: string, saidYes: boolean): string | null {
   if (/\b(pet|pets|cat|cats|dog|dogs)\b/.test(lower)) {
     return "I noticed your pet question and can confirm the pet details before we book.";
   }
@@ -129,7 +151,7 @@ function inquiryCue(inquiryText: string | null): string | null {
   if (/\bapply\b|\bapplication\b|\bcredit\b/.test(lower)) {
     return "I can also answer application questions after we confirm whether the unit is a fit.";
   }
-  return "I read your note and can answer your questions before we book.";
+  return saidYes ? null : "I read your note and can answer your questions before we book.";
 }
 
 export function suggestedCaptureQuestion(
@@ -169,7 +191,17 @@ function sentence(value: string | null): string | null {
   return /[.!?]$/.test(clean) ? clean : `${clean}.`;
 }
 
+function article(word: string): string {
+  return /^[aeiou]/.test(word) ? "an" : "a";
+}
+
 function slotOffer(input: AiReplyDraftInput): string {
+  const window = preferredWindow(input.inquiryText);
+  if (window) {
+    return input.noSuitableTime
+      ? `The open times did not suit you, so I will look for ${article(window)} ${window} time.`
+      : `I will look for ${article(window)} ${window} viewing time for you.`;
+  }
   if (input.noSuitableTime) {
     return "I can offer another viewing slot. Would a weekday evening, weekend, or daytime window work better for you?";
   }
@@ -212,9 +244,13 @@ export function buildAiReplyDraft(input: AiReplyDraftInput): AiReplyDraft {
     offer,
     bookingUrl ? `You can also pick a time yourself here: ${bookingUrl}` : null,
     "",
-    bookingUrl
-      ? "Or reply with the window that works best, and I will confirm the next step."
-      : "Please reply with the window that works best, and I will confirm the next step.",
+    preferredWindow(input.inquiryText)
+      ? bookingUrl
+        ? "Or reply here, and I will confirm the time."
+        : "I will reply here to confirm the time."
+      : bookingUrl
+        ? "Or reply with the window that works best, and I will confirm the next step."
+        : "Please reply with the window that works best, and I will confirm the next step.",
     "",
     "Thanks,",
     orgName,

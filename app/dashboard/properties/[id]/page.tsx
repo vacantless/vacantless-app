@@ -632,7 +632,7 @@ const SYNDICATION_PACKET_FIELD_TARGETS: Partial<
   utilities: { tab: "setup", hash: "#rental-details" },
   parking: { tab: "setup", hash: "#property-parking" },
   amenities: { tab: "setup", hash: "#rental-details" },
-  pets: { tab: "setup", hash: "#rental-details" },
+  pets: { tab: "setup", hash: "#property-pets" },
   laundry: { tab: "setup", hash: "#property-laundry" },
   air_conditioning: { tab: "setup", hash: "#rental-details" },
   furnished: { tab: "setup", hash: "#rental-details" },
@@ -3903,7 +3903,11 @@ export default async function PropertyDetailPage({
           </div>
 
           {/* --- Pets (structured policy 0045; inheritable 0050) --- */}
-          <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
+          {/* S726: "Add pet policy" lands here, not on the address at the top. */}
+          <div
+            id="property-pets"
+            className="mt-4 scroll-mt-6 rounded-lg border border-gray-100 bg-gray-50/60 p-3"
+          >
             <p className="mb-2 text-xs font-medium text-gray-600">Pets welcome</p>
             <p className="mb-3 text-xs text-gray-400">
               Leave a field on &ldquo;Inherit&rdquo; to use your{" "}
