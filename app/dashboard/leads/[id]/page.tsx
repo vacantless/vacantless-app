@@ -94,6 +94,8 @@ type Lead = {
     available_date: string | null;
     laundry: string | null;
     pet_friendly: boolean | null;
+    pets_cats?: boolean | null;
+    pets_dogs?: boolean | null;
   } | null;
   listing_post: ListingPost;
 };
@@ -123,7 +125,7 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, source_detail, no_suitable_time, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, property:properties(id, address, rent_cents, beds, baths, parking, available_date, laundry, pet_friendly), listing_post:listing_posts(portal, label, url)",
+      "id, name, email, phone, source, source_detail, no_suitable_time, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, property:properties(id, address, rent_cents, beds, baths, parking, available_date, laundry, pet_friendly, pets_cats, pets_dogs), listing_post:listing_posts(portal, label, url)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -259,6 +261,8 @@ export default async function LeadDetailPage({
               availableDate: l.property.available_date,
               laundry: l.property.laundry,
               petFriendly: l.property.pet_friendly,
+              petsCats: l.property.pets_cats ?? null,
+              petsDogs: l.property.pets_dogs ?? null,
             }
           : null,
         knowledge: propertyKnowledge,

@@ -157,3 +157,15 @@ ok("S726: when available is still timing", buildAiReplyDraft({renterName:"A",org
 ok("S726: pets after still available keeps pet cue", buildAiReplyDraft({renterName:"A",orgName:"O",inquiryText:"Is this still available? Do you allow cats?",listing:null}).body.includes("Yes, it is still available. I noticed your pet question"));
 
 console.log(`\nai-reply: ${passed} passed, 0 failed`);
+
+// S727: cats-only must not read "pet friendly"
+{
+  const base = { renterName: "A", orgName: "O", inquiryText: "Hi", bookingUrl: null };
+  const listing = { address: "1 X St", rentCents: 120000, beds: 1, baths: 1, petFriendly: true };
+  const cats = buildAiReplyDraft({ ...base, listing: { ...listing, petsCats: true, petsDogs: false } }).body;
+  ok("S727: cats only says cats welcome (no dogs)", cats.includes("cats welcome (no dogs)") && !cats.includes("pet friendly"));
+  const both = buildAiReplyDraft({ ...base, listing: { ...listing, petsCats: true, petsDogs: true } }).body;
+  ok("S727: both says cats and dogs welcome", both.includes("cats and dogs welcome"));
+  const unset = buildAiReplyDraft({ ...base, listing }).body;
+  ok("S727: kind unset keeps pet friendly", unset.includes("pet friendly"));
+}

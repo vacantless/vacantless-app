@@ -226,5 +226,17 @@ export async function GET(req: NextRequest) {
    }
   }
 
+  // S727: one readable line per run, so the per-renter gate can be checked in
+  // Vercel logs (the JSON summary only reaches GitHub Actions).
+  const reasons: Record<string, number> = {};
+  for (const d of summary.details) {
+    const k = typeof d.skipped === "string" ? d.skipped : null;
+    if (k) reasons[k] = (reasons[k] ?? 0) + 1;
+  }
+  console.log(
+    `[nurture] scanned=${summary.scanned} sent=${summary.sent} skipped=${summary.skipped} errors=${summary.errors} ` +
+      Object.entries(reasons).map(([k, v]) => `${k}=${v}`).join(" "),
+  );
+
   return NextResponse.json(summary, { status: 200 });
 }

@@ -9,6 +9,9 @@ export type AiReplyListing = {
   availableDate?: string | null;
   laundry?: string | null;
   petFriendly?: boolean | null;
+  /** S727: which pets the landlord ticked; "pet friendly" alone overstates cats-only. */
+  petsCats?: boolean | null;
+  petsDogs?: boolean | null;
 };
 
 export type AiReplyDraftInput = {
@@ -92,6 +95,16 @@ function laundryLabel(value: string | null | undefined): string | null {
   }
 }
 
+/** S727: name the pets actually allowed; plain "pet friendly" only when the kind is not set. */
+export function petLabel(listing: AiReplyListing): string | null {
+  const cats = listing.petsCats === true;
+  const dogs = listing.petsDogs === true;
+  if (cats && dogs) return "cats and dogs welcome";
+  if (cats) return "cats welcome (no dogs)";
+  if (dogs) return "dogs welcome (no cats)";
+  return listing.petFriendly === true ? "pet friendly" : null;
+}
+
 function listingFacts(listing: AiReplyListing | null): string[] {
   if (!listing) return [];
 
@@ -103,7 +116,7 @@ function listingFacts(listing: AiReplyListing | null): string[] {
       ? `available ${friendlyDate(cleanText(listing.availableDate))}`
       : null,
     laundryLabel(listing.laundry),
-    listing.petFriendly === true ? "pet friendly" : null,
+    petLabel(listing),
   ];
 
   return facts.filter((x): x is string => Boolean(x));
