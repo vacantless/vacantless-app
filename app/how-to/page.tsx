@@ -2,13 +2,13 @@ import Link from "next/link";
 import { VacantlessMark } from "../../components/vacantless-mark";
 import { HOW_TO_VIDEOS } from "@/lib/how-to-videos";
 
-// S726: the six how-to videos (recorded on the S712 test account, captions
+// S726: the seven how-to videos (recorded on the S712 test account, captions
 // only). Public, so the welcome email and the getting-started page can link
 // here. Files live in public/videos (720p, about 1 to 2 MB each).
 export const metadata = {
   title: "How-to videos - Vacantless",
   description:
-    "Six short videos: add a rental, set viewing times, answer an enquiry, post to rental sites, showing agents, and what happens after the viewing.",
+    "Seven short videos: add a rental, set viewing times, answer an enquiry, post to rental sites, showing agents, after the viewing, and the little things that save you time.",
 };
 
 
@@ -33,7 +33,7 @@ export default function HowToPage() {
       <main className="mx-auto w-[min(1120px,calc(100%-32px))] py-12 sm:py-16">
         <p className="text-[0.8rem] font-extrabold uppercase tracking-[0.12em] text-[var(--color-accent-strong)]">How-to videos</p>
         <h1 className="mt-2 text-[clamp(1.9rem,4vw,2.6rem)] font-extrabold leading-tight tracking-tight">
-          Six short videos. Under a minute each.
+          Seven short videos. About a minute each.
         </h1>
         <p className="mt-3 max-w-[40rem] text-[1.05rem] leading-relaxed text-[#384a42]">
           Each one walks a real screen in Vacantless with captions, so you can watch with the sound off.

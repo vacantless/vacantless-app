@@ -33,6 +33,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decideAccountClosure, OPEN_RENTAL_STATUSES } from "@/lib/account-closure";
 import { adminEmails } from "@/lib/provisioning-server";
+import { textingRequestEmail } from "@/lib/texting-setup-emails";
 import { isAdminEmail } from "@/lib/provisioning";
 import { canUseRenterSms } from "@/lib/billing";
 import { parseMessageSetup } from "@/lib/message-setup-save";
@@ -1270,15 +1271,27 @@ export async function requestTexting() {
     .eq("id", org.id);
   if (error) redirect("/dashboard/settings?tab=comms&sms=error");
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: props } = await supabase
+    .from("properties")
+    .select("address")
+    .eq("organization_id", org.id)
+    .is("archived_at", null)
+    .order("created_at", { ascending: true })
+    .limit(3);
+  const mail = textingRequestEmail({
+    orgName: org.name ?? null,
+    orgId: org.id,
+    requesterEmail: user?.email ?? null,
+    addresses: ((props ?? []) as { address: string | null }[]).map((p) => p.address ?? "").filter(Boolean),
+  });
   for (const to of adminEmails()) {
     await sendNotificationEmail({
       to_email: to,
-      subject: `Texting request: ${org.name ?? org.id}`,
-      body:
-        `${org.name ?? "An account"} asked for texting. Account id ${org.id}.\n\n` +
-        "Get a local Canadian number in Twilio near their rentals. " +
-        "Set its text and call webhooks the same way as the other numbers. " +
-        "Add it in Admin under Texting numbers. Send one test text and check it was delivered.",
+      subject: mail.subject,
+      body: mail.body,
       org_name: "Vacantless",
       brand_color: null,
       logo_url: null,

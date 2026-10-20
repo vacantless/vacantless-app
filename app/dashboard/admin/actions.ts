@@ -17,6 +17,9 @@ import {
 import { isOrgFeatureKey } from "@/lib/feature-entitlements";
 import { isPlatformSwitchKey } from "@/lib/platform-switches";
 import { cleanOwnNumber } from "@/lib/org-sms-numbers";
+import { textingOnEmail } from "@/lib/texting-setup-emails";
+import { getUserByIdCached } from "@/lib/auth-email-cache";
+import { sendNotificationEmail } from "@/lib/email";
 
 // Operator-initiated landlord onboarding (the scale version of WORKFLOW 112).
 // Double-gated: the page 404s for non-admins, AND this action rechecks the
@@ -228,12 +231,18 @@ export async function setOrgSmsNumberAsAdmin(formData: FormData): Promise<void> 
   } else {
     const phone = cleanOwnNumber(String(formData.get("phone") ?? ""));
     if (!phone) redirect("/dashboard/admin?numbers=bad_number");
+    const enabled = formData.get("enabled") === "on";
+    const { data: before } = await admin
+      .from("org_sms_numbers")
+      .select("enabled")
+      .eq("organization_id", orgId)
+      .maybeSingle();
     const write = await admin.from("org_sms_numbers").upsert(
       {
         organization_id: orgId,
         phone_e164: phone,
         provider: "twilio",
-        enabled: formData.get("enabled") === "on",
+        enabled,
         updated_at: new Date().toISOString(),
         updated_by: user?.email ?? null,
       },
@@ -242,7 +251,43 @@ export async function setOrgSmsNumberAsAdmin(formData: FormData): Promise<void> 
     if (write.error) {
       redirect(write.error.code === "23505" ? "/dashboard/admin?numbers=taken" : "/dashboard/admin?numbers=error");
     }
+    // S726g: first time a number is switched on, tell the landlord, and clear
+    // the waiting request so Admin stops listing them as waiting.
+    if (enabled && !(before as { enabled?: boolean } | null)?.enabled) {
+      await admin.from("organizations").update({ sms_requested_at: null }).eq("id", orgId);
+      await emailLandlordTextingOn(admin, orgId, phone).catch(() => null);
+    }
   }
   revalidatePath("/dashboard/admin");
   redirect("/dashboard/admin?numbers=saved");
+}
+
+// S726g: the "Texting is on" email goes to the account's owner admins.
+async function emailLandlordTextingOn(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  orgId: string,
+  phoneE164: string,
+): Promise<void> {
+  const [{ data: org }, { data: members }] = await Promise.all([
+    admin.from("organizations").select("name, brand_color, logo_url, reply_to_email").eq("id", orgId).maybeSingle(),
+    admin.from("memberships").select("user_id").eq("organization_id", orgId).eq("role", "owner_admin"),
+  ]);
+  const o = (org ?? {}) as { name?: string | null; brand_color?: string | null; logo_url?: string | null };
+  const mail = textingOnEmail({ orgName: o.name ?? null, phoneE164 });
+  const seen = new Set<string>();
+  for (const m of (members ?? []) as { user_id: string }[]) {
+    const { data } = await getUserByIdCached(admin, m.user_id);
+    const to = data.user?.email?.trim().toLowerCase();
+    if (!to || seen.has(to)) continue;
+    seen.add(to);
+    await sendNotificationEmail({
+      to_email: to,
+      subject: mail.subject,
+      body: mail.body,
+      org_name: o.name ?? "Vacantless",
+      brand_color: o.brand_color ?? null,
+      logo_url: o.logo_url ?? null,
+      reply_to_email: null,
+    }).catch(() => null);
+  }
 }

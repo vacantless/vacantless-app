@@ -368,7 +368,7 @@ const LEASING_STATS = LEASING_PROOF_STATS;
 
 /* S726: the 37-second ad, recorded on a test account with made-up renters
    (captions, no voice). Muted autoplay is allowed by browsers; the controls
-   let people turn the music on. The six how-tos live at /how-to. */
+   let people turn the music on. The seven how-tos live at /how-to. */
 function SeeItWork() {
   return (
     <section id="video" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">

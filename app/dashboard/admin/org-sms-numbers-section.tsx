@@ -34,7 +34,7 @@ export async function OrgSmsNumbersSection({ flash }: { flash?: string }) {
                 : null;
 
   return (
-    <section className="space-y-3">
+    <section id="texting-numbers" className="scroll-mt-6 space-y-3">
       <h2 className="text-sm font-semibold text-slate-700">Texting numbers</h2>
       <p className="text-xs text-slate-500">
         A landlord with a number that is on texts renters from it and gets their replies. Texts go to
