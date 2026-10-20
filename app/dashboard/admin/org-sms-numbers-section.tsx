@@ -9,7 +9,7 @@ export async function OrgSmsNumbersSection({ flash }: { flash?: string }) {
   const admin = createAdminClient();
   if (!admin) return null;
   const [{ data: orgs }, rowsRes] = await Promise.all([
-    admin.from("organizations").select("id, name").is("closed_at", null).order("name"),
+    admin.from("organizations").select("id, name, sms_requested_at").is("closed_at", null).order("name"),
     admin.from("org_sms_numbers").select("organization_id, phone_e164, enabled"),
   ]);
   const tableReady = !rowsRes.error;
@@ -57,11 +57,24 @@ export async function OrgSmsNumbersSection({ flash }: { flash?: string }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {((orgs ?? []) as { id: string; name: string | null }[]).map((o) => {
+            {(
+              (orgs ?? []) as { id: string; name: string | null; sms_requested_at?: string | null }[]
+            )
+              // S726f: accounts that asked for texting and have no number yet go first.
+              .sort((a, b) => Number(!!b.sms_requested_at && !byOrg.has(b.id)) - Number(!!a.sms_requested_at && !byOrg.has(a.id)))
+              .map((o) => {
               const row = byOrg.get(o.id);
+              const waiting = !!o.sms_requested_at && !row;
               return (
-                <tr key={o.id}>
-                  <th className="px-3 py-2 font-medium text-slate-800">{o.name ?? o.id}</th>
+                <tr key={o.id} className={waiting ? "bg-amber-50" : undefined}>
+                  <th className="px-3 py-2 font-medium text-slate-800">
+                    {o.name ?? o.id}
+                    {waiting && (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                        Asked {new Date(o.sms_requested_at as string).toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "America/Toronto" })}
+                      </span>
+                    )}
+                  </th>
                   <td className="px-3 py-2">
                     <form action={setOrgSmsNumberAsAdmin} className="flex flex-wrap items-center gap-2">
                       <input type="hidden" name="organization_id" value={o.id} />

@@ -68,12 +68,11 @@ const COMPARE_ROWS: Row[] = [
     us: "Built for Kijiji and Rentals.ca, where Canadian renters look, plus Zumper.",
     them: "Their website does not name any Canadian rental site.",
   },
-  // UPDATE WHEN TEXTING SHIPS (Noam 2026-10-15): renter texting on a number per
-  // landlord (Twilio) is planned. Once it is live for landlords, change this row
-  // to what the product actually does, and add texting to the home page plans.
+  // S726f (2026-10-20): texting is offered on Growth. The landlord presses
+  // "Turn on texting" and we set up a local number (lib/sms-limit.ts limit).
   {
     topic: "Texting renters",
-    us: "Not yet. Renters hear from you by email.",
+    us: "On Growth: booking confirmations and reminders by text from your own local number, which we set up for you. Up to 500 texts a month.",
     them: "Not stated on their pricing page.",
   },
   {

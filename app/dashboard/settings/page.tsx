@@ -11,6 +11,7 @@ import { canUseRenterSms } from "@/lib/billing";
 import { isOwnNumberSmsConfigured, isSmsConfigured } from "@/lib/sms";
 import { orgHasSwitch } from "@/lib/platform-switches";
 import { orgOwnSmsNumber } from "@/lib/org-sms-numbers";
+import { SMS_MONTHLY_LIMIT, textsSentThisMonth } from "@/lib/sms-limit";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import {
@@ -29,6 +30,7 @@ import {
   uploadOrgLogo,
   removeOrgLogo,
   closeAccount,
+  requestTexting,
 } from "./actions";
 import { ACCOUNT_CLOSURE_MESSAGES } from "@/lib/account-closure";
 import { CopyLinkButton } from "@/components/copy-link-button";
@@ -705,6 +707,12 @@ export default async function SettingsPage({
   const orgTexts =
     !!ownSmsNumber || (await orgHasSwitch(smsAdmin, "shared_sms_number", org.id));
   const smsTransportReady = ownSmsNumber ? isOwnNumberSmsConfigured() : isSmsConfigured();
+  // S726f: texting request (0253) and this month's texts against the limit.
+  const { data: smsReqRow } = smsAdmin
+    ? await smsAdmin.from("organizations").select("sms_requested_at").eq("id", org.id).maybeSingle()
+    : { data: null };
+  const smsRequestedAt = (smsReqRow as { sms_requested_at: string | null } | null)?.sms_requested_at ?? null;
+  const textsThisMonth = ownSmsNumber ? await textsSentThisMonth(smsAdmin, org.id) : 0;
 
   return (
     <div>
@@ -1899,8 +1907,42 @@ export default async function SettingsPage({
             </div>
             {!orgTexts ? (
               <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                Texting renters is not available on your account yet. Renters
-                get every booking confirmation and reminder by email.
+                {smsFlash === "requested" || (smsRequestedAt && canRenterSms) ? (
+                  <>
+                    <p className="font-medium text-gray-800">Texting is being set up.</p>
+                    <p className="mt-1">
+                      We are getting a local number for your account. Texts go out within one
+                      business day. This card will then show your number. Until then, renters get
+                      every message by email.
+                    </p>
+                  </>
+                ) : canRenterSms ? (
+                  <>
+                    <p className="font-medium text-gray-800">Text renters their confirmations and reminders.</p>
+                    <p className="mt-1">
+                      Renters who leave a phone number get texts as well as email. They get their
+                      booking confirmation and a reminder on the day. If they have not confirmed,
+                      they also get one the day before. They can reply to you, and can turn texts
+                      off. We set up a local number for your account within one business day.
+                      Included in Growth, up to {SMS_MONTHLY_LIMIT} texts a month.
+                    </p>
+                    <button
+                      type="submit"
+                      formAction={requestTexting}
+                      className="mt-3 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:opacity-90"
+                    >
+                      Turn on texting
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Texting renters comes with Growth. Renters on your account get every message
+                    by email.{" "}
+                    <Link href="/dashboard/billing" className="font-medium underline">
+                      See Growth
+                    </Link>
+                  </>
+                )}
               </div>
             ) : (
             <>
@@ -1963,16 +2005,16 @@ export default async function SettingsPage({
                 <span className="block text-xs text-gray-400">
                   {smsTransportReady ? (
                     <>
-                      When a renter leaves a phone number, we text their booking
-                      confirmation. We text a reminder a few hours before the
-                      viewing. The day-before reminder still goes by email.
+                      We text renters who leave a phone number. They get their
+                      booking confirmation and a reminder on the day. If they have
+                      not confirmed, we text the day before too.
                     </>
                   ) : (
                     <>
                       Once your account&apos;s SMS is connected, we&apos;ll text
-                      renters who leave a phone number. We text their booking
-                      confirmation and a reminder a few hours before the viewing.
-                      The day-before reminder still goes by email.
+                      renters who leave a phone number. They get their booking
+                      confirmation and a reminder on the day. If they have not
+                      confirmed, we text the day before too.
                     </>
                   )}{" "}
                   Every text includes &quot;Reply STOP to opt out,&quot; and a
@@ -1980,6 +2022,12 @@ export default async function SettingsPage({
                 </span>
               </span>
             </label>
+            {ownSmsNumber && (
+              <p className="mt-3 text-xs text-gray-500">
+                Texts come from {ownSmsNumber}. {textsThisMonth} of {SMS_MONTHLY_LIMIT} texts used
+                this month. Past that, renters get email only until the 1st.
+              </p>
+            )}
 
             </>
             )}

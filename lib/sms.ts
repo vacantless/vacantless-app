@@ -675,7 +675,20 @@ export async function sendSms({ to, body, organizationId }: SendOrgSmsInput): Pr
   if (!smsLive()) return { sent: false, reason: "sms_not_live" };
   const route = routeSms({ ...(await orgSmsStanding(organizationId)), to });
   if (route.kind === "none") return { sent: false, reason: route.reason };
-  if (route.kind === "own") return sendViaTwilio({ to, body, from: route.from });
+  if (route.kind === "own") {
+    // S726f: monthly limit per landlord number (lib/sms-limit.ts). Over it, the
+    // text is skipped and the renter still gets the email.
+    try {
+      const { createAdminClient } = await import("./supabase/admin");
+      const { overMonthlyTextLimit, textsSentThisMonth } = await import("./sms-limit");
+      if (overMonthlyTextLimit(await textsSentThisMonth(createAdminClient(), organizationId))) {
+        return { sent: false, reason: "monthly_text_limit" };
+      }
+    } catch {
+      // Never block a text because the count could not be read.
+    }
+    return sendViaTwilio({ to, body, from: route.from });
+  }
   const provider = selectSmsProvider();
   return provider === "none"
     ? { sent: false, reason: "no_credentials" }

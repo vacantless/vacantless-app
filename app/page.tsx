@@ -649,6 +649,8 @@ const PLANS: {
     includes: [
       "Unlimited live rentals",
       "Everything in Free",
+      // S726f: texting on the landlord's own local number (we set it up).
+      "Text renters their confirmations and reminders",
       "Help from us when you need it",
     ],
     addon: "Add Posting for CA$49 a month. See below.",

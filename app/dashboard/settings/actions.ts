@@ -1254,3 +1254,37 @@ export async function closeAccount(formData: FormData) {
   await supabase.auth.signOut();
   redirect("/account-closed");
 }
+
+// S726f: a Growth landlord asks for texting. We buy a local Twilio number and
+// add their org_sms_numbers row (SKILL N+113, admin page "Texting numbers").
+// The request turns their texting setting on so texts start the moment the
+// number is added, and emails the Vacantless admins.
+export async function requestTexting() {
+  const org = await requireSettingsOrg();
+  if (!canUseRenterSms(org.plan)) redirect("/dashboard/settings?tab=comms&sms=upgrade");
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ sms_requested_at: new Date().toISOString(), sms_enabled: true })
+    .eq("id", org.id);
+  if (error) redirect("/dashboard/settings?tab=comms&sms=error");
+
+  for (const to of adminEmails()) {
+    await sendNotificationEmail({
+      to_email: to,
+      subject: `Texting request: ${org.name ?? org.id}`,
+      body:
+        `${org.name ?? "An account"} asked for texting. Account id ${org.id}.\n\n` +
+        "Get a local Canadian number in Twilio near their rentals. " +
+        "Set its text and call webhooks the same way as the other numbers. " +
+        "Add it in Admin under Texting numbers. Send one test text and check it was delivered.",
+      org_name: "Vacantless",
+      brand_color: null,
+      logo_url: null,
+      reply_to_email: null,
+    }).catch(() => null);
+  }
+
+  redirect("/dashboard/settings?tab=comms&sms=requested");
+}
