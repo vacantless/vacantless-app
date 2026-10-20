@@ -373,11 +373,11 @@ function SeeItWork() {
   return (
     <section id="video" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="See it work in 37 seconds.">
+        <SectionHead title="See it work in 48 seconds.">
           A renter asks, books and confirms, and the landlord sees it all in one
           list. Made on a test account with made-up renters.{" "}
           <Link href="/how-to" className="font-semibold text-[#15211d] underline">
-            Six how-to videos
+            Seven how-to videos
           </Link>
           .
         </SectionHead>
