@@ -1,4 +1,5 @@
 import { matchKnowledge, type PropertyQaEntry } from "./property-qa";
+import { formatAvailability } from "./property-features";
 
 export type AiReplyListing = {
   address: string | null;
@@ -113,7 +114,7 @@ function listingFacts(listing: AiReplyListing | null): string[] {
     bedsBaths(listing),
     cleanText(listing.parking) ? `parking: ${cleanText(listing.parking)}` : null,
     cleanText(listing.availableDate)
-      ? `available ${friendlyDate(cleanText(listing.availableDate))}`
+      ? formatAvailability(cleanText(listing.availableDate)).toLowerCase() // S728: a past date reads "available now"
       : null,
     laundryLabel(listing.laundry),
     petLabel(listing),

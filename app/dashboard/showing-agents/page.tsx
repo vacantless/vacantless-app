@@ -16,6 +16,8 @@ import {
   setShowingAgentArchived,
   setAutoAssign,
 } from "./actions";
+import { CalendarFeedLink } from "@/components/calendar-feed-link";
+import { calendarFeedUrl } from "@/lib/calendar-feed-server";
 
 export const dynamic = "force-dynamic";
 
@@ -148,6 +150,10 @@ export default async function ShowingAgentsPage({
                     <p className="text-sm font-semibold text-gray-900">
                       {a.name}
                     </p>
+                    <CalendarFeedLink
+                      url={calendarFeedUrl({ kind: "agent", orgId: org.id, agentId: a.id })}
+                      label="Calendar link for this agent"
+                    />
                     <p className="mt-0.5 text-xs text-gray-500">
                       {[
                         a.email,

@@ -44,19 +44,22 @@ function normalizeEmail(email: string | null): string | null {
 }
 
 function occurredAtIso(raw: Record<string, unknown>): string {
-  const direct =
-    str(raw.date) ?? str(raw.ts) ?? str(raw.timestamp) ?? str(raw.created_at);
+  // S728: Brevo's "date" is account-local time with no zone ("2026-10-20
+  // 17:30:03"), so reading it as UTC put every event 4 hours early (KI1342b).
+  // The numeric epoch fields are exact; use them first, the date string last.
+  for (const key of ["ts_epoch", "ts_event", "ts"]) {
+    const v = raw[key];
+    const n = typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v) : NaN;
+    if (Number.isFinite(n) && n > 0) {
+      const ms = n > 10_000_000_000 ? n : n * 1000;
+      return new Date(ms).toISOString();
+    }
+  }
+  const direct = str(raw.date) ?? str(raw.timestamp) ?? str(raw.created_at);
   if (direct) {
     const ms = new Date(direct).getTime();
     if (Number.isFinite(ms)) return new Date(ms).toISOString();
   }
-
-  const tsEvent = raw.ts_event;
-  if (typeof tsEvent === "number" && Number.isFinite(tsEvent)) {
-    const ms = tsEvent > 10_000_000_000 ? tsEvent : tsEvent * 1000;
-    return new Date(ms).toISOString();
-  }
-
   return new Date().toISOString();
 }
 

@@ -458,7 +458,7 @@ export default async function AutomationsPage({
                                   reminderByKey.get(event.key)!.lastSentAt!,
                                   org.booking_timezone,
                                 )}`
-                              : "Not sent yet — sends once a year when it's due"}
+                              : "Not sent yet - sends once a year when it's due"}
                           </p>
                         )}
                       </div>
@@ -568,7 +568,7 @@ export default async function AutomationsPage({
                                 {configured.length === 0 && (
                                   <span className="text-gray-400">
                                     {" "}
-                                    (from your team and reply-to — add addresses
+                                    (from your team and reply-to - add addresses
                                     above to change this)
                                   </span>
                                 )}

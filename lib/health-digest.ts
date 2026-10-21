@@ -11,7 +11,16 @@ export const SWEEP_STALE_MINUTES = 60;
 export const DIGEST_LOCAL_HOUR = 8; // 8 AM Toronto
 export const DIGEST_TIMEZONE = "America/Toronto";
 
-export type SweepRunRow = { ran_at: string; ok: boolean; ran: number; failed: string[] | null };
+import { disabledSweeps } from "@/lib/cron-sweeps";
+
+export type SweepRunRow = {
+  ran_at: string;
+  ok: boolean;
+  ran: number;
+  failed: string[] | null;
+  /** S728: per-sweep answers (reason, sent). */
+  details?: Record<string, { status?: number | null; reason?: string; sent?: number }> | null;
+};
 export type EmailProblem = { event: string; email: string; subject: string | null; reason: string | null };
 export type PortalOutcome = { org: string; outcome: string; count: number };
 export type ParserNoteLead = { org: string; name: string | null; notes: string };
@@ -81,6 +90,11 @@ export function healthSections(input: HealthInput): HealthSection[] {
   for (const [path, n] of [...failedByPath.entries()].sort((a, b) => b[1] - a[1])) {
     sweepLines.push(`${path} failed in ${n} of ${input.sweeps.length} runs.`);
   }
+  // S728: a sweep switched off by a flag answers 200 "disabled" and used to
+  // be invisible here. Name them once, from the newest run.
+  const newest = [...input.sweeps].sort((a, b) => Date.parse(b.ran_at) - Date.parse(a.ran_at))[0];
+  const off = disabledSweeps(newest?.details ?? null);
+  if (off.length) sweepLines.push(`Switched off by a flag (not running): ${off.join(", ")}.`);
   if (sweepLines.length) out.push({ title: "Background sweeps", lines: sweepLines });
 
   // 2. Emails that did not arrive.

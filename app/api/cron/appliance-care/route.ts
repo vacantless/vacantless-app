@@ -369,9 +369,9 @@ export async function GET(req: NextRequest) {
           const address = prop?.address?.trim() || "your rental unit";
           const type = applianceTypeLabel(r.appliance_type);
           const where = (r.location ?? "").trim();
-          const loc = where ? ` — ${where}` : "";
+          const loc = where ? ` - ${where}` : "";
           const state = status === "overdue" ? "WARRANTY LAPSED" : "warranty ending";
-          const line = `- ${type}${ident(r.make, r.model)}${loc} — warranty ends ${targetDate!} (${state})`;
+          const line = `- ${type}${ident(r.make, r.model)}${loc} - warranty ends ${targetDate!} (${state})`;
           const bucket = byUnit.get(r.property_id) ?? { address, items: [] };
           bucket.items.push({
             stampId: r.id,
@@ -431,10 +431,10 @@ export async function GET(req: NextRequest) {
           const address = prop?.address?.trim() || "your rental unit";
           const type = appliance ? applianceTypeLabel(appliance.appliance_type) : "Appliance";
           const where = (appliance?.location ?? "").trim();
-          const loc = where ? ` — ${where}` : "";
+          const loc = where ? ` - ${where}` : "";
           const what = (r.label ?? "Consumable").trim();
           const state = status === "overdue" ? "OVERDUE" : "due soon";
-          const line = `- ${type}${loc} — ${what} due ${targetDate!} (${state})`;
+          const line = `- ${type}${loc} - ${what} due ${targetDate!} (${state})`;
           const bucket = byUnit.get(r.property_id) ?? { address, items: [] };
           bucket.items.push({
             stampId: r.id,

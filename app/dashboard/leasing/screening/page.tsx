@@ -598,6 +598,25 @@ export default async function ScreeningSettingsPage({
             </span>
           </label>
 
+          <label className={`mt-4 flex items-start gap-3 ${org.screening_enabled ? "" : "opacity-50"}`}>
+            <input
+              name="screening_gate_booking"
+              type="checkbox"
+              defaultChecked={org.screening_gate_booking === true}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300"
+            />
+            <span className="text-sm">
+              <span className="block font-medium text-gray-700">
+                Only renters whose answers fit can book a time themselves
+              </span>
+              <span className="block text-xs text-gray-400">
+                A renter flagged by the rules above is still saved as an enquiry and told
+                your team will be in touch. They get no booking link until you send one.
+                The rules stay limited to income, move-in date and pets.
+              </span>
+            </span>
+          </label>
+
           <p className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
             Screening uses only ability to pay, timing, and pets, never factors
             like family size, background, or any protected group.

@@ -36,7 +36,19 @@ export async function updateSession(request: NextRequest) {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
+
+  // S728: a browser that still carries a dead session cookie (signed out
+  // elsewhere, token rotated) makes every public page log "Invalid Refresh
+  // Token" as an error. Drop the dead cookies once, so it stops.
+  if (!user && authError && /refresh token/i.test(authError.message)) {
+    for (const c of request.cookies.getAll()) {
+      if (c.name.startsWith("sb-") && /-auth-token/.test(c.name)) {
+        supabaseResponse.cookies.set(c.name, "", { maxAge: 0, path: "/" });
+      }
+    }
+  }
 
   const path = request.nextUrl.pathname;
   const isProtected =

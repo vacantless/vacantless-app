@@ -212,13 +212,14 @@ export default async function ImportHistoryPage({
         <PageHeader
           eyebrow="Money"
           title="Import history"
-          subtitle="Seed categorization from prior accounting once Premium accounting is enabled."
+          subtitle="Seed categorization from prior accounting once accounting is part of your plan."
           icon={<Icons.page />}
         />
         <FeatureLockedNotice
-          title="Accounting history import is a Premium feature"
+          title="Accounting history import is not part of your plan yet"
           description="Upgrade to review imported accounting history, match it to bank transactions, and seed rules for future expenses."
-          unlockTier="premium"
+          ctaLabel="Ask us about accounting"
+          ctaHref="mailto:hello@vacantless.com?subject=Accounting%20on%20Vacantless"
         />
       </div>
     );

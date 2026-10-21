@@ -89,6 +89,8 @@ export type InquiryFormProps = {
   // an inquiry/booking. Default false (surfaced from get_public_listing) so every
   // org that never flips it behaves exactly as before.
   requirePhone: boolean;
+  /** S728: true only when this account's renters really get texts. */
+  textsRenters?: boolean;
 };
 
 // Tap-first renter booking form (S409 BUILD 2). Core principle: tap choices
@@ -127,6 +129,7 @@ export function InquiryForm({
   petFriendly,
   petPolicySet = true,
   requirePhone,
+  textsRenters = false,
 }: InquiryFormProps) {
   const hasSlots = days.length > 0;
 
@@ -454,9 +457,13 @@ export function InquiryForm({
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
               <span className="mt-1 block text-xs text-gray-400">
-                {requirePhone
-                  ? "We'll text you about this viewing (such as a confirmation and reminders). Reply STOP anytime to opt out."
-                  : "If you share your number we may text you about this viewing (such as a confirmation and reminders). Reply STOP anytime to opt out."}
+                {textsRenters
+                  ? requirePhone
+                    ? "We'll text you about this viewing (such as a confirmation and reminders). Reply STOP anytime to opt out."
+                    : "If you share your number we may text you about this viewing (such as a confirmation and reminders). Reply STOP anytime to opt out."
+                  : requirePhone
+                    ? "So we can reach you about this viewing."
+                    : "Optional. So we can reach you about this viewing."}
               </span>
             </div>
           </div>

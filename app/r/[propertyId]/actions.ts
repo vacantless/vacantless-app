@@ -308,7 +308,7 @@ async function notifyOperatorsOfNewLead(
         lead_phone: extra.phone.trim() || "(no phone)",
         move_in: extra.moveIn.trim() || "(not specified)",
         no_suitable_time_note: extra.noSuitableTime
-          ? "⚠ This renter couldn't find a workable viewing time — offer alternate times."
+          ? "This renter could not find a workable viewing time. Offer other times."
           : "",
         screening,
         renter_message: "",
@@ -811,8 +811,13 @@ export async function submitLead(formData: FormData) {
   let slotTaken = false;
   let texted = false;
 
+  // S728: pre-screening gate. When the account gates self-booking and this
+  // renter's answers qualified out, the lead is filed and the renter hears
+  // the team will be in touch; no slot is booked and no booking link is sent.
+  const gated = payload.gate_booking === true && payload.qualified_out === true;
+
   // --- Booking path -------------------------------------------------------
-  if (initialEffects.attemptBooking) {
+  if (initialEffects.attemptBooking && !gated) {
     const r = await attemptBooking(supabase, payload.lead_id, propertyId, slot);
     slotTaken = r.slotTaken;
     texted = r.texted;
@@ -838,7 +843,7 @@ export async function submitLead(formData: FormData) {
           p_property_id: propertyId,
         });
         const av = avData as Availability | null;
-        if (av && generateSlots(av).some((d) => d.slots.length > 0)) {
+        if (!gated && av && generateSlots(av).some((d) => d.slots.length > 0)) {
           bookingUrl = `${APP_URL}${withTracking(
             `/r/${propertyId}`,
             listingPostId,
@@ -880,7 +885,7 @@ export async function submitLead(formData: FormData) {
   }
 
   const submittedState =
-    outcome === "booked" ? "booked" : slotTaken ? "slottaken" : "1";
+    outcome === "booked" ? "booked" : slotTaken ? "slottaken" : gated ? "review" : "1";
   redirect(
     withTracking(
       `/r/${propertyId}?submitted=${submittedState}${outcome === "booked" && texted ? "&texted=1" : ""}`,

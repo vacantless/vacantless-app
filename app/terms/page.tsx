@@ -13,7 +13,7 @@ export const metadata = {
 const LEGAL_ENTITY = "Vacantless";
 const MAILING_ADDRESS = "Ontario, Canada";
 const GOVERNING_LAW = "the Province of Ontario, Canada";
-const LAST_UPDATED = "July 3, 2026";
+const LAST_UPDATED = "October 20, 2026";
 const CONTACT_EMAIL = "hello@vacantless.com";
 
 export default function TermsPage() {
@@ -69,8 +69,8 @@ export default function TermsPage() {
         <P>
           Vacantless is not a bank, money transmitter, or payment processor and
           never holds your funds. Where you collect rent through the Service, the
-          payment is processed by a third party (Stripe, or Rotessa where you
-          connect it), you are the merchant of record, and funds settle directly
+          payment is processed by a third party (Stripe), you are the merchant
+          of record, and funds settle directly
           to you. Those processors charge their own fees, set and deducted by
           them; Vacantless adds no fee of its own on rent payments. Your use of a
           processor is subject to that processor&apos;s own terms. Any third-party
@@ -81,7 +81,7 @@ export default function TermsPage() {
         <H2>Subscriptions, billing, and cancellation</H2>
         <List
           items={[
-            "Vacantless offers a Free plan and paid plans (Growth and Premium). Paid subscription fees are separate from any payment-processor fees.",
+            "Vacantless offers a Free plan, a paid Growth plan and a paid Posting add-on. Paid subscription fees are separate from any fees a rental site or payment processor charges.",
             "Paid plans are billed in advance on a recurring monthly basis until cancelled. Prices are in CAD unless stated otherwise.",
             "You can cancel at any time. Cancellation stops future billing; your paid access continues until the end of the current billing period.",
             "Except where required by law, subscription fees already paid are non-refundable, including for partial periods.",

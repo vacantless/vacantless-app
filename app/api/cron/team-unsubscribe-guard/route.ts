@@ -4,12 +4,14 @@ import {
   BREVO_BLOCKED_ENDPOINT,
   buildTeamAddressSet,
   teamAddressesToUnblock,
+  UNSUBSCRIBE_REASON_CODES,
   type BrevoBlockedContact,
 } from "@/lib/team-unsubscribe-guard";
 import {
   BLOCKLIST_CLEARED_KIND,
   BLOCKLIST_KIND,
   blocklistRowsToRecord,
+  markRenterEmailOptOut,
   normEmail,
   type DeliveryRow,
   type LeadEmailRow,
@@ -117,6 +119,7 @@ export async function GET(req: NextRequest) {
   // S726: record blocked RENTER addresses (and ones that left the list) so
   // automatic renter emails skip them and the renter page says so.
   let renterRecorded = 0;
+  let renterOptedOut = 0;
   try {
     const blockedEmails = new Set(
       blocked.map((b) => normEmail(b.email)).filter((e): e is string => !!e && !team.has(e)),
@@ -149,12 +152,21 @@ export async function GET(req: NextRequest) {
       if (insErr) console.error("[team-unsubscribe-guard] renter record failed", insErr.message);
       else renterRecorded = toRecord.length;
     } else if (dry) renterRecorded = toRecord.length;
+    // S728: an unsubscribe click is recorded on the lead itself, so it stands
+    // even after the block is lifted for the renter's own transactional email.
+    if (!dry) {
+      for (const r of toRecord) {
+        if (r.kind === BLOCKLIST_KIND && UNSUBSCRIBE_REASON_CODES.has(r.reason ?? "")) {
+          renterOptedOut += await markRenterEmailOptOut(admin, r.email, r.occurred_at);
+        }
+      }
+    }
   } catch (e) {
     console.error("[team-unsubscribe-guard] renter record error", (e as Error).message);
   }
 
   console.log(
-    `[team-unsubscribe-guard] blocked=${blocked.length} team=${team.size} toUnblock=${toUnblock.length} unblocked=${unblocked.length} failed=${failed.length} renterRecorded=${renterRecorded} dry=${dry}`,
+    `[team-unsubscribe-guard] blocked=${blocked.length} team=${team.size} toUnblock=${toUnblock.length} unblocked=${unblocked.length} failed=${failed.length} renterRecorded=${renterRecorded} renterOptedOut=${renterOptedOut} dry=${dry}`,
   );
   return NextResponse.json({
     ok: failed.length === 0,
@@ -165,5 +177,6 @@ export async function GET(req: NextRequest) {
     unblocked,
     failed,
     renterRecorded,
+    renterOptedOut,
   }, { status: failed.length === 0 ? 200 : 500 });
 }

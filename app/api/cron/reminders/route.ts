@@ -457,6 +457,7 @@ export async function GET(req: NextRequest) {
         leasing_phone: leasingPhone,
         cancel_token: row.cancel_token ?? null,
         when_label: whenLabel,
+        confirmed: row.confirmed_at != null,
       });
 
       if (!result.sent) {
@@ -502,6 +503,7 @@ export async function GET(req: NextRequest) {
             confirm_url: confirmUrl,
             reschedule_url: rescheduleUrl,
             cancel_url: cancelUrl,
+            confirmed: row.confirmed_at != null,
           },
           kind,
         ),

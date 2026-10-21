@@ -110,7 +110,7 @@ function violationLine(a: Actionable): string {
   const notice = (r.notice_type ?? "").trim();
   const noticePart = notice ? ` (notice: ${notice})` : "";
   const state = a.status === "overdue" ? "OVERDUE" : "deadline approaching";
-  return `- ${type}${noticePart} — remedy due ${a.remedyDueOn} (${state})`;
+  return `- ${type}${noticePart} - remedy due ${a.remedyDueOn} (${state})`;
 }
 
 /** The primary tenant's name (fallback: first named tenant), for the copy. */

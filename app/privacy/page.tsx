@@ -17,7 +17,7 @@ export const metadata = {
 // when you have it).
 const LEGAL_ENTITY = "Vacantless";
 const MAILING_ADDRESS = "Ontario, Canada";
-const LAST_UPDATED = "October 19, 2026";
+const LAST_UPDATED = "October 20, 2026";
 const CONTACT_EMAIL = "hello@vacantless.com";
 
 export default function PrivacyPage() {
@@ -54,7 +54,7 @@ export default function PrivacyPage() {
             "Account information: your name, business name, email, and login credentials.",
             "Rental information: addresses, rent, unit details, photos, and availability you enter.",
             "Renter and inquiry information that landlords enter or that renters submit: names, emails, phone numbers, messages, viewing bookings, and tenancy details.",
-            "Payment information: when you use a rent rail, payments are processed by third parties (Stripe, Rotessa). Vacantless stores only processor identifiers and payment status. We never store bank account numbers, card numbers, credit reports, SINs, or government ID numbers.",
+            "Payment information: when you collect rent through the Service, payments are processed by a third party (Stripe). Vacantless stores only processor identifiers and payment status. We never store bank account numbers, card numbers, credit reports, SINs, or government ID numbers.",
             "Usage and technical data: log data, device and browser information, and cookies needed to run the site and keep sessions secure.",
           ]}
         />
@@ -79,9 +79,9 @@ export default function PrivacyPage() {
           We share information only with providers that help us run the Service,
           under contracts that limit their use of it. These include our hosting
           and database provider, our email delivery providers, and the payment
-          processors you choose to use (Stripe and, where applicable, Rotessa).
+          processor you choose to use (Stripe).
           Renter questions may be answered with help from an AI provider
-          (Anthropic). Texts are sent through an SMS provider (Quo or Twilio).
+          (Anthropic). Texts are sent through an SMS provider (Twilio).
           Some of these providers operate in the United States, so information may
           be processed outside Canada.
         </P>
@@ -90,12 +90,12 @@ export default function PrivacyPage() {
         <P>
           If you connect a Facebook Business Page (and its linked Instagram
           Business account) to Vacantless, we access only the identity of that
-          Page and account &mdash; the Page ID and name, a Page access token, and
-          the linked Instagram Business account ID and username &mdash; so we can
+          Page and account (the Page ID and name, a Page access token, and
+          the linked Instagram Business account ID and username) so we can
           publish the rental-listing posts you authorize. When you publish a
-          listing, we create a single post &mdash; the property address,
-          beds/baths, monthly rent, and a tracked link to the public listing
-          &mdash; on your own Page feed, and, for Instagram, the listing&apos;s
+          listing, we create a single post (the property address,
+          beds/baths, monthly rent, and a tracked link to the public listing)
+          on your own Page feed, and, for Instagram, the listing&apos;s
           cover photo with the same caption on your linked Instagram Business
           account. A post is created only after you review the prepared listing
           and approve it (for example, by tapping &quot;Publish everywhere&quot;
@@ -137,6 +137,13 @@ export default function PrivacyPage() {
           certain uses. If you are a renter whose information a landlord entered,
           please contact that landlord first; we will support their request. To
           make a request to us, email {emailLink()}.
+        </P>
+        <P>
+          Email you did not ask for by booking: every follow-up, new-viewing-times
+          notice, waiting-list notice or price-drop email to a renter carries an
+          unsubscribe link, and one click ends them. Booking confirmations and
+          viewing reminders for a viewing you booked still arrive. Every text ends
+          with &quot;Reply STOP to opt out&quot;, and STOP ends texts at once.
         </P>
 
         <H2>Landlord responsibilities</H2>

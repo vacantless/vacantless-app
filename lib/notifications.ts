@@ -106,7 +106,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     description:
       "When a trade accepts, declines, or sends a quote for a job you dispatched. Goes to your team so you can act from your inbox.",
     tokens: [...COMMON_TOKENS, "trade_name", "job_title", "status_label", "detail", "dashboard_url"],
-    defaultSubject: "{{trade_name}} {{status_label}} — {{job_title}}",
+    defaultSubject: "{{trade_name}} {{status_label}} - {{job_title}}",
     defaultBody:
       "{{trade_name}} {{status_label}} for \"{{job_title}}\" at {{property_address}}.\n\n{{detail}}\n\nReview and respond in your dashboard: {{dashboard_url}}",
     active: true,
@@ -115,7 +115,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "dispatch.scheduled.trade",
     family: "dispatch",
     audience: "trade",
-    label: "Job scheduled — notify the trade",
+    label: "Job scheduled - notify the trade",
     description:
       "When you approve a quote and confirm a date, the trade is told they're booked. The trade on the job is always included; add cc's below.",
     tokens: [...COMMON_TOKENS, "trade_name", "job_title", "scheduled_date", "job_url"],
@@ -128,20 +128,20 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "dispatch.scheduled.tenant",
     family: "dispatch",
     audience: "tenant",
-    label: "Maintenance scheduled — notify the tenant",
+    label: "Maintenance scheduled - notify the tenant",
     description:
       "When work is scheduled, the tenant who reported it is told the date. The tenant on the tenancy is always included; add cc's below.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "job_title", "scheduled_date"],
     defaultSubject: "Your maintenance is scheduled for {{scheduled_date}}",
     defaultBody:
-      "Hi {{tenant_first_name}},\n\nGood news — the work for \"{{job_title}}\" at {{property_address}} is scheduled for {{scheduled_date}}. We'll be in touch if anything changes.\n\nThank you,\n{{org_name}}",
+      "Hi {{tenant_first_name}},\n\nGood news - the work for \"{{job_title}}\" at {{property_address}} is scheduled for {{scheduled_date}}. We'll be in touch if anything changes.\n\nThank you,\n{{org_name}}",
     active: true,
   },
   {
     key: "dispatch.completed.tenant",
     family: "dispatch",
     audience: "tenant",
-    label: "Maintenance complete — notify the tenant",
+    label: "Maintenance complete - notify the tenant",
     description:
       "When you mark a dispatched job complete, the tenant who reported it is told it's done.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "job_title"],
@@ -154,7 +154,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "dispatch.cancelled.trade",
     family: "dispatch",
     audience: "trade",
-    label: "Dispatch cancelled — notify the trade",
+    label: "Dispatch cancelled - notify the trade",
     description:
       "When you pull a job back from a trade, they're told it's cancelled so they don't show up.",
     tokens: [...COMMON_TOKENS, "trade_name", "job_title"],
@@ -171,7 +171,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     description:
       "When a trade sends a question about a job you dispatched (often before they accept), your team is notified so you can answer from the dashboard.",
     tokens: [...COMMON_TOKENS, "trade_name", "job_title", "question", "dashboard_url"],
-    defaultSubject: "{{trade_name}} asked a question — {{job_title}}",
+    defaultSubject: "{{trade_name}} asked a question - {{job_title}}",
     defaultBody:
       "{{trade_name}} asked a question about \"{{job_title}}\" at {{property_address}}:\n\n{{question}}\n\nReply from your dashboard: {{dashboard_url}}",
     active: true,
@@ -180,7 +180,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "dispatch.reply.trade",
     family: "dispatch",
     audience: "trade",
-    label: "You replied — notify the trade",
+    label: "You replied - notify the trade",
     description:
       "When you answer a trade's question, they're told there's a reply and linked back to the job. The trade on the job is always included; add cc's below.",
     tokens: [...COMMON_TOKENS, "trade_name", "job_title", "reply", "job_url"],
@@ -205,7 +205,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "leasing.repair_appointment_reminder",
     family: "dispatch",
     audience: "tenant",
-    label: "Repair visit reminder — notify the tenant",
+    label: "Repair visit reminder - notify the tenant",
     description:
       "Once you confirm a repair appointment, the tenant gets a reminder the day before and again the same day so they're home for the arrival window. Goes to the tenant on the job's tenancy. The text-message version needs a Premium plan; email is always included. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "job_title", "appointment_window", "reminder_lead"],
@@ -263,7 +263,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     tokens: [...COMMON_TOKENS, "lead_name", "lead_phone", "reply_text", "dashboard_url"],
     defaultSubject: "{{lead_name}} texted back about {{property_address}}",
     defaultBody:
-      "{{lead_name}} ({{lead_phone}}) wrote:\n\n{{reply_text}}\n\nReply to them by phone or text from your own phone. Their record: {{dashboard_url}}",
+      "{{lead_name}} ({{lead_phone}}) wrote:\n\n{{reply_text}}\n\nText them back from their page, so they see the same number: {{dashboard_url}}",
     defaultAccent: "#d97706",
     active: true,
   },
@@ -649,7 +649,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Unconfirmed viewing reminder",
     description:
-      "Before an assigned viewing, if it hasn't been confirmed with the renter yet, the assigned agent gets a one-tap reminder to confirm it — so nothing slips through the cracks. Defaults to the assigned agent; add recipients below to CC the lead agent for oversight. Off until you turn it on.",
+      "Before an assigned viewing, if it hasn't been confirmed with the renter yet, the assigned agent gets a one-tap reminder to confirm it - so nothing slips through the cracks. Defaults to the assigned agent; add recipients below to CC the lead agent for oversight. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "agent_name", "lead_name", "showing_time", "agent_url"],
     defaultSubject: "Please confirm your viewing - {{lead_name}} at {{property_address}}",
     defaultBody:
@@ -765,9 +765,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     key: "leasing.rent_increase",
     family: "leasing",
     audience: "operator",
-    label: "Rent increase due — serve the N1",
+    label: "Rent increase due - serve the N1",
     description:
-      "When one of your tenancies reaches its annual rent-increase window, you get a reminder of the date you must serve the Form N1 and the guideline amount — so you never leave a legal increase on the table. One email per unit, once per cycle. Defaults to members who manage inquiries; edit the recipients below.",
+      "When one of your tenancies reaches its annual rent-increase window, you get a reminder of the date you must serve the Form N1 and the guideline amount - so you never leave a legal increase on the table. One email per unit, once per cycle. Defaults to members who manage inquiries; edit the recipients below.",
     tokens: [
       ...COMMON_TOKENS,
       "tenant_names",
@@ -779,7 +779,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "dashboard_url",
     ],
     defaultSubject:
-      "Rent increase: serve the N1 by {{serve_by_date}} — {{property_address}}",
+      "Rent increase: serve the N1 by {{serve_by_date}} - {{property_address}}",
     defaultBody:
       "It's time to start the annual rent increase for {{property_address}}.\n\nTenant(s): {{tenant_names}}\nServe the Form N1 by: {{serve_by_date}}\nIncrease effective: {{effective_date}}\nGuideline: {{guideline_percent}}\nRent: {{current_rent}} → {{new_rent}}/mo\n\nOpen the tenancy to review the details and print the pre-filled N1: {{dashboard_url}}",
     active: true,
@@ -803,9 +803,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     family: "leasing",
     audience: "tenant",
     sendMode: "approve_to_send",
-    label: "Rent increase — courtesy note to the tenant",
+    label: "Rent increase - courtesy note to the tenant",
     description:
-      "An optional, friendly heads-up to the tenant when their lease anniversary approaches, asking whether they intend to stay — drafted for you to review and send, never sent automatically. This is a courtesy note, not the legal Form N1 (you still serve the N1 separately). Off until you turn it on.",
+      "An optional, friendly heads-up to the tenant when their lease anniversary approaches, asking whether they intend to stay - drafted for you to review and send, never sent automatically. This is a courtesy note, not the legal Form N1 (you still serve the N1 separately). Off until you turn it on.",
     tokens: [
       ...COMMON_TOKENS,
       "tenant_first_name",
@@ -814,7 +814,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     ],
     defaultSubject: "A quick note about your lease at {{property_address}}",
     defaultBody:
-      "Hi {{tenant_first_name}},\n\nWe're reaching out ahead of your lease anniversary at {{property_address}}. There's nothing you need to do right now — your tenancy simply continues unless you choose otherwise.\n\nWhen you have a moment, we'd love to know: are you planning to stay on for another year? There's no pressure either way — we just want to plan ahead. A separate notice with any rent details will follow if applicable.\n\nThanks,\n{{org_name}}",
+      "Hi {{tenant_first_name}},\n\nWe're reaching out ahead of your lease anniversary at {{property_address}}. There's nothing you need to do right now - your tenancy simply continues unless you choose otherwise.\n\nWhen you have a moment, we'd love to know: are you planning to stay on for another year? There's no pressure either way - we just want to plan ahead. A separate notice with any rent details will follow if applicable.\n\nThanks,\n{{org_name}}",
     active: true,
   },
   // ---- Seasonal compliance calendar (S343 — the soft-comms drip build-out) ----
@@ -839,7 +839,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     sendMode: "approve_to_send",
     label: "Seasonal: furnace filter reminder",
     description:
-      "As the heating season begins, an optional friendly reminder to the tenant to replace the furnace filter — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+      "As the heating season begins, an optional friendly reminder to the tenant to replace the furnace filter - drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
     defaultSubject: "A quick seasonal reminder for {{property_address}}",
     defaultBody:
@@ -853,9 +853,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     sendMode: "approve_to_send",
     label: "Seasonal: outdoor water shut-off",
     description:
-      "Before the first frost, an optional reminder to the tenant to disconnect garden hoses and prepare outdoor faucets for winter — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+      "Before the first frost, an optional reminder to the tenant to disconnect garden hoses and prepare outdoor faucets for winter - drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
-    defaultSubject: "Outdoor water shut-off for the winter — {{property_address}}",
+    defaultSubject: "Outdoor water shut-off for the winter - {{property_address}}",
     defaultBody:
       "Hi {{tenant_first_name}},\n\nWith colder weather on the way, it's time to prepare the outdoor faucets at {{property_address}} for winter. Please disconnect and drain any garden hoses so the exterior taps don't freeze. If the outdoor water supply needs to be shut off at the valve, we'll be in touch to arrange a convenient time.\n\nThanks,\n{{org_name}}",
     active: true,
@@ -867,9 +867,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     sendMode: "approve_to_send",
     label: "Seasonal: smoke & CO alarm test",
     description:
-      "An optional seasonal reminder to the tenant to test their smoke and carbon-monoxide alarms and report any that aren't working — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+      "An optional seasonal reminder to the tenant to test their smoke and carbon-monoxide alarms and report any that aren't working - drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
-    defaultSubject: "Time to test your smoke & CO alarms — {{property_address}}",
+    defaultSubject: "Time to test your smoke & CO alarms - {{property_address}}",
     defaultBody:
       "Hi {{tenant_first_name}},\n\nThis is a friendly seasonal reminder to test the smoke and carbon-monoxide alarms in your home at {{property_address}} and make sure each one is working. If any alarm is missing, chirping, or doesn't sound when you test it, please let us know right away and we'll arrange a replacement.\n\nThanks,\n{{org_name}}",
     active: true,
@@ -881,9 +881,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     sendMode: "approve_to_send",
     label: "Seasonal: outdoor water turn-on",
     description:
-      "Once the frost risk has passed, an optional reminder to the tenant that the outdoor faucets are being readied for spring — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+      "Once the frost risk has passed, an optional reminder to the tenant that the outdoor faucets are being readied for spring - drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
-    defaultSubject: "Outdoor water is coming back on — {{property_address}}",
+    defaultSubject: "Outdoor water is coming back on - {{property_address}}",
     defaultBody:
       "Hi {{tenant_first_name}},\n\nNow that the risk of frost has passed, we're getting the outdoor faucets at {{property_address}} ready for the warmer months. If you'd like the exterior water turned back on, just let us know and we'll arrange it. It's also a good time to check the outdoor taps for any drips after the winter.\n\nThanks,\n{{org_name}}",
     active: true,
@@ -895,7 +895,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     sendMode: "approve_to_send",
     label: "Seasonal: dryer-vent cleaning",
     description:
-      "A mid-winter fire-safety reminder to the tenant to clear lint from the dryer's vent and lint trap — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+      "A mid-winter fire-safety reminder to the tenant to clear lint from the dryer's vent and lint trap - drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
     defaultSubject: "A quick dryer safety reminder for {{property_address}}",
     defaultBody:
@@ -909,9 +909,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     sendMode: "approve_to_send",
     label: "Seasonal: AC startup & cooling filter",
     description:
-      "Ahead of the cooling season, an optional reminder to the tenant to test the air conditioning and replace the filter before the first hot stretch — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+      "Ahead of the cooling season, an optional reminder to the tenant to test the air conditioning and replace the filter before the first hot stretch - drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
-    defaultSubject: "Getting ready for the cooling season — {{property_address}}",
+    defaultSubject: "Getting ready for the cooling season - {{property_address}}",
     defaultBody:
       "Hi {{tenant_first_name}},\n\nWith warmer weather on the way, this is a friendly reminder to test the air conditioning at {{property_address}} and replace the filter so it's ready before the first hot stretch. Running it for a few minutes now is the easiest way to catch any issue early. If the AC doesn't cool the way it should, please let us know and we'll arrange a service.\n\nThanks,\n{{org_name}}",
     active: true,
@@ -923,11 +923,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     sendMode: "approve_to_send",
     label: "Seasonal: eavestrough clearing",
     description:
-      "After the leaves have fallen, an optional reminder about clearing the eavestroughs and downspouts before winter — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+      "After the leaves have fallen, an optional reminder about clearing the eavestroughs and downspouts before winter - drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
-    defaultSubject: "Clearing the eavestroughs before winter — {{property_address}}",
+    defaultSubject: "Clearing the eavestroughs before winter - {{property_address}}",
     defaultBody:
-      "Hi {{tenant_first_name}},\n\nNow that most of the leaves have come down, it's a good time to clear the eavestroughs and downspouts at {{property_address}} so melting snow and ice can drain freely this winter. If clearing the eavestroughs is something we look after for your home, you don't need to do anything — we'll take care of it.\n\nThanks,\n{{org_name}}",
+      "Hi {{tenant_first_name}},\n\nNow that most of the leaves have come down, it's a good time to clear the eavestroughs and downspouts at {{property_address}} so melting snow and ice can drain freely this winter. If clearing the eavestroughs is something we look after for your home, you don't need to do anything - we'll take care of it.\n\nThanks,\n{{org_name}}",
     active: true,
   },
   {
@@ -937,11 +937,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     sendMode: "approve_to_send",
     label: "Seasonal: winter walkways & ice",
     description:
-      "As winter sets in, an optional reminder to the tenant about keeping walkways and steps clear of snow and ice, and reporting slippery spots — drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
+      "As winter sets in, an optional reminder to the tenant about keeping walkways and steps clear of snow and ice, and reporting slippery spots - drafted for you to review and send, never sent automatically. A courtesy note, not a legal notice. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "season_year"],
-    defaultSubject: "Keeping walkways safe this winter — {{property_address}}",
+    defaultSubject: "Keeping walkways safe this winter - {{property_address}}",
     defaultBody:
-      "Hi {{tenant_first_name}},\n\nWith winter weather setting in, this is a friendly reminder to help keep the walkways, steps, and entrances at {{property_address}} clear of snow and ice so everyone stays safe. If clearing snow and salting is something we look after for your home, you don't need to do anything — and either way, please let us know right away about any icy or slippery spots so we can take care of them.\n\nThanks,\n{{org_name}}",
+      "Hi {{tenant_first_name}},\n\nWith winter weather setting in, this is a friendly reminder to help keep the walkways, steps, and entrances at {{property_address}} clear of snow and ice so everyone stays safe. If clearing snow and salting is something we look after for your home, you don't need to do anything - and either way, please let us know right away about any icy or slippery spots so we can take care of them.\n\nThanks,\n{{org_name}}",
     active: true,
   },
   // ---- Landlord-notify compliance reminders (S357 — the landlord tier) --------
@@ -969,11 +969,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Annual: book the heating-system service",
     description:
-      "Ahead of the heating season, a reminder to schedule a licensed technician to service the furnace/heating systems across your units — a safety and efficiency check that many insurers also expect. Goes to your team, not the tenant. Off until you turn it on.",
+      "Ahead of the heating season, a reminder to schedule a licensed technician to service the furnace/heating systems across your units - a safety and efficiency check that many insurers also expect. Goes to your team, not the tenant. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
     defaultSubject: "Time to book the annual heating-system service ({{season_year}})",
     defaultBody:
-      "Heating season is approaching — a good time to book your annual furnace/heating service.\n\nA yearly inspection by a licensed technician keeps the systems running safely and efficiently, helps catch a failing heat exchanger (a carbon-monoxide risk) before the cold sets in, and is often a condition of your insurance.\n\n- Schedule service for the heating systems across your units.\n- Keep the service record on file.\n- Replace or arrange replacement of furnace filters where you're responsible.\n\nOpen your units in the dashboard: {{dashboard_url}}",
+      "Heating season is approaching - a good time to book your annual furnace/heating service.\n\nA yearly inspection by a licensed technician keeps the systems running safely and efficiently, helps catch a failing heat exchanger (a carbon-monoxide risk) before the cold sets in, and is often a condition of your insurance.\n\n- Schedule service for the heating systems across your units.\n- Keep the service record on file.\n- Replace or arrange replacement of furnace filters where you're responsible.\n\nOpen your units in the dashboard: {{dashboard_url}}",
     active: true,
   },
   {
@@ -982,11 +982,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Annual: smoke & CO alarm compliance",
     description:
-      "A yearly reminder of your legal duty as the landlord to provide and maintain working smoke and carbon-monoxide alarms, and to keep a record. Goes to your team, not the tenant — it pairs with the optional tenant 'test your alarms' courtesy note. Off until you turn it on.",
+      "A yearly reminder of your legal duty as the landlord to provide and maintain working smoke and carbon-monoxide alarms, and to keep a record. Goes to your team, not the tenant - it pairs with the optional tenant 'test your alarms' courtesy note. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
     defaultSubject: "Annual smoke & CO alarm compliance check ({{season_year}})",
     defaultBody:
-      "A yearly reminder about your alarm obligations as the landlord.\n\nUnder Ontario's Fire Code (O. Reg. 213/07), the landlord is responsible for installing and maintaining working smoke alarms and, where there is a fuel-burning appliance or an attached garage, carbon-monoxide alarms — and for keeping a maintenance record.\n\n- Verify a working smoke alarm on every storey and outside sleeping areas of each unit.\n- Verify CO alarms where required.\n- Test, replace dead batteries, and replace any alarm past its expiry.\n- Log the date you checked each unit.\n\nYou can also send tenants the optional 'test your smoke & CO alarms' courtesy note from your dashboard: {{dashboard_url}}",
+      "A yearly reminder about your alarm obligations as the landlord.\n\nUnder Ontario's Fire Code (O. Reg. 213/07), the landlord is responsible for installing and maintaining working smoke alarms and, where there is a fuel-burning appliance or an attached garage, carbon-monoxide alarms - and for keeping a maintenance record.\n\n- Verify a working smoke alarm on every storey and outside sleeping areas of each unit.\n- Verify CO alarms where required.\n- Test, replace dead batteries, and replace any alarm past its expiry.\n- Log the date you checked each unit.\n\nYou can also send tenants the optional 'test your smoke & CO alarms' courtesy note from your dashboard: {{dashboard_url}}",
     active: true,
   },
   // Vacant Home Tax declaration — two timed nudges (60 days, then 30 days) ahead
@@ -1007,9 +1007,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     description:
       "An early reminder (about 60 days out) to file your municipal Vacant Home Tax declaration for each residential property. Toronto's deadline is April 30; other cities differ. Goes to your team, not the tenant. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
-    defaultSubject: "Vacant Home Tax declaration opens — due in about 2 months ({{season_year}})",
+    defaultSubject: "Vacant Home Tax declaration opens - due in about 2 months ({{season_year}})",
     defaultBody:
-      "A heads-up so the Vacant Home Tax declaration doesn't sneak up on you.\n\nMany Ontario municipalities now require an ANNUAL vacant-home declaration for every residential property — even your principal residence. If you miss it, the city can assume the home was vacant and bill you the tax.\n\n- In Toronto, the declaration for the prior year is due April 30. Ottawa and Hamilton run their own declarations on their own dates — confirm yours.\n- File one declaration per residential property you own.\n- Keep the confirmation for your records.\n\nThis is your early (~2 months out) reminder; you'll get one more about a month before the deadline. Review your properties in your dashboard: {{dashboard_url}}",
+      "A heads-up so the Vacant Home Tax declaration doesn't sneak up on you.\n\nMany Ontario municipalities now require an ANNUAL vacant-home declaration for every residential property - even your principal residence. If you miss it, the city can assume the home was vacant and bill you the tax.\n\n- In Toronto, the declaration for the prior year is due April 30. Ottawa and Hamilton run their own declarations on their own dates - confirm yours.\n- File one declaration per residential property you own.\n- Keep the confirmation for your records.\n\nThis is your early (~2 months out) reminder; you'll get one more about a month before the deadline. Review your properties in your dashboard: {{dashboard_url}}",
     active: true,
   },
   {
@@ -1022,7 +1022,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
     defaultSubject: "Reminder: Vacant Home Tax declaration due in about a month ({{season_year}})",
     defaultBody:
-      "A final nudge on the Vacant Home Tax declaration.\n\nIf you've already filed for each of your residential properties, you can ignore this. If not, the deadline is close — and missing it means the city can assume the home was vacant and bill you the tax.\n\n- In Toronto, the declaration for the prior year is due April 30. Confirm the date for your municipality (Ottawa and Hamilton differ).\n- File one declaration per residential property.\n- Keep the confirmation for your records.\n\nFile now and you're done for the year. Review your properties in your dashboard: {{dashboard_url}}",
+      "A final nudge on the Vacant Home Tax declaration.\n\nIf you've already filed for each of your residential properties, you can ignore this. If not, the deadline is close - and missing it means the city can assume the home was vacant and bill you the tax.\n\n- In Toronto, the declaration for the prior year is due April 30. Confirm the date for your municipality (Ottawa and Hamilton differ).\n- File one declaration per residential property.\n- Keep the confirmation for your records.\n\nFile now and you're done for the year. Review your properties in your dashboard: {{dashboard_url}}",
     active: true,
   },
   // Freehold winterization — the LANDLORD-side companion to the tenant outdoor-
@@ -1037,11 +1037,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Freehold: shut off outdoor water before winter",
     description:
-      "Before the first frost, a reminder to shut off and drain the exterior water supply on the freehold houses you manage directly — especially any vacant or between-tenants unit — so an outdoor faucet or supply line doesn't freeze and burst. Goes to your team, not the tenant. Off until you turn it on.",
+      "Before the first frost, a reminder to shut off and drain the exterior water supply on the freehold houses you manage directly - especially any vacant or between-tenants unit - so an outdoor faucet or supply line doesn't freeze and burst. Goes to your team, not the tenant. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "season_year", "dashboard_url"],
     defaultSubject: "Winterize the outdoor water on your freehold units ({{season_year}})",
     defaultBody:
-      "Frost is on the way — time to winterize the outdoor water on the houses you look after.\n\nFor your freehold/house units (and any vacant or between-tenants unit especially), a frozen hose bib or supply line can split and cause a costly flood:\n\n- Shut off the interior valve that feeds each exterior faucet, then open the outside tap to drain the line.\n- Disconnect and store garden hoses.\n- Blow out or drain any irrigation/sprinkler lines.\n- For an occupied unit, coordinate with the tenant (you can send them the 'outdoor water shut-off' courtesy note from your dashboard).\n\nReview your properties in your dashboard: {{dashboard_url}}",
+      "Frost is on the way - time to winterize the outdoor water on the houses you look after.\n\nFor your freehold/house units (and any vacant or between-tenants unit especially), a frozen hose bib or supply line can split and cause a costly flood:\n\n- Shut off the interior valve that feeds each exterior faucet, then open the outside tap to drain the line.\n- Disconnect and store garden hoses.\n- Blow out or drain any irrigation/sprinkler lines.\n- For an occupied unit, coordinate with the tenant (you can send them the 'outdoor water shut-off' courtesy note from your dashboard).\n\nReview your properties in your dashboard: {{dashboard_url}}",
     active: true,
   },
   {
@@ -1056,11 +1056,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Detectors reaching end of life",
     description:
-      "When the smoke / carbon-monoxide detectors you've logged for a unit reach their manufacturer end-of-life (~10 years for smoke and combo, ~7 for CO-only), you get one reminder per unit — so you order the right type and replace the whole unit's set in one trip instead of reacting to a beep. Goes to your team, not the tenant. Built from each unit's Detectors list; off until you turn it on.",
+      "When the smoke / carbon-monoxide detectors you've logged for a unit reach their manufacturer end-of-life (~10 years for smoke and combo, ~7 for CO-only), you get one reminder per unit - so you order the right type and replace the whole unit's set in one trip instead of reacting to a beep. Goes to your team, not the tenant. Built from each unit's Detectors list; off until you turn it on.",
     tokens: [...COMMON_TOKENS, "detector_list", "earliest_eol", "dashboard_url"],
-    defaultSubject: "Detectors due for replacement — {{property_address}}",
+    defaultSubject: "Detectors due for replacement - {{property_address}}",
     defaultBody:
-      "Some of the smoke / carbon-monoxide detectors you've logged at {{property_address}} are reaching their manufacturer end-of-life:\n\n{{detector_list}}\n\nOrder the right type now — a combination smoke + CO unit is not interchangeable with a smoke-only one — so you can replace the whole unit's set in a single trip. Please confirm each detector's manufacturer date and your local fire code; service life is typically ~10 years for smoke and combination alarms and ~7 for CO-only.\n\nReview or update this unit's detector inventory: {{dashboard_url}}",
+      "Some of the smoke / carbon-monoxide detectors you've logged at {{property_address}} are reaching their manufacturer end-of-life:\n\n{{detector_list}}\n\nOrder the right type now - a combination smoke + CO unit is not interchangeable with a smoke-only one - so you can replace the whole unit's set in a single trip. Please confirm each detector's manufacturer date and your local fire code; service life is typically ~10 years for smoke and combination alarms and ~7 for CO-only.\n\nReview or update this unit's detector inventory: {{dashboard_url}}",
     active: true,
   },
   {
@@ -1076,11 +1076,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Major equipment reaching end of life",
     description:
-      "When the water heaters and furnaces you've logged for a unit reach their manufacturer end-of-life (~10 years for tank water heaters, ~15 for furnaces), you get one reminder per unit — with enough lead time to plan the replacement on your schedule instead of reacting to a failure. Goes to your team, not the tenant. Built from each unit's Equipment list; off until you turn it on.",
+      "When the water heaters and furnaces you've logged for a unit reach their manufacturer end-of-life (~10 years for tank water heaters, ~15 for furnaces), you get one reminder per unit - with enough lead time to plan the replacement on your schedule instead of reacting to a failure. Goes to your team, not the tenant. Built from each unit's Equipment list; off until you turn it on.",
     tokens: [...COMMON_TOKENS, "equipment_list", "earliest_eol", "dashboard_url"],
-    defaultSubject: "Major equipment due for replacement — {{property_address}}",
+    defaultSubject: "Major equipment due for replacement - {{property_address}}",
     defaultBody:
-      "Some of the major equipment you've logged at {{property_address}} is reaching its manufacturer end-of-life:\n\n{{equipment_list}}\n\nPlan the replacement now, while you can do it on your own schedule. A tank water heater past ~10 years carries a rising risk of leaking and causing water damage, and a furnace is best replaced in the off-season before the next heating season — both cost considerably more as an emergency. Please confirm each item's manufacturer date.\n\nReview or update this unit's equipment: {{dashboard_url}}",
+      "Some of the major equipment you've logged at {{property_address}} is reaching its manufacturer end-of-life:\n\n{{equipment_list}}\n\nPlan the replacement now, while you can do it on your own schedule. A tank water heater past ~10 years carries a rising risk of leaking and causing water damage, and a furnace is best replaced in the off-season before the next heating season - both cost considerably more as an emergency. Please confirm each item's manufacturer date.\n\nReview or update this unit's equipment: {{dashboard_url}}",
     active: true,
   },
   {
@@ -1096,7 +1096,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     description:
       "For units you flag as having a smart lock, your team gets a recurring reminder every 6 months to replace the batteries before a showing, tenant, or trade visit gets stuck at the door. Goes to your team, not the tenant. Off until you turn it on.",
     tokens: [...COMMON_TOKENS, "smart_lock_list", "interval_months", "next_due_date", "dashboard_url"],
-    defaultSubject: "Replace smart-lock batteries — {{property_address}}",
+    defaultSubject: "Replace smart-lock batteries - {{property_address}}",
     defaultBody:
       "This unit is flagged as having a smart lock. Replace the batteries now so access keeps working for renters, tenants, trades, and showing agents:\n\n{{smart_lock_list}}\n\nThis reminder repeats every {{interval_months}} months. After this reminder is stamped, the next one is due around {{next_due_date}}.\n\nReview this rental's setup: {{dashboard_url}}",
     active: true,
@@ -1113,11 +1113,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Appliance warranty expiring",
     description:
-      "When the manufacturer warranty on an appliance you've logged for a unit is about to lapse (~6 weeks out), you get one reminder per unit — so you can register it or use the coverage before it runs out. Goes to your team, not the tenant. Built from each unit's Appliances list; off until you turn it on.",
+      "When the manufacturer warranty on an appliance you've logged for a unit is about to lapse (~6 weeks out), you get one reminder per unit - so you can register it or use the coverage before it runs out. Goes to your team, not the tenant. Built from each unit's Appliances list; off until you turn it on.",
     tokens: [...COMMON_TOKENS, "appliance_list", "earliest_date", "dashboard_url"],
-    defaultSubject: "Appliance warranty expiring soon — {{property_address}}",
+    defaultSubject: "Appliance warranty expiring soon - {{property_address}}",
     defaultBody:
-      "The manufacturer warranty on some appliances you've logged at {{property_address}} is about to lapse:\n\n{{appliance_list}}\n\nIf you haven't registered these with the manufacturer, now is the time — and if anything has been acting up, get it looked at while the coverage still applies. Please confirm each purchase date and your warranty terms.\n\nReview or update this unit's appliances: {{dashboard_url}}",
+      "The manufacturer warranty on some appliances you've logged at {{property_address}} is about to lapse:\n\n{{appliance_list}}\n\nIf you haven't registered these with the manufacturer, now is the time - and if anything has been acting up, get it looked at while the coverage still applies. Please confirm each purchase date and your warranty terms.\n\nReview or update this unit's appliances: {{dashboard_url}}",
     active: true,
   },
   {
@@ -1133,9 +1133,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Appliance consumable due",
     description:
-      "For appliance consumables you track on a cycle (a fridge water filter, a range-hood filter), you get one reminder per unit when one is due — so you order the right part and swap it on time. After you replace it, tap “Mark replaced” on the unit's Appliances list and the next reminder is scheduled automatically. Goes to your team, not the tenant; off until you turn it on.",
+      "For appliance consumables you track on a cycle (a fridge water filter, a range-hood filter), you get one reminder per unit when one is due - so you order the right part and swap it on time. After you replace it, tap “Mark replaced” on the unit's Appliances list and the next reminder is scheduled automatically. Goes to your team, not the tenant; off until you turn it on.",
     tokens: [...COMMON_TOKENS, "appliance_list", "earliest_date", "dashboard_url"],
-    defaultSubject: "Appliance consumable due — {{property_address}}",
+    defaultSubject: "Appliance consumable due - {{property_address}}",
     defaultBody:
       "Some appliance consumables you track at {{property_address}} are due for replacement:\n\n{{appliance_list}}\n\nOrder the right part now so it's a quick swap. Once it's done, tap “Mark replaced” on the unit's Appliances list and we'll schedule the next reminder for you.\n\nReview or update this unit's appliances: {{dashboard_url}}",
     active: true,
@@ -1153,9 +1153,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Renter's insurance expiring or lapsed",
     description:
-      "If your lease requires the tenant to carry renter's (contents + liability) insurance, log their policy on the tenancy and we'll email you about a month before it expires — and again if it lapses — so you can ask for renewed proof before there's a coverage gap. One reminder per tenancy. Goes to your team, not the tenant. Built from each tenancy's Renter's insurance list; off until you turn it on.",
+      "If your lease requires the tenant to carry renter's (contents + liability) insurance, log their policy on the tenancy and we'll email you about a month before it expires - and again if it lapses - so you can ask for renewed proof before there's a coverage gap. One reminder per tenancy. Goes to your team, not the tenant. Built from each tenancy's Renter's insurance list; off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_name", "insurance_list", "earliest_expiry", "dashboard_url"],
-    defaultSubject: "Renter's insurance needs attention — {{property_address}}",
+    defaultSubject: "Renter's insurance needs attention - {{property_address}}",
     defaultBody:
       "The renter's insurance you've logged for {{tenant_name}} at {{property_address}} needs attention:\n\n{{insurance_list}}\n\nReach out to your tenant for renewed proof of insurance before any coverage gap. An uninsured tenant can leave you exposed if there's a fire, flood, or liability claim. Please confirm the policy details on file.\n\nReview or update this tenancy's insurance: {{dashboard_url}}",
     active: true,
@@ -1173,9 +1173,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Lease violation follow-up due",
     description:
-      "When you log a lease violation on a tenancy and give the tenant a remedy deadline, we email you as that deadline approaches — and again if it passes — so you can check whether it was fixed and then close it or escalate, before the window to act on a notice slips. One reminder per tenancy. Goes to your team, not the tenant. Built from each tenancy's Lease violations list; off until you turn it on.",
+      "When you log a lease violation on a tenancy and give the tenant a remedy deadline, we email you as that deadline approaches - and again if it passes - so you can check whether it was fixed and then close it or escalate, before the window to act on a notice slips. One reminder per tenancy. Goes to your team, not the tenant. Built from each tenancy's Lease violations list; off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_name", "violation_list", "earliest_due", "dashboard_url"],
-    defaultSubject: "Lease violation needs follow-up — {{property_address}}",
+    defaultSubject: "Lease violation needs follow-up - {{property_address}}",
     defaultBody:
       "A lease violation you've logged for {{tenant_name}} at {{property_address}} has a remedy deadline that needs follow-up:\n\n{{violation_list}}\n\nCheck whether the tenant has remedied it. If they have, mark it remedied; if not, decide whether to escalate. Acting before the deadline window closes keeps your options open.\n\nReview or update this tenancy's lease violations: {{dashboard_url}}",
     active: true,
@@ -1194,9 +1194,9 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Property inspection due",
     description:
-      "Schedule your move-in, move-out, and periodic inspections on a tenancy with a planned date, and we email you about a week before — and again if the date passes — so you can give the tenant the required written notice and book a time before it slips. One reminder per tenancy. Goes to your team, not the tenant. Built from each tenancy's Inspections list; off until you turn it on.",
+      "Schedule your move-in, move-out, and periodic inspections on a tenancy with a planned date, and we email you about a week before - and again if the date passes - so you can give the tenant the required written notice and book a time before it slips. One reminder per tenancy. Goes to your team, not the tenant. Built from each tenancy's Inspections list; off until you turn it on.",
     tokens: [...COMMON_TOKENS, "tenant_name", "inspection_list", "earliest_due", "dashboard_url"],
-    defaultSubject: "Property inspection coming up — {{property_address}}",
+    defaultSubject: "Property inspection coming up - {{property_address}}",
     defaultBody:
       "A property inspection you've scheduled for {{tenant_name}} at {{property_address}} is coming up:\n\n{{inspection_list}}\n\nGive your tenant the required written notice of entry and book a time. Once it's done, mark it completed so the record's on file for any future deposit or damage dispute.\n\nReview or update this tenancy's inspections: {{dashboard_url}}",
     active: true,

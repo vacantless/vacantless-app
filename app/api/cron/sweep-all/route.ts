@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { SWEEP_PATHS, summarizeSweeps, type SweepResult } from "@/lib/cron-sweeps";
+import { SWEEP_PATHS, summarizeSweeps, sweepDetails, type SweepResult } from "@/lib/cron-sweeps";
 
 // S713e: the database's 15-minute timer (pg_cron, migration 0245) calls this
 // one address, and it runs every background sweep. Two ways in:
@@ -48,9 +48,19 @@ export async function GET(req: NextRequest) {
           cache: "no-store",
           signal: AbortSignal.timeout(PER_SWEEP_TIMEOUT_MS),
         });
-        // Drain the body so the connection closes cleanly.
-        await res.text().catch(() => "");
-        return { path, status: res.status, ms: Date.now() - started };
+        // S728: keep what the sweep answered. A flag that is off returns 200
+        // with reason "disabled", which used to vanish here.
+        const text = await res.text().catch(() => "");
+        let reason: string | null = null;
+        let sent: number | null = null;
+        try {
+          const body = JSON.parse(text) as { reason?: unknown; sent?: unknown };
+          if (typeof body.reason === "string") reason = body.reason;
+          if (typeof body.sent === "number") sent = body.sent;
+        } catch {
+          // not JSON
+        }
+        return { path, status: res.status, ms: Date.now() - started, reason, sent };
       } catch (err) {
         return {
           path,
@@ -72,6 +82,7 @@ export async function GET(req: NextRequest) {
         ok: summary.failed.length === 0,
         ran: summary.ran,
         failed: summary.failed,
+        details: sweepDetails(results),
       });
       await admin
         .from("sweep_runs")

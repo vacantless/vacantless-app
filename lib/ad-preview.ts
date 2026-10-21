@@ -7,6 +7,7 @@
 
 import { formatRent } from "./listing-copy";
 import { friendlyDate } from "./ai-reply";
+import { formatAvailability } from "./property-features";
 import { PARKING_TYPE_LABELS, type ParkingType, type UnitFeatures } from "./property-features";
 
 export type AdPreviewInput = {
@@ -88,8 +89,9 @@ export function buildAdPreview(input: AdPreviewInput): AdPreview {
   if (input.beds != null) rooms.push(input.beds === 0 ? "Studio" : plural(input.beds, "bedroom", "bedrooms"));
   if (input.baths != null) rooms.push(plural(input.baths, "bathroom", "bathrooms"));
   if (rooms.length) facts.push({ label: "Size", value: rooms.join(", ") });
-  const when = friendlyDate(f.available_date ?? null);
-  facts.push(when ? { label: "Available", value: when } : { label: "Available", value: "Not set", missing: true });
+  // S728: a date that has passed reads "Now", never a past date in an ad.
+  const when = formatAvailability(f.available_date ?? null).replace(/^Available /, "");
+  facts.push(f.available_date ? { label: "Available", value: when === "now" ? "Now" : when } : { label: "Available", value: "Not set", missing: true });
   facts.push(petsLine(f));
   facts.push(utilitiesLine(f));
   const parking = parkingLine(f);

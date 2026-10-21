@@ -12,9 +12,13 @@ import {
 import {
   cancelSiteSignin,
   confirmSiteSignin,
+  failStalledSiteSignin,
   readSiteSigninWindow,
   type SiteSigninWindowRead,
 } from "./actions";
+
+/** S728: how long "starting" may last before the page gives up on it. */
+const STARTING_LIMIT_MS = 3 * 60_000;
 
 const TONE: Record<string, string> = {
   wait: "border-gray-200 bg-white",
@@ -44,9 +48,16 @@ export function WindowPanel({
     }
   }, [win.status, router]);
 
+  // S728: a window stuck at "starting" is given up on after three minutes,
+  // so the landlord sees "The window did not open" and a Try again, not a
+  // spinner that never ends (the runner may be asleep).
+  const startingSince = useRef(Date.now());
   useEffect(() => {
     if (!siteSigninIsOpen(win.status)) return;
     const timer = setInterval(async () => {
+      if (win.status === "starting" && Date.now() - startingSince.current > STARTING_LIMIT_MS) {
+        await failStalledSiteSignin(win.id);
+      }
       const next = await readSiteSigninWindow(win.id);
       if (next) {
         setWin(next);

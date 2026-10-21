@@ -13,6 +13,17 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // S728: the nav says Plans -> /#pricing, but people type /pricing and ads
+  // link it. Both short paths were 404s.
+  async redirects() {
+    return [
+      { source: "/pricing", destination: "/#pricing", permanent: true },
+      { source: "/plans", destination: "/#pricing", permanent: true },
+      { source: "/features", destination: "/#product", permanent: true },
+      { source: "/compare", destination: "/compare/showinghero", permanent: true },
+      { source: "/videos", destination: "/how-to", permanent: true },
+    ];
+  },
   experimental: {
     // Photo uploads ride a server action as multipart FormData. The default
     // body cap is 1 MB — far too small for phone photos — so raise it. Each

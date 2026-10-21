@@ -10,12 +10,12 @@ import {
 // live product keeps (same wording as the home page and Billing). Every
 // ShowingHero line is from showinghero.com/pricing, read 2026-10-15. Re-read
 // their page before changing their column; never state what their page does not.
-const SHOWINGHERO_CHECKED = "October 15, 2026";
+const SHOWINGHERO_CHECKED = "October 20, 2026";
 
 export const metadata = {
-  title: "Vacantless vs ShowingHero - for landlords under 300 units",
+  title: "Vacantless vs ShowingHero - for Canadian landlords of any size",
   description:
-    "ShowingHero's published plans start at 300 units or 25 listings, in US dollars. Vacantless is free for one rental and CA$99 a month for as many as you have, built in Canada for Kijiji, Rentals.ca and Zumper.",
+    "ShowingHero's published pricing starts at US$450 a month (300 units or 25 listings). Vacantless is free for one rental and CA$99 a month for as many as you have, built in Canada for Kijiji, Rentals.ca and Zumper.",
 };
 
 type Row = { topic: string; us: string; them: string };
@@ -24,7 +24,7 @@ const COMPARE_ROWS: Row[] = [
   {
     topic: "Who it is for",
     us: "Landlords and agents of any size, starting with one rental.",
-    them: "Portfolios with at least 300 units, or at least 25 active listings.",
+    them: "Any size, their FAQ says. Their published pricing starts at a 300-unit or 25-listing minimum.",
   },
   {
     topic: "Price",
@@ -62,23 +62,23 @@ const COMPARE_ROWS: Row[] = [
     them: "25+ listing sites.",
   },
   {
-    // S722: their homepage and pricing page (read 2026-10-15) name no Canadian
-    // site and do not mention Canada. Re-read both before changing this row.
+    // S728: their FAQ (read 2026-10-20) says they serve Canada; their pricing,
+    // homepage and FAQ name no Canadian rental site. Re-read before changing.
     topic: "Canadian rental sites",
     us: "Built for Kijiji and Rentals.ca, where Canadian renters look, plus Zumper.",
-    them: "Their website does not name any Canadian rental site.",
+    them: "Serves Canada, their FAQ says. Their pages name no Canadian rental site; Craigslist is the only site named.",
   },
   // S726f (2026-10-20): texting is offered on Growth. The landlord presses
   // "Turn on texting" and we set up a local number (lib/sms-limit.ts limit).
   {
     topic: "Texting renters",
     us: "On Growth: booking confirmations and reminders by text from your own local number, which we set up for you. Up to 500 texts a month.",
-    them: "Not stated on their pricing page.",
+    them: "Yes. Alerts, email and SMS, plus a dedicated ShowingHero phone number for each client.",
   },
   {
     topic: "Contract",
     us: "Billed monthly. Change or cancel anytime, no contract.",
-    them: "Not stated on their pricing page.",
+    them: "No contract, their FAQ says. Billed for active listings.",
   },
 ];
 
@@ -93,11 +93,11 @@ export default function CompareShowingHeroPage() {
               Vacantless vs ShowingHero
             </p>
             <h1 className="mb-[18px] max-w-[22ch] text-[clamp(2.1rem,4.4vw,3.2rem)] font-extrabold leading-[1.05] tracking-tight">
-              ShowingHero is built for big portfolios. Vacantless is built for everyone else.
+              ShowingHero is priced for big portfolios. Vacantless is priced for everyone else.
             </h1>
             <p className="max-w-[56ch] text-[clamp(1.04rem,1.6vw,1.2rem)] leading-relaxed text-[#384a42]">
-              ShowingHero&apos;s published plans start at 300 units or 25 listings, billed in US
-              dollars. Vacantless starts with one rental, free, and is CA$99 a month for as many
+              ShowingHero&apos;s published pricing starts at US$450 a month, for 300 units or 25
+              listings. Vacantless starts with one rental, free, and is CA$99 a month for as many
               as you have. It is built in Canada, for the sites Canadian renters use.
             </p>
           </div>
@@ -140,7 +140,7 @@ export default function CompareShowingHeroPage() {
               ))}
             </div>
             <p className="mt-3 text-[0.8rem] leading-relaxed text-[#59655f]">
-              ShowingHero prices and features are as published on showinghero.com/pricing, read{" "}
+              ShowingHero prices and features are as published on showinghero.com/pricing and showinghero.com/faq, read{" "}
               {SHOWINGHERO_CHECKED}. ShowingHero is a trademark of its owner. Vacantless is not
               affiliated with ShowingHero.
             </p>

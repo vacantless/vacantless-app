@@ -597,3 +597,44 @@ export async function fileApplicationPdf(formData: FormData) {
   revalidatePath(`/dashboard/leads/${leadId}`);
   redirect(`/dashboard/leads/${leadId}?apply=filed`);
 }
+
+// ---------------------------------------------------------------------------
+// S728: Text back. A renter who texts the account's number gets the reply
+// from that same number, written on their record, instead of from the
+// landlord's own phone (which showed the renter two different numbers).
+// Gated on manage_leads, the lead being in the org, a phone on file, no STOP,
+// and the account really texting (lib/sms orgTextsRenters).
+// ---------------------------------------------------------------------------
+export async function textRenter(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const text = String(formData.get("text") ?? "").replace(/\s+/g, " ").trim().slice(0, 320);
+  if (!id) return;
+  if (!text) redirect(`/dashboard/leads/${id}?text=empty#text-back`);
+
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return;
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("id, phone, sms_opt_out")
+    .eq("id", id)
+    .maybeSingle();
+  if (!lead) return;
+  const to = normalizePhoneE164((lead.phone as string | null) ?? "");
+  if (!to) redirect(`/dashboard/leads/${id}?text=no_phone#text-back`);
+  if (lead.sms_opt_out) redirect(`/dashboard/leads/${id}?text=opted_out#text-back`);
+
+  const { sendSms, orgTextsRenters } = await import("@/lib/sms");
+  if (!(await orgTextsRenters(org.id))) redirect(`/dashboard/leads/${id}?text=not_on#text-back`);
+  const result = await sendSms({ to, body: text, organizationId: org.id });
+  await supabase.from("messages").insert({
+    organization_id: org.id,
+    lead_id: id,
+    channel: result.sent ? "sms" : "note",
+    direction: "outbound",
+    body: result.sent ? text : `Text not sent (${result.reason ?? "unknown"}): ${text}`,
+  });
+  revalidatePath(`/dashboard/leads/${id}`);
+  redirect(`/dashboard/leads/${id}?text=${result.sent ? "sent" : "failed"}#text-back`);
+}

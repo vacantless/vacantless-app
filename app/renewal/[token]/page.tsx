@@ -82,7 +82,7 @@ export default async function RenewalCheckinPage({
   const OPTIONS: { choice: string; title: string; sub: string }[] = [
     { choice: "staying", title: "I'm staying", sub: "I'd like to renew and stay in my home." },
     { choice: "leaving", title: "I'm moving out", sub: "I'm planning to leave when my term ends." },
-    { choice: "unsure", title: "I'm not sure yet", sub: "I haven't decided — check back with me." },
+    { choice: "unsure", title: "I'm not sure yet", sub: "I haven't decided - check back with me." },
   ];
 
   return (
@@ -100,7 +100,7 @@ export default async function RenewalCheckinPage({
             A quick check-in about {address}
           </h1>
           <p className="mt-2 text-sm opacity-90">
-            Your lease is coming up for renewal. Let {orgName} know your plans —
+            Your lease is coming up for renewal. Let {orgName} know your plans - 
             it takes one tap, and there’s nothing else to fill out.
           </p>
         </div>
@@ -116,7 +116,7 @@ export default async function RenewalCheckinPage({
 
         {answered ? (
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <p className="text-lg font-semibold text-gray-900">Thank you — got it.</p>
+            <p className="text-lg font-semibold text-gray-900">Thank you - got it.</p>
             <p className="mt-2 text-sm text-gray-600">
               We’ve let {orgName} know you’re{" "}
               <span className="font-medium">{INTENT_LABEL[answered] ?? answered}</span>.

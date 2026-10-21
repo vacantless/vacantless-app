@@ -256,8 +256,19 @@ export default function SignupPage() {
           </p>
         )}
         <button type="submit" disabled={loading} className={AUTH_BUTTON_CLASS}>
-          {loading ? "Creating…" : "Create login"}
+          {loading ? "Creating..." : "Create login"}
         </button>
+        <p className="mt-3 text-center text-xs text-gray-500">
+          By creating a login you agree to the{" "}
+          <a href="https://www.vacantless.com/terms" className="underline" target="_blank" rel="noopener noreferrer">
+            Terms
+          </a>{" "}
+          and{" "}
+          <a href="https://www.vacantless.com/privacy" className="underline" target="_blank" rel="noopener noreferrer">
+            Privacy Policy
+          </a>
+          . We email you about your account and your renters; every other email has an unsubscribe link.
+        </p>
       </form>
     </AuthShell>
   );

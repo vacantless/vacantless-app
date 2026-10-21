@@ -43,7 +43,37 @@ export const SWEEP_PATHS = [
   "/api/cron/health-digest",
 ] as const;
 
-export type SweepResult = { path: string; status: number | null; ms: number; error?: string };
+export type SweepResult = {
+  path: string;
+  status: number | null;
+  ms: number;
+  error?: string;
+  /** S728: what the sweep answered ("disabled" when its flag is off). */
+  reason?: string | null;
+  sent?: number | null;
+};
+
+/** S728: the per-path answers worth keeping on the sweep_runs row. Pure. */
+export function sweepDetails(results: SweepResult[]): Record<string, { status: number | null; reason?: string; sent?: number }> {
+  const out: Record<string, { status: number | null; reason?: string; sent?: number }> = {};
+  for (const r of results) {
+    const key = r.path.replace("/api/cron/", "");
+    const d: { status: number | null; reason?: string; sent?: number } = { status: r.status };
+    if (typeof r.reason === "string" && r.reason) d.reason = r.reason.slice(0, 80);
+    if (typeof r.sent === "number") d.sent = r.sent;
+    out[key] = d;
+  }
+  return out;
+}
+
+/** S728: sweeps a flag has switched off, from one run's details. Pure. */
+export function disabledSweeps(details: Record<string, { reason?: string }> | null | undefined): string[] {
+  if (!details) return [];
+  return Object.entries(details)
+    .filter(([, d]) => typeof d?.reason === "string" && /disabled|not_configured|not_enabled/.test(d.reason))
+    .map(([k]) => k)
+    .sort();
+}
 
 /** One line per sweep, for the route's JSON summary. Pure. */
 export function summarizeSweeps(results: SweepResult[]): {

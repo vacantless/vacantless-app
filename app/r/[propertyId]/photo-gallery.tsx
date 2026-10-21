@@ -55,7 +55,7 @@ export function PhotoGallery({
     if (!available) return null;
     return (
       <div className="mt-6 flex items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center">
-        <span className="text-sm text-gray-400">Photos coming soon</span>
+        <span className="text-sm text-gray-400">No photos yet</span>
       </div>
     );
   }

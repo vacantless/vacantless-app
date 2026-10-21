@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
 
   const [sweepsRes, lastSweepRes, portalRes, notesRes, robotRes, sessionRes, emails] =
     await Promise.all([
-      admin.from("sweep_runs").select("ran_at, ok, ran, failed").gte("ran_at", since),
+      admin.from("sweep_runs").select("ran_at, ok, ran, failed, details").gte("ran_at", since),
       admin.from("sweep_runs").select("ran_at").order("ran_at", { ascending: false }).limit(1).maybeSingle(),
       admin.from("inbound_portal_events").select("organization_id, outcome").gte("received_at", since),
       admin

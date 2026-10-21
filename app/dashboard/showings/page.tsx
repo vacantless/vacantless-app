@@ -40,6 +40,8 @@ import {
   nudgeRenterForConfirmation,
   releaseUnconfirmedShowingByOperator,
 } from "./actions";
+import { CalendarFeedLink } from "@/components/calendar-feed-link";
+import { calendarFeedUrl } from "@/lib/calendar-feed-server";
 
 export const dynamic = "force-dynamic";
 
@@ -389,6 +391,7 @@ export default async function ShowingsPage({
             Manage showing agents →
           </Link>
         )}
+        <CalendarFeedLink url={calendarFeedUrl({ kind: "org", orgId: org.id })} />
       </div>
 
       {proposalParam && (

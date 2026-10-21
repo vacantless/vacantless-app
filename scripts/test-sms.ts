@@ -249,8 +249,33 @@ const linkedSameDay = showingReminderSms(
   "sameday",
 );
 ok("linked reminder includes confirm URL", linkedSameDay.includes("/showing/confirm/tok"));
-ok("linked reminder includes reschedule URL", linkedSameDay.includes("/showing/reschedule/tok"));
-ok("linked reminder includes cancel URL", linkedSameDay.includes("/showing/cancel/tok"));
+// S728: one link only; the confirm page offers reschedule and cancel.
+ok("linked reminder carries no reschedule URL", !linkedSameDay.includes("/showing/reschedule/tok"));
+ok("linked reminder carries no cancel URL", !linkedSameDay.includes("/showing/cancel/tok"));
+ok("linked reminder says it can change or cancel", linkedSameDay.includes("Confirm, change or cancel"));
+const linkedLong = showingReminderSms(
+  {
+    org_name: "Agile Real Estate Group Inc.",
+    property_address: "833 Pillette Rd, Unit 33, Windsor, ON N8Y 3B4",
+    when_label: "Wednesday, Oct 21 at 5:00 PM",
+    confirm_url: "https://app.vacantless.com/showing/confirm/0a455e72-4981-4a1a-9979-ca971dd3c0ef",
+  },
+  "24h",
+);
+ok("linked reminder with a real org and address <= 2 segments", smsSegments(linkedLong) <= 2);
+// S728: an unconfirmed renter hears that the time may go to someone else.
+const unconfirmedSameDay = showingReminderSms({ ...copy, confirm_url: "https://app.vacantless.test/showing/confirm/tok", confirmed: false }, "sameday");
+ok("unconfirmed same-day says the time may go", unconfirmedSameDay.includes("may go to someone else"));
+ok("unconfirmed same-day keeps the link", unconfirmedSameDay.includes("/showing/confirm/tok"));
+ok("confirmed same-day reads as booked", showingReminderSms({ ...copy, confirmed: true }, "sameday").includes("booked for a viewing today"));
+ok("unconfirmed day-before says tomorrow and may go", showingReminderSms({ ...copy, confirmed: false }, "24h").includes("is tomorrow") && showingReminderSms({ ...copy, confirmed: false }, "24h").includes("may go to someone else"));
+ok("unconfirmed same-day with a long address <= 2 segments", smsSegments(showingReminderSms({
+  org_name: "Agile Real Estate Group Inc.",
+  property_address: "833 Pillette Rd, Unit 33, Windsor, ON N8Y 3B4",
+  when_label: "Wednesday, Oct 21 at 5:00 PM",
+  confirm_url: "https://app.vacantless.com/showing/confirm/0a455e72-4981-4a1a-9979-ca971dd3c0ef",
+  confirmed: false,
+}, "sameday")) <= 2);
 
 // builders degrade with missing fields
 const bare = bookingConfirmationSms({ org_name: null, property_address: null, when_label: "soon" });

@@ -142,3 +142,22 @@ export async function confirmSiteSignin(id: string): Promise<void> {
 export async function cancelSiteSignin(id: string): Promise<void> {
   await updateOwnWindow(id, { status: "cancelled", view_url: null });
 }
+
+/**
+ * S728: a window that is still "starting" after three minutes never opened
+ * (the runner is asleep or the dispatch was lost). Mark it failed so the
+ * page offers Try again instead of a spinner that never ends.
+ */
+export async function failStalledSiteSignin(id: string): Promise<void> {
+  const who = await allowed();
+  if (!who) return;
+  const admin = createAdminClient();
+  if (!admin) return;
+  await admin
+    .from(TABLE)
+    .update({ status: "failed", detail: "did_not_open", view_url: null, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("organization_id", who.orgId)
+    .eq("status", "starting")
+    .lt("created_at", new Date(Date.now() - 3 * 60_000).toISOString());
+}

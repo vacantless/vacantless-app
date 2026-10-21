@@ -105,7 +105,7 @@ function inspectionLine(a: Actionable): string {
   const r = a.row;
   const type = inspectionTypeLabel(r.inspection_type);
   const state = a.status === "overdue" ? "OVERDUE" : "date approaching";
-  return `- ${type} — planned for ${a.scheduledFor} (${state})`;
+  return `- ${type} - planned for ${a.scheduledFor} (${state})`;
 }
 
 /** The primary tenant's name (fallback: first named tenant), for the copy. */

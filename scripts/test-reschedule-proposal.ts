@@ -471,16 +471,16 @@ ok("0154 preserves anon/authenticated grants for both RPCs",
 const emailSource = readFileSync("lib/email.ts", "utf8");
 const pageSource = readFileSync("app/showing/reschedule/[token]/page.tsx", "utf8");
 ok("proposal email adopts BrokerBay subject and opener",
-  emailSource.includes("Time change suggestion —") &&
+  emailSource.includes("Time change suggestion - ") &&
     emailSource.includes("Would it be possible to adjust your viewing on this property to the following?"));
-ok("proposal surfaces use Original Showing and green New Suggested Time options",
+ok("proposal surfaces use Original Showing and green suggested-time options",
   emailSource.includes("Original Showing") &&
-    emailSource.includes("New Suggested Time") &&
+    emailSource.includes("Suggested time") &&
     pageSource.includes("Original Showing") &&
-    pageSource.includes("New Suggested Time"));
+    pageSource.includes("Suggested time"));
 ok("none-work path avoids BrokerBay deny cancellation copy",
-  emailSource.includes("None of these work — see all available times") &&
-    pageSource.includes("None of these work — see all available times") &&
+  emailSource.includes("None of these work - see all available times") &&
+    pageSource.includes("None of these work, see all available times") &&
     !emailSource.includes("Deny") &&
     !pageSource.includes("Deny"));
 ok("accept confirmation says successfully modified and confirmed",

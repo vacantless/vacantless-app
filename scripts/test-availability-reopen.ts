@@ -62,7 +62,16 @@ ok(
 );
 ok(
   "eligible: accepts lead notified before this reopen",
-  eligible({ reopenNotifiedAtMs: reopenedAtMs - 1 }),
+  eligible({ reopenNotifiedAtMs: reopenedAtMs - 8 * 24 * 3_600_000 }),
+);
+// S728: one notice a week per renter, however often the calendar reopens.
+ok(
+  "cooldown: notified an hour ago is ineligible even for a newer reopen",
+  !eligible({ reopenNotifiedAtMs: nowMs - 3_600_000, reopenedAtMs: nowMs - 60_000 }),
+);
+ok(
+  "cooldown: notified eight days ago is eligible for a newer reopen",
+  eligible({ reopenNotifiedAtMs: nowMs - 8 * 24 * 3_600_000, reopenedAtMs: nowMs - 60_000 }),
 );
 
 {
@@ -72,8 +81,8 @@ ok(
     !eligible({ reopenNotifiedAtMs: stampedMs }),
   );
   ok(
-    "once-per-reopen: newer reopen makes lead eligible again",
-    eligible({ reopenNotifiedAtMs: stampedMs, reopenedAtMs: stampedMs + 1 }),
+    "once-per-reopen: newer reopen makes lead eligible again (after the cooldown)",
+    eligible({ reopenNotifiedAtMs: stampedMs - 8 * 24 * 3_600_000, reopenedAtMs: stampedMs + 1 - 8 * 24 * 3_600_000 + 2 }),
   );
 }
 

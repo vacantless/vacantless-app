@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { OPERATOR_LINE } from "@/lib/operator-line";
 import { LEASING_PROOF_STATS } from "@/lib/proof-stats";
+import { TIERS } from "@/lib/billing";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -172,7 +173,7 @@ function Hero() {
         <div className="max-w-[590px]">
           <Eyebrow>For landlords and property managers</Eyebrow>
           <h1 className="mb-[16px] max-w-[19ch] text-[clamp(2.2rem,4.6vw,3.4rem)] font-extrabold leading-[1.04] tracking-tight">
-            <span className="block">Every renter answered.</span>
+            <span className="block">Every renter answered.{" "}</span>
             <span className="block">Every viewing booked.</span>
           </h1>
           <p className="mb-[18px] max-w-[34rem] text-[clamp(1.1rem,1.8vw,1.32rem)] font-semibold leading-[1.4] text-[#203029]">
@@ -336,7 +337,7 @@ function LeasingProof() {
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
         <SectionHead title="It already runs on our own rentals.">
           Vacantless started as the system for the rentals its founder runs.
-          Here is what it has handled there since May.
+          Here is what it has handled there since May 2026.
         </SectionHead>
         <div className="grid gap-4 sm:grid-cols-3">
           {LEASING_STATS.map((s) => (
@@ -630,14 +631,8 @@ const PLANS: {
     name: "Free",
     price: "CA$0",
     priceNote: "a month",
-    body: "One live rental, with everything renters need to book.",
-    includes: [
-      "One live rental page",
-      "Instant email replies with a booking link",
-      "Self-booked viewings and email reminders",
-      "Every renter in one list",
-      "Posts to your Facebook Page, free",
-    ],
+    body: TIERS.free.blurb,
+    includes: TIERS.free.features,
     cta: "Start free",
     href: "/signup",
   },
@@ -645,14 +640,9 @@ const PLANS: {
     name: "Growth",
     price: "CA$99",
     priceNote: "a month",
-    body: "As many rentals as you have.",
-    includes: [
-      "Unlimited live rentals",
-      "Everything in Free",
-      // S726f: texting on the landlord's own local number (we set it up).
-      "Text renters their confirmations and reminders",
-      "Help from us when you need it",
-    ],
+    body: TIERS.growth.blurb,
+    // S728: the same bullets as the billing page, from one place (lib/billing.ts).
+    includes: TIERS.growth.features,
     addon: "Add Posting for CA$49 a month. See below.",
     cta: "Choose Growth",
     href: "/signup?plan=growth",

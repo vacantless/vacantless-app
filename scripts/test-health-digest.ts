@@ -102,6 +102,19 @@ ok("portal: not_parsed is a problem", portalOutcomeIsProblem("not_parsed"));
   ok("robot: signed-out site listed", lines.includes("Agile Real Estate Group, rentals_ca: signed out (needs login)."), lines);
 }
 {
+  // S728: a sweep a flag switched off is named once, from the newest run.
+  const s = healthSections({
+    ...clean,
+    sweeps: [
+      { ran_at: "2026-10-16T12:00:00Z", ok: true, ran: 28, failed: [], details: { "landlord-campaign": { status: 200, reason: "disabled" }, nurture: { status: 200, sent: 1 } } },
+      { ran_at: "2026-10-16T12:15:00Z", ok: true, ran: 28, failed: [], details: { "landlord-campaign": { status: 200, reason: "disabled" }, "compliance-calendar": { status: 200, reason: "global_disabled" }, nurture: { status: 200, sent: 0 } } },
+    ],
+  });
+  const lines = s.flatMap((x) => x.lines).join("\n");
+  ok("flag-off sweeps named", lines.includes("Switched off by a flag (not running): compliance-calendar, landlord-campaign."), lines);
+  ok("a sweep that merely sent 0 is not called off", !lines.includes("nurture"), lines);
+}
+{
   const many = Array.from({ length: 20 }, (_, i) => ({ event: "softBounces", email: `r${i}@x.com`, subject: null, reason: null }));
   const d = buildHealthDigest({ ...clean, emails: { checked: true, problems: many } });
   ok("many bounces: capped with a count", d.body.includes("...and 5 more."), d.body);

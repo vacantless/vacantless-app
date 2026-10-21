@@ -190,7 +190,10 @@ export function siteSigninView(
       return {
         tone: "bad",
         title: "The window did not open",
-        body: "Your account stays as it was. Please try again in a minute.",
+        body:
+          detail === "did_not_open"
+            ? "Nothing happened for three minutes, so we stopped waiting. Your account stays as it was. Try again; if it happens twice, email hello@vacantless.com and we will open it for you."
+            : "Your account stays as it was. Please try again in a minute.",
       };
     default:
       return {

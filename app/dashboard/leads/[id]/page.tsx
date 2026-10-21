@@ -38,6 +38,9 @@ import { ALLOWED_FORM_FIELDS } from "@/lib/rental-application";
 import { createDocumentDownloadUrl } from "@/lib/documents-server";
 import { OutcomeSelect } from "../../showings/outcome-select";
 import { InquiryReplyPanel } from "../inquiry-reply-panel";
+import { TextBackPanel } from "../text-back-panel";
+import { orgTextsRenters } from "@/lib/sms";
+import { displayCanadianNumber } from "@/lib/texting-setup-emails";
 import { buildAiReplyDraft } from "@/lib/ai-reply";
 import { loadPropertyKnowledge } from "@/lib/property-qa";
 import { PropertyQaPanel } from "../property-qa-panel";
@@ -77,6 +80,8 @@ type Lead = {
   next_action_at: string | null;
   next_action_note: string | null;
   created_at: string;
+  email_opt_out_at?: string | null;
+  sms_opt_out?: boolean | null;
   screen_income_cents: number | null;
   screen_occupants: number | null;
   screen_has_pets: boolean | null;
@@ -119,13 +124,13 @@ export default async function LeadDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { apply?: string; qa?: string };
+  searchParams: { apply?: string; qa?: string; text?: string };
 }) {
   const supabase = createClient();
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, source_detail, no_suitable_time, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, property:properties(id, address, rent_cents, beds, baths, parking, available_date, laundry, pet_friendly, pets_cats, pets_dogs), listing_post:listing_posts(portal, label, url)",
+      "id, name, email, phone, source, source_detail, no_suitable_time, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, email_opt_out_at, sms_opt_out, property:properties(id, address, rent_cents, beds, baths, parking, available_date, laundry, pet_friendly, pets_cats, pets_dogs), listing_post:listing_posts(portal, label, url)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -209,6 +214,10 @@ export default async function LeadDetailPage({
   const existingTenancyId = (tenancyRef as { id: string } | null)?.id ?? null;
 
   const org = await getCurrentOrg();
+  // S728: Text back shows only when the account really texts and the renter
+  // left a number and has not texted STOP.
+  const textBack = !!l.phone && !l.sms_opt_out && !!org && (await orgTextsRenters(org.id));
+
   const timeZone = org?.booking_timezone ?? "America/Toronto";
   const orgName = org?.name ?? "Vacantless";
   const canApplications = canUseRentalApplications(org?.plan);
@@ -525,6 +534,17 @@ export default async function LeadDetailPage({
         filedDownloadUrl={applicationFiledDownloadUrl}
       />
 
+      {!emailBlock && l.email_opt_out_at && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-medium">This renter unsubscribed from follow-up emails.</p>
+          <p className="mt-1">
+            Since {new Date(l.email_opt_out_at).toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: timeZone })},{" "}
+            they get no follow-ups, new-times notices or price drops. Their own booking confirmations and
+            viewing reminders still go out.
+          </p>
+        </div>
+      )}
+
       {emailBlock && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           <p className="font-medium">Emails to this renter are not delivered.</p>
@@ -651,6 +671,10 @@ export default async function LeadDetailPage({
           entries={propertyKnowledge}
           flash={searchParams.qa ?? null}
         />
+      )}
+
+      {textBack && l.phone && (
+        <TextBackPanel leadId={l.id} phoneLabel={displayCanadianNumber(l.phone)} flash={searchParams.text ?? null} />
       )}
 
       <InquiryReplyPanel

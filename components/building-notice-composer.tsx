@@ -138,7 +138,7 @@ export default function BuildingNoticeComposer({
           onChange={(e) => onPickBuilding(e.target.value)}
           className={inputCls}
         >
-          <option value="">— Choose a building —</option>
+          <option value="">Choose a building</option>
           {buildingOptions.map((o) => (
             <option key={o.buildingKey} value={o.buildingKey}>
               {o.label}

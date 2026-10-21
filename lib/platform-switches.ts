@@ -11,14 +11,18 @@ export const PLATFORM_SWITCHES = {
   shared_sms_number: {
     label: "Texts from the shared number",
     description:
-      "Renter and tenant texts go out from the one Vacantless QUO number, and replies to it are filed to this account. Only for accounts the number's registration covers.",
+      "Renter and tenant texts go out from the shared Vacantless number, and replies to it are filed to this account. Only for accounts the number's registration covers.",
     builtIn: ["921f7c08-98af-428f-a238-36f4a781b0de"], // Agile Real Estate Group
   },
   answers_own_enquiries: {
     label: "Answers its own emailed-in renters",
     description:
       "Emailed-in renters are filed with no instant reply, because the landlord's own staff answer every renter.",
-    builtIn: ["921f7c08-98af-428f-a238-36f4a781b0de"], // Agile: Aaliyah answers every renter (Noam, 2026-10-08)
+    // S728: Agile removed. With it on, Rentals.ca and Zumper renters waited
+    // 48 hours for a first touch and 3 of 5 Rentals.ca renters were marked
+    // lost with no message ever sent (30 days to 2026-10-20). Staff can turn
+    // it back on in /dashboard/admin.
+    builtIn: [],
   },
 } as const;
 

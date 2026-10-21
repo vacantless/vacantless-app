@@ -68,6 +68,7 @@ import {
   type RelistRadarEmailKind,
   type RelistRadarSettings,
 } from "@/lib/relist-radar";
+import { closeStaleRunItems } from "@/lib/run-item-closer";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -2409,6 +2410,14 @@ export async function GET(req: NextRequest) {
     errors: 0,
     details: [],
   };
+
+  // S728: close items that can never finish before scanning, so a leased
+  // unit's gone ad and a months-old sign-in wait stop being re-flagged.
+  const closed = await closeStaleRunItems(admin, nowISO);
+  if (closed > 0) {
+    pushDetail(summary, { closed_stale_items: closed });
+    console.log(`[distribution-freshness] closed ${closed} stale run items`);
+  }
 
   const { data, error } = await admin
     .from("distribution_run_items")

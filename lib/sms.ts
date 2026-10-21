@@ -171,6 +171,8 @@ export type SmsCopyInput = {
   confirm_url?: string | null;
   reschedule_url?: string | null;
   cancel_url?: string | null;
+  /** S728: false when the renter has not confirmed yet (null or undefined: unknown). */
+  confirmed?: boolean | null;
 };
 
 /** Booking-confirmation text. The renter just self-booked; first SMS touch. */
@@ -194,20 +196,28 @@ export function bookingConfirmationSms(p: SmsCopyInput): string {
 export function showingReminderSms(p: SmsCopyInput, kind: "24h" | "sameday" | "2h"): string {
   const org = (p.org_name || "Our leasing team").trim();
   const addr = p.property_address ? p.property_address.trim() : "the property";
+  // S728: an unconfirmed renter is told plainly that the time may go to
+  // someone else, instead of a reminder that reads as settled and then a
+  // release an hour before (4 of 5 Agile cancellations in 30 days).
+  const unconfirmed = p.confirmed === false;
+  const confirm = p.confirm_url?.trim() || p.reschedule_url?.trim() || p.cancel_url?.trim();
+  if (unconfirmed && kind !== "2h") {
+    const day = kind === "sameday" ? "today" : "tomorrow";
+    const keep = confirm ? `Keep it: ${confirm}` : "Reply here to keep it.";
+    return noEmDash(
+      `${org}: your viewing at ${addr} is ${day}, ${p.when_label}. Not confirmed yet, so the time may go to someone else. ${keep} ${OPT_OUT_LINE}`,
+    );
+  }
   const lead =
     kind === "2h"
       ? "your viewing is coming up soon"
       : kind === "sameday"
         ? "you're booked for a viewing today"
-      : "a reminder of your upcoming viewing";
-  const confirm = p.confirm_url?.trim();
-  const reschedule = p.reschedule_url?.trim();
-  const cancel = p.cancel_url?.trim();
-  const actionLine = confirm
-    ? `Confirm: ${confirm}` +
-      (reschedule ? ` Reschedule: ${reschedule}` : "") +
-      (cancel ? ` Cancel: ${cancel}` : "")
-    : "Reply here to reschedule.";
+        : "a reminder of your upcoming viewing";
+  // One link. The confirm page offers reschedule and cancel too, so three
+  // links only cost two extra segments per text (434 chars) against the
+  // account's monthly allowance.
+  const actionLine = confirm ? `Confirm, change or cancel: ${confirm}` : "Reply here to reschedule.";
   return noEmDash(
     `${org}: ${lead} at ${addr} for ${p.when_label}. ${actionLine} ${OPT_OUT_LINE}`,
   );
@@ -488,6 +498,34 @@ export type SendOrgSmsInput = SendSmsInput & { organizationId: string | null | u
 /** Built-in accounts only (no database). Pure. The send gate also reads staff switches. */
 export function orgCanUseSharedSmsNumber(orgId: string | null | undefined): boolean {
   return builtInSwitchOn("shared_sms_number", orgId);
+}
+
+/**
+ * S728: will this account's renters actually get texts today? True only when
+ * texting is live, the account turned it on, the plan includes renter texts
+ * and the account has a number to send from. The renter page shows its
+ * "We'll text you" line only when this is true, so no renter is promised a
+ * text that never comes. Never throws.
+ */
+export async function orgTextsRenters(orgId: string | null | undefined): Promise<boolean> {
+  if (!orgId || !smsLive()) return false;
+  try {
+    const { createAdminClient } = await import("./supabase/admin");
+    const { canUseRenterSms } = await import("./billing");
+    const admin = createAdminClient();
+    if (!admin) return false;
+    const { data: org } = await admin
+      .from("organizations")
+      .select("sms_enabled, plan")
+      .eq("id", orgId)
+      .maybeSingle();
+    const o = org as { sms_enabled?: boolean | null; plan?: string | null } | null;
+    if (!o || o.sms_enabled !== true || !canUseRenterSms(o.plan)) return false;
+    const standing = await orgSmsStanding(orgId);
+    return !!standing.ownNumber || standing.onSharedNumber;
+  } catch {
+    return false;
+  }
 }
 
 // S717: an account with its own number (lib/org-sms-numbers.ts, 0248) texts

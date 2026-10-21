@@ -176,7 +176,7 @@ const IMPORT_ERROR_TEXT: Record<string, string> = {
   toobig: "That file is too large. Export a shorter date range and try again.",
   unreadable: "That file couldn't be read. Make sure it's a plain .ofx/.qfx export.",
   unknown_format: "Unsupported file. Upload an OFX or QFX transaction export.",
-  csv_unsupported: "CSV import is coming soon — for now, download an OFX/QFX export from your bank.",
+  csv_unsupported: "CSV files are not read. Download an OFX or QFX export from your bank instead.",
   empty: "That file was empty.",
   no_transactions: "No transactions were found in that file.",
   save: "Couldn't save the import. Please try again.",

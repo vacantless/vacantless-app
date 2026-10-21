@@ -227,6 +227,8 @@ export async function updateScreeningFlags(formData: FormData) {
       screening_income_multiple: result.values.screening_income_multiple,
       screening_max_movein_days: result.values.screening_max_movein_days,
       screening_flag_pets: result.values.screening_flag_pets,
+      // S728: gate self-booking on the answers (off by default).
+      screening_gate_booking: formData.get("screening_gate_booking") != null,
       screening_reason_income: result.values.screening_reason_income,
       screening_reason_movein: result.values.screening_reason_movein,
       screening_reason_pets: result.values.screening_reason_pets,

@@ -104,10 +104,10 @@ export default async function AfterLivePage({
                 className="flex items-start justify-between gap-3 border-b border-[var(--vl-border)] pb-2 last:border-0"
               >
                 <span className="font-medium text-[var(--vl-text-primary)]">
-                  {lead.name ?? "—"}
+                  {lead.name ?? "Not given"}
                 </span>
                 <span className="text-right text-[var(--vl-text-secondary)]">
-                  {lead.channel ?? "—"}
+                  {lead.channel ?? "Unknown"}
                   {lead.receivedOn ? ` · ${lead.receivedOn.slice(0, 10)}` : ""}
                 </span>
               </li>

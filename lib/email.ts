@@ -15,6 +15,9 @@ import { TEST_SAMPLE, TEST_SUBJECT_PREFIX } from "@/lib/test-email";
 import { DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { telDialString } from "@/lib/showing-contact";
 import { isValidMailAlias } from "@/lib/email-ingest";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { gateRenterEmail, kindFromTags } from "@/lib/renter-email-block";
+import { renterUnsubscribeUrl } from "@/lib/renter-unsubscribe-server";
 
 const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
@@ -27,7 +30,7 @@ export function scrubEmDashes(s: string): string {
  * S715: every Brevo send goes through here, so the copy rules hold for every
  * email, including templates an operator edited in Settings.
  */
-function brevoFetch(init: RequestInit): Promise<Response> {
+async function brevoFetch(init: RequestInit): Promise<Response> {
   let body = init.body;
   if (typeof body === "string") {
     try {
@@ -35,12 +38,34 @@ function brevoFetch(init: RequestInit): Promise<Response> {
       for (const k of ["subject", "htmlContent", "textContent"]) {
         if (typeof parsed[k] === "string") parsed[k] = scrubEmDashes(parsed[k] as string);
       }
+      // S728: one gate for every renter email. A renter who unsubscribed gets
+      // no marketing email again; their own booking confirmation and
+      // reminders still go (Brevo's unsubscribe block is lifted for those).
+      // A bounced or spam-reported address gets nothing and the caller sees
+      // why in the reason (brevo_422:...).
+      const kind = kindFromTags(parsed.tags);
+      const to = Array.isArray(parsed.to) ? (parsed.to[0] as { email?: string } | undefined) : undefined;
+      const apiKey = (init.headers as Record<string, string> | undefined)?.["api-key"] ?? process.env.BREVO_API_KEY ?? "";
+      const verdict = await gateRenterEmail(createAdminClient(), to?.email ?? null, kind, apiKey);
+      if (!verdict.allow) {
+        return new Response(JSON.stringify({ message: verdict.reason }), {
+          status: 422,
+          headers: { "content-type": "application/json" },
+        });
+      }
       body = JSON.stringify(parsed);
     } catch {
       // Not JSON: send as is.
     }
   }
   return fetch(BREVO_ENDPOINT, { ...init, body });
+}
+
+/** S728: the unsubscribe line at the foot of every marketing email to a renter. Pure. */
+export function unsubscribeFooterHtml(url: string | null | undefined, brand: string): string {
+  const u = (url ?? "").trim();
+  if (!u) return "";
+  return ` <a href="${escapeHtml(u)}" style="color:${escapeHtml(brand)};">Unsubscribe from these emails</a>.`;
 }
 
 /** S715: Vacantless's own emails said "Sent by Vacantless via Vacantless." Pure. */
@@ -105,6 +130,10 @@ export type AutoReplyPayload = {
   lead_id: string;
   lead_reused?: boolean | null;
   lead_has_showing?: boolean | null;
+  /** S728: the renter's answers qualified out (income, move-in or pets). */
+  qualified_out?: boolean | null;
+  /** S728: the account gates self-booking on pre-screening. */
+  gate_booking?: boolean | null;
   org_id: string;
   renter_name: string | null;
   renter_email: string | null;
@@ -582,7 +611,7 @@ function rescheduleProposalHtml(p: RescheduleProposalPayload): string {
     ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
     : "";
   const proposed = p.proposed_when_labels
-    .map((label) => timeChangeBlock("New Suggested Time", escapeHtml(label), "suggested", proposalUrl))
+    .map((label) => timeChangeBlock("Suggested time", escapeHtml(label), "suggested", proposalUrl))
     .join("");
 
   return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
@@ -596,8 +625,8 @@ function rescheduleProposalHtml(p: RescheduleProposalPayload): string {
       <div style="margin:0 0 12px;">${timeChangeBlock("Original Showing", current, "original")}</div>
       <div style="margin:0 0 18px;">${proposed}</div>
       <p style="margin:0 0 12px;color:#52525b;font-size:13px;">Tap a green suggested time to review and accept it. Your original viewing stays booked unless you accept a new time or rebook.</p>
-      <p style="margin:0 0 16px;"><a href="${renterUrl}" style="color:${escapeHtml(brand)};font-weight:600;text-decoration:none;">None of these work — see all available times</a></p>
-      <p style="margin:0 0 8px;color:#52525b;font-size:13px;">Magic link:</p>
+      <p style="margin:0 0 16px;"><a href="${renterUrl}" style="color:${escapeHtml(brand)};font-weight:600;text-decoration:none;">None of these work - see all available times</a></p>
+      <p style="margin:0 0 8px;color:#52525b;font-size:13px;">Or paste this link into your browser:</p>
       <p style="margin:0 0 16px;word-break:break-all;font-size:13px;"><a href="${proposalUrl}" style="color:${escapeHtml(brand)};">${proposalUrl}</a></p>
       <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
     </div>
@@ -616,7 +645,7 @@ export async function sendRescheduleProposal(
   if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
 
   const subject = p.property_address
-    ? `Time change suggestion — ${p.property_address}`
+    ? `Time change suggestion - ${p.property_address}`
     : "Time change suggestion";
 
   const body = {
@@ -662,7 +691,7 @@ function rescheduleAcceptedConfirmationHtml(
   p: RescheduleAcceptedConfirmationPayload,
 ): string {
   const brand = p.brand_color || DEFAULT_BRAND_COLOR;
-  const org = escapeHtml(p.org_name || "Your leasing team");
+  const org = escapeHtml(p.org_name || "Our leasing team");
   const hi = escapeHtml(firstName(p.renter_name));
   const address = p.property_address ? escapeHtml(p.property_address) : "the property";
   const oldTime = p.old_when_label ? escapeHtml(p.old_when_label) : null;
@@ -684,7 +713,7 @@ function rescheduleAcceptedConfirmationHtml(
       <p style="margin:0 0 18px;">The following viewing has been successfully modified and is now confirmed.</p>
       <p style="margin:0 0 18px;color:#52525b;"><strong>${address}</strong></p>
       ${oldTime ? `<div style="margin:0 0 12px;">${timeChangeBlock("Original Showing", oldTime, "original")}</div>` : ""}
-      <div style="margin:0 0 18px;">${timeChangeBlock("New Suggested Time", newTime, "suggested")}</div>
+      <div style="margin:0 0 18px;">${timeChangeBlock("Your new viewing time", newTime, "suggested")}</div>
       ${logistics}
       ${calendarLineHtml(p.calendar_url, brand, true)}
       ${p.cancel_url ? `<p style="margin:18px 0 0;font-size:13px;color:#52525b;">Need to cancel instead? <a href="${escapeHtml(p.cancel_url)}" style="color:${escapeHtml(brand)};">Use your cancellation link</a>.</p>` : ""}
@@ -873,6 +902,8 @@ export type ReminderPayload = {
   // action links: GET opens the confirm/reschedule pages; only POST confirms.
   cancel_token?: string | null;
   when_label: string; // already formatted in the org timezone
+  /** S728: false when the renter has not confirmed yet. */
+  confirmed?: boolean | null;
 };
 
 function reminderHtml(p: ReminderPayload): string {
@@ -892,12 +923,17 @@ function reminderHtml(p: ReminderPayload): string {
     ? `${APP_BASE_URL}/showing/cancel/${encodeURIComponent(cancelToken)}`
     : null;
 
+  const unconfirmed = p.confirmed === false;
   const lead =
     p.kind === "2h"
       ? "Just a quick reminder - your viewing is coming up soon:"
       : p.kind === "sameday"
-        ? "Your viewing is today. Tap below to confirm you'll be there:"
-      : "This is a friendly reminder of your upcoming viewing:";
+        ? unconfirmed
+          ? "Your viewing is today and you have not confirmed yet, so the time may go to someone else. Tap below to keep it:"
+          : "Your viewing is today. Tap below to confirm you'll be there:"
+        : unconfirmed
+          ? "Your viewing is tomorrow. Please confirm below; an unconfirmed time may be offered to someone else:"
+          : "This is a friendly reminder of your upcoming viewing:";
 
   const logo = p.logo_url
     ? `<img src="${escapeHtml(
@@ -1275,7 +1311,7 @@ function priceDropHtml(p: PriceDropPayload): string {
       <p style="margin:24px 0 0;color:#52525b;">Talk soon,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      You are receiving this because you inquired about this listing with us.
+      You are receiving this because you inquired about this listing with us.${unsubscribeFooterHtml(renterUnsubscribeUrl(p.lead_id), brand)}
     </div>
   </div>
 </body></html>`;
@@ -1395,8 +1431,7 @@ function waitlistAlertHtml(p: WaitlistAlertPayload): string {
       <p style="margin:24px 0 0;color:#52525b;">Talk soon,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      You are receiving this because you joined the waiting list for this rental.
-      Reply STOP and we won't email you about it again.
+      You are receiving this because you joined the waiting list for this rental.${unsubscribeFooterHtml(renterUnsubscribeUrl(p.entry_id, "waitlist"), brand)}
     </div>
   </div>
 </body></html>`;
@@ -1519,7 +1554,7 @@ function viewingTimesOpenedHtml(p: ViewingTimesOpenedPayload): string {
       <p style="margin:24px 0 0;color:#52525b;">Talk soon,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      You are receiving this because you asked us to keep you posted when new viewing times opened.
+      You are receiving this because you asked us to keep you posted when new viewing times opened.${unsubscribeFooterHtml(renterUnsubscribeUrl(p.lead_id), brand)}
     </div>
   </div>
 </body></html>`;
@@ -1651,8 +1686,7 @@ function nurtureHtml(p: NurturePayload, copy: NurtureCopy): string {
       <p style="margin:24px 0 0;color:#52525b;">Talk soon,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      You are receiving this because you inquired about a listing with us. Reply
-      STOP and we won't follow up again.
+      You are receiving this because you inquired about a listing with us.${unsubscribeFooterHtml(renterUnsubscribeUrl(p.lead_id), brand)}
     </div>
   </div>
 </body></html>`;
@@ -1930,7 +1964,7 @@ function leaseSignatureHtml(p: LeaseSignaturePayload): string {
     <div style="padding:28px 28px 24px;">
       ${logo}
       <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
-      <p style="margin:0 0 16px;">Your lease for <strong>${addr}</strong> is ready for your signature. Please review the full document and sign electronically — it only takes a minute, and no account is needed.</p>
+      <p style="margin:0 0 16px;">Your lease for <strong>${addr}</strong> is ready for your signature. Please review the full document and sign electronically - it only takes a minute, and no account is needed.</p>
       <p style="margin:0 0 24px;text-align:center;">
         <a href="${url}" style="display:inline-block;background:${escapeHtml(
           brand,
@@ -1940,7 +1974,7 @@ function leaseSignatureHtml(p: LeaseSignaturePayload): string {
       <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      You are receiving this because ${org} prepared a lease for you to sign. This link is unique to you — please don't forward it.
+      You are receiving this because ${org} prepared a lease for you to sign. This link is unique to you - please don't forward it.
     </div>
   </div>
 </body></html>`;

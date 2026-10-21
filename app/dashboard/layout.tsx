@@ -8,6 +8,7 @@ import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { VacantlessMark } from "@/components/vacantless-mark";
 import { adTagConfig, adTagsOn, conversionsToFire, type ConversionEvent } from "@/lib/ad-conversions";
 import { isOwnAddress } from "@/lib/new-account-watch";
+import { planLabelOf, type PlanKey } from "@/lib/billing";
 import { AdConversionFire } from "@/components/ad-tags";
 import { recordAdConversions } from "./ad-conversion-actions";
 
@@ -102,7 +103,7 @@ export default async function DashboardLayout({
             />
             <div>
               <p className="text-xs uppercase tracking-wider opacity-80">
-                Vacantless · {org.plan}
+                Vacantless · {planLabelOf(org.plan as PlanKey)}
               </p>
               <h1 className="text-lg font-bold">{org.name}</h1>
             </div>

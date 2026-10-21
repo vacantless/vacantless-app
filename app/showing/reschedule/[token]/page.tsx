@@ -34,7 +34,7 @@ function slotList(value: unknown): string[] {
     : [];
 }
 
-function InactiveLink({ status }: { status?: string }) {
+function InactiveLink({ status, rebookUrl }: { status?: string; rebookUrl?: string | null }) {
   if (status === "accepted") {
     return (
       <main className="mx-auto max-w-2xl px-6 py-10">
@@ -50,17 +50,33 @@ function InactiveLink({ status }: { status?: string }) {
       </main>
     );
   }
+  // S728: never a dead end. Offer the listing page when we know it, and
+  // say where to find it when we do not.
   const message =
     status === "taken"
-      ? "That time is no longer available. Please use the listing page to pick another open time."
+      ? "That time was just taken by someone else."
       : status === "expired"
-        ? "This reschedule link is no longer active."
-        : "This reschedule link could not be opened.";
+        ? "This link is no longer active."
+        : "This link could not be opened.";
   return (
     <main className="mx-auto max-w-2xl px-6 py-10">
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
-        <h1 className="text-xl font-semibold text-gray-900">Link unavailable</h1>
+        <h1 className="text-xl font-semibold text-gray-900">
+          {status === "taken" ? "That time is gone" : "Link unavailable"}
+        </h1>
         <p className="mt-3 text-sm text-gray-600">{message}</p>
+        {rebookUrl ? (
+          <a
+            href={rebookUrl}
+            className="mt-6 inline-flex items-center justify-center rounded-xl bg-gray-900 px-4 py-3 text-base font-semibold text-white shadow-sm"
+          >
+            Pick another open time
+          </a>
+        ) : (
+          <p className="mt-4 text-sm text-gray-600">
+            Open the listing link from your booking email to pick another open time, or reply to that email.
+          </p>
+        )}
       </div>
     </main>
   );
@@ -81,7 +97,10 @@ export default async function RescheduleProposalPage({
   if (!proposal?.ok) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <InactiveLink status={searchParams.status ?? proposal?.reason} />
+        <InactiveLink
+          status={searchParams.status ?? proposal?.reason}
+          rebookUrl={proposal?.property_id ? `/r/${proposal.property_id}` : null}
+        />
       </div>
     );
   }
@@ -174,7 +193,7 @@ export default async function RescheduleProposalPage({
                     >
                       <span>
                         <span className="block text-xs font-bold uppercase tracking-wide text-emerald-700">
-                          New Suggested Time
+                          Suggested time
                         </span>
                         <span className="mt-1 block text-base font-semibold text-emerald-950">
                           {formatSlotLong(slot, tz)}

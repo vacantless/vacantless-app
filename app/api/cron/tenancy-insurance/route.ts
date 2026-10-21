@@ -117,9 +117,9 @@ function insuranceLine(a: Actionable): string {
   const policy = (r.policy_number ?? "").trim();
   const policyPart = policy ? ` (policy ${policy})` : "";
   const coverage = formatCoverageCents(r.coverage_amount_cents);
-  const coveragePart = coverage ? ` — ${coverage} liability` : "";
+  const coveragePart = coverage ? ` - ${coverage} liability` : "";
   const state = a.status === "lapsed" ? "LAPSED" : "expiring soon";
-  return `- ${who}${policyPart}${coveragePart} — expires ${a.expiryDate} (${state})`;
+  return `- ${who}${policyPart}${coveragePart} - expires ${a.expiryDate} (${state})`;
 }
 
 /** The primary tenant's name (fallback: first named tenant), for the copy. */

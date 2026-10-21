@@ -111,8 +111,8 @@ function equipmentLine(a: Actionable): string {
   const anchor = equipmentInstallAnchor(r);
   const installed = anchor ? `installed ${anchor.slice(0, 4)}` : "install date unknown";
   const state = a.status === "overdue" ? "OVERDUE" : "due soon";
-  const loc = where ? ` — ${where}` : "";
-  return `- ${type}${qty}${loc} — ${installed} — end of life ${a.eolDate} (${state})`;
+  const loc = where ? ` - ${where}` : "";
+  return `- ${type}${qty}${loc} - ${installed} - end of life ${a.eolDate} (${state})`;
 }
 
 export async function GET(req: NextRequest) {

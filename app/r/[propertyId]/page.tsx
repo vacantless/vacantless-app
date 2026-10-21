@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { orgTextsRenters } from "@/lib/sms";
+import { hasEntitlement } from "@/lib/billing";
 import { submitLead, rebookSavedLead, joinWaitlist } from "./actions";
 import { InquiryForm } from "./inquiry-form";
 import { PhotoGallery } from "./photo-gallery";
@@ -287,17 +289,21 @@ export default async function PublicListingPage({
   // S702: a closed account's rentals say "no longer available" and offer no
   // waiting list, because nobody is left to email the renter.
   let orgClosed = false;
+  // S728: the waiting list is offered only when the account's plan can notify
+  // it. A Free account cannot, so its page makes no "we'll email you" promise.
+  let waitlistOffered = false;
   if (!isAvailable) {
     const admin = createAdminClient();
     if (admin) {
       const { data: prop } = await admin
         .from("properties")
-        .select("organizations(closed_at)")
+        .select("organizations(closed_at, plan)")
         .eq("id", params.propertyId)
         .maybeSingle();
       const orgRel = (prop as { organizations?: unknown } | null)?.organizations;
-      const orgRow = Array.isArray(orgRel) ? orgRel[0] : orgRel;
-      orgClosed = Boolean((orgRow as { closed_at?: string | null } | null)?.closed_at);
+      const orgRow = (Array.isArray(orgRel) ? orgRel[0] : orgRel) as { closed_at?: string | null; plan?: string | null } | null;
+      orgClosed = Boolean(orgRow?.closed_at);
+      waitlistOffered = hasEntitlement(orgRow?.plan ?? null, "waitlist");
     }
   }
   // Guardrail: keep white-on-brand (header, button) and brand-on-white (price)
@@ -319,16 +325,22 @@ export default async function PublicListingPage({
   // structured parking, amenities, video). Read only for a live listing, by id,
   // selecting just these renter-facing columns. Service role, so keep it narrow.
   let extras: ListingExtras | null = null;
+  // S728: the form says "We'll text you" only when this account's renters
+  // really get texts (texting live, turned on, in the plan, a number to send
+  // from). Free accounts and accounts still waiting for a number say nothing.
+  let textsRenters = false;
   if (isAvailable) {
     const admin = createAdminClient();
     if (admin) {
       const { data: extraRow } = await admin
         .from("properties")
-        .select(LISTING_EXTRAS_COLUMNS)
+        .select(`${LISTING_EXTRAS_COLUMNS}, organization_id`)
         .eq("id", params.propertyId)
         .eq("status", "available")
         .maybeSingle();
       extras = (extraRow as ListingExtras | null) ?? null;
+      const orgId = (extraRow as { organization_id?: string | null } | null)?.organization_id ?? null;
+      textsRenters = await orgTextsRenters(orgId);
     }
   }
   const goodToKnow = buildGoodToKnow({ ...(extras ?? {}), parking: l.parking });
@@ -610,9 +622,13 @@ export default async function PublicListingPage({
                     This rental is no longer available
                   </h2>
                   <p className="mt-2 text-sm text-gray-600">
-                    {displayOpenSiblings.length > 0
-                      ? `${l.org_name} has other rentals available now. You can also join the waiting list for this one.`
-                      : `Want it if it opens up again? Join the waiting list and ${l.org_name} will email you the moment it's available.`}
+                    {!waitlistOffered
+                      ? displayOpenSiblings.length > 0
+                        ? `${l.org_name} has other rentals available now.`
+                        : `Check back with ${l.org_name} for other rentals.`
+                      : displayOpenSiblings.length > 0
+                        ? `${l.org_name} has other rentals available now. You can also join the waiting list for this one.`
+                        : `Want it if it opens up again? Join the waiting list and ${l.org_name} will email you the moment it's available.`}
                   </p>
                 </div>
                 {displayOpenSiblings.length > 0 ? (
@@ -657,6 +673,7 @@ export default async function PublicListingPage({
                     Please add an email or phone so we can reach you.
                   </p>
                 ) : null}
+                {waitlistOffered ? (
                 <form action={joinWaitlist} className="mt-5 space-y-4">
                   <input type="hidden" name="property_id" value={l.id} />
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -713,6 +730,7 @@ export default async function PublicListingPage({
                     We&apos;ll only use this to tell you when this rental opens up.
                   </p>
                 </form>
+                ) : null}
               </div>
             )
           ) : slotTaken ? (
@@ -852,6 +870,7 @@ export default async function PublicListingPage({
               petFriendly={l.pet_friendly}
               petPolicySet={l.pet_policy_set ?? true}
               requirePhone={l.inquiry_require_phone ?? false}
+              textsRenters={textsRenters}
             />
           )}
         </div>

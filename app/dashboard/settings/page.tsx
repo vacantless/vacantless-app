@@ -104,6 +104,7 @@ import {
   portalRequirementActionPlanFor,
   type PortalRequirementActionPlan,
 } from "@/lib/portal-requirements";
+import { displayCanadianNumber } from "@/lib/texting-setup-emails";
 
 export const dynamic = "force-dynamic";
 
@@ -724,7 +725,7 @@ export default async function SettingsPage({
 
       <SettingsTabs active={tab} hidden={postLeaseEnabled ? [] : ["banking"]} />
 
-      {/* ================= Tab 1 — Public Page & Brand ================= */}
+      {/* ================= Tab 1 - Public Page & Brand ================= */}
       {tab === "brand" && (
         <div className="mt-6 space-y-6">
           {saved && (
@@ -810,7 +811,7 @@ export default async function SettingsPage({
                 </h3>
               </div>
               <div className="overflow-hidden rounded-lg border border-gray-200">
-                {/* Mini renter header — white text on the brand, exactly as renters see it */}
+                {/* Mini renter header - white text on the brand, exactly as renters see it */}
                 <div
                   className="flex items-center gap-2 px-4 py-3 text-white"
                   style={{ background: displayBg }}
@@ -848,7 +849,7 @@ export default async function SettingsPage({
               )}
             </div>
 
-            {/* Sticky save bar — stays in view while you scroll the form */}
+            {/* Sticky save bar - stays in view while you scroll the form */}
             <div className="sticky bottom-4 lg:col-span-3">
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white/95 px-5 py-3 shadow-lg backdrop-blur">
                 <p className="text-xs text-gray-500">
@@ -862,7 +863,7 @@ export default async function SettingsPage({
             </div>
           </form>
 
-          {/* Logo — uploaded to storage; sets the image on the public page + emails */}
+          {/* Logo - uploaded to storage; sets the image on the public page + emails */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="flex items-center gap-2.5">
               <IconTile size="sm"><Icons.page className="h-4 w-4" /></IconTile>
@@ -915,7 +916,7 @@ export default async function SettingsPage({
             )}
           </div>
 
-          {/* Public renter page — see exactly what renters get from your link */}
+          {/* Public renter page - see exactly what renters get from your link */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
@@ -930,14 +931,14 @@ export default async function SettingsPage({
               />
             </div>
             <p className="mt-2 text-sm text-gray-500">
-              Open the live page renters see when you share a listing link — pick
+              Open the live page renters see when you share a listing link - pick
               any listing to preview its branded inquiry and booking page.
             </p>
           </div>
 
           {/* --- Public contact details. The org phone/email renters and rental
-              sites see — used on the public renter page, N1/N4 notices, receipts,
-              and reminder emails — plus the private landlord account email. The
+              sites see - used on the public renter page, N1/N4 notices, receipts,
+              and reminder emails - plus the private landlord account email. The
               listing-feed link and feed readiness now live on
               Settings → Rental site accounts (IA Slice 2, S604). */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -1055,7 +1056,7 @@ export default async function SettingsPage({
 
           {/* IA Step 3 (S275): Renter pre-screening + Building standard policy
               MOVED OUT of this tab to their point-of-use (the brand tab was
-              doing 7 jobs — G6). They live where the operator actually uses
+              doing 7 jobs - G6). They live where the operator actually uses
               them; these are the bridges (G7 fix). The editors are unchanged. */}
           <div className="grid gap-4 sm:grid-cols-2">
             <Link href="/dashboard/leasing/screening" className="block">
@@ -1092,7 +1093,7 @@ export default async function SettingsPage({
         </div>
       )}
 
-      {/* ================= Tab — Distribution ================= */}
+      {/* ================= Tab - Distribution ================= */}
       {tab === "distribution" && (
         <div className="mt-6 space-y-6">
           {searchParams.distribution === "saved" && (
@@ -1432,7 +1433,7 @@ export default async function SettingsPage({
                 </a>
               </div>
 
-              {/* Feed readiness — what syndicates vs what's skipped and why
+              {/* Feed readiness - what syndicates vs what's skipped and why
                   (moved here from Public page in IA Slice 2, S604). */}
               <div className="mt-4 border-t border-gray-200 pt-4">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -1448,7 +1449,7 @@ export default async function SettingsPage({
                     >
                       Public page → Public contact details
                     </Link>{" "}
-                    — aggregators require one before they accept your feed.
+ - aggregators require one before they accept your feed.
                   </div>
                 )}
 
@@ -1789,7 +1790,7 @@ export default async function SettingsPage({
         </div>
       )}
 
-      {/* ================= Tab 2 — Communications ================= */}
+      {/* ================= Tab 2 - Communications ================= */}
       {tab === "comms" && (
         <div className="mt-6 space-y-6">
           <form id="message-setup" action={saveMessageSetup} className="space-y-6">
@@ -1951,7 +1952,7 @@ export default async function SettingsPage({
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
                 {smsTransportReady
                   ? "Text message setting saved."
-                  : "Saved. Texts start once your account's SMS is connected — nothing is sending yet."}
+                  : "Saved. Texts start once your account's SMS is connected - nothing is sending yet."}
               </div>
             )}
             {smsFlash === "error" && (
@@ -2024,7 +2025,7 @@ export default async function SettingsPage({
             </label>
             {ownSmsNumber && (
               <p className="mt-3 text-xs text-gray-500">
-                Texts come from {ownSmsNumber}. {textsThisMonth} of {SMS_MONTHLY_LIMIT} texts used
+                Texts come from {displayCanadianNumber(ownSmsNumber)}. {textsThisMonth} of {SMS_MONTHLY_LIMIT} texts used
                 this month. Past that, renters get email only until the 1st.
               </p>
             )}
@@ -2054,7 +2055,7 @@ export default async function SettingsPage({
             )}
             {renterFlash === "invalid" && (
               <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-                The send delay must be a whole number of hours (0–336).
+                The send delay must be a whole number of hours (0 to 336).
               </div>
             )}
             {renterFlash === "error" && (
@@ -2599,7 +2600,7 @@ export default async function SettingsPage({
           point-of-use under Tenants → Lease clauses (set where you use them,
           G7). The clause CRUD + data fetch live on that page now. */}
 
-      {/* ================= Tab — Banking & Rent ================= */}
+      {/* ================= Tab - Banking & Rent ================= */}
       {tab === "banking" && (
         <div className="mt-6 space-y-6">
           {searchParams.rotessa === "connected" && (
@@ -2705,7 +2706,7 @@ export default async function SettingsPage({
         </div>
       )}
 
-      {/* ================= Tab 4 — Account & Plan ================= */}
+      {/* ================= Tab 4 - Account & Plan ================= */}
       {tab === "account" && (
         <div className="mt-6 space-y-6">
           {featuresFlash === "forbidden" && (

@@ -26,11 +26,15 @@ export function isReopenLeadEligible(args: {
   if (ageMs < 0 || ageMs > NURTURE_MAX_AGE_MS) return false;
 
   if (args.reopenedAtMs == null) return false;
-  return (
-    args.reopenNotifiedAtMs == null ||
-    args.reopenNotifiedAtMs < args.reopenedAtMs
-  );
+  if (args.reopenNotifiedAtMs == null) return true;
+  // S728: one new-times notice per renter per week, however often the
+  // calendar is reopened (a test org got three in two hours on 2026-10-20).
+  if (args.nowMs - args.reopenNotifiedAtMs < REOPEN_NOTICE_COOLDOWN_MS) return false;
+  return args.reopenNotifiedAtMs < args.reopenedAtMs;
 }
+
+/** S728: the least time between two new-times notices to one renter. */
+export const REOPEN_NOTICE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function reopenLeadsToNotify<T>(open: number, eligible: T[]): T[] {
   if (open < 1) return [];

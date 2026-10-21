@@ -464,7 +464,9 @@ export function storageUpsellNote(
   const used = Math.max(0, Math.floor(photoCount));
   const remaining = Math.max(0, cap - used);
   const atCap = used >= cap;
-  const higherCapAvailable = cap < PREMIUM_PHOTO_CAP;
+  // S728: Premium is not sold (the billing page never shows it), so nothing
+  // points a landlord at a plan they cannot buy. Re-enable when it is.
+  const higherCapAvailable = false && cap < PREMIUM_PHOTO_CAP;
   // Surface within 4 of the cap (or at it), but only if more room exists above.
   const showUpsell = higherCapAvailable && remaining <= 4;
   return { cap, used, remaining, atCap, showUpsell };
@@ -521,6 +523,7 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "Instant email replies with a booking link",
       "Self-booked viewings and email reminders",
       "Every renter in one list",
+      "Posts to your Facebook Page, free",
     ],
   },
   growth: {
@@ -531,10 +534,14 @@ export const TIERS: Record<TierKey, TierInfo> = {
     maxActiveListings: null,
     blurb: "As many rentals as you have.",
     highlight: true,
+    // S728: one wording for the homepage and the billing page; app/page.tsx
+    // reads these bullets, so edit them here only.
     features: [
       "Unlimited live rentals",
       "Everything in Free",
-      "Help from us when you need it",
+      "Text renters their confirmations and reminders",
+      "Renter applications, questions before booking and a waiting list",
+      "Email help from us within one business day",
     ],
   },
   premium: {
@@ -1070,7 +1077,8 @@ export type BillingInput = {
   now?: Date; // injectable for tests
 };
 
-function planLabelOf(plan: PlanKey): string {
+/** S728: exported so the dashboard header prints "Growth", not the raw key. */
+export function planLabelOf(plan: PlanKey): string {
   if (plan === "growth") return "Growth";
   if (plan === "premium") return "Premium";
   if (plan === "managed") return "Managed";

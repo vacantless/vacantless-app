@@ -246,9 +246,10 @@ export default async function ReconcilePage({
           icon={<Icons.card />}
         />
         <FeatureLockedNotice
-          title="Reconciliation is a Premium accounting feature"
+          title="Reconciliation is not part of your plan yet"
           description="Upgrade to clear unmatched bank transactions, match rent deposits, and see the accounting queue across every connected account."
-          unlockTier="premium"
+          ctaLabel="Ask us about accounting"
+          ctaHref="mailto:hello@vacantless.com?subject=Accounting%20on%20Vacantless"
         />
       </div>
     );
