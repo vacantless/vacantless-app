@@ -8,6 +8,7 @@
 // Accounts made before this shipped never get them: the cron passes a cutoff.
 // Pure, so the wording and the timing are unit tested.
 import type { Stage } from "./new-account-watch";
+import { HOW_TO_COUNT_WORD } from "./how-to-videos";
 
 export type OnboardingEmail = {
   step: 1 | 2;
@@ -83,8 +84,8 @@ export function decideOnboardingEmail(args: {
         "Thanks for signing up. Here is how to get your first renter booked.",
         steps,
         "After that, every renter gets an answer right away. They book a viewing on their own, and you get an email.",
-        // S726: one link to the seven how-to videos.
-        "Prefer to watch? Seven short videos, about a minute each: https://www.vacantless.com/how-to",
+        // S726: one link to the how-to videos (count from lib/how-to-videos).
+        `Prefer to watch? ${HOW_TO_COUNT_WORD} short videos, about a minute each: https://www.vacantless.com/how-to`,
         nextLine,
         "Reply to this email if you get stuck. I read every one.",
         "Noam, founder of Vacantless",

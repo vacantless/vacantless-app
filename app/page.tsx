@@ -3,6 +3,7 @@ import { MarketingHeader } from "@/components/marketing-chrome";
 import { OPERATOR_LINE } from "@/lib/operator-line";
 import { LEASING_PROOF_STATS } from "@/lib/proof-stats";
 import { TIERS } from "@/lib/billing";
+import { HOW_TO_COUNT_WORD } from "@/lib/how-to-videos";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -326,7 +327,7 @@ const LEASING_STATS = LEASING_PROOF_STATS;
 
 /* S726: the 37-second ad, recorded on a test account with made-up renters
    (captions, no voice). Muted autoplay is allowed by browsers; the controls
-   let people turn the music on. The seven how-tos live at /how-to. */
+   let people turn the music on. The how-tos live at /how-to. */
 function SeeItWork() {
   return (
     <section id="video" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
@@ -335,7 +336,7 @@ function SeeItWork() {
           A renter asks, books and confirms, and the landlord sees it all in one
           list. Made on a test account with made-up renters.{" "}
           <Link href="/how-to" className="font-semibold text-[#15211d] underline">
-            Seven how-to videos
+            {HOW_TO_COUNT_WORD} how-to videos
           </Link>
           .
         </SectionHead>

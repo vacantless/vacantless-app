@@ -9,4 +9,9 @@ export const HOW_TO_VIDEOS: { n: number; title: string; line: string; seconds: n
   { n: 5, title: "Showing agents", line: "Add the people who run viewings and let new bookings go to them.", seconds: 25 },
   { n: 6, title: "After the viewing", line: "Reminders, new times, follow-ups, feedback and the application link.", seconds: 63 },
   { n: 7, title: "Little things that save you time", line: "Texts from your own number, a daily email, and warnings before things slip.", seconds: 39 },
+  { n: 8, title: "Your agent's phone", line: "The agent's one link: call the renter, confirm, hand a viewing back, mark how it went.", seconds: 43 },
 ];
+
+// S729: the count in words, so headings never go stale when a video is added.
+const COUNT_WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
+export const HOW_TO_COUNT_WORD = COUNT_WORDS[HOW_TO_VIDEOS.length] ?? String(HOW_TO_VIDEOS.length);
