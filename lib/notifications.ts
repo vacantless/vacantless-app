@@ -682,6 +682,25 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     defaultAccent: "#d97706",
     active: true,
   },
+  // Agent can't make it (S729). Audience operator; fired when a showing agent
+  // taps "Can't make it" on their no-login viewings page (/agent/[token]). The
+  // viewing is handed back unassigned with its time kept; the renter is NOT
+  // contacted. Same recipients as Viewing booked, so the landlord can cover it,
+  // give it to another agent, or move it.
+  {
+    key: "leasing.agent_cant_make_it",
+    family: "leasing",
+    audience: "operator",
+    label: "Showing agent can't make a viewing",
+    description:
+      "When a showing agent taps Can't make it on their viewings page, your leasing team is told so someone else can run the viewing or you can move it. The renter is not contacted. Defaults to members who manage inquiries; edit the recipients below.",
+    tokens: [...COMMON_TOKENS, "agent_name", "lead_name", "showing_time", "dashboard_url"],
+    defaultSubject: "{{agent_name}} can't make a viewing: {{property_address}}, {{showing_time}}",
+    defaultBody:
+      "{{agent_name}} can't make the viewing with {{lead_name}} at {{property_address}} ({{showing_time}}) and handed it back.\n\nThe viewing still stands and the renter has not been told. Run it yourself, give it to another agent, or move it.\n\nOpen your viewings: {{dashboard_url}}",
+    defaultAccent: "#d97706",
+    active: true,
+  },
   // Daily leasing snapshot digest (Agile→Vacantless teardown — replaces the
   // scheduled daily Zap 365197456). Audience operator; ONE email per weekday at
   // start-of-shift summarizing four buckets, not one-per-event. The scheduled
@@ -1227,6 +1246,7 @@ const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   "leasing.reschedule_accepted": "showing",
   "leasing.showing_unconfirmed_nudge": "showing",
   "leasing.showing_auto_released": "showing",
+  "leasing.agent_cant_make_it": "showing",
   "leasing.daily_snapshot": "showing",
   "leasing.viewing_availability_reminder": "showing",
   "leasing.viewing_availability_dropped": "showing",

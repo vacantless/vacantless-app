@@ -7,7 +7,7 @@ import {
   coordinationStatusLabel,
 } from "@/lib/showing-agents";
 import { OUTCOME_NUDGE_MAX_AGE_MS } from "@/lib/reminders";
-import { confirmShowingFromToken, recordOutcomeFromToken } from "./actions";
+import { confirmShowingFromToken, recordOutcomeFromToken, releaseShowingFromToken } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -151,6 +151,9 @@ export default async function AgentCalendarPage({
   const recordedAttended = searchParams.status === "recorded_attended";
   const recordedNoShow = searchParams.status === "recorded_no_show";
   const errored = searchParams.status === "error";
+  const released = searchParams.status === "released";
+  const gone = searchParams.status === "gone";
+  const tooLate = searchParams.status === "past";
 
   // One card renderer shared by both sections. A future viewing shows Confirm; a
   // past-but-open one shows the one-tap outcome capture.
@@ -274,6 +277,29 @@ export default async function AgentCalendarPage({
               </button>
             </form>
           )}
+          {!happened && (
+            <details className="group mt-3">
+              <summary className="cursor-pointer list-none text-center text-sm font-medium text-gray-600 underline underline-offset-2 [&::-webkit-details-marker]:hidden">
+                Can&apos;t make it?
+              </summary>
+              <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3.5">
+                <p className="text-sm text-gray-700">
+                  This hands the viewing back to {orgName} so someone else can run it or move
+                  it. The renter is not contacted, and the time stays booked.
+                </p>
+                <form action={releaseShowingFromToken} className="mt-3">
+                  <input type="hidden" name="token" value={params.token} />
+                  <input type="hidden" name="showing_id" value={s.id} />
+                  <button
+                    type="submit"
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-center text-base font-semibold text-gray-800 shadow-sm hover:bg-gray-50"
+                  >
+                    Hand it back
+                  </button>
+                </form>
+              </div>
+            </details>
+          )}
         </div>
       </div>
     );
@@ -316,6 +342,22 @@ export default async function AgentCalendarPage({
             Thanks, marked as a no-show. Noted for the lead agent.
           </p>
         )}
+        {released && (
+          <p className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+            Handed back. {orgName} has been told and will cover it or move it. The renter
+            was not contacted.
+          </p>
+        )}
+        {gone && (
+          <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+            That viewing is no longer on your list.
+          </p>
+        )}
+        {tooLate && (
+          <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+            That viewing time has passed. Mark how it went instead.
+          </p>
+        )}
         {errored && (
           <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">
             Something went wrong. Please try again.
@@ -351,7 +393,8 @@ export default async function AgentCalendarPage({
                 </h2>
                 <p className="mt-1 text-sm text-gray-600">
                   Tap Confirm once you&apos;ve reached the renter and the viewing is
-                  on. After it happens, mark whether they showed.
+                  on. Can&apos;t make one? Hand it back. After it happens, mark
+                  whether they showed.
                 </p>
                 <div className="mt-5 space-y-4">{upcoming.map(renderCard)}</div>
               </section>
