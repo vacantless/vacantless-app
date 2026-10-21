@@ -155,7 +155,12 @@ export async function GET(req: NextRequest) {
         error_code: string | null;
         error_message: string | null;
       }[]
-    ).map((r) => ({
+    )
+      // S729: closed_stale is the run-item closer (S728) tidying a dead job on
+      // purpose, not a failure. Its first run closed 26 old items and filled
+      // the 2026-10-21 digest with 26 false "problems".
+      .filter((r) => r.error_code !== "closed_stale")
+      .map((r) => ({
       org: orgName(r.organization_id),
       channel: r.channel,
       status: r.publish_status ?? r.error_code,
