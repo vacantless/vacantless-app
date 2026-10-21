@@ -876,7 +876,7 @@ export function portalLeadNote(lead: ParsedPortalLead): string {
         ? "viewing request"
         : "tour request"
       : lead.portal === "kijiji" || lead.portal === "zumper"
-        ? "enquiry"
+        ? "inquiry"
         : "tenant lead";
   const facts: string[] = [`Received from ${portalName} (${kindWord}).`];
   if (lead.requestedTimes.length > 0) {

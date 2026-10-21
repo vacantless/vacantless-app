@@ -33,7 +33,7 @@ const agile = buildPostingAdvice([
 ]);
 ok("best named site", agile[0]?.tone === "good" && agile[0].text.startsWith("Facebook Marketplace brings"));
 ok("website never praised", !agile.some((a) => a.text.startsWith("website")));
-ok("dud flagged", agile.some((a) => a.tone === "fix" && a.text.startsWith("Rentals.ca sent 5 enquiries")));
+ok("dud flagged", agile.some((a) => a.tone === "fix" && a.text.startsWith("Rentals.ca sent 5 inquiries")));
 ok("untracked share flagged", agile.some((a) => a.text.includes("% of your renters")));
 ok("Kijiji present so not suggested", !agile.some((a) => a.tone === "try"));
 ok("at most 3", agile.length <= 3);
@@ -41,7 +41,7 @@ ok("at most 3", agile.length <= 3);
 const fresh = buildPostingAdvice([row("Zumper + PadMapper", 6, 2)]);
 ok("suggests both free sites", fresh.some((a) => a.tone === "try" && a.text.includes("Kijiji or Facebook Marketplace")));
 ok("no em dash", ![...agile, ...fresh].some((a) => /[—–]/.test(a.text)));
-ok("singular enquiry", buildPostingAdvice([row("Kijiji", 1, 0), row("Facebook Marketplace", 5, 0)]).some((a) => a.text.includes("5 enquiries")));
+ok("singular enquiry", buildPostingAdvice([row("Kijiji", 1, 0), row("Facebook Marketplace", 5, 0)]).some((a) => a.text.includes("5 inquiries")));
 
 const page = readFileSync("app/dashboard/reports/page.tsx", "utf8");
 ok("reports page shows advice", page.includes("buildPostingAdvice(channels)") && page.includes("Where to post next"));

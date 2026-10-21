@@ -234,7 +234,7 @@ export default async function ReportsPage({
       {rentalAdvice.length > 0 && (
         <Section
           title="Rentals that need a look"
-          subtitle="From enquiries over the last two weeks, for rentals listed at least a week."
+          subtitle="From inquiries over the last two weeks, for rentals listed at least a week."
         >
           <ul className="space-y-2">
             {rentalAdvice.map((a) => (

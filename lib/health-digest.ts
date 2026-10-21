@@ -122,7 +122,7 @@ export function healthSections(input: HealthInput): HealthSection[] {
     const note = /Parser notes:\s*([\s\S]*)$/.exec(l.notes)?.[1] ?? "";
     portalLines.push(`${l.org}: ${l.name ?? "a renter"} was filed with gaps (${clip(note, 120)}).`);
   }
-  if (portalLines.length) out.push({ title: "Renter enquiries from sites", lines: portalLines });
+  if (portalLines.length) out.push({ title: "Renter inquiries from sites", lines: portalLines });
 
   // 4. Robot posting.
   const robotLines: string[] = [];

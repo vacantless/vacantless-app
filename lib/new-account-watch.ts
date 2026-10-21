@@ -63,7 +63,7 @@ export const STAGE_LABELS: Record<Stage, string> = {
   rental_added: "Rental added",
   live: "Rental live",
   viewing_times: "Viewing times set",
-  first_enquiry: "First enquiry",
+  first_enquiry: "First inquiry",
   first_booking: "First booking",
 };
 
@@ -72,8 +72,8 @@ export const NEXT_STEP: Record<Stage, string> = {
   signed_up: "has not added a rental yet",
   rental_added: "added a rental but has not put it live",
   live: "is live but has no viewing times, so renters cannot book",
-  viewing_times: "is live with viewing times but no enquiry yet",
-  first_enquiry: "has enquiries but no booking yet",
+  viewing_times: "is live with viewing times but no inquiry yet",
+  first_enquiry: "has inquiries but no booking yet",
   first_booking: "has a booking",
 };
 

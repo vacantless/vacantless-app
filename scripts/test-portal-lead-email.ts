@@ -495,7 +495,7 @@ if (z.ok) {
   );
   ok("zumper: exact confidence", l.confidence === "exact");
   const note = portalLeadNote(l);
-  ok("zumper: note names the site", note.includes("Received from Zumper (enquiry)."), note);
+  ok("zumper: note names the site", note.includes("Received from Zumper (inquiry)."), note);
   ok("zumper: note carries the move-in date", note.includes("Move-in date given: October 06, 2026."), note);
 }
 

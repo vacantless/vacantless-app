@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MarketingHeader } from "@/components/marketing-chrome";
 import { OPERATOR_LINE } from "@/lib/operator-line";
 import { LEASING_PROOF_STATS } from "@/lib/proof-stats";
 import { VacantlessMark } from "../../components/vacantless-mark";
@@ -15,7 +16,7 @@ const SIGNUP_LABEL = "Start free";
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-white text-[#15211d]">
-      <SiteHeader />
+      <MarketingHeader active="about" />
       <main>
         <AboutHero />
         <Body />
@@ -26,52 +27,6 @@ export default function AboutPage() {
   );
 }
 
-function SiteHeader() {
-  return (
-    <header className="sticky top-0 z-20 border-b border-[#d9e1dc]/80 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex w-[min(1120px,calc(100%-32px))] items-center justify-between gap-4 py-3.5">
-        <Link href="/" className="inline-flex items-center gap-2.5">
-          <VacantlessMark variant="black" className="h-[30px] w-[30px]" />
-          <span className="text-[1.02rem] font-bold tracking-tight text-[#15211d]">
-            Vacantless
-          </span>
-        </Link>
-        <nav
-          className="hidden items-center gap-[18px] text-[0.91rem] font-semibold text-[#59655f] md:flex"
-          aria-label="Marketing sections"
-        >
-          <Link href="/#product" className="hover:text-[#15211d]">
-            What you get
-          </Link>
-          <Link href="/#how" className="hover:text-[#15211d]">
-            How it works
-          </Link>
-          <Link href="/#pricing" className="hover:text-[#15211d]">
-            Plans
-          </Link>
-          <Link href="/about" className="text-[#15211d]">
-            About
-          </Link>
-        </nav>
-        <div className="flex flex-shrink-0 items-center gap-2.5">
-        <Link
-          href="/login"
-          className="hidden min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-[#d5ddd9] bg-white px-[18px] text-[0.92rem] font-bold text-[#17362f] transition hover:bg-[#f4f7f5] sm:inline-flex"
-        >
-          Log in
-        </Link>
-        <Link
-          href="/signup"
-          aria-label={SIGNUP_LABEL}
-          className="inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-[#17362f] bg-[#17362f] px-[18px] text-[0.92rem] font-bold text-white shadow-[0_8px_18px_rgba(23,54,47,0.18)] transition hover:bg-[#1f463c]"
-        >
-          {SIGNUP_LABEL}
-        </Link>
-        </div>
-      </div>
-    </header>
-  );
-}
 
 function AboutHero() {
   return (
@@ -85,7 +40,7 @@ function AboutHero() {
         </h1>
         <p className="max-w-[52ch] text-[clamp(1.06rem,1.7vw,1.24rem)] leading-relaxed text-[#384a42]">
           Vacantless did not start as a product. It started as the system one
-          operator built to fill his own rentals without losing the thread.
+          landlord built to fill his own rentals without losing the thread.
         </p>
         <div className="mt-11 flex items-center gap-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -97,7 +52,7 @@ function AboutHero() {
           <div>
             <p className="text-[1.15rem] font-extrabold">Noam Muscovitch</p>
             <p className="mt-0.5 text-[0.9rem] font-semibold text-[#59655f]">
-              Founder &amp; Operator
+              Founder
             </p>
           </div>
         </div>

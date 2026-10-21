@@ -6,7 +6,7 @@
 // 2026-06-26 are only 210, so the page says "since May", not "since June".
 // Update them from the database, never from memory.
 export const LEASING_PROOF_STATS: readonly { value: string; label: string }[] = [
-  { value: "258", label: "renter enquiries, all in one list." },
+  { value: "258", label: "renter inquiries, all in one list." },
   { value: "107", label: "viewings booked." },
   { value: "8 in 10", label: "viewings booked by the renter, with no phone tag." },
 ];

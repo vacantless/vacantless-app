@@ -1,3 +1,4 @@
+import { LEGAL_ENTITY, MAILING_ADDRESS } from "@/lib/operator-line";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { VacantlessMark } from "../../components/vacantless-mark";
@@ -13,11 +14,8 @@ export const metadata = {
     "How Vacantless collects, uses, and protects personal information for landlords and their renters.",
 };
 
-// Best-guess operator + address (confirm at legal review; swap the street in
-// when you have it).
-const LEGAL_ENTITY = "Vacantless";
-const MAILING_ADDRESS = "Ontario, Canada";
-const LAST_UPDATED = "October 20, 2026";
+// Operator + address live in lib/operator-line (one source of truth, S729).
+const LAST_UPDATED = "October 21, 2026";
 const CONTACT_EMAIL = "hello@vacantless.com";
 
 export default function PrivacyPage() {

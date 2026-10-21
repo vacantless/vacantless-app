@@ -53,7 +53,7 @@ export function buildPostingAdvice(rows: ChannelRow[]): Advice[] {
   if (best) {
     out.push({
       tone: "good",
-      text: `${best.site} brings you the most booked viewings: ${best.booked} from ${plural(best.enquiries, "enquiry", "enquiries")}. Keep that ad fresh.`,
+      text: `${best.site} brings you the most booked viewings: ${best.booked} from ${plural(best.enquiries, "inquiry", "inquiries")}. Keep that ad fresh.`,
     });
   }
 
@@ -63,7 +63,7 @@ export function buildPostingAdvice(rows: ChannelRow[]): Advice[] {
   if (dud) {
     out.push({
       tone: "fix",
-      text: `${dud.site} sent ${plural(dud.enquiries, "enquiry", "enquiries")} but no bookings. Check the price and photos on that ad. Make sure your ad links to your booking page.`,
+      text: `${dud.site} sent ${plural(dud.enquiries, "inquiry", "inquiries")} but no bookings. Check the price and photos on that ad. Make sure your ad links to your booking page.`,
     });
   }
 

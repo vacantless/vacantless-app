@@ -59,7 +59,7 @@ const COMPARE_ROWS: Row[] = [
   {
     topic: "Rental sites",
     us: "Your Facebook Page, free. Kijiji, Rentals.ca and Zumper with the CA$49 a month Posting add-on, on your own accounts. Kijiji charges its own fee for each ad.",
-    them: "25+ listing sites.",
+    them: "25+ listing sites, not named on their pricing page. None is named as Canadian (see the next row).",
   },
   {
     // S728: their FAQ (read 2026-10-20) says they serve Canada; their pricing,
@@ -151,7 +151,7 @@ export default function CompareShowingHeroPage() {
           <div className="mx-auto w-[min(920px,calc(100%-32px))]">
             <h2 className="mb-3 text-[1.5rem] font-extrabold tracking-tight">Which one fits you</h2>
             <p className="mb-4 max-w-[64ch] leading-relaxed text-[#384a42]">
-              If you manage hundreds of units, want self-guided tours, or need a long list of US
+              If you manage hundreds of units, want self-guided tours, or want their list of 25+
               listing sites, ShowingHero is built for that.
             </p>
             <p className="max-w-[64ch] leading-relaxed text-[#384a42]">

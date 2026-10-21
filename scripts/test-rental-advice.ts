@@ -40,7 +40,7 @@ const agileLeads = [
 ];
 const a = buildRentalAdvice(agile, agileLeads, now);
 ok("agile: three lines", a.length === 3, a);
-ok("agile: Unit 33 flagged first", a[0]?.propertyId === "p33" && a[0].text.startsWith("833 Pillette Rd, Unit 33 got 0 enquiries in the last 14 days."), a[0]);
+ok("agile: Unit 33 flagged first", a[0]?.propertyId === "p33" && a[0].text.startsWith("833 Pillette Rd, Unit 33 got 0 inquiries in the last 14 days."), a[0]);
 ok("agile: Unit 36 flagged", a[1]?.propertyId === "p36", a[1]);
 ok("agile: Bruce no bookings", a[2]?.propertyId === "bruce" && a[2].text.includes("no viewing booked"), a[2]);
 ok("agile: Unit 3 not flagged", !a.some((x) => x.propertyId === "p3"));

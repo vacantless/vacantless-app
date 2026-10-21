@@ -107,7 +107,7 @@ export function buildRentalAdvice(rentals: RentalLite[], leads: LeadLite[], nowM
       tone: "fix",
       propertyId: r.id,
       text:
-        `${r.label} got ${plural(r.enquiries, "enquiry", "enquiries")} in the last ${r.days} days. ` +
+        `${r.label} got ${plural(r.enquiries, "inquiry", "inquiries")} in the last ${r.days} days. ` +
         `Your other rentals get about ${roundRate(others)} a week. ` +
         `A slow ad is usually the rent or the first photo: try a photo of the building or the brightest room first, and compare the rent with similar ads.`,
     });
@@ -121,7 +121,7 @@ export function buildRentalAdvice(rentals: RentalLite[], leads: LeadLite[], nowM
       tone: "fix",
       propertyId: unbooked.id,
       text:
-        `${unbooked.label} got ${plural(unbooked.enquiries, "enquiry", "enquiries")} in the last ${unbooked.days} days but no viewing booked. ` +
+        `${unbooked.label} got ${plural(unbooked.enquiries, "inquiry", "inquiries")} in the last ${unbooked.days} days but no viewing booked. ` +
         `Check that you have viewing times open for it and that its ads link to its booking page.`,
     });
   }
@@ -131,7 +131,7 @@ export function buildRentalAdvice(rentals: RentalLite[], leads: LeadLite[], nowM
     out.push({
       tone: "good",
       propertyId: best.id,
-      text: `${best.label} gets the most interest: ${plural(best.enquiries, "enquiry", "enquiries")} in the last ${best.days} days. What its ad does well (price, first photo, title) is worth copying.`,
+      text: `${best.label} gets the most interest: ${plural(best.enquiries, "inquiry", "inquiries")} in the last ${best.days} days. What its ad does well (price, first photo, title) is worth copying.`,
     });
   }
 

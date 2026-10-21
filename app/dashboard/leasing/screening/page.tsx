@@ -610,7 +610,7 @@ export default async function ScreeningSettingsPage({
                 Only renters whose answers fit can book a time themselves
               </span>
               <span className="block text-xs text-gray-400">
-                A renter flagged by the rules above is still saved as an enquiry and told
+                A renter flagged by the rules above is still saved as an inquiry and told
                 your team will be in touch. They get no booking link until you send one.
                 The rules stay limited to income, move-in date and pets.
               </span>

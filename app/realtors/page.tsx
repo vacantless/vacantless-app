@@ -57,7 +57,7 @@ export default function RealtorsPage() {
             </h1>
             <p className="max-w-[56ch] text-[clamp(1.04rem,1.6vw,1.2rem)] leading-relaxed text-[#384a42]">
               Your owner expects the unit marketed like a landlord would, on the sites renters
-              use, and every enquiry answered. Vacantless runs the renter side so you can spend
+              use, and every inquiry answered. Vacantless runs the renter side so you can spend
               your time on the showings and the lease.
             </p>
           </div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MarketingHeader } from "@/components/marketing-chrome";
 import { OPERATOR_LINE } from "@/lib/operator-line";
 import { LEASING_PROOF_STATS } from "@/lib/proof-stats";
 import { TIERS } from "@/lib/billing";
@@ -32,7 +33,7 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-white text-[#15211d]">
-      <SiteHeader />
+      <MarketingHeader active="home" />
       <main>
         <Hero />
         <SeeItWork />
@@ -93,50 +94,6 @@ function SecondaryButton({
 
 /* ------------------------------------------------------------------- Header */
 
-function SiteHeader() {
-  return (
-    <header className="sticky top-0 z-20 border-b border-[#d9e1dc]/80 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex w-[min(1120px,calc(100%-32px))] items-center justify-between gap-4 py-3.5">
-        <Wordmark />
-        <nav
-          className="hidden items-center gap-[18px] text-[0.91rem] font-semibold text-[#59655f] md:flex"
-          aria-label="Marketing sections"
-        >
-          <a href="#product" className="hover:text-[#15211d]">
-            What you get
-          </a>
-          <a href="#how" className="hover:text-[#15211d]">
-            How it works
-          </a>
-          <a href="#pricing" className="hover:text-[#15211d]">
-            Plans
-          </a>
-          <Link href="/about" className="hover:text-[#15211d]">
-            About
-          </Link>
-        </nav>
-        <div className="flex flex-shrink-0 items-center gap-2.5">
-          <Link
-            href="/login"
-            className="inline-flex min-h-[44px] items-center justify-center text-[0.86rem] font-bold text-[#203029] transition hover:text-[#15211d] sm:hidden"
-          >
-            Log in
-          </Link>
-          <SecondaryButton href="/login" className="hidden sm:inline-flex">
-            Log in
-          </SecondaryButton>
-          <PrimaryButton
-            href="/signup"
-            ariaLabel="Start free with one rental"
-            className="!px-2.5 !text-[0.86rem] sm:!px-[18px] sm:!text-[0.92rem]"
-          >
-            Start free
-          </PrimaryButton>
-        </div>
-      </div>
-    </header>
-  );
-}
 
 function Wordmark() {
   return (
@@ -666,7 +623,7 @@ function FounderBand() {
           className="h-[104px] w-[104px] flex-none rounded-full object-cover shadow-[0_12px_32px_rgba(28,43,36,0.1)]"
         />
         <div>
-          <Eyebrow>From the operator who built it</Eyebrow>
+          <Eyebrow>Why we built it</Eyebrow>
           <p className="mb-3.5 max-w-[44ch] text-[clamp(1.2rem,2.2vw,1.6rem)] font-semibold leading-snug text-[#273832]">
             &quot;I run rentals myself. I built Vacantless so renters stop
             waiting on me and I stop chasing viewings. Now other landlords
@@ -675,7 +632,7 @@ function FounderBand() {
           <p className="text-base font-extrabold">
             Noam Muscovitch
             <span className="mt-0.5 block text-[0.86rem] font-semibold text-[#59655f]">
-              Founder &amp; Operator
+              Founder
             </span>
           </p>
           <Link
