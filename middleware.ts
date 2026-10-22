@@ -36,12 +36,17 @@ export async function middleware(request: NextRequest) {
 
 // S723: first-touch ad source for page visits (lib/signup-source.ts). Kept only
 // when the visit has ad tags or an outside referrer, and never overwritten.
+// S731: except by a founding invite link (utm_source=founding): an invite is
+// a deliberate offer, so it replaces an earlier ad click and the Founding 20
+// card shows on Billing after sign-up (lib/founding-offer).
 function rememberFirstTouch(request: NextRequest, response: NextResponse) {
   try {
     if (request.method !== "GET") return;
     const path = request.nextUrl.pathname;
     if (path.startsWith("/api")) return;
-    if (request.cookies.get(SOURCE_COOKIE)) return;
+    const foundingInvite =
+      (request.nextUrl.searchParams.get("utm_source") ?? "").trim().toLowerCase() === "founding";
+    if (request.cookies.get(SOURCE_COOKIE) && !foundingInvite) return;
     const src = captureSource({
       searchParams: request.nextUrl.searchParams,
       referer: request.headers.get("referer"),
