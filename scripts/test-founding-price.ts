@@ -5,6 +5,7 @@ ok(hasFoundingDiscount({ discounts: [{ coupon: { id: "FOUNDING50X3" } }] }), "cl
 ok(hasFoundingDiscount({ discounts: [{ source: { coupon: "FOUNDING50X3", type: "coupon" } }] }), "dahlia source.coupon");
 ok(hasFoundingDiscount({ discounts: [{ promotion_code: { code: "FOUNDING10" } }] }), "promo code text");
 ok(hasFoundingDiscount({ discounts: [{ coupon: { id: "FOUNDING20-50X12" } }] }), "S731 Founding 20 coupon");
+ok(hasFoundingDiscount({ discounts: [{ coupon: { id: "FOUNDING20-49X12" } }] }), "S731e Founding 20 flat coupon");
 ok(!hasFoundingDiscount({ discounts: [{ coupon: { id: "OTHER" } }] }), "other coupon");
 ok(!hasFoundingDiscount({ discounts: [] }), "no discount");
 ok(!hasFoundingDiscount(null), "null");

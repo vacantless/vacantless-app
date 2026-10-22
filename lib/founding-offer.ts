@@ -8,10 +8,16 @@
 // (scripts/test-founding-offer.ts); checkout, the Billing card and the daily
 // free-period job call it.
 
-export const FOUNDING20_COUPON_ID = "FOUNDING20-50X12";
+// S731e: a flat $50 off ($99 to $49), not 50% (which Stripe showed as $49.50
+// while every page said $49). The first coupon, FOUNDING20-50X12, was made
+// once on 2026-10-22 during the test checkout and is never used again; it is
+// still recognised so nothing made with it is missed.
+export const FOUNDING20_COUPON_ID = "FOUNDING20-49X12";
+export const FOUNDING20_COUPON_IDS = [FOUNDING20_COUPON_ID, "FOUNDING20-50X12"] as const;
+export const FOUNDING20_AMOUNT_OFF_CENTS = 5000;
+export const FOUNDING20_CURRENCY = "cad";
 export const FOUNDING20_OFFER = "founding20";
 export const FOUNDING20_SPOTS = 20;
-export const FOUNDING20_PERCENT_OFF = 50;
 export const FOUNDING20_DISCOUNT_MONTHS = 12;
 export const FOUNDING20_FREE_CAP_DAYS = 90;
 export const FOUNDING20_AFTER_BOOKING_DAYS = 30;
@@ -90,4 +96,83 @@ export function foundingTrialEnd(input: {
   // Stripe needs a trial end at least a little in the future.
   if (target <= input.nowSec + 120) return "now";
   return target;
+}
+
+/** The checkout page line under the button, so the free time is never a surprise. */
+export const FOUNDING20_CHECKOUT_NOTE =
+  "Your free time ends 30 days after Vacantless books your first viewing, or after 90 days, whichever comes first. Then $49 a month until a year from today, then $99 a month. We email you the date before the first charge.";
+
+/** The email sent when the first booking sets the end of the free time. */
+export function foundingTrialEmail(input: {
+  endSec: number | "now";
+  nowSec: number;
+  timeZone?: string | null;
+}): { subject: string; body: string } {
+  const endMs = (input.endSec === "now" ? input.nowSec : input.endSec) * 1000;
+  let day: string;
+  try {
+    day = new Intl.DateTimeFormat("en-CA", {
+      timeZone: input.timeZone || "America/Toronto",
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    }).format(new Date(endMs));
+  } catch {
+    day = new Date(endMs).toISOString().slice(0, 10);
+  }
+  if (input.endSec === "now") {
+    return {
+      subject: "Your founding free time has ended",
+      body:
+        "Vacantless booked your first viewing more than 30 days ago, so your founding free time ends today. " +
+        "Growth is now $49 a month until a year from when you started, then $99 a month. " +
+        "You can cancel anytime from Billing.",
+    };
+  }
+  return {
+    subject: `Your first viewing is booked: free until ${day}`,
+    body:
+      `Vacantless booked your first viewing, so your founding free time now ends on ${day}. ` +
+      "After that, Growth is $49 a month until a year from when you started, then $99 a month. " +
+      "You can cancel anytime from Billing before then and you will not be charged.",
+  };
+}
+
+/** Days before the end of the free time that the reminder goes out. */
+export const FOUNDING20_REMINDER_DAYS = 7;
+
+/** True when the 7-day reminder is due and has not been sent. */
+export function foundingReminderDue(input: {
+  trialEndSec: number | null;
+  nowSec: number;
+  alreadySent: boolean;
+}): boolean {
+  if (input.alreadySent || input.trialEndSec == null) return false;
+  const left = input.trialEndSec - input.nowSec;
+  return left > 0 && left <= FOUNDING20_REMINDER_DAYS * 86_400;
+}
+
+/** The reminder a week before the first charge. */
+export function foundingReminderEmail(input: { trialEndSec: number; timeZone?: string | null }): {
+  subject: string;
+  body: string;
+} {
+  let day: string;
+  try {
+    day = new Intl.DateTimeFormat("en-CA", {
+      timeZone: input.timeZone || "America/Toronto",
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    }).format(new Date(input.trialEndSec * 1000));
+  } catch {
+    day = new Date(input.trialEndSec * 1000).toISOString().slice(0, 10);
+  }
+  return {
+    subject: `Your founding free time ends ${day}`,
+    body:
+      `A reminder: your Vacantless founding free time ends on ${day}. ` +
+      "Then Growth is $49 a month until a year from when you started, then $99 a month. " +
+      "To stop before then, cancel from Billing and you will not be charged.",
+  };
 }

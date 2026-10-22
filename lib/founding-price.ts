@@ -9,7 +9,7 @@ export const FOUNDING_PROMO_CODE = "FOUNDING10";
 export const FOUNDING_LOCK_MONTHS = 12;
 // S731: the Founding 20 offer (lib/founding-offer) uses its own coupon; its
 // subscriptions get the same 12-month price-lock stamp.
-import { FOUNDING20_COUPON_ID } from "./founding-offer";
+import { FOUNDING20_COUPON_IDS } from "./founding-offer";
 
 /**
  * True when a Stripe object (a subscription with discounts expanded, or a
@@ -21,7 +21,7 @@ export function hasFoundingDiscount(value: unknown): boolean {
   const seen = new Set<unknown>();
   const walk = (v: unknown, depth: number): boolean => {
     if (depth > 8 || v == null) return false;
-    if (typeof v === "string") return v === FOUNDING_COUPON_ID || v === FOUNDING_PROMO_CODE || v === FOUNDING20_COUPON_ID;
+    if (typeof v === "string") return v === FOUNDING_COUPON_ID || v === FOUNDING_PROMO_CODE || (FOUNDING20_COUPON_IDS as readonly string[]).includes(v);
     if (typeof v !== "object" || seen.has(v)) return false;
     seen.add(v);
     if (Array.isArray(v)) return v.some((x) => walk(x, depth + 1));

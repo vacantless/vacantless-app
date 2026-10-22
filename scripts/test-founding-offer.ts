@@ -6,6 +6,10 @@ import {
   foundingTrialCap,
   foundingTrialEnd,
   FOUNDING20_SPOTS,
+  foundingTrialEmail,
+  foundingReminderDue,
+  foundingReminderEmail,
+  FOUNDING20_CHECKOUT_NOTE,
 } from "../lib/founding-offer";
 
 let pass = 0;
@@ -61,5 +65,25 @@ eq("booking on the first day: end day 30", foundingTrialEnd({ createdSec: T0, tr
 eq("job late, target passed: now", foundingTrialEnd({ createdSec: T0, trialEndSec: cap, firstBookingSec: T0 + 5 * DAY, nowSec: T0 + 40 * DAY }), "now");
 eq("no trial end: leave", foundingTrialEnd({ createdSec: T0, trialEndSec: null, firstBookingSec: T0 + 5 * DAY, nowSec: T0 + 6 * DAY }), null);
 
+// S731e: the free-time email and checkout note
+{
+  const end = Date.UTC(2026, 10, 30, 17, 0, 0) / 1000; // Mon Nov 30 2026, noon Toronto
+  const m = foundingTrialEmail({ endSec: end, nowSec: end - 30 * DAY, timeZone: "America/Toronto" });
+  eq("email subject names the day", m.subject, "Your first viewing is booked: free until Monday, November 30");
+  eq("email body has $49 and the day", /November 30/.test(m.body) && /\$49 a month/.test(m.body), true);
+  const n = foundingTrialEmail({ endSec: "now", nowSec: end });
+  eq("ended-now subject", n.subject, "Your founding free time has ended");
+  eq("no em dash in emails", /\u2014/.test(m.body + n.body + m.subject + FOUNDING20_CHECKOUT_NOTE), false);
+  eq("checkout note under Stripe's 1200 char limit", FOUNDING20_CHECKOUT_NOTE.length < 1200, true);
+}
+{
+  const now = T0;
+  eq("reminder: 8 days left, not yet", foundingReminderDue({ trialEndSec: now + 8 * DAY, nowSec: now, alreadySent: false }), false);
+  eq("reminder: 7 days left, due", foundingReminderDue({ trialEndSec: now + 7 * DAY, nowSec: now, alreadySent: false }), true);
+  eq("reminder: already sent", foundingReminderDue({ trialEndSec: now + 3 * DAY, nowSec: now, alreadySent: true }), false);
+  eq("reminder: already ended", foundingReminderDue({ trialEndSec: now - 60, nowSec: now, alreadySent: false }), false);
+  const r = foundingReminderEmail({ trialEndSec: Date.UTC(2026, 10, 30, 17) / 1000, timeZone: "America/Toronto" });
+  eq("reminder subject", r.subject, "Your founding free time ends Monday, November 30");
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

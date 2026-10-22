@@ -15,7 +15,9 @@ import {
   FOUNDING20_COUPON_ID,
   FOUNDING20_DISCOUNT_MONTHS,
   FOUNDING20_OFFER,
-  FOUNDING20_PERCENT_OFF,
+  FOUNDING20_AMOUNT_OFF_CENTS,
+  FOUNDING20_CHECKOUT_NOTE,
+  FOUNDING20_CURRENCY,
   foundingChannel,
   foundingSpotsLeft,
   foundingTrialCap,
@@ -164,8 +166,8 @@ export async function startCheckout(formData: FormData) {
   redirect(session.url);
 }
 
-// S731: the Founding 20 checkout. Growth with the founding coupon (50% off for
-// 12 months) and a free period that starts at 90 days; the daily
+// S731: the Founding 20 checkout. Growth with the founding coupon ($50 off for
+// 12 months, so $49) and a free period that starts at 90 days; the daily
 // founding-trial job shortens it to 30 days after the first booked viewing.
 // Card at checkout. Only for an account with a founding link that is not
 // paying yet, and only while spots are left. Redirect-based like startCheckout.
@@ -213,8 +215,9 @@ export async function startFoundingCheckout(formData: FormData) {
   } catch {
     await stripe!.coupons.create({
       id: FOUNDING20_COUPON_ID,
-      name: "Founding 20: 50% off your first year",
-      percent_off: FOUNDING20_PERCENT_OFF,
+      name: "Founding 20: $49 a month for your first year",
+      amount_off: FOUNDING20_AMOUNT_OFF_CENTS,
+      currency: FOUNDING20_CURRENCY,
       duration: "repeating",
       duration_in_months: FOUNDING20_DISCOUNT_MONTHS,
     });
@@ -233,6 +236,7 @@ export async function startFoundingCheckout(formData: FormData) {
     client_reference_id: org.id,
     discounts: [{ coupon: FOUNDING20_COUPON_ID }],
     payment_method_collection: "always",
+    custom_text: { submit: { message: FOUNDING20_CHECKOUT_NOTE } },
     subscription_data: {
       trial_end: foundingTrialCap(Math.floor(Date.now() / 1000)),
       trial_settings: { end_behavior: { missing_payment_method: "cancel" } },
