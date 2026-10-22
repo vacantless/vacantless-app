@@ -15,6 +15,8 @@
 export const FOUNDING20_COUPON_ID = "FOUNDING20-49X12";
 export const FOUNDING20_COUPON_IDS = [FOUNDING20_COUPON_ID, "FOUNDING20-50X12"] as const;
 export const FOUNDING20_AMOUNT_OFF_CENTS = 5000;
+/** Shown on Stripe checkout and invoices; Stripe allows at most 40 characters. */
+export const FOUNDING20_COUPON_NAME = "Founding 20: $49/month, first year";
 export const FOUNDING20_CURRENCY = "cad";
 export const FOUNDING20_OFFER = "founding20";
 export const FOUNDING20_SPOTS = 20;

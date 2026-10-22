@@ -10,6 +10,7 @@ import {
   foundingReminderDue,
   foundingReminderEmail,
   FOUNDING20_CHECKOUT_NOTE,
+  FOUNDING20_COUPON_NAME,
 } from "../lib/founding-offer";
 
 let pass = 0;
@@ -75,6 +76,7 @@ eq("no trial end: leave", foundingTrialEnd({ createdSec: T0, trialEndSec: null, 
   eq("ended-now subject", n.subject, "Your founding free time has ended");
   eq("no em dash in emails", /\u2014/.test(m.body + n.body + m.subject + FOUNDING20_CHECKOUT_NOTE), false);
   eq("checkout note under Stripe's 1200 char limit", FOUNDING20_CHECKOUT_NOTE.length < 1200, true);
+  eq("coupon name within Stripe's 40 characters", FOUNDING20_COUPON_NAME.length <= 40, true);
 }
 {
   const now = T0;

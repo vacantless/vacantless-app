@@ -17,6 +17,7 @@ import {
   FOUNDING20_OFFER,
   FOUNDING20_AMOUNT_OFF_CENTS,
   FOUNDING20_CHECKOUT_NOTE,
+  FOUNDING20_COUPON_NAME,
   FOUNDING20_CURRENCY,
   foundingChannel,
   foundingSpotsLeft,
@@ -213,14 +214,19 @@ export async function startFoundingCheckout(formData: FormData) {
   try {
     await stripe!.coupons.retrieve(FOUNDING20_COUPON_ID);
   } catch {
-    await stripe!.coupons.create({
-      id: FOUNDING20_COUPON_ID,
-      name: "Founding 20: $49 a month for your first year",
-      amount_off: FOUNDING20_AMOUNT_OFF_CENTS,
-      currency: FOUNDING20_CURRENCY,
-      duration: "repeating",
-      duration_in_months: FOUNDING20_DISCOUNT_MONTHS,
-    });
+    try {
+      await stripe!.coupons.create({
+        id: FOUNDING20_COUPON_ID,
+        name: FOUNDING20_COUPON_NAME, // Stripe caps coupon names at 40 characters
+        amount_off: FOUNDING20_AMOUNT_OFF_CENTS,
+        currency: FOUNDING20_CURRENCY,
+        duration: "repeating",
+        duration_in_months: FOUNDING20_DISCOUNT_MONTHS,
+      });
+    } catch (err) {
+      console.error("[founding] coupon create failed", err instanceof Error ? err.message : err);
+      redirect("/dashboard/billing?error=checkout");
+    }
   }
 
   const {
