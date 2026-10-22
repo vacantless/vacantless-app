@@ -518,6 +518,48 @@ if (z2.ok) {
   ok("zumper 4158: property line read", z2.lead.subjectAddress === "1195 Bruce Avenue #303", z2.lead.subjectAddress);
 }
 
+// S730: a PadMapper lead (Zumper's sister site: same sender, same ad ids, its
+// own layout). Shape copied from the 2026-10-21 Assumption 9 lead whose
+// message, phone and move-in were all dropped.
+const PADMAPPER_HTML = `<html><body>
+<div>You have received a PadMapper lead.</div>
+<div>The following lead is interested in</div>
+<div><a href="https://post.spmailtechno.com/f/a/x">1551 Assumption Street #9: 1 Bed 1 Bath</a></div>
+<div>Pat Renter</div>
+<div><a href="mailto:pat.renter@example.com">pat.renter@example.com</a></div>
+<div><a href="tel:5195550177">(519) 555-0177</a></div>
+<div>Hi,<br>I found your listing on PadMapper and I&#39;m interested in speaking to you about it.<br>Can you please let me know if it&#39;s still available, and when I might be able to view it?<br><br>Thanks<br><br>PadMapper Listing: https://www.padmapper.com/rentals/65446440/1-bedroom-1-bath-apartment-windsor-on</div>
+<div>Move In: 29 Nov. 2026</div>
+<div>Reply to respond</div><div>or</div><div><a href="https://post.spmailtechno.com/f/a/y">Screen Renter</a></div>
+<div>PadMapper Inc., 95 Third St, 2nd Floor, San Francisco, CA 94103</div>
+</body></html>`;
+const pm = parsePortalLeadEmail({
+  ...ZUMPER,
+  subject: "PadMapper tenant lead for 1551 Assumption Street #9: 1 Bed 1 Bath",
+  from: '"Pat Renter <pat.renter@example.com> via PadMapper" <noreply@zumperchat.com>',
+  replyTo: '"Pat Renter" <pat.renter@example.com>',
+  textBody: "",
+  htmlBody: PADMAPPER_HTML,
+});
+ok("padmapper: parses", pm.ok, pm);
+if (pm.ok) {
+  const l = pm.lead;
+  ok("padmapper: portal is zumper (same ad, same sender)", l.portal === "zumper", l.portal);
+  ok("padmapper: renter name", l.name === "Pat Renter", l.name);
+  ok("padmapper: renter email", l.email === "pat.renter@example.com", l.email);
+  ok("padmapper: phone with brackets", l.phone === "(519) 555-0177", l.phone);
+  ok("padmapper: property line from the body, no subject fallback", l.subjectAddress === "1551 Assumption Street #9" && !l.warnings.some((w) => /subject line/.test(w)), l);
+  ok("padmapper: listing id from padmapper.com/rentals", l.adId === "65446440", l.adId);
+  ok("padmapper: move-in verbatim", l.moveIn === "29 Nov. 2026", l.moveIn);
+  ok(
+    "padmapper: message is the renter's words, link cut",
+    l.message === "Hi,\nI found your listing on PadMapper and I'm interested in speaking to you about it.\nCan you please let me know if it's still available, and when I might be able to view it?\nThanks",
+    l.message,
+  );
+  ok("padmapper: no warnings", l.warnings.length === 0, l.warnings);
+  ok("padmapper: exact confidence", l.confidence === "exact");
+}
+
 // A Reply-To pointing back at Zumper must never be filed as the renter.
 const z3 = parsePortalLeadEmail({ ...ZUMPER, replyTo: "noreply@zumperchat.com", htmlBody: ZUMPER_HTML.replace(/jane\.renter@example\.com/g, "x").replace(/519\.555\.0142/, "call me") });
 ok("zumper: a portal-owned Reply-To and no phone is not a lead", z3.ok === false, z3);

@@ -159,7 +159,10 @@ export type PortalLeadParseResult =
 /** Lowercased bare address out of "Name <a@b.c>" or "a@b.c". */
 export function bareAddress(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const angled = /<([^>]+)>/.exec(value);
+  // The LAST <...> is the address: PadMapper's display name carries the
+  // renter's own address ("Pat <pat@x.com> via PadMapper" <noreply@...>).
+  const all = [...value.matchAll(/<([^<>]+)>/g)];
+  const angled = all.length ? all[all.length - 1] : null;
   const raw = (angled ? angled[1] : value).trim().toLowerCase();
   return raw.includes("@") ? raw : null;
 }
@@ -741,7 +744,7 @@ export function addressMatchesZumperProperty(
  *  verbatim. Only a line that is nothing but a phone number qualifies. */
 function zumperPhoneLine(line: string): string | null {
   const t = line.trim();
-  if (!/^\+?[\d][\d .()-]{8,}\d$/.test(t)) return null;
+  if (!/^\+?\(?\d[\d .()-]{8,}\d$/.test(t)) return null;
   const digits = t.replace(/\D/g, "");
   return digits.length >= 10 && digits.length <= 11 ? t : null;
 }
@@ -784,6 +787,21 @@ export function parseZumperLeadEmail(input: PortalLeadParseInput): PortalLeadPar
       }
     }
   }
+  // PadMapper (Zumper's sister site, same sender and ad ids) lays the lead out
+  // as: "The following lead is interested in", the property line, the
+  // renter's name, email and phone, then the message ending in
+  // "PadMapper Listing: <url>", then "Move In: 29 Nov. 2026" (S730).
+  const interestedIdx = lines.findIndex((l) => /^the following lead is interested in$/i.test(l));
+  let padContactEnd = -1;
+  if (interestedIdx >= 0) {
+    for (let i = interestedIdx + 2; i < Math.min(lines.length, interestedIdx + 6); i++) {
+      const line = lines[i];
+      const isEmail = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(line);
+      const p = zumperPhoneLine(line);
+      if (p && !phone) phone = p;
+      if (isEmail || p) padContactEnd = i;
+    }
+  }
   if (!email) {
     const m = lines
       .slice(Math.max(0, contactStart), propertyIdx > 0 ? propertyIdx : undefined)
@@ -797,6 +815,10 @@ export function parseZumperLeadEmail(input: PortalLeadParseInput): PortalLeadPar
 
   // Property line: Zumper's own field, the authority for the unit.
   let propertyLine: string | null = propertyIdx >= 0 ? lines[propertyIdx + 1] ?? null : null;
+  if ((!propertyLine || !/^\d/.test(propertyLine)) && interestedIdx >= 0) {
+    const next = lines[interestedIdx + 1] ?? null;
+    if (next && /^\d/.test(next)) propertyLine = next;
+  }
   if (!propertyLine || !/^\d/.test(propertyLine)) {
     const m = /tenant lead for\s+(.+)$/i.exec((input.subject ?? "").trim());
     propertyLine = m ? m[1].trim() : null;
@@ -810,6 +832,10 @@ export function parseZumperLeadEmail(input: PortalLeadParseInput): PortalLeadPar
   if (moveIdx >= 0) {
     const next = lines[moveIdx + 1] ?? "";
     if (/^[A-Za-z]+\s+\d{1,2},\s+\d{4}/.test(next)) moveIn = next.replace(/\s*\(.*\)\s*$/, "").trim();
+  }
+  if (!moveIn) {
+    const m = lines.map((l) => /^move in:\s*(\d{1,2}\s+[A-Za-z]+\.?\s+\d{4})\s*$/i.exec(l)).find((x) => x != null);
+    if (m) moveIn = m[1].trim();
   }
 
   // Message: the lines after "<First> asked:" up to Zumper's own footer.
@@ -826,10 +852,21 @@ export function parseZumperLeadEmail(input: PortalLeadParseInput): PortalLeadPar
     const joined = out.join("\n").trim();
     if (joined) message = joined;
   }
+  if (!message && padContactEnd >= 0) {
+    const out: string[] = [];
+    for (const line of lines.slice(padContactEnd + 1)) {
+      if (/^move in:/i.test(line) || /^reply to respond$/i.test(line)) break;
+      const cut = line.replace(/\s*(?:PadMapper|Zumper) Listing:.*$/i, "").trim();
+      if (cut) out.push(cut);
+      if (/(?:PadMapper|Zumper) Listing:/i.test(line)) break;
+    }
+    const joined = out.join("\n").trim();
+    if (joined) message = joined;
+  }
   if (!message) warnings.push("could not isolate the renter's message from the body");
 
   // Listing id: a second signal only (see the header comment).
-  const idMatch = /zumper\.com\/listings\/(\d{6,})/i.exec(html || body);
+  const idMatch = /(?:zumper\.com\/listings|padmapper\.com\/rentals)\/(\d{6,})/i.exec(html || body);
   const adId = idMatch ? idMatch[1] : null;
 
   if (!email && !phone) return { ok: false, reason: "no_contact_details_found" };
