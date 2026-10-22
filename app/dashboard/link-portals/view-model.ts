@@ -87,6 +87,10 @@ export type LinkPortalsVM = {
   // and poll. Off = render once from rows, never write (acceptance 3).
   probeEnabled: boolean;
   generatedAt: string;
+  /** S732: false when the org has no Posting add-on, so the page header can
+   * say which sites are free and which need Posting instead of promising
+   * "we post your ads for you" to every account. */
+  postingAddon: boolean;
 };
 
 export function linkPortalsProbeEnabled(): boolean {
@@ -115,11 +119,16 @@ export async function buildLinkPortalsViewModel(
     // S704: Rentals.ca shows only for Agile (our robot cannot post it).
     if (isHiddenForOrg(row.channel, orgId)) return null;
 
-    const copy = stage1StatusCopy(row.state, channel.connectKind);
-    const addonNote =
-      !robotAccess.allowed && isRobotPostedChannel(row.channel)
-        ? { text: t("addon.note"), linkLabel: t("addon.link"), href: POSTING_ADDON_HREF }
-        : null;
+    const needsAddon = !robotAccess.allowed && isRobotPostedChannel(row.channel);
+    // S732 walk-through: without the add-on a Kijiji, Rentals.ca or Zumper
+    // tile read "Needs you - Sign in once. Then we post your ads on it" with no
+    // sign-in button, under a header that promised posting. The tile now says
+    // what it is (part of the Posting add-on) in a neutral tone, with one button
+    // to the add-on and no "Needs you".
+    const copy = needsAddon
+      ? { titleKey: "status.addon", subKey: "status.addonSub", tone: "neutral" as const }
+      : stage1StatusCopy(row.state, channel.connectKind);
+    const addonNote = null;
     const label = row.accountLabel ?? channel.label;
     const reason = t(`reason.${stage1ReasonKey(row)}`);
     const capCost = row.costCap;
@@ -133,9 +142,10 @@ export async function buildLinkPortalsViewModel(
         : stage1ConnectHref(row.channel, channel.connectKind);
     const buttonKey = stage1ConnectButtonKey(channel.connectKind);
     let button: LinkPortalTileButton | null = null;
-    if (addonNote) {
-      // S713: no sign-in button without the Posting add-on.
-      button = null;
+    if (needsAddon) {
+      // S713: no sign-in button without the Posting add-on. S732: one button
+      // to the add-on instead of a bare note.
+      button = { kind: "connect", href: POSTING_ADDON_HREF, label: t("addon.button") };
     } else if (row.state === "dead_session" && showConnect && connectHref) {
       button = {
         kind: "reconnect",
@@ -199,6 +209,7 @@ export async function buildLinkPortalsViewModel(
     // window, so the line and the button say sign in, not "tell us which
     // account".
     const signsInOnce =
+      !needsAddon &&
       siteSigninLinksOn() && isSiteSigninChannel(row.channel) && row.state === "not_linked";
     const sub = t(signsInOnce ? "status.notLinkedSubSignin" : copy.subKey, {
       label,
@@ -240,7 +251,9 @@ export async function buildLinkPortalsViewModel(
       tone: copy.tone,
       title: t(copy.titleKey),
       sub,
-      kindLine: t(STAGE1_CONNECT_KIND_COPY[channel.connectKind]),
+      // S732: Marketplace said "Ready" and "Not connected through Vacantless"
+      // on the same tile. A self-posted site names the kit instead.
+      kindLine: t(row.state === "self_post" ? "kindSelfPost" : STAGE1_CONNECT_KIND_COPY[channel.connectKind]),
       accountLine,
       checkedLine,
       capLine,
@@ -268,5 +281,6 @@ export async function buildLinkPortalsViewModel(
     groups,
     probeEnabled,
     generatedAt: now.toISOString(),
+    postingAddon: robotAccess.allowed,
   };
 }

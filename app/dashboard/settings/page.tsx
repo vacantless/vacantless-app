@@ -7,7 +7,8 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { getCurrentOrg } from "@/lib/org";
 import { getRoleForOrg } from "@/lib/membership";
-import { canUseRenterSms } from "@/lib/billing";
+import { canUseRenterSms, POSTING_ADDON_HREF } from "@/lib/billing";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { isOwnNumberSmsConfigured, isSmsConfigured } from "@/lib/sms";
 import { orgHasSwitch } from "@/lib/platform-switches";
 import { orgOwnSmsNumber } from "@/lib/org-sms-numbers";
@@ -358,6 +359,10 @@ export default async function SettingsPage({
   // (F2 fix, S225: this used to surface only the newest property).
   const supabase = createClient();
   const postLeaseEnabled = await orgShowsPostLease(supabase, org.id);
+  // S732 walk-through: the Rental site accounts tab promised "we post your
+  // ads for you" and showed the Kijiji paid-ad limits to an account without
+  // the Posting add-on. Read the add-on once and say what applies.
+  const robotPostingAccess = await readRobotPostingAccess(supabase, org.id);
   // Only listings that actually render a public /r page belong in the picker.
   // get_public_listing 404s 'draft' + 'off_market' (migration 0020), so a draft
   // (e.g. a freshly duplicated rental) would lead to a 404 - exclude both here.
@@ -1137,18 +1142,20 @@ export default async function SettingsPage({
             <div className="rounded-2xl border border-gray-200 bg-white p-5">
               <h3 className="text-base font-semibold text-gray-900">Your rental site accounts</h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-600">
-                Sign in to each site once. After that we post your ads for you.
-                You approve each post. We never see your password.
+                {robotPostingAccess.allowed
+                  ? "Sign in to each site once. After that we post your ads for you. You approve each post. We never see your password."
+                  : "With the Posting add-on you sign in to Kijiji, Rentals.ca and Zumper once. Then we post your ads there for you. You approve each post. We never see your password."}
               </p>
               <Link
-                href="/dashboard/link-portals"
+                href={robotPostingAccess.allowed ? "/dashboard/link-portals" : POSTING_ADDON_HREF}
                 className="mt-4 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm"
               >
-                Go to your site accounts →
+                {robotPostingAccess.allowed ? "Go to your site accounts →" : "See the Posting add-on →"}
               </Link>
             </div>
           )}
           {!isPlatformAdmin &&
+            robotPostingAccess.allowed &&
             distributionChannels
               .filter(({ cap }) => {
                 const ch = channelByKey(cap.channel);

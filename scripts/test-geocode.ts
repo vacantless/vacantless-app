@@ -267,6 +267,46 @@ async function main() {
     process.exit(1);
   }
 
+  // S732: a business at the civic address must not lend its name to the ad.
+  const business = normalizeGeoapifyAutocomplete({
+    features: [
+      {
+        type: "Feature",
+        properties: {
+          name: "RBC",
+          housenumber: "245",
+          street: "Ouellette Avenue",
+          formatted: "RBC, 245 Ouellette Avenue, Windsor, ON N9A 7J2, Canada",
+          lat: 42.318,
+          lon: -83.0396,
+          place_id: "geo-biz",
+        },
+      },
+      {
+        type: "Feature",
+        properties: {
+          name: "Ouellette Avenue",
+          housenumber: "245",
+          street: "Ouellette Avenue",
+          formatted: "245 Ouellette Avenue, Windsor, ON N9A 7J2, Canada",
+          lat: 42.318,
+          lon: -83.0397,
+          place_id: "geo-street",
+        },
+      },
+    ],
+  });
+  eq(
+    "Geoapify autocomplete drops a leading business name",
+    business[0]?.label,
+    "245 Ouellette Avenue, Windsor, ON N9A 7J2, Canada",
+  );
+  eq(
+    "Geoapify autocomplete keeps a plain street label",
+    business[1]?.label,
+    "245 Ouellette Avenue, Windsor, ON N9A 7J2, Canada",
+  );
+
   console.log(`geocode: ${passed} passed, ${failed} failed`);
 }
 

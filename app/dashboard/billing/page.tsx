@@ -40,6 +40,7 @@ import {
   foundingChannel,
   foundingOfferVisible,
   foundingSpotsLeft,
+  foundingMonthlyCents,
 } from "@/lib/founding-offer";
 import { Icons } from "@/components/icons";
 
@@ -211,6 +212,15 @@ export default async function BillingPage({
       }
     })());
 
+  // S732: the founding offer with Posting, when the add-on price exists.
+  const foundingPostingOffered =
+    foundingShown && foundingSpots > 0 && Boolean(postingAddonPriceId());
+  const foundingWithPosting = foundingMonthlyCents({
+    growthCents: TIERS.growth.priceCents,
+    postingCents: POSTING_ADDON.priceCents,
+    withPosting: true,
+  });
+
   // Whether to show the standalone pilot offer (only for a fresh trial org that
   // hasn't started a pilot or subscribed).
   // S710 (Noam): the 30-day pilot is no longer offered. The plans are Free
@@ -295,15 +305,36 @@ export default async function BillingPage({
                 most. After your first year, Growth is $99 a month. Cancel anytime.{" "}
                 {foundingSpots} of 20 spots left.
               </p>
-              <form action={startFoundingCheckout} className="mt-3">
-                <input type="hidden" name="founding" value={searchParams.founding ?? ""} />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800"
-                >
-                  Start the founding offer
-                </button>
-              </form>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <form action={startFoundingCheckout}>
+                  <input type="hidden" name="founding" value={searchParams.founding ?? ""} />
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800"
+                  >
+                    Start the founding offer
+                  </button>
+                </form>
+                {foundingPostingOffered && (
+                  <form action={startFoundingCheckout}>
+                    <input type="hidden" name="founding" value={searchParams.founding ?? ""} />
+                    <input type="hidden" name="with_posting" value="1" />
+                    <button
+                      type="submit"
+                      className="rounded-lg border border-green-700 bg-white px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-100"
+                    >
+                      Start it with Posting ({formatAmount(foundingWithPosting.firstYear)} a month in your first year)
+                    </button>
+                  </form>
+                )}
+              </div>
+              {foundingPostingOffered && (
+                <p className="mt-2 text-xs text-gray-600">
+                  With Posting we post your rentals to Kijiji, Rentals.ca and Zumper for you. It is
+                  free during your free time too, then {formatAmount(foundingWithPosting.firstYear)} a
+                  month for the first year and {formatAmount(foundingWithPosting.after)} after.
+                </p>
+              )}
             </>
           ) : (
             <p className="mt-2 text-sm text-gray-800">
@@ -722,6 +753,22 @@ export default async function BillingPage({
                   It goes on your next bill, charged only for the days left
                   this month.
                 </p>
+              </form>
+            ) : foundingPostingOffered ? (
+              // S732: a founding account saw "Get Growth with Posting ($148)"
+              // here, with no founding price. Same checkout as the founding
+              // card, with Posting.
+              <form action={startFoundingCheckout}>
+                <input type="hidden" name="founding" value={searchParams.founding ?? ""} />
+                <input type="hidden" name="with_posting" value="1" />
+                <p className="mb-3 text-sm text-gray-700">
+                  Posting needs Growth. Your founding offer covers both: free until 30 days after
+                  your first booked viewing, then {formatAmount(foundingWithPosting.firstYear)} a
+                  month for the first year.
+                </p>
+                <button className="w-full rounded-lg bg-green-700 px-4 py-2.5 text-sm font-medium text-white sm:w-auto sm:px-8">
+                  Start the founding offer with Posting
+                </button>
               </form>
             ) : (
               <form action={startCheckout}>

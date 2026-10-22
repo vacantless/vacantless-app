@@ -104,11 +104,38 @@ export function foundingTrialEnd(input: {
 export const FOUNDING20_CHECKOUT_NOTE =
   "Your free time ends 30 days after Vacantless books your first viewing, or after 90 days, whichever comes first. Then $49 a month until a year from today, then $99 a month. We email you the date before the first charge.";
 
+// S732: the founding offer with the Posting add-on in the same checkout. The
+// $50 coupon comes off the invoice total, so Growth $99 + Posting $49 - $50 =
+// $98 in the first year, then $148. Posting is free during the free time too,
+// since posting is what brings the first viewing (Noam's call, S732).
+export const FOUNDING20_WITH_POSTING_CHECKOUT_NOTE =
+  "Your free time ends 30 days after Vacantless books your first viewing, or after 90 days, whichever comes first. Then $98 a month (Growth $49 plus Posting $49) until a year from today, then $148 a month. We email you the date before the first charge.";
+
+/** The founding monthly price in cents for the first year, with or without
+ * Posting. Pure, so the Billing card and the checkout note cannot drift. */
+export function foundingMonthlyCents(input: {
+  growthCents: number;
+  postingCents: number;
+  withPosting: boolean;
+}): { firstYear: number; after: number } {
+  const list = input.growthCents + (input.withPosting ? input.postingCents : 0);
+  return { firstYear: Math.max(0, list - FOUNDING20_AMOUNT_OFF_CENTS), after: list };
+}
+
+/** The price sentence in the founding emails. S732: with Posting the first
+ * year is $98 and after it $148. */
+export function foundingPriceLine(withPosting: boolean | undefined, tense: "is" | "is now"): string {
+  return withPosting
+    ? `Growth with Posting ${tense} $98 a month until a year from when you started, then $148 a month.`
+    : `Growth ${tense} $49 a month until a year from when you started, then $99 a month.`;
+}
+
 /** The email sent when the first booking sets the end of the free time. */
 export function foundingTrialEmail(input: {
   endSec: number | "now";
   nowSec: number;
   timeZone?: string | null;
+  withPosting?: boolean;
 }): { subject: string; body: string } {
   const endMs = (input.endSec === "now" ? input.nowSec : input.endSec) * 1000;
   let day: string;
@@ -127,7 +154,7 @@ export function foundingTrialEmail(input: {
       subject: "Your founding free time has ended",
       body:
         "Vacantless booked your first viewing more than 30 days ago, so your founding free time ends today. " +
-        "Growth is now $49 a month until a year from when you started, then $99 a month. " +
+        `${foundingPriceLine(input.withPosting, "is now")} ` +
         "You can cancel anytime from Billing.",
     };
   }
@@ -135,7 +162,7 @@ export function foundingTrialEmail(input: {
     subject: `Your first viewing is booked: free until ${day}`,
     body:
       `Vacantless booked your first viewing, so your founding free time now ends on ${day}. ` +
-      "After that, Growth is $49 a month until a year from when you started, then $99 a month. " +
+      `After that, ${foundingPriceLine(input.withPosting, "is")} ` +
       "You can cancel anytime from Billing before then and you will not be charged.",
   };
 }
@@ -155,7 +182,11 @@ export function foundingReminderDue(input: {
 }
 
 /** The reminder a week before the first charge. */
-export function foundingReminderEmail(input: { trialEndSec: number; timeZone?: string | null }): {
+export function foundingReminderEmail(input: {
+  trialEndSec: number;
+  timeZone?: string | null;
+  withPosting?: boolean;
+}): {
   subject: string;
   body: string;
 } {
@@ -174,7 +205,7 @@ export function foundingReminderEmail(input: { trialEndSec: number; timeZone?: s
     subject: `Your founding free time ends ${day}`,
     body:
       `A reminder: your Vacantless founding free time ends on ${day}. ` +
-      "Then Growth is $49 a month until a year from when you started, then $99 a month. " +
+      `Then ${foundingPriceLine(input.withPosting, "is")} ` +
       "To stop before then, cancel from Billing and you will not be charged.",
   };
 }

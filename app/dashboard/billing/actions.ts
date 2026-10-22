@@ -22,6 +22,7 @@ import {
   foundingChannel,
   foundingSpotsLeft,
   foundingTrialCap,
+  FOUNDING20_WITH_POSTING_CHECKOUT_NOTE,
 } from "@/lib/founding-offer";
 import {
   isPaidPlan,
@@ -235,14 +236,27 @@ export async function startFoundingCheckout(formData: FormData) {
   const customerId = await ensureCustomer(org, user?.email ?? null);
   if (!customerId) redirect("/dashboard/billing?error=not_configured");
 
+  // S732: the founding offer with Posting in the same checkout (with_posting=1
+  // from the Billing page). One more line item; the $50 coupon comes off the
+  // total, so $98 in the first year. The free time covers both items.
+  const addonPriceId = postingAddonPriceId();
+  const withPosting = String(formData.get("with_posting") ?? "") === "1";
+  if (withPosting && !addonPriceId) redirect("/dashboard/billing?error=addon_not_configured");
+  const lineItems: { price: string; quantity: number }[] = [{ price: priceId!, quantity: 1 }];
+  if (withPosting && addonPriceId) lineItems.push({ price: addonPriceId, quantity: 1 });
+
   const session = await stripe!.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
-    line_items: [{ price: priceId!, quantity: 1 }],
+    line_items: lineItems,
     client_reference_id: org.id,
     discounts: [{ coupon: FOUNDING20_COUPON_ID }],
     payment_method_collection: "always",
-    custom_text: { submit: { message: FOUNDING20_CHECKOUT_NOTE } },
+    custom_text: {
+      submit: {
+        message: withPosting ? FOUNDING20_WITH_POSTING_CHECKOUT_NOTE : FOUNDING20_CHECKOUT_NOTE,
+      },
+    },
     subscription_data: {
       trial_end: foundingTrialCap(Math.floor(Date.now() / 1000)),
       trial_settings: { end_behavior: { missing_payment_method: "cancel" } },
@@ -251,6 +265,7 @@ export async function startFoundingCheckout(formData: FormData) {
         founding_offer: FOUNDING20_OFFER,
         founding_channel: channel,
         founding_trial: "first_booking_plus_30_max_90",
+        founding_with_posting: withPosting ? "1" : "0",
       },
     },
     success_url: `${APP_BASE_URL}/dashboard/billing?checkout=success`,

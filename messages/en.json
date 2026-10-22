@@ -49,7 +49,9 @@
       "selfPostSub": "Free. Your team posts it from your own Facebook.",
       "postedForYouSub": "We post your {name} ads for you, and keep them running.",
       "optional": "Optional",
-      "optionalSub": "Connect it to post your ads here too."
+      "optionalSub": "Connect it to post your ads here too.",
+      "addon": "Posting add-on",
+      "addonSub": "With Posting we post your ads here for you, on your own account. $49 a month on Growth. You approve each ad first."
     },
     "buttons": {
       "login": "Add your {name} account",
@@ -105,8 +107,11 @@
     },
     "addon": {
       "note": "Part of the Posting add-on. $49 a month.",
-      "link": "See Billing"
-    }
+      "link": "See Billing",
+      "button": "See the Posting add-on"
+    },
+    "subNoAddon": "Facebook Page and Instagram connect here for free. Kijiji, Rentals.ca and Zumper are posted for you with the Posting add-on.",
+    "kindSelfPost": "Posted from the Marketplace kit on each rental, by you or your showing agent."
   },
   "stage2": {
     "title": "Tell us about your rental",

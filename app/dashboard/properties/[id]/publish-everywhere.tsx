@@ -734,9 +734,13 @@ export function PublishEverywhere({
             instantDestinationsLoading={confirmDestinationsLoading}
             instantDestinationsError={confirmDestinationsError}
             forYouRows={
-              robotPostingAllowed
+              // S732 walk-through: Facebook Marketplace is posted by the
+              // landlord from the kit, never after a sign-in, so it must not
+              // count as "1 site needs sign-in" in the confirm dialog.
+              (robotPostingAllowed
                 ? forYou
                 : forYou.filter((r) => !isRobotPostedChannel(r.key))
+              ).filter((r) => !(r.key === "facebook" && marketplaceKit))
             }
             conciergeDeskEnabled={conciergeDeskEnabled}
           conciergeUsage={conciergeUsage}
@@ -802,7 +806,9 @@ function ForYouHandoff({
           ? "Posting to rental sites opens once your listing has the details every site needs."
           : allSetSummary
           ? "The link to each ad is saved here. Reopen a site only when you change the listing."
-          : "We post it for you. You approve each post and pay a site only if it charges."}
+          : robotPostingAllowed
+          ? "We post it for you. You approve each post and pay a site only if it charges."
+          : "Facebook Page and Instagram post from here, free. The Marketplace kit gives you the ad to paste. Kijiji, Rentals.ca and Zumper are posted for you with the Posting add-on."}
       </p>
       {postingBlocker && (
         <a

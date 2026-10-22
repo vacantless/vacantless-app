@@ -113,9 +113,14 @@ export function ConfirmPublishButton({
                 : "Renters can see your page and book a viewing. Posting to rental sites comes next, and you approve each one."}
             </p>
 
+            {/* S732 walk-through: a first-time landlord with nothing connected
+                saw "Your own connected accounts receiving a post - No site posts
+                yet", which reads as a problem. Show the list only when a
+                connected site will post now. */}
+            {showingInstantCommitment ? (
             <div className="mt-4 rounded-lg border border-gray-200">
               <h3 className="border-b border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Your own connected accounts receiving a post
+                Also posting now to your connected sites
               </h3>
               <ul className="divide-y divide-gray-100">
                 {loadingDestinations ? (
@@ -143,6 +148,7 @@ export function ConfirmPublishButton({
                 )}
               </ul>
             </div>
+            ) : null}
             {destinationError && (
               <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 {destinationError}

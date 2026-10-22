@@ -462,16 +462,30 @@ export function AddPropertyV2Form({
     applyPrefill(fd);
   }
 
+  // S732 walk-through: AI draft replaced a pasted two-paragraph description
+  // with a thinner one and nothing said so. Keep the landlord's text in hand
+  // so one click brings it back.
+  const [replacedDescription, setReplacedDescription] = useState<string | null>(null);
+
+  function restoreDescription() {
+    if (replacedDescription == null) return;
+    update("description", replacedDescription);
+    setReplacedDescription(null);
+    setDescriptionMessage("Your text is back.");
+  }
+
   function draftDescription() {
     if (!formRef.current) return;
     const fd = new FormData(formRef.current);
     setDescriptionMessage(null);
+    const before = draft.description.trim();
     startDescriptionTransition(async () => {
       const result = await draftAddPropertyV2Description(fd);
       if (!result.ok) {
         setDescriptionMessage(result.message);
         return;
       }
+      setReplacedDescription(before.length > 0 && before !== result.description.trim() ? before : null);
       update("description", result.description);
       const base =
         result.source === "ai"
@@ -1233,6 +1247,19 @@ export function AddPropertyV2Form({
           {descriptionMessage && (
             <p className="mt-2 text-xs font-medium text-gray-600">
               {descriptionMessage}
+              {replacedDescription != null && (
+                <>
+                  {" "}
+                  It replaced the text you had.{" "}
+                  <button
+                    type="button"
+                    onClick={restoreDescription}
+                    className="font-semibold text-brand underline"
+                  >
+                    Put my text back
+                  </button>
+                </>
+              )}
             </p>
           )}
         </section>

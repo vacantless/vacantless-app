@@ -320,5 +320,48 @@ ok("no street-suffix line -> address null", parseMlsListing("Bedrooms: 2\nBathro
   ok("date: possession cue skips 'Flexible', takes July 1 2026", r.availableDate === "2026-07-01");
 }
 
+
+// --- S732: a plain classified ad (no labels), as a landlord pastes it --------
+const CLASSIFIED = `Bright 2 bedroom apartment for rent - 245 Ouellette Ave, Unit 4, Windsor, ON N9A 1B3
+$1,650/month. Available December 1, 2026.
+2 bedrooms, 1 bathroom, about 850 sq ft, second floor of a well kept low-rise building.
+Freshly painted, laminate floors, updated kitchen with fridge and stove, in-suite laundry. Heat and water included, tenant pays hydro. One parking spot included. No smoking. Small pets considered.
+Steps to the riverfront, bus routes and downtown shops. Minutes to the University of Windsor.
+First and last month required. Listed by owner.`;
+{
+  const r = parseMlsListing(CLASSIFIED);
+  ok("classified: address is the street, not the facts line", r.address === "245 Ouellette Ave, Unit 4, Windsor, ON N9A 1B3");
+  ok("classified: rent 1650", r.rentCents === 165000);
+  ok("classified: beds 2 baths 1", r.beds === 2 && r.baths === 1);
+  ok("classified: sqft 850", r.sqft === 850);
+  ok("classified: apartment", r.propertyType === "apartment");
+  ok("classified: heat AND water included from one phrase", r.heatIncluded === true && r.waterIncluded === true);
+  ok("classified: hydro not included", r.hydroIncluded === false);
+  ok("classified: parking sentence kept", (r.parking ?? "").toLowerCase().startsWith("one parking spot"));
+  ok("classified: laundry in suite", r.laundry === "in_suite");
+  ok("classified: description keeps both paragraphs", !!r.description && r.description.includes("Freshly painted") && r.description.includes("riverfront"));
+  ok("classified: description leaves out the price line", !!r.description && !r.description.includes("$1,650"));
+}
+{
+  const r = parseMlsListing("2 bedrooms, 1 bathroom, about 850 sq ft, second floor.\nRent $1,500 per month.");
+  ok("facts line alone is not an address", r.address === null);
+}
+{
+  const r = parseMlsListing("Cozy basement apartment at 12 King Street West, Kitchener. Close to shops, parks and transit.");
+  ok("embedded address stops before 'close to shops'", r.address === "12 King Street West, Kitchener");
+  ok("basement apartment type", r.propertyType === "basement apartment");
+}
+{
+  const r = parseMlsListing("All utilities included. 1 bedroom condo, 77 Harbour Sq Unit 1203, Toronto, ON M5J 2S2.");
+  ok("all utilities included -> heat, hydro, water", r.heatIncluded && r.hydroIncluded && r.waterIncluded);
+  ok("Harbour Sq address with unit", r.address === "77 Harbour Sq Unit 1203, Toronto, ON M5J 2S2");
+}
+{
+  const r = parseMlsListing("Spacious unit, 900 sq ft, heat, hydro & water included, 2 underground parking spaces.");
+  ok("heat, hydro & water list", r.heatIncluded && r.hydroIncluded && r.waterIncluded);
+  ok("900 sq ft is not an address", r.address === null);
+  ok("2 underground parking spaces", (r.parking ?? "").startsWith("2 underground parking spaces"));
+}
+
 console.log(`\nmls-import: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

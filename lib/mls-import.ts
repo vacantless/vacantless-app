@@ -355,7 +355,16 @@ function extractPropertyType(lines: string[]): string | null {
     ["Property Type", "Building Type", "Type"],
     { allowNextLine: true },
   );
-  if (!v) return null;
+  if (!v) {
+    // S732: a classified ad names the type in prose ("2 bedroom apartment for
+    // rent", "basement apartment", "semi-detached house"). Take the first one.
+    const prose = lines.join(" ");
+    const m =
+      /\b(basement apartment|basement suite|basement|townhouse|townhome|town house|semi-detached|detached house|detached|duplex|triplex|fourplex|bungalow|condo(?:minium)?|apartment|house|loft|studio|bachelor)\b/i.exec(
+        prose,
+      );
+    return m ? m[1].toLowerCase() : null;
+  }
   const clean = v.trim().replace(/\s+/g, " ");
   if (!clean || /^(none|n\/a|na|unknown|not stated|-)$/i.test(clean)) return null;
   return clean.slice(0, 120).trim() || null;
@@ -381,7 +390,16 @@ function extractParking(lines: string[]): string | null {
     ],
     { allowNextLine: true },
   );
-  if (!v) return null;
+  if (!v) {
+    // S732: prose ads say "One parking spot included" or "2 underground
+    // parking spaces". Keep the sentence as the free-text parking note.
+    const prose = lines.join(" ");
+    const m =
+      /\b((?:\d+|one|two|three|four)\s+(?:[a-z-]+\s+){0,2}parking\s+(?:spots?|spaces?|stalls?)[^.;\n]{0,40})/i.exec(
+        prose,
+      );
+    return m ? m[1].trim().slice(0, 200) : null;
+  }
   const trimmed = v.trim();
   if (/^(none|no|0|n\/a|na)\b/i.test(trimmed)) return null;
   return trimmed.slice(0, 200);
@@ -587,16 +605,21 @@ function extractDescription(lines: string[]): string | null {
     if (joined.length >= 20) return joined;
   }
 
-  // Fallback: the longest prose-looking line (has spaces, sentence length, not
-  // a label line). Helps a bare realtor.ca paste where remarks have no header.
-  let best: string | null = null;
+  // Fallback: the prose lines, in order (has spaces, sentence length, ends a
+  // sentence, not a label line, not a price or facts line). Helps a bare
+  // realtor.ca or classified paste where remarks have no header. S732: used
+  // to keep only the single longest line, so a two-paragraph ad lost its
+  // second paragraph.
+  const prose: string[] = [];
   for (const line of lines) {
     if (genericLabelRe.test(line)) continue;
-    if (line.length >= 60 && /\s/.test(line) && /[.!?]/.test(line)) {
-      if (!best || line.length > best.length) best = line;
+    if (/^[$\d]/.test(line)) continue;
+    if (line.length >= 40 && /\s/.test(line) && /[.!?]["')]?$/.test(line)) {
+      prose.push(line);
     }
   }
-  return best;
+  if (prose.length === 0) return null;
+  return prose.join("\n\n").slice(0, 4000);
 }
 
 // --- address ----------------------------------------------------------------
@@ -610,12 +633,82 @@ const STREET_SUFFIX =
  * street suffix). Conservative — a line that does not look like an address
  * returns null rather than a wrong guess.
  */
+// S732: a facts line ("2 bedrooms, 1 bathroom, about 850 sq ft, second floor")
+// starts with a digit and carries "sq", which the suffix list reads as Square.
+// It is never an address.
+const FACTS_LINE = /\b(bed(?:room)?s?|bath(?:room)?s?|sq\.?\s*ft|sqft|square\s*f(?:ee|oo)?t|per\s+month|\/mo(?:nth)?\b)/i;
+
 function looksLikeAddress(line: string): boolean {
   if (line.length > 120) return false;
+  if (FACTS_LINE.test(line)) return false;
   // Must start with a digit (civic number) or a unit prefix, and carry a
   // street suffix somewhere.
   const startsRight = /^(?:unit\s+)?#?\s*\d/i.test(line);
   return startsRight && STREET_SUFFIX.test(line);
+}
+
+// S732: an address inside a longer line ("Bright 2 bedroom apartment for rent -
+// 245 Ouellette Ave, Unit 4, Windsor, ON N9A 1B3"). Civic number, up to four
+// street words, a street suffix, then an optional unit, city, province and
+// postal code. "850 sq ft" never matches: the suffix may not be followed by
+// ft/feet, and the civic number may not be followed by a bed/bath word.
+const CA_PROVINCE =
+  /^(?:ON|QC|BC|AB|MB|SK|NS|NB|PE|PEI|NL|YT|NT|NU|Ontario|Quebec|Québec|British Columbia|Alberta|Manitoba|Saskatchewan|Nova Scotia|New Brunswick|Prince Edward Island|Newfoundland(?: and Labrador)?)\b/i;
+const POSTAL_CODE = /\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b/i;
+const STREET_SUFFIX_WORDS = STREET_SUFFIX.source.slice(2, -2); // drop the \b ... \b
+const EMBEDDED_ADDRESS = new RegExp(
+  "(?:(?:unit|apt|apartment|suite)\\s*#?\\s*(?=[A-Za-z]?\\d)[A-Za-z0-9-]+\\s*[,-]?\\s*)?" +
+    "\\d{1,6}[A-Za-z]?(?:\\s*-\\s*\\d{1,6})?\\s+(?!(?:bed|bath|sq|square|per)\\b)" +
+    "(?:[A-Za-z0-9.'\\-]+\\s+){0,4}?" +
+    STREET_SUFFIX_WORDS + "\\b" +
+    "\\.?(?!\\s*(?:ft|feet)\\b)" +
+    "(?:\\s+(?:N|S|E|W|NE|NW|SE|SW|North|South|East|West)\\b\\.?)?" +
+    "(?:\\s*,?\\s*(?:unit|apt|apartment|suite|#)\\s*#?\\s*[A-Za-z0-9-]+)?" +
+    "(?:,\\s*[A-Za-z][A-Za-z0-9'\\-]*(?:\\s+[A-Za-z0-9'\\-]+){0,3}){0,3}" +
+    // No commas ("Unit 9 Windsor ON N9A 1X6"): up to three place words that
+    // are not the start of prose, then a postal code.
+    "(?:\\s+(?!(?:bed|bath|sq|per|available|for|with|near|close|steps|minutes|walk|rent|and|in|on|at|is|has|the|a)\\b)[A-Za-z][A-Za-z'\\-]+){0,3}" +
+    // A province word only when a postal code, a comma or the end follows it,
+    // so "Dr on the lake" is not "Dr, ON".
+    "(?:,?\\s+(?:ON|QC|BC|AB|MB|SK|NS|NB|PE|NL|Ontario|Quebec|Alberta|Manitoba|Saskatchewan)\\b(?=\\s*,|\\s*$|\\s*[A-Z]\\d[A-Z]\\s?\\d[A-Z]\\d\\b))?" +
+    "(?:,?\\s*[A-Z]\\d[A-Z]\\s?\\d[A-Z]\\d\\b)?",
+  "i",
+);
+
+/** A comma chunk after the street reads as a place (city, province, postal
+ * code) when every word is capitalised or a postal code; "close to shops" is
+ * not one. */
+function chunkLooksLikePlace(chunk: string): boolean {
+  const t = chunk.trim();
+  if (!t) return false;
+  if (CA_PROVINCE.test(t)) return true;
+  if (/^(?:unit|apt|apartment|suite|#)\s*#?\s*[A-Za-z0-9-]+$/i.test(t)) return true;
+  return t
+    .split(/\s+/)
+    .every((w) => /^[A-Z]/.test(w) || POSTAL_CODE.test(w) || /^\d/.test(w));
+}
+
+function extractEmbeddedAddress(lines: string[]): string | null {
+  for (const line of lines) {
+    if (line.length > 240) continue;
+    const m = EMBEDDED_ADDRESS.exec(line);
+    if (!m) continue;
+    const chunks = m[0].split(",");
+    const kept = [chunks[0]];
+    for (const chunk of chunks.slice(1)) {
+      if (!chunkLooksLikePlace(chunk)) break;
+      kept.push(chunk);
+    }
+    const found = kept
+      .map((c) => c.trim())
+      .join(", ")
+      .replace(/\s+/g, " ")
+      .replace(/[\s,.-]+$/, "")
+      .trim();
+    if (found.length < 8) continue;
+    return found.slice(0, 160);
+  }
+  return null;
 }
 
 function extractAddress(lines: string[]): string | null {
@@ -627,9 +720,11 @@ function extractAddress(lines: string[]): string | null {
   if (labelled && labelled.length <= 160) return labelled.slice(0, 160);
 
   for (const line of lines) {
-    if (looksLikeAddress(line)) return line.slice(0, 160);
+    // S732: trim trailing prose ("... M5A 1E1 available now") when the line
+    // carries a recognisable address.
+    if (looksLikeAddress(line)) return extractEmbeddedAddress([line]) ?? line.slice(0, 160);
   }
-  return null;
+  return extractEmbeddedAddress(lines);
 }
 
 // --- amenity / utility keyword pass -----------------------------------------
@@ -720,6 +815,26 @@ function extractUtilities(lines: string[], rawText: string): {
   // Also catch inline "Heat included", "Water included" phrasing, but never a
   // "tenant pays ..." / "plus utilities" / "not included" context.
   const all = rawText.toLowerCase();
+  // S732: "Heat and water included", "heat, hydro & water included",
+  // "all utilities included", "all inclusive". Scan the words before "included".
+  const listRe =
+    /\b((?:(?:heat|heating|hydro|electricity|water|internet|cable|utilities|all utilities|all)\s*(?:,|and|&|\+|\/)?\s*){1,6})(?:are\s+|is\s+)?included\b/g;
+  let lm: RegExpExecArray | null;
+  while ((lm = listRe.exec(all)) !== null) {
+    const words = lm[1];
+    if (/\b(utilities|all)\b/.test(words)) {
+      out.heat = true;
+      out.hydro = true;
+      out.water = true;
+    } else {
+      scan(words);
+    }
+  }
+  if (/\ball[- ]inclusive\b/.test(all)) {
+    out.heat = true;
+    out.hydro = true;
+    out.water = true;
+  }
   if (/\bheat\s+(?:is\s+)?included\b/.test(all)) out.heat = true;
   if (/\b(hydro|electricity)\s+(?:is\s+)?included\b/.test(all)) out.hydro = true;
   if (/\bwater\s+(?:is\s+)?included\b/.test(all)) out.water = true;

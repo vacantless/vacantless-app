@@ -81,6 +81,9 @@ export async function GET(req: NextRequest) {
         return r.sent ? "sent" : `failed:${r.reason}`;
       };
 
+      // S732: the price in the emails follows the checkout (with Posting = $98).
+      const withPosting = sub.metadata?.founding_with_posting === "1";
+
       // The 7-day reminder before any founding free time ends (booking or not).
       if (
         foundingReminderDue({
@@ -91,7 +94,9 @@ export async function GET(req: NextRequest) {
       ) {
         details.push({ org: o.id, sub: sub.id, reminder: sub.trial_end, dry });
         if (!dry) {
-          const sent = await emailCustomer(foundingReminderEmail({ trialEndSec: sub.trial_end as number }));
+          const sent = await emailCustomer(
+            foundingReminderEmail({ trialEndSec: sub.trial_end as number, withPosting }),
+          );
           await stripe.subscriptions.update(sub.id, {
             metadata: { ...(sub.metadata ?? {}), founding_reminder_sent: `${new Date().toISOString()} ${sent}` },
           });
@@ -119,7 +124,7 @@ export async function GET(req: NextRequest) {
         },
       });
       changed++;
-      const mailed = await emailCustomer(foundingTrialEmail({ endSec: end, nowSec }));
+      const mailed = await emailCustomer(foundingTrialEmail({ endSec: end, nowSec, withPosting }));
       details.push({ org: o.id, emailed: mailed });
     } catch (err) {
       errors++;

@@ -665,8 +665,10 @@ function SyndicationFirstCard({
   firstListingPacketMissingField,
   firstListingPacketMissingLabel,
   listingPacketMissingLabels = [],
+  robotPostingAllowed = false,
 }: {
   propertyId: string;
+  robotPostingAllowed?: boolean;
   linkIsLive: boolean;
   setupOutstanding: number;
   hasPhotos: boolean;
@@ -824,8 +826,9 @@ function SyndicationFirstCard({
               are next, not while the customer is still filling in the listing. */}
           {!packetBlocked ? (
             <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-400">
-              We post your ad on each site. You approve each post. A site
-              counts as Live once the link to your ad is saved.
+              {robotPostingAllowed
+                ? "We post your ad on each site. You approve each post. A site counts as Live once the link to your ad is saved."
+                : "Your Facebook Page posts from here, free. The Marketplace kit gives you the ad to paste. With the Posting add-on we post Kijiji, Rentals.ca and Zumper for you. A site counts as Live once the link to your ad is saved."}
             </p>
           ) : null}
         </div>
@@ -3084,6 +3087,7 @@ export default async function PropertyDetailPage({
       {publicPageIsBookable && (
         <SyndicationFirstCard
           propertyId={p.id}
+          robotPostingAllowed={robotPostingAccess.allowed}
           linkIsLive={publicPageIsBookable}
           setupOutstanding={setupOutstandingCount}
           hasPhotos={hasListingPhotos}

@@ -56,7 +56,7 @@ export default async function LinkPortalsPage({
       as="section"
       eyebrow={tStages("s1")}
       title={tStage1("title")}
-      subtitle={tStage1("sub")}
+      subtitle={tStage1(vm.postingAddon ? "sub" : "subNoAddon")}
       action={
         <LanguageDropdown
           locale={assertSupportedLocale(locale)}

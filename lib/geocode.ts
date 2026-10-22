@@ -204,7 +204,25 @@ function geoapifyLatLng(feature: Record<string, unknown>) {
 function geoapifyLabel(feature: Record<string, unknown>): string | null {
   const properties = geoapifyProperties(feature);
   const direct = cleanText(properties.formatted);
-  if (direct) return direct;
+  if (direct) {
+    // S732 walk-through: when the civic address is also a business, Geoapify
+    // formats it "RBC, 245 Ouellette Avenue, Windsor, ON N9A 7J2, Canada" and
+    // the bank's name landed in the landlord's ad. Drop a leading place name
+    // when a house number is known and the name is not the street itself.
+    const name = cleanText(properties.name);
+    const housenumber = cleanText(properties.housenumber);
+    const street = cleanText(properties.street);
+    if (
+      name &&
+      housenumber &&
+      direct.toLowerCase().startsWith(`${name.toLowerCase()}, `) &&
+      !(street && name.toLowerCase() === street.toLowerCase()) &&
+      !name.startsWith(housenumber)
+    ) {
+      return direct.slice(name.length + 2).trim() || direct;
+    }
+    return direct;
+  }
 
   const firstLine = cleanText(properties.address_line1);
   const secondLine = cleanText(properties.address_line2);

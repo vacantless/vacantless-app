@@ -49,7 +49,9 @@
       "selfPostSub": "Gratuit. Votre équipe la publie depuis votre propre Facebook.",
       "postedForYouSub": "Nous publions vos annonces {name} pour vous et les gardons en ligne.",
       "optional": "Facultatif",
-      "optionalSub": "Connectez-le pour publier vos annonces ici aussi."
+      "optionalSub": "Connectez-le pour publier vos annonces ici aussi.",
+      "addon": "Option Publication",
+      "addonSub": "Avec Publication, nous publions vos annonces ici pour vous, sur votre propre compte. 49 $ par mois avec le forfait Growth. Vous approuvez chaque annonce d'abord."
     },
     "buttons": {
       "login": "Ajoutez votre compte {name}",
@@ -105,8 +107,11 @@
     },
     "addon": {
       "note": "Inclus dans l'option Publication. 49 $ par mois.",
-      "link": "Voir la facturation"
-    }
+      "link": "Voir la facturation",
+      "button": "Voir l'option Publication"
+    },
+    "subNoAddon": "La page Facebook et Instagram se connectent ici gratuitement. Kijiji, Rentals.ca et Zumper sont publiés pour vous avec l'option Publication.",
+    "kindSelfPost": "Publiée depuis la trousse Marketplace de chaque logement. Par vous ou votre agent."
   },
   "stage2": {
     "title": "Parlez-nous de votre logement",
