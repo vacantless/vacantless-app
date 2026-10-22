@@ -12,6 +12,15 @@ import {
 } from "@/lib/stripe";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import {
+  FOUNDING20_COUPON_ID,
+  FOUNDING20_DISCOUNT_MONTHS,
+  FOUNDING20_OFFER,
+  FOUNDING20_PERCENT_OFF,
+  foundingChannel,
+  foundingSpotsLeft,
+  foundingTrialCap,
+} from "@/lib/founding-offer";
+import {
   isPaidPlan,
   isPilotPlan,
   PILOT_DEPOSIT_CENTS,
@@ -147,6 +156,93 @@ export async function startCheckout(formData: FormData) {
     // Lets you apply a founding-customer / promo coupon at checkout without a
     // code change if you decide to keep list price high and discount instead.
     allow_promotion_codes: true,
+    success_url: `${APP_BASE_URL}/dashboard/billing?checkout=success`,
+    cancel_url: `${APP_BASE_URL}/dashboard/billing?checkout=cancel`,
+  });
+
+  if (!session.url) redirect("/dashboard/billing?error=checkout");
+  redirect(session.url);
+}
+
+// S731: the Founding 20 checkout. Growth with the founding coupon (50% off for
+// 12 months) and a free period that starts at 90 days; the daily
+// founding-trial job shortens it to 30 days after the first booked viewing.
+// Card at checkout. Only for an account with a founding link that is not
+// paying yet, and only while spots are left. Redirect-based like startCheckout.
+export async function startFoundingCheckout(formData: FormData) {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_billing", "/dashboard/billing?forbidden=1");
+  if (org.stripe_subscription_id || (org.plan ?? "free") !== "free") {
+    redirect("/dashboard/billing?error=already_paid");
+  }
+
+  const supabase = createClient();
+  const { data: srcRow } = await supabase
+    .from("organizations")
+    .select("signup_source")
+    .eq("id", org.id)
+    .maybeSingle();
+  const channel = foundingChannel({
+    param: String(formData.get("founding") ?? "") || null,
+    signupSource: (srcRow as { signup_source?: unknown } | null)?.signup_source ?? null,
+  });
+  if (!channel) redirect("/dashboard/billing?error=founding_link");
+
+  const stripe = getStripe();
+  const priceId = priceIdForPlan("growth");
+  if (!stripe || !priceId) redirect("/dashboard/billing?error=not_configured");
+
+  // Spots: every founding subscription ever created counts, whatever its status.
+  let used = 0;
+  try {
+    const found = await stripe!.subscriptions.search({
+      query: `metadata['founding_offer']:'${FOUNDING20_OFFER}'`,
+      limit: 100,
+    });
+    used = found.data.length;
+  } catch (err) {
+    console.error("[founding] spot count failed", err instanceof Error ? err.message : err);
+    redirect("/dashboard/billing?error=checkout");
+  }
+  if (foundingSpotsLeft(used) < 1) redirect("/dashboard/billing?error=founding_full");
+
+  // The coupon is made on first use, so there is no dashboard step.
+  try {
+    await stripe!.coupons.retrieve(FOUNDING20_COUPON_ID);
+  } catch {
+    await stripe!.coupons.create({
+      id: FOUNDING20_COUPON_ID,
+      name: "Founding 20: 50% off your first year",
+      percent_off: FOUNDING20_PERCENT_OFF,
+      duration: "repeating",
+      duration_in_months: FOUNDING20_DISCOUNT_MONTHS,
+    });
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const customerId = await ensureCustomer(org, user?.email ?? null);
+  if (!customerId) redirect("/dashboard/billing?error=not_configured");
+
+  const session = await stripe!.checkout.sessions.create({
+    mode: "subscription",
+    customer: customerId,
+    line_items: [{ price: priceId!, quantity: 1 }],
+    client_reference_id: org.id,
+    discounts: [{ coupon: FOUNDING20_COUPON_ID }],
+    payment_method_collection: "always",
+    subscription_data: {
+      trial_end: foundingTrialCap(Math.floor(Date.now() / 1000)),
+      trial_settings: { end_behavior: { missing_payment_method: "cancel" } },
+      metadata: {
+        org_id: org.id,
+        founding_offer: FOUNDING20_OFFER,
+        founding_channel: channel,
+        founding_trial: "first_booking_plus_30_max_90",
+      },
+    },
     success_url: `${APP_BASE_URL}/dashboard/billing?checkout=success`,
     cancel_url: `${APP_BASE_URL}/dashboard/billing?checkout=cancel`,
   });

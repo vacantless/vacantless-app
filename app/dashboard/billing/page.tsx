@@ -15,6 +15,7 @@ import {
   nextBillLine,
 } from "@/lib/billing";
 import {
+  getStripe,
   isBillingConfigured,
   isDepositConfigured,
   postingAddonPriceId,
@@ -26,6 +27,7 @@ import { adminEmails } from "@/lib/provisioning-server";
 import { isAdminEmail } from "@/lib/provisioning";
 import {
   startCheckout,
+  startFoundingCheckout,
   openBillingPortal,
   startPilot,
   startDepositCheckout,
@@ -33,6 +35,12 @@ import {
   removePostingAddon,
 } from "./actions";
 import { BrandBanner } from "@/components/ui";
+import {
+  FOUNDING20_OFFER,
+  foundingChannel,
+  foundingOfferVisible,
+  foundingSpotsLeft,
+} from "@/lib/founding-offer";
 import { Icons } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +55,7 @@ export default async function BillingPage({
     deposit?: string;
     plan?: string;
     addon?: string;
+    founding?: string;
   };
 }) {
   const org = await getCurrentOrg();
@@ -165,7 +174,42 @@ export default async function BillingPage({
     addon_needs_growth:
       "Posting needs Growth. Choose Growth with Posting below.",
     addon: "We could not change Posting. Please try again.",
+    founding_link: "The founding offer needs the link from your founding invite.",
+    founding_full: "All 20 founding spots are taken. Growth is still $99 a month.",
   };
+
+  // S731: the Founding 20 card, only for an account with a founding link
+  // (?founding=<channel>, or a sign-up from a utm_source=founding link) that
+  // is not paying yet, and only while spots are left.
+  const { data: srcRow } = await createClient()
+    .from("organizations")
+    .select("signup_source")
+    .eq("id", org.id)
+    .maybeSingle();
+  const foundingFrom = foundingChannel({
+    param: searchParams.founding ?? null,
+    signupSource: (srcRow as { signup_source?: unknown } | null)?.signup_source ?? null,
+  });
+  let foundingSpots = 0;
+  const foundingShown =
+    foundingOfferVisible({
+      channel: foundingFrom,
+      plan: org.plan,
+      hasSubscription: Boolean(org.stripe_subscription_id),
+      billingReady: isBillingConfigured() && Boolean(priceIdForPlan("growth")),
+    }) &&
+    (await (async () => {
+      try {
+        const found = await getStripe()!.subscriptions.search({
+          query: `metadata['founding_offer']:'${FOUNDING20_OFFER}'`,
+          limit: 100,
+        });
+        foundingSpots = foundingSpotsLeft(found.data.length);
+        return true;
+      } catch {
+        return false;
+      }
+    })());
 
   // Whether to show the standalone pilot offer (only for a fresh trial org that
   // hasn't started a pilot or subscribed).
@@ -236,6 +280,37 @@ export default async function BillingPage({
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {errorCopy[error] ?? "Something went wrong. Please try again."}
         </div>
+      )}
+      {foundingShown && (
+        <section className="mt-4 rounded-xl border border-green-300 bg-green-50 p-5">
+          <h2 className="text-base font-semibold text-gray-900">Founding offer</h2>
+          {foundingSpots > 0 ? (
+            <>
+              <p className="mt-2 text-sm text-gray-800">
+                Pay nothing until Vacantless books your first viewing. Then you get 30 more days
+                free, then Growth is $49 a month for the rest of your first year. It is normally $99.
+              </p>
+              <p className="mt-2 text-sm text-gray-700">
+                We ask for a card now. You are not charged during the free time, which is 90 days at
+                most. After your first year, Growth is $99 a month. Cancel anytime.{" "}
+                {foundingSpots} of 20 spots left.
+              </p>
+              <form action={startFoundingCheckout} className="mt-3">
+                <input type="hidden" name="founding" value={searchParams.founding ?? ""} />
+                <button
+                  type="submit"
+                  className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800"
+                >
+                  Start the founding offer
+                </button>
+              </form>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-gray-800">
+              All 20 founding spots are taken. Growth is still $99 a month below.
+            </p>
+          )}
+        </section>
       )}
 
       {/* Current plan + status */}
