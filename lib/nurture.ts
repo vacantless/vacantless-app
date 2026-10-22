@@ -145,6 +145,35 @@ const NO_SUITABLE_TIME_STEP_COPY: Record<number, NurtureCopy> = {
   },
 };
 
+// S731: a follow-up is a nudge, not a reply, so it never lands overnight.
+// Same 8 am to 9 pm local window the SMS nudges use (lib/sms isWithinQuietHours);
+// kept here so this file stays pure. A skipped sweep just sends on the next
+// sweep after 8 am (the cron runs every 15 minutes).
+export const NURTURE_SEND_START_HOUR = 8;
+export const NURTURE_SEND_END_HOUR = 21;
+
+export function nurtureQuietNow(nowMs: number, timeZone: string | null | undefined): boolean {
+  let hour: number;
+  try {
+    hour = parseInt(
+      new Intl.DateTimeFormat("en-US", { timeZone: timeZone || "America/Toronto", hour: "numeric", hour12: false }).format(new Date(nowMs)),
+      10,
+    );
+  } catch {
+    return false; // bad timezone: never block a send on a formatting error
+  }
+  if (Number.isNaN(hour)) return false;
+  if (hour === 24) hour = 0;
+  return hour < NURTURE_SEND_START_HOUR || hour >= NURTURE_SEND_END_HOUR;
+}
+
+// S731: "We're lining up more viewing times" is only true until the renter is
+// told new times opened. After a new-times notice (leads.reopen_notified_at),
+// the follow-up uses the normal "Book a viewing" copy instead of contradicting it.
+export function nurtureUsesNoTimeCopy(noSuitableTime: boolean | null | undefined, reopenNotifiedAt: string | null | undefined): boolean {
+  return noSuitableTime === true && !reopenNotifiedAt;
+}
+
 /**
  * Per-step nurture copy. Steps outside 1..NURTURE_STEPS fall back to step 1 so
  * the composer never renders empty strings.

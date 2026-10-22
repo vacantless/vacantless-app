@@ -8,7 +8,7 @@ import type {
 import { limitAvailabilityToWeekdays, unionBuildingWeekdays } from "@/lib/booking";
 import { loadBuildingDayScope } from "@/lib/building-days-server";
 import { loadBlockedRenterEmails, normEmail } from "@/lib/renter-email-block";
-import { onePerRenter } from "@/lib/nurture";
+import { nurtureQuietNow, onePerRenter } from "@/lib/nurture";
 import { countOpenBookableSlots } from "@/lib/availability-tripwire";
 import {
   isReopenLeadEligible,
@@ -198,6 +198,27 @@ export async function GET(req: NextRequest) {
           dry,
         });
         summary.details.push({ org: orgId, skipped: "no_reopen_stamp", leads: group.leads.length });
+        continue;
+      }
+
+      // S731: no new-times notice overnight (8 am to 9 pm local). Nothing is
+      // stamped, so the notice goes out on the first sweep after 8 am.
+      if (!force && nurtureQuietNow(nowMs, org.booking_timezone ?? null)) {
+        skippedCount = group.leads.length;
+        summary.skipped += skippedCount;
+        logOrgReopenResult({
+          orgId,
+          outcome: "quiet_hours",
+          eligible: 0,
+          open,
+          toNotify: 0,
+          sent: 0,
+          skipped: skippedCount,
+          errors: 0,
+          force,
+          dry,
+        });
+        summary.details.push({ org: orgId, skipped: "quiet_hours", leads: group.leads.length });
         continue;
       }
 

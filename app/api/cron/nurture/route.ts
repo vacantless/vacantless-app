@@ -9,6 +9,8 @@ import {
   renterNurtureGate,
   type RenterSibling,
   NURTURE_MAX_AGE_MS,
+  nurtureQuietNow,
+  nurtureUsesNoTimeCopy,
 } from "@/lib/nurture";
 
 // Lead-nurture sweep (M5). Finds still-open leads (inquired, not yet booked or
@@ -69,9 +71,9 @@ export async function GET(req: NextRequest) {
     .from("leads")
     .select(
       "id, created_at, organization_id, property_id, name, email, status, " +
-        "no_suitable_time, nurture_step_sent, nurture_last_sent_at, " +
+        "no_suitable_time, reopen_notified_at, nurture_step_sent, nurture_last_sent_at, " +
         "properties(address, rent_cents, status), " +
-        "organizations(name, brand_color, logo_url, mail_alias, reply_to_email, nurture_enabled)",
+        "organizations(name, brand_color, logo_url, mail_alias, reply_to_email, nurture_enabled, booking_timezone)",
     )
     .in("status", NURTURABLE_STATUSES as unknown as string[])
     .lt("nurture_step_sent", NURTURE_STEPS)
@@ -140,6 +142,12 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
+    if (nurtureQuietNow(nowMs, org?.booking_timezone ?? null)) {
+      summary.skipped++;
+      summary.details.push({ lead: row.id, skipped: "quiet_hours" });
+      continue;
+    }
+
     const renterEmail: string | null = row.email ?? null;
     if (!renterEmail) {
       summary.skipped++;
@@ -177,7 +185,7 @@ export async function GET(req: NextRequest) {
       reply_to_email: org?.reply_to_email ?? null,
       property_address: property?.address ?? null,
       rent_cents: property?.rent_cents ?? null,
-      no_suitable_time: row.no_suitable_time === true,
+      no_suitable_time: nurtureUsesNoTimeCopy(row.no_suitable_time, row.reopen_notified_at),
     });
 
     if (!result.sent) {
@@ -215,7 +223,7 @@ export async function GET(req: NextRequest) {
       lead: row.id,
       step,
       to: renterEmail,
-      no_suitable_time: row.no_suitable_time === true,
+      no_suitable_time: nurtureUsesNoTimeCopy(row.no_suitable_time, row.reopen_notified_at),
     });
    } catch (err) {
      summary.errors++;

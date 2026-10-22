@@ -11,6 +11,8 @@ import {
   HOUR_MS,
   renterNurtureGate,
   onePerRenter,
+  nurtureQuietNow,
+  nurtureUsesNoTimeCopy,
 } from "../lib/nurture";
 
 let pass = 0;
@@ -236,6 +238,20 @@ eq(
   eq("one per renter: 2 covers 3 and 1", (out.covered.get("2") ?? []).map((x) => x.id), ["3", "1"]);
   eq("one per renter: 5 covers 4", (out.covered.get("5") ?? []).map((x) => x.id), ["4"]);
   eq("one per renter: loner has no cover", out.covered.has("6"), false);
+}
+// --- S731: quiet hours and the no-time copy ---
+{
+  const toronto = (h: number, m = 0) => Date.UTC(2026, 9, 22, h + 4, m); // EDT = UTC-4
+  eq("quiet: 12:30 am Toronto is quiet", nurtureQuietNow(toronto(0, 30), "America/Toronto"), true);
+  eq("quiet: 7:59 am is quiet", nurtureQuietNow(toronto(7, 59), "America/Toronto"), true);
+  eq("quiet: 8:00 am sends", nurtureQuietNow(toronto(8), "America/Toronto"), false);
+  eq("quiet: 8:59 pm sends", nurtureQuietNow(toronto(20, 59), "America/Toronto"), false);
+  eq("quiet: 9:00 pm is quiet", nurtureQuietNow(toronto(21), "America/Toronto"), true);
+  eq("quiet: null tz falls back to Toronto", nurtureQuietNow(toronto(0, 30), null), true);
+  eq("quiet: bad tz never blocks", nurtureQuietNow(toronto(0, 30), "Not/AZone"), false);
+  eq("no-time copy: flag, never told", nurtureUsesNoTimeCopy(true, null), true);
+  eq("no-time copy: flag, told new times", nurtureUsesNoTimeCopy(true, "2026-10-20T15:00:00Z"), false);
+  eq("no-time copy: no flag", nurtureUsesNoTimeCopy(false, null), false);
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
