@@ -1,8 +1,8 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-10-19",
-  "checksum": "310a205549c71bbff2d3e816875bf52cbd66a2c0a2691638630ad2cb29515fc6",
+  "generated": "2026-10-22",
+  "checksum": "e72ee9326eb76f4857ac35a2ef82cf56b1f5044a687bed4fa7fba06d7c42299d",
   "surfaces": [
     "app/agent/[token]/marketplace/[propertyId]/page.tsx",
     "app/dashboard/(wizard)/getting-started/page.tsx",
@@ -66,7 +66,6 @@
     "app/dashboard/(wizard)/getting-started/page.tsx\u0000sentence_length": 1,
     "app/dashboard/automations/page.tsx\u0000ampersand_or_slash": 2,
     "app/dashboard/automations/page.tsx\u0000banned_word": 3,
-    "app/dashboard/automations/page.tsx\u0000em_dash": 2,
     "app/dashboard/automations/page.tsx\u0000parentheses": 4,
     "app/dashboard/dashboard-nav.tsx\u0000ampersand_or_slash": 2,
     "app/dashboard/dashboard-nav.tsx\u0000banned_word": 1,
@@ -90,7 +89,7 @@
     "app/dashboard/settings/page.tsx\u0000all_caps": 2,
     "app/dashboard/settings/page.tsx\u0000ampersand_or_slash": 7,
     "app/dashboard/settings/page.tsx\u0000banned_word": 64,
-    "app/dashboard/settings/page.tsx\u0000em_dash": 5,
+    "app/dashboard/settings/page.tsx\u0000em_dash": 1,
     "app/dashboard/settings/page.tsx\u0000parentheses": 15,
     "app/dashboard/settings/page.tsx\u0000sentence_length": 15,
     "app/dashboard/today-lane.tsx\u0000banned_word": 1,
@@ -142,10 +141,10 @@
   },
   "strings": {
     "app/agent/[token]/marketplace/[propertyId]/page.tsx": 14,
-    "app/dashboard/(wizard)/getting-started/page.tsx": 22,
+    "app/dashboard/(wizard)/getting-started/page.tsx": 25,
     "app/dashboard/add-details/page.tsx": 2,
     "app/dashboard/add-details/question-sheet-form.tsx": 2,
-    "app/dashboard/after-live/page.tsx": 1,
+    "app/dashboard/after-live/page.tsx": 3,
     "app/dashboard/automations/page.tsx": 65,
     "app/dashboard/dashboard-nav.tsx": 30,
     "app/dashboard/facebook-connect/page.tsx": 7,
@@ -162,8 +161,8 @@
     "app/dashboard/properties/[id]/marketing-kit-card.tsx": 25,
     "app/dashboard/properties/[id]/marketplace-row.tsx": 13,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
-    "app/dashboard/properties/[id]/page.tsx": 402,
-    "app/dashboard/properties/[id]/publish-everywhere.tsx": 111,
+    "app/dashboard/properties/[id]/page.tsx": 417,
+    "app/dashboard/properties/[id]/publish-everywhere.tsx": 116,
     "app/dashboard/properties/new/add-property-form.tsx": 105,
     "app/dashboard/properties/new/page.tsx": 5,
     "app/dashboard/properties/page.tsx": 86,
@@ -171,9 +170,9 @@
     "app/dashboard/properties/standard-policy/page.tsx": 65,
     "app/dashboard/send-live/page.tsx": 4,
     "app/dashboard/settings/facebook-page-card.tsx": 10,
-    "app/dashboard/settings/page.tsx": 301,
-    "app/dashboard/site-signin/[channel]/page.tsx": 16,
-    "app/dashboard/site-signin/[channel]/window-panel.tsx": 6,
+    "app/dashboard/settings/page.tsx": 310,
+    "app/dashboard/site-signin/[channel]/page.tsx": 19,
+    "app/dashboard/site-signin/[channel]/window-panel.tsx": 10,
     "app/dashboard/today-lane.tsx": 5,
     "components/marketplace-kit-steps.tsx": 20,
     "lib/distribution-analytics.ts": 8,
@@ -184,9 +183,9 @@
     "lib/distribution-freshness.ts": 20,
     "lib/distribution-launch-coverage.ts": 8,
     "lib/distribution-partner.ts": 13,
-    "lib/distribution-publish.ts": 77,
+    "lib/distribution-publish.ts": 82,
     "lib/distribution-run.ts": 62,
-    "lib/distribution-stuck-sweep.ts": 8,
+    "lib/distribution-stuck-sweep.ts": 9,
     "lib/distribution-verification.ts": 20,
     "lib/listing-copy.ts": 59,
     "lib/listing-description.ts": 76,
@@ -194,7 +193,7 @@
     "lib/listing-health.ts": 15,
     "lib/listing-quality.ts": 34,
     "lib/listing-state.ts": 10,
-    "lib/site-signin.ts": 26,
+    "lib/site-signin.ts": 27,
     "messages/en.json": 205,
     "messages/fr.json": 205
   },
@@ -251,24 +250,6 @@
       "rule": "banned_word",
       "file": "app/dashboard/automations/page.tsx",
       "text": "Operator lane saved.",
-      "count": 1
-    },
-    {
-      "rule": "em_dash",
-      "file": "app/dashboard/automations/page.tsx",
-      "text": "(from your team and reply-to — add addresses above to change this)",
-      "count": 1
-    },
-    {
-      "rule": "em_dash",
-      "file": "app/dashboard/automations/page.tsx",
-      "text": "Not sent yet — sends once a year when it's due",
-      "count": 1
-    },
-    {
-      "rule": "parentheses",
-      "file": "app/dashboard/automations/page.tsx",
-      "text": "(from your team and reply-to — add addresses above to change this)",
       "count": 1
     },
     {
@@ -1006,12 +987,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/settings/page.tsx",
-      "text": "— aggregators require one before they accept your feed.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/settings/page.tsx",
       "text": "{value} /api/feed/ {value}",
       "count": 1
     },
@@ -1276,18 +1251,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/settings/page.tsx",
-      "text": "Saved. Texts start once your account's SMS is connected — nothing is sending yet.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "Sends a gentle, branded sequence of up to 3 reminders (around 2, 5, and 10 days after the inquiry) inviting them to book a viewing. It stops automatically the moment a renter books, is marked lost, or moves further along.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/settings/page.tsx",
       "text": "Set spend limit",
       "count": 1
     },
@@ -1360,31 +1323,7 @@
     {
       "rule": "em_dash",
       "file": "app/dashboard/settings/page.tsx",
-      "text": "— aggregators require one before they accept your feed.",
-      "count": 1
-    },
-    {
-      "rule": "em_dash",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "Open the live page renters see when you share a listing link — pick any listing to preview its branded inquiry and booking page.",
-      "count": 1
-    },
-    {
-      "rule": "em_dash",
-      "file": "app/dashboard/settings/page.tsx",
       "text": "Renters get a one-tap 1–5 star rating link once you mark their viewing as Attended. Results show on the viewing and in Reports.",
-      "count": 1
-    },
-    {
-      "rule": "em_dash",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "Saved. Texts start once your account's SMS is connected — nothing is sending yet.",
-      "count": 1
-    },
-    {
-      "rule": "em_dash",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "The send delay must be a whole number of hours (0–336).",
       "count": 1
     },
     {
@@ -1444,12 +1383,6 @@
     {
       "rule": "parentheses",
       "file": "app/dashboard/settings/page.tsx",
-      "text": "Sends a gentle, branded sequence of up to 3 reminders (around 2, 5, and 10 days after the inquiry) inviting them to book a viewing. It stops automatically the moment a renter books, is marked lost, or moves further along.",
-      "count": 1
-    },
-    {
-      "rule": "parentheses",
-      "file": "app/dashboard/settings/page.tsx",
       "text": "Some fields weren't valid. Check the brand color (a hex like #0e8c8c).",
       "count": 1
     },
@@ -1457,12 +1390,6 @@
       "rule": "parentheses",
       "file": "app/dashboard/settings/page.tsx",
       "text": "The number renters can text or call when they arrive for a viewing. We put it in their booking confirmation and reminder. You can add an extension (for example 226-778-0014 ext 5). Leave blank to use your listing contact phone.",
-      "count": 1
-    },
-    {
-      "rule": "parentheses",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "The send delay must be a whole number of hours (0–336).",
       "count": 1
     },
     {
@@ -1522,20 +1449,8 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/settings/page.tsx",
-      "text": "Open the live page renters see when you share a listing link — pick any listing to preview its branded inquiry and booking page.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/settings/page.tsx",
       "text": "Renters get a one-tap 1–5 star rating link once you mark their viewing as Attended. Results show on the viewing and in Reports.",
       "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "Sends a gentle, branded sequence of up to 3 reminders (around 2, 5, and 10 days after the inquiry) inviting them to book a viewing. It stops automatically the moment a renter books, is marked lost, or moves further along.",
-      "count": 2
     },
     {
       "rule": "sentence_length",
