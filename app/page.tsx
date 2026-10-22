@@ -566,7 +566,7 @@ function PostingAddonCard() {
           ))}
         </ul>
         <p className="text-[0.84rem] leading-snug text-[#59655f]">
-          Kijiji charges its own fee for each ad. Facebook Page posting is free on every plan.
+          Kijiji charges its own fee for each ad. Facebook Page posting and the Marketplace kit (ready to paste in) are free on every plan.
         </p>
       </div>
     </article>

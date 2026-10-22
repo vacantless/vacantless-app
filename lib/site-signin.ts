@@ -192,7 +192,7 @@ export function siteSigninView(
         title: "The window did not open",
         body:
           detail === "did_not_open"
-            ? "Nothing happened for three minutes, so we stopped waiting. Your account stays as it was. Try again; if it happens twice, email hello@vacantless.com and we will open it for you."
+            ? "We waited three minutes with no sign-in, so we closed the window. Your account stays as it was. Try again. If it happens twice, email hello@vacantless.com and we will open it for you."
             : "Your account stays as it was. Please try again in a minute.",
       };
     default:

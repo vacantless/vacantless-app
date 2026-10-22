@@ -539,7 +539,7 @@ export const TIERS: Record<TierKey, TierInfo> = {
     features: [
       "Unlimited live rentals",
       "Everything in Free",
-      "Text renters their confirmations and reminders",
+      "Text renters their confirmations and reminders from your own local number",
       "Renter applications, questions before booking and a waiting list",
       "Email help from us within one business day",
     ],
