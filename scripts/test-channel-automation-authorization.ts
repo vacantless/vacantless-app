@@ -32,9 +32,11 @@ const helper = section(
   "function apiAutomaticChannelFromForm",
   "async function requireCurrentOrgProperty",
 );
+// S734: the write lives in authorizeChannelAutomationCore (shared with
+// "Post it here now"); the form action is a thin wrapper after it.
 const authorize = section(
   source,
-  "export async function authorizeChannelAutomation",
+  "export async function authorizeChannelAutomationCore",
   "export async function revokeChannelAutomation",
 );
 const revoke = section(
@@ -80,7 +82,7 @@ ok(
 );
 ok(
   "authorize update is scoped by current org",
-  authorize.includes('.eq("organization_id", org.id)'),
+  authorize.includes('.eq("organization_id", args.orgId)'),
 );
 ok(
   "authorize update is still connected-row scoped",

@@ -39,6 +39,13 @@ export type OnboardingWizardInput = {
   hasTenancy: boolean;
   /** DISTRIBUTION_WIZARD_ENABLED: the step links to the wizard when on, the Rentals list when dark (never a broken link). */
   wizardEnabled: boolean;
+  /**
+   * S734 (review item 1): the rental to post, when the org has one. The
+   * "Post my rental" step then opens that rental's sites view, where the
+   * free sites and the one-click Facebook Page post are, instead of the
+   * "Sign in to your rental sites" page that led with three locked tiles.
+   */
+  postRentalPropertyId?: string | null;
   railStepDoneAt: string | null;
   dismissedAt: string | null;
   /** S700: false drops the post-lease steps (tenancy, rent collection). Default true. */
@@ -135,6 +142,13 @@ export function computeOnboardingState(
     }
     if (def.key === "property" && input.addPropertyV2Enabled) {
       return { ...def, href: "/dashboard/properties/new", status };
+    }
+    if (def.key === "get_online" && input.postRentalPropertyId) {
+      return {
+        ...def,
+        href: `/dashboard/properties/${encodeURIComponent(input.postRentalPropertyId)}?tab=distribute#distribute-header`,
+        status,
+      };
     }
     if (def.key === "get_online" && input.wizardEnabled) {
       return { ...def, href: "/dashboard/link-portals", status };

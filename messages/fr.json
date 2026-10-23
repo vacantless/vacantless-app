@@ -51,7 +51,7 @@
       "optional": "Facultatif",
       "optionalSub": "Connectez-le pour publier vos annonces ici aussi.",
       "addon": "Option Publication",
-      "addonSub": "Avec Publication, nous publions vos annonces ici pour vous, sur votre propre compte. 49 $ par mois avec le forfait Growth. Vous approuvez chaque annonce d'abord."
+      "addonSub": "Avec Publication, nous publions vos annonces ici pour vous, sur votre propre compte. 49 $ par mois, avec Gratuit ou Growth. Vous approuvez chaque annonce d'abord."
     },
     "buttons": {
       "login": "Ajoutez votre compte {name}",

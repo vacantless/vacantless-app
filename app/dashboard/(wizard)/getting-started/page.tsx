@@ -84,10 +84,20 @@ export default async function GettingStartedPage({
 
   const row = onboarding as OnboardingRow | null;
   const postLeaseEnabled = await orgShowsPostLease(supabase, org.id);
+  // S734: the newest rental is the one to post; the step opens its sites view.
+  const { data: newestRental } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("organization_id", org.id)
+    .is("archived_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   const state = computeOnboardingState({
     hasProperty: (propertyCount ?? 0) > 0,
     hasLiveListing: (liveListingCount ?? 0) > 0,
     wizardEnabled: distributionWizardEnabled(),
+    postRentalPropertyId: (newestRental?.id as string | undefined) ?? null,
     hasTenancy: (tenancyCount ?? 0) > 0,
     hasViewingTimes: (ruleCount ?? 0) > 0 || (overrideCount ?? 0) > 0,
     postLeaseEnabled,

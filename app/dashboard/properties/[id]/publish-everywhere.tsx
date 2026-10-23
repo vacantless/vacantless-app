@@ -39,11 +39,10 @@ import type { AdPreview } from "@/lib/ad-preview";
 import { useState } from "react";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
-import { publishProperty, requestConciergePublish, startSitePost } from "../actions";
+import { allowChannelAndPostNow, publishProperty, requestConciergePublish, startSitePost } from "../actions";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
 import {
   authorizeAutopilotSubmit,
-  authorizeChannelAutomation,
   readInstantPublishDestinations,
   revokeChannelAutomation,
   stopAutopilotSubmit,
@@ -203,19 +202,20 @@ function ChannelAutomationAction({
   row: ResolvedRow;
 }) {
   if (row.automationAction === "authorize") {
+    // S734: one click authorizes and posts (allowChannelAndPostNow). Before,
+    // Allow set a flag and the landlord had to find Post everywhere after.
     return (
-      <form action={authorizeChannelAutomation} className="mt-1.5">
+      <form action={allowChannelAndPostNow} className="mt-1.5">
         <input type="hidden" name="property_id" value={propertyId} />
         <input type="hidden" name="channel" value={row.key} />
         <p className="mb-1 text-[11px] leading-relaxed text-amber-800">
-          Allow us to post this listing to this account. You approve every
-          site before anything goes out.
+          Post this rental here now, and again each time you post your edits.
         </p>
         <button
           type="submit"
           className="rounded-lg bg-amber-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-amber-700"
         >
-          Allow us to post
+          Post it here now
         </button>
       </form>
     );
@@ -833,8 +833,13 @@ function ForYouHandoff({
           {postingBlocker.action}
         </a>
       )}
-      <ul className="mt-3 space-y-2.5">
-        {rows.map((row) => (
+      {/* S734 (review item 1): without Posting, the free sites come first
+          (Marketplace kit, then the one-click Facebook Page and Instagram
+          rows), then one Posting offer, then the three locked sites. With
+          Posting the order is unchanged: the sites we post for you first. */}
+      {(() => {
+        const locked = (row: ResolvedRow) => !robotPostingAllowed && isRobotPostedChannel(row.key);
+        const renderRow = (row: ResolvedRow) => (
           <ForYouRow
             key={row.key}
             row={row}
@@ -846,20 +851,35 @@ function ForYouHandoff({
             wizardEnabled={wizardEnabled}
             postingBlocked={Boolean(postingBlocker)}
             marketplaceKit={row.key === "facebook" ? marketplaceKit : null}
-            addonLocked={!robotPostingAllowed && isRobotPostedChannel(row.key)}
+            addonLocked={locked(row)}
             capNote={capNotes[row.key] ?? null}
             adPreview={adPreview}
           />
-        ))}
-        {!robotPostingAllowed &&
-          !postingBlocker &&
-          rows.some((row) => isRobotPostedChannel(row.key)) && <PostingOfferCard />}
-      </ul>
-      {children ? (
-        <div className="mt-3 rounded-xl border border-indigo-100 bg-white px-3 py-1">
-          {children}
-        </div>
-      ) : null}
+        );
+        const open = rows.filter((row) => !locked(row));
+        const held = rows.filter(locked);
+        const childBox = children ? (
+          <div className="mt-3 rounded-xl border border-indigo-100 bg-white px-3 py-1">{children}</div>
+        ) : null;
+        if (robotPostingAllowed || held.length === 0) {
+          return (
+            <>
+              <ul className="mt-3 space-y-2.5">{rows.map(renderRow)}</ul>
+              {childBox}
+            </>
+          );
+        }
+        return (
+          <>
+            <ul className="mt-3 space-y-2.5">{open.map(renderRow)}</ul>
+            {childBox}
+            <ul className="mt-3 space-y-2.5">
+              {!postingBlocker && <PostingOfferCard />}
+              {held.map(renderRow)}
+            </ul>
+          </>
+        );
+      })()}
       {conciergeDeskEnabled && !postingBlocker && (
         <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
           A site shows Live once the link to your ad is saved.

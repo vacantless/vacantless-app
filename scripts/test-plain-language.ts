@@ -62,6 +62,9 @@ const SURFACES: Surface[] = [
   // S734: the results card after posting and the Posting offer text.
   { file: "app/dashboard/properties/[id]/posted-results-card.tsx", mode: "ui" },
   { file: "lib/posted-results.ts", mode: "ui" },
+  // S734 wave 2: where renters come from, on the rental.
+  { file: "app/dashboard/properties/[id]/renter-sources-card.tsx", mode: "ui" },
+  { file: "lib/renter-sources.ts", mode: "ui" },
   // S705: the Facebook Page Connect / Disconnect card, moved out of the
   // removed Advanced tools view.
   { file: "app/dashboard/settings/facebook-page-card.tsx", mode: "ui" },

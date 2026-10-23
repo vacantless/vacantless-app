@@ -440,6 +440,10 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         hasProperty: (propertyCount ?? 0) > 0,
         hasLiveListing: (listingOnlineCount ?? 0) > 0,
         wizardEnabled: distributionWizardEnabled(),
+        // S734: the newest live rental is the one to post (null before Set Live,
+        // so the step still opens the rental list until then).
+        postRentalPropertyId:
+          (availablePropertyRows as { id: string }[] | null)?.[0]?.id ?? null,
         hasTenancy: (onboardingTenancyCount ?? 0) > 0,
         hasViewingTimes:
           (availabilityCount ?? 0) > 0 || (availabilityOverrideCount ?? 0) > 0,

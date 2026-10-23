@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { takenDownNote } from "@/lib/ads-still-up";
-import { closeTakedownItems } from "@/lib/facebook-page-takedown";
+import { closeTakedownItems, resetLiveRunItemsForPost } from "@/lib/facebook-page-takedown";
 
 export async function markAdTakenDown(formData: FormData) {
   const propertyId = String(formData.get("property_id") ?? "");
@@ -39,6 +39,7 @@ export async function markAdTakenDown(formData: FormData) {
       .eq("organization_id", org.id);
     // S734: a queued takedown item for this post is finished now.
     await closeTakedownItems(supabase, org.id, row.id, "the landlord pressed I took it down");
+    await resetLiveRunItemsForPost(supabase, org.id, row.id);
   }
   revalidatePath(back);
   redirect(`${back}?ad=down#ads-still-up`);

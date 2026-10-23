@@ -60,6 +60,10 @@ import {
   postToFacebookPageFeed,
 } from "@/lib/facebook-page-graph";
 import {
+  buildPageAlbumMessage,
+  postListingAlbumToFacebookPage,
+} from "@/lib/facebook-page-photos";
+import {
   facebookOAuthConfigured,
   fbPageChannelEnabled,
   igChannelEnabled,
@@ -267,28 +271,30 @@ async function recordChannelAutomationConsentAttempt(
   });
 }
 
-export async function authorizeChannelAutomation(formData: FormData) {
-  await requireCapability("manage_properties", FORBIDDEN);
-  const propertyId = s(formData, "property_id");
-  const channel = apiAutomaticChannelFromForm(formData, propertyId);
-
-  const org = await getCurrentOrg();
-  if (!org) redirect("/onboarding");
+/**
+ * S734: the authorize step without its redirects, so "Allow and post now" on
+ * the rental (app/dashboard/properties/actions.ts allowChannelAndPostNow) can
+ * authorize and then post in one click. Returns the reason the page should
+ * show when it cannot authorize.
+ */
+export async function authorizeChannelAutomationCore(args: {
+  orgId: string;
+  propertyId: string;
+  channel: string;
+}): Promise<{ ok: true } | { ok: false; reason: "channel_auto_connectfirst" | "channel_auto_error" | "forbidden" }> {
   const supabase = createClient();
-  await requireCurrentOrgProperty(supabase, propertyId, org.id);
-
   const uid = await userId(supabase);
-  if (!uid) redirect(FORBIDDEN);
+  if (!uid) return { ok: false, reason: "forbidden" };
 
   const { data: account } = await supabase
     .from("distribution_channel_accounts")
     .select("account_status")
-    .eq("organization_id", org.id)
-    .eq("channel", channel)
+    .eq("organization_id", args.orgId)
+    .eq("channel", args.channel)
     .maybeSingle();
   const acct = account as { account_status: string | null } | null;
   if (!acct || acct.account_status !== "connected") {
-    channelAutomationBackTo(propertyId, "channel_auto_connectfirst", channel);
+    return { ok: false, reason: "channel_auto_connectfirst" };
   }
 
   const nowISO = new Date().toISOString();
@@ -300,22 +306,38 @@ export async function authorizeChannelAutomation(formData: FormData) {
       automation_authorized_by: uid,
       updated_at: nowISO,
     })
-    .eq("organization_id", org.id)
-    .eq("channel", channel)
+    .eq("organization_id", args.orgId)
+    .eq("channel", args.channel)
     .eq("account_status", "connected")
     .select("channel")
     .maybeSingle();
-  if (error || !saved) {
-    channelAutomationBackTo(propertyId, "channel_auto_error", channel);
-  }
+  if (error || !saved) return { ok: false, reason: "channel_auto_error" };
 
   await recordChannelAutomationConsentAttempt(supabase, {
-    orgId: org.id,
-    propertyId,
-    channel,
+    orgId: args.orgId,
+    propertyId: args.propertyId,
+    channel: args.channel,
     userId: uid,
     authorized: true,
   });
+  return { ok: true };
+}
+
+export async function authorizeChannelAutomation(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyId = s(formData, "property_id");
+  const channel = apiAutomaticChannelFromForm(formData, propertyId);
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  await requireCurrentOrgProperty(supabase, propertyId, org.id);
+
+  const result = await authorizeChannelAutomationCore({ orgId: org.id, propertyId, channel });
+  if (!result.ok) {
+    if (result.reason === "forbidden") redirect(FORBIDDEN);
+    channelAutomationBackTo(propertyId, result.reason, channel);
+  }
 
   if (propertyId) {
     revalidatePath(`/dashboard/properties/${propertyId}`);
@@ -323,6 +345,15 @@ export async function authorizeChannelAutomation(formData: FormData) {
   }
   revalidatePath("/dashboard/settings");
   redirect(settingsChannelAutomationRedirectPath("channel_auto_on", channel));
+}
+
+/** S734: the channel key check, shared with allowChannelAndPostNow. */
+export async function apiAutomaticChannelOrNull(formData: FormData): Promise<string | null> {
+  const channelRaw = normalizePublishChannel(s(formData, "channel"));
+  if (!channelRaw || !isPublishChannelKey(channelRaw)) return null;
+  const channel = channelByKey(channelRaw);
+  if (!channel || channel.mode !== "api_automatic") return null;
+  return channelRaw;
 }
 
 export async function revokeChannelAutomation(formData: FormData) {
@@ -1231,7 +1262,7 @@ export async function postFacebookPageNow(formData: FormData) {
 
   const { data: property } = await supabase
     .from("properties")
-    .select("id, address, beds, baths, rent_cents")
+    .select("id, address, beds, baths, rent_cents, description")
     .eq("id", propertyId)
     .maybeSingle();
   if (!property) {
@@ -1243,6 +1274,7 @@ export async function postFacebookPageNow(formData: FormData) {
     beds: number | null;
     baths: number | null;
     rent_cents: number | null;
+    description: string | null;
   };
   let listingPostId =
     (reserved[0]?.listing_post_id as string | null) ?? it.listing_post_id;
@@ -1263,20 +1295,52 @@ export async function postFacebookPageNow(formData: FormData) {
   const trackedUrl = listingPostId
     ? buildTrackedLink(publicUrl, listingPostId)
     : publicUrl;
-  const message = buildPageFeedMessage({
+  // S734 (review item 6): a photo post with the description, not a three-line
+  // link post. The public photos are the ones the /r page shows, cover first.
+  // No photos, or every upload refused: the link post as before.
+  const { data: pubListing } = await supabase.rpc("get_public_listing", {
+    p_property_id: propertyId,
+  });
+  const pubPhotos = (pubListing as { photos?: unknown } | null)?.photos;
+  const photoUrls = Array.isArray(pubPhotos)
+    ? pubPhotos.filter((x): x is string => typeof x === "string" && x.trim() !== "")
+    : [];
+  const albumMessage = buildPageAlbumMessage({
     address: p.address,
     beds: p.beds,
     baths: p.baths,
     rentCents: p.rent_cents,
+    description: p.description,
     publicUrl: trackedUrl,
   });
-
-  const graph = await postToFacebookPageFeed({
+  let graph = await postListingAlbumToFacebookPage({
     pageId,
     pageAccessToken,
-    message,
-    link: trackedUrl,
+    message: albumMessage,
+    photoUrls,
   });
+  if (graph && !graph.ok && !graph.isAuthError) {
+    console.error("postFacebookPageNow: album post failed, falling back to the link post", {
+      propertyId,
+      error: graph.error,
+    });
+    graph = null;
+  }
+  if (!graph) {
+    const message = buildPageFeedMessage({
+      address: p.address,
+      beds: p.beds,
+      baths: p.baths,
+      rentCents: p.rent_cents,
+      publicUrl: trackedUrl,
+    });
+    graph = await postToFacebookPageFeed({
+      pageId,
+      pageAccessToken,
+      message,
+      link: trackedUrl,
+    });
+  }
   if (!graph.ok) {
     await releaseReservation();
     if (graph.isAuthError) {

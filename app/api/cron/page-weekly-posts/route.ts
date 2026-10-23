@@ -5,6 +5,10 @@ import {
   buildPageFeedMessage,
   postToFacebookPageFeed,
 } from "@/lib/facebook-page-graph";
+import {
+  buildPageAlbumMessage,
+  postListingAlbumToFacebookPage,
+} from "@/lib/facebook-page-photos";
 import { fbPageChannelEnabled } from "@/lib/facebook-page-oauth";
 import { buildTrackedLink } from "@/lib/listing-distribution";
 import { localDateString } from "@/lib/leasing-snapshot";
@@ -96,7 +100,7 @@ export async function GET(req: NextRequest) {
     const [{ data: props }, { data: posts }] = await Promise.all([
       admin
         .from("properties")
-        .select("id, status, archived_at, address, beds, baths, rent_cents")
+        .select("id, status, archived_at, address, beds, baths, rent_cents, description")
         .eq("organization_id", org.id)
         .eq("status", "available")
         .is("archived_at", null),
@@ -114,6 +118,7 @@ export async function GET(req: NextRequest) {
       beds: number | null;
       baths: number | null;
       rent_cents: number | null;
+      description: string | null;
     }[];
     const postRows = (posts ?? []) as {
       id: string;
@@ -154,7 +159,27 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      const graph = await postToFacebookPageFeed({ pageId, pageAccessToken: token, message, link });
+      // S734: the weekly post carries the photos too (link post as fallback).
+      const { data: pubListing } = await admin.rpc("get_public_listing", { p_property_id: propertyId });
+      const pubPhotos = (pubListing as { photos?: unknown } | null)?.photos;
+      const photoUrls = Array.isArray(pubPhotos)
+        ? pubPhotos.filter((x): x is string => typeof x === "string" && x.trim() !== "")
+        : [];
+      let graph = await postListingAlbumToFacebookPage({
+        pageId,
+        pageAccessToken: token,
+        message: buildPageAlbumMessage({
+          address: p.address,
+          beds: p.beds,
+          baths: p.baths,
+          rentCents: p.rent_cents,
+          description: p.description,
+          publicUrl: link,
+        }),
+        photoUrls,
+      });
+      if (graph && !graph.ok && !graph.isAuthError) graph = null;
+      if (!graph) graph = await postToFacebookPageFeed({ pageId, pageAccessToken: token, message, link });
       if (!graph.ok) {
         errors++;
         details.push({ org: org.id, property: propertyId, error: graph.error });

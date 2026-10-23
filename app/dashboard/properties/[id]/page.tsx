@@ -55,6 +55,8 @@ import { RenewAdsCard } from "./renew-ads-card";
 import { PageWeeklyPostsCard } from "./page-weekly-posts-card";
 import { MarketingKitCard } from "./marketing-kit-card";
 import { PostedResultsCard } from "./posted-results-card";
+import { RenterSourcesCard } from "./renter-sources-card";
+import { renterSourcesForRental } from "@/lib/renter-sources";
 import { postedResultsNextSteps, postedResultsSites } from "@/lib/posted-results";
 import { VideoAdCard } from "./video-ad-card";
 import { publicAddressLabel } from "@/lib/address-privacy";
@@ -385,6 +387,9 @@ type LeadRow = {
   price_drop_notified_cents: number | null;
   listing_post_id: string | null;
   created_at: string;
+  /** S734: which site the renter came from (lib/renter-sources). */
+  source: string | null;
+  leased_date: string | null;
 };
 
 type ListingPostRow = {
@@ -927,11 +932,22 @@ export default async function PropertyDetailPage({
   const { data: leads } = await supabase
     .from("leads")
     .select(
-      "id, name, email, status, price_drop_notified_cents, listing_post_id, created_at",
+      "id, name, email, status, price_drop_notified_cents, listing_post_id, created_at, source, leased_date",
     )
     .eq("property_id", p.id)
     .order("created_at", { ascending: false });
   const leadRows = (leads ?? []) as LeadRow[];
+  // S734 (review item 3): which site brought each renter, on the rental.
+  const renterSources = renterSourcesForRental(
+    leadRows.map((l) => ({
+      id: l.id,
+      source: l.source,
+      status: l.status,
+      created_at: l.created_at,
+      leased_date: l.leased_date,
+      property_id: p.id,
+    })),
+  );
 
   const { data: posts } = await supabase
     .from("listing_posts")
@@ -3130,6 +3146,10 @@ export default async function PropertyDetailPage({
           )}
         />
       )}
+
+      {/* S734 (review item 3): which site each renter came from, here on the
+          rental, not only on Reports. */}
+      <RenterSourcesCard sources={renterSources} />
 
       <PhotoUploadModal
         propertyId={p.id}

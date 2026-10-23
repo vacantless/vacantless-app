@@ -142,6 +142,39 @@ export async function startCheckout(formData: FormData) {
   const customerId = await ensureCustomer(org, user?.email ?? null);
   if (!customerId) redirect("/dashboard/billing?error=not_configured");
 
+  // S734: a Free account already paying for Posting on its own has a live
+  // subscription with one item. Growth goes onto that subscription (prorated,
+  // same card) instead of a second checkout and a second subscription.
+  if (
+    !isPaidPlan(org.plan) &&
+    org.stripe_subscription_id &&
+    subscriptionGrantsPlan(org.subscription_status)
+  ) {
+    try {
+      const sub = await stripe!.subscriptions.retrieve(org.stripe_subscription_id);
+      if (subscriptionGrantsPlan(sub.status)) {
+        const items = (sub.items?.data ?? []).map((it) => ({ id: it.id, price: { id: it.price?.id ?? null } }));
+        const alreadyGrowth = itemForPrice(items, priceId);
+        if (!alreadyGrowth) {
+          await stripe!.subscriptionItems.create({
+            subscription: sub.id,
+            price: priceId!,
+            quantity: 1,
+            proration_behavior: "create_prorations",
+          });
+        }
+        redirect("/dashboard/billing?checkout=success");
+      }
+    } catch (err) {
+      if (err && typeof err === "object" && "digest" in err) throw err;
+      console.error("startCheckout: adding Growth to a Posting-only subscription failed", {
+        organizationId: org.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      redirect("/dashboard/billing?error=checkout");
+    }
+  }
+
   // S713: "Growth with Posting" from the Posting card sends with_posting=1.
   // Same checkout, one more line item. Only when the add-on price exists; the
   // webhook turns Posting on once Stripe says the subscription is paid for.
@@ -164,6 +197,43 @@ export async function startCheckout(formData: FormData) {
     cancel_url: `${APP_BASE_URL}/dashboard/billing?checkout=cancel`,
   });
 
+  if (!session.url) redirect("/dashboard/billing?error=checkout");
+  redirect(session.url);
+}
+
+// S734 (review item 5): Posting on its own, for a Free account. One
+// subscription with the add-on price only; the webhook turns the flag on and
+// leaves the plan at free (an unknown plan price never changes the plan).
+export async function startPostingOnlyCheckout() {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_billing", "/dashboard/billing?forbidden=1");
+  if (isPaidPlan(org.plan)) redirect("/dashboard/billing?error=addon_needs_growth#posting-addon");
+  if (org.stripe_subscription_id && subscriptionGrantsPlan(org.subscription_status)) {
+    redirect("/dashboard/billing?addon=already#posting-addon");
+  }
+
+  const stripe = getStripe();
+  const addonPriceId = postingAddonPriceId();
+  if (!stripe || !addonPriceId) redirect("/dashboard/billing?error=addon_not_configured");
+
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const customerId = await ensureCustomer(org, user?.email ?? null);
+  if (!customerId) redirect("/dashboard/billing?error=not_configured");
+
+  const session = await stripe!.checkout.sessions.create({
+    mode: "subscription",
+    customer: customerId,
+    line_items: [{ price: addonPriceId!, quantity: 1 }],
+    client_reference_id: org.id,
+    subscription_data: { metadata: { org_id: org.id, posting_only: "1" } },
+    allow_promotion_codes: true,
+    success_url: `${APP_BASE_URL}/dashboard/billing?checkout=posting#posting-addon`,
+    cancel_url: `${APP_BASE_URL}/dashboard/billing?checkout=cancel#posting-addon`,
+  });
   if (!session.url) redirect("/dashboard/billing?error=checkout");
   redirect(session.url);
 }
@@ -515,10 +585,21 @@ export async function removePostingAddon() {
   if (!access.addonItemId) redirect("/dashboard/billing?addon=none#posting-addon");
 
   try {
+    // S734: Posting bought on its own is the subscription's only item, and
+    // Stripe refuses to delete the last item. End that subscription at the
+    // period end instead (paid-through days stay usable; the webhook turns the
+    // flag off when it ends).
+    const item = await stripe!.subscriptionItems.retrieve(access.addonItemId!);
+    const sub = await stripe!.subscriptions.retrieve(item.subscription as string);
+    if ((sub.items?.data ?? []).length <= 1) {
+      await stripe!.subscriptions.update(sub.id, { cancel_at_period_end: true });
+      redirect("/dashboard/billing?addon=ending#posting-addon");
+    }
     await stripe!.subscriptionItems.del(access.addonItemId!, {
       proration_behavior: "create_prorations",
     });
   } catch (err) {
+    if (err && typeof err === "object" && "digest" in err) throw err;
     console.error("removePostingAddon: Stripe call failed", {
       organizationId: org.id,
       error: err instanceof Error ? err.message : String(err),

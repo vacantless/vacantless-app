@@ -37,8 +37,10 @@ ok("managed + add-on = yes", canUseRobotPosting({ plan: "managed", posting_addon
 ok("growth without add-on = no", !canUseRobotPosting({ plan: "growth", posting_addon_active: false }));
 ok("growth, flag missing = no", !canUseRobotPosting({ plan: "growth" }));
 ok("growth, flag null = no", !canUseRobotPosting({ plan: "growth", posting_addon_active: null }));
+// S734: the add-on works on any plan, Free included (the webhook owns the flag).
 for (const plan of ["free", "trial", "pilot", "core", "plus", null, undefined, "bogus"]) {
-  ok(`${plan} + add-on flag = no (needs a paid plan)`, !canUseRobotPosting({ plan, posting_addon_active: true }));
+  ok(`${plan} + add-on flag = yes (S734, any plan)`, canUseRobotPosting({ plan, posting_addon_active: true }));
+  ok(`${plan} without the flag = no`, !canUseRobotPosting({ plan, posting_addon_active: false }));
 }
 ok("null org = no", !canUseRobotPosting(null));
 
@@ -125,7 +127,8 @@ const offer = {
   subscriptionStatus: "active",
 };
 ok("growth, live sub -> add", postingAddonOffer(offer) === "add");
-ok("free -> needs_growth", postingAddonOffer({ ...offer, plan: "free", hasSubscription: false, subscriptionStatus: null }) === "needs_growth");
+ok("free, no subscription -> add_free (S734)", postingAddonOffer({ ...offer, plan: "free", hasSubscription: false, subscriptionStatus: null }) === "add_free");
+ok("free after a canceled sub -> add_free", postingAddonOffer({ ...offer, plan: "free", hasSubscription: true, subscriptionStatus: "canceled" }) === "add_free");
 ok("canceled growth -> needs_growth", postingAddonOffer({ ...offer, subscriptionStatus: "canceled" }) === "needs_growth");
 ok("no price -> unavailable (no buy button)", postingAddonOffer({ ...offer, priceConfigured: false }) === "unavailable");
 ok("bought -> on_bought", postingAddonOffer({ ...offer, addonActive: true, addonItemId: "si_1" }) === "on_bought");
@@ -183,9 +186,10 @@ const signinPage = read("app/dashboard/site-signin/[channel]/page.tsx");
 ok("sign-in page shows the note, not the form", signinPage.includes("access.allowed &&") && signinPage.includes("POSTING_ADDON_NOTE"));
 
 const pe = read("app/dashboard/properties/[id]/publish-everywhere.tsx");
-ok("site rows get the add-on lock", pe.includes("addonLocked={!robotPostingAllowed && isRobotPostedChannel(row.key)}"));
+ok("site rows get the add-on lock", pe.includes("const locked = (row: ResolvedRow) => !robotPostingAllowed && isRobotPostedChannel(row.key);") && pe.includes("addonLocked={locked(row)}"));
 ok("other rows get the add-on lock", pe.includes("addonLocked={!robotPostingAllowed && isRobotPostedChannel(r.key)}"));
-ok("locked row shows the note", pe.includes("<PostingAddonNote"));
+// S734: one Posting offer card under the list, no note per locked row.
+ok("locked rows share one Posting offer card", pe.includes("<PostingOfferCard />") && !pe.includes("<PostingAddonNote"));
 ok("UI defaults closed", pe.includes("robotPostingAllowed = false"));
 ok("Marketplace kit row is never locked", !isRobotPostedChannel("facebook") && pe.includes("<MarketplaceRow"));
 const page = read("app/dashboard/properties/[id]/page.tsx");
@@ -193,7 +197,7 @@ ok("property page passes the real gate", page.includes("robotPostingAllowed={rob
 ok("property page explains run=postingaddon", page.includes('searchParams.run === "postingaddon"'));
 
 const vm = read("app/dashboard/link-portals/view-model.ts");
-ok("link-portals tile: note instead of sign-in button", vm.includes("if (addonNote) {") && vm.includes("isRobotPostedChannel(row.channel)"));
+ok("link-portals tile: add-on button instead of sign-in button", vm.includes("if (needsAddon) {") && vm.includes("isRobotPostedChannel(row.channel)"));
 const en = JSON.parse(read("messages/en.json"));
 const fr = JSON.parse(read("messages/fr.json"));
 ok("en addon copy", en.stage1.addon.note === POSTING_ADDON_NOTE && !!en.stage1.addon.link);
@@ -237,6 +241,7 @@ ok("not pending once the add lands", postingAddonPending("on_bought", { addon: "
 ok("not pending once the removal lands", postingAddonPending("add", { addon: "removed" }) === null);
 ok("not pending with no URL signal", postingAddonPending("add", {}) === null);
 ok("a cancelled checkout is not pending", postingAddonPending("needs_growth", { checkout: "cancel" }) === null);
+ok("pending: Posting-only checkout back on Free (S734)", postingAddonPending("add_free", { checkout: "posting" }) === "switching_on");
 {
   const page = read("app/dashboard/billing/page.tsx");
   ok("billing page checks pending before any buy button", page.indexOf("addonPending ?") > 0 && page.indexOf("addonPending ?") < page.indexOf("Add Posting for"));

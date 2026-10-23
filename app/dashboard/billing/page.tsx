@@ -33,6 +33,7 @@ import {
   startDepositCheckout,
   addPostingAddon,
   removePostingAddon,
+  startPostingOnlyCheckout,
 } from "./actions";
 import { BrandBanner } from "@/components/ui";
 import {
@@ -124,6 +125,7 @@ export default async function BillingPage({
     removed: "Posting is switching off. You get a credit for the unused days.",
     already: "Posting is already on.",
     none: "There is no Posting add-on to remove.",
+    ending: "Posting ends at the end of this billing period. Nothing more is charged.",
   };
 
   const configured = isBillingConfigured();
@@ -173,7 +175,7 @@ export default async function BillingPage({
       "The setup deposit is part of the pilot. Start your pilot first.",
     addon_not_configured: "The Posting add-on is not on sale yet.",
     addon_needs_growth:
-      "Posting needs Growth. Choose Growth with Posting below.",
+      "Posting could not be added that way. Use the Posting button below.",
     addon: "We could not change Posting. Please try again.",
     founding_link: "The founding offer needs the link from your founding invite.",
     founding_full: "All 20 founding spots are taken. Growth is still $99 a month.",
@@ -251,6 +253,13 @@ export default async function BillingPage({
           {view.isPaid && !addonPending
             ? `Thanks! ${currentPlanTitle(view.planLabel, addonOffer)} is active.`
             : "Thanks! Your subscription is being activated. It can take a few seconds to reflect here. Refresh if it still shows your old plan."}
+        </div>
+      )}
+      {checkout === "posting" && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {addonOffer === "on_bought"
+            ? "Thanks! Posting is on. Sign in to Kijiji, Rentals.ca and Zumper once and we post your ads."
+            : "Thanks! Posting is switching on. It can take a few seconds to show here. Refresh if it still says Free."}
         </div>
       )}
       {checkout === "cancel" && (
@@ -754,6 +763,19 @@ export default async function BillingPage({
                   this month.
                 </p>
               </form>
+            ) : addonOffer === "add_free" && !foundingPostingOffered ? (
+              // S734 (review item 5): Posting on its own for a Free account.
+              <form action={startPostingOnlyCheckout}>
+                <p className="mb-3 text-sm text-gray-700">
+                  Works with your free rental. Add Growth later if you want more rentals live at once.
+                </p>
+                <button className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white sm:w-auto sm:px-8">
+                  Add Posting for {formatAmount(POSTING_ADDON.priceCents)} a month
+                </button>
+                <p className="mt-2 text-xs text-gray-400">
+                  Billed monthly. Cancel anytime; Posting then ends at the end of the period.
+                </p>
+              </form>
             ) : foundingPostingOffered ? (
               // S732: a founding account saw "Get Growth with Posting ($148)"
               // here, with no founding price. Same checkout as the founding
@@ -762,9 +784,9 @@ export default async function BillingPage({
                 <input type="hidden" name="founding" value={searchParams.founding ?? ""} />
                 <input type="hidden" name="with_posting" value="1" />
                 <p className="mb-3 text-sm text-gray-700">
-                  Posting needs Growth. Your founding offer covers both: free until 30 days after
-                  your first booked viewing, then {formatAmount(foundingWithPosting.firstYear)} a
-                  month for the first year.
+                  Your founding offer covers Growth and Posting. Free until 30 days after your first
+                  booked viewing. Then {formatAmount(foundingWithPosting.firstYear)} a month for the
+                  first year.
                 </p>
                 <button className="w-full rounded-lg bg-green-700 px-4 py-2.5 text-sm font-medium text-white sm:w-auto sm:px-8">
                   Start the founding offer with Posting
@@ -775,7 +797,7 @@ export default async function BillingPage({
                 <input type="hidden" name="plan" value="growth" />
                 <input type="hidden" name="with_posting" value="1" />
                 <p className="mb-3 text-sm text-gray-700">
-                  Posting needs Growth. Get both in one checkout.
+                  Get Growth and Posting together in one checkout.
                 </p>
                 <button
                   disabled={!growthPriceSet}

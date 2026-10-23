@@ -28,6 +28,7 @@
     "app/dashboard/properties/[id]/page.tsx",
     "app/dashboard/properties/[id]/posted-results-card.tsx",
     "app/dashboard/properties/[id]/publish-everywhere.tsx",
+    "app/dashboard/properties/[id]/renter-sources-card.tsx",
     "app/dashboard/properties/new/add-property-form.tsx",
     "app/dashboard/properties/new/page.tsx",
     "app/dashboard/properties/page.tsx",
@@ -59,6 +60,7 @@
     "lib/listing-quality.ts",
     "lib/listing-state.ts",
     "lib/posted-results.ts",
+    "lib/renter-sources.ts",
     "lib/site-signin.ts",
     "messages/en.json",
     "messages/fr.json"
@@ -166,6 +168,7 @@
     "app/dashboard/properties/[id]/page.tsx": 416,
     "app/dashboard/properties/[id]/posted-results-card.tsx": 8,
     "app/dashboard/properties/[id]/publish-everywhere.tsx": 118,
+    "app/dashboard/properties/[id]/renter-sources-card.tsx": 3,
     "app/dashboard/properties/new/add-property-form.tsx": 112,
     "app/dashboard/properties/new/page.tsx": 5,
     "app/dashboard/properties/page.tsx": 86,
@@ -197,6 +200,7 @@
     "lib/listing-quality.ts": 34,
     "lib/listing-state.ts": 10,
     "lib/posted-results.ts": 11,
+    "lib/renter-sources.ts": 1,
     "lib/site-signin.ts": 27,
     "messages/en.json": 211,
     "messages/fr.json": 211

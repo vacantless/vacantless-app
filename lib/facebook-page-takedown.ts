@@ -89,9 +89,39 @@ export async function takeDownFacebookPagePosts(args: {
       .eq("id", post.id)
       .eq("organization_id", args.organizationId);
     await closeTakedownItems(args.supabase, args.organizationId, post.id, "Vacantless deleted the Facebook Page post");
+    await resetLiveRunItemsForPost(args.supabase, args.organizationId, post.id);
     result.removed.push(post.id);
   }
   return result;
+}
+
+/**
+ * A run item that still says "live" for a post that is gone blocks the next
+ * "Post everywhere" (the autofire skips live items and the post action
+ * refuses to reserve one). Put it back to queued with no post behind it, so
+ * the next post makes a fresh row. Found live on 2026-10-23: a rental set
+ * Live again after a takedown never reached the Page.
+ */
+export async function resetLiveRunItemsForPost(
+  supabase: SupabaseClient,
+  organizationId: string,
+  listingPostId: string,
+): Promise<void> {
+  const nowISO = new Date().toISOString();
+  await supabase
+    .from("distribution_run_items")
+    .update({
+      status: "pending",
+      publish_status: "queued",
+      listing_post_id: null,
+      external_url: null,
+      audit_message: "The post was taken down; ready to post again.",
+      updated_at: nowISO,
+    })
+    .eq("organization_id", organizationId)
+    .eq("listing_post_id", listingPostId)
+    .neq("transport", "takedown")
+    .eq("publish_status", "live");
 }
 
 /**

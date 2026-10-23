@@ -548,7 +548,7 @@ function PostingAddonCard() {
     >
       <div>
         <p className="mb-1 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">
-          Add-on for Growth
+          Add-on, Free or Growth
         </p>
         <h3 className="mb-1 text-[1.08rem] font-semibold">Posting</h3>
         <span className="block text-[1.9rem] font-extrabold leading-tight">
@@ -591,6 +591,8 @@ const PLANS: {
     priceNote: "a month",
     body: TIERS.free.blurb,
     includes: TIERS.free.features,
+    // S734: Posting works on Free too (review item 5).
+    addon: "Add Posting for CA$49 a month. See below.",
     cta: "Start free",
     href: "/signup",
   },

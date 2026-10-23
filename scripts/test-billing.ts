@@ -739,7 +739,8 @@ const growthTierCopy = `${TIERS.growth.blurb} ${TIERS.growth.features.join(" ")}
 // S702j: Free and Growth read like the homepage pricing (leasing first).
 ok("Free tier card offers one live rental", freeTierCopy.includes("one live rental"));
 // S717: texting is Agile only until each landlord has its own number; Growth must not sell it.
-ok("Growth tier card does not sell renter texts", !/\btexts?\b/i.test(growthTierCopy));
+// S726 sells texting on Growth (Twilio); S734 brings the assertion back to the truth.
+ok("Growth tier card sells renter texts (S726)", /\btexts?\b/i.test(growthTierCopy));
 ok("Growth tier card no longer lists rent collection", !growthTierCopy.includes("rent collection"));
 ok("Growth blurb no longer says collect rent", !TIERS.growth.blurb.toLowerCase().includes("collect rent"));
 
@@ -793,13 +794,14 @@ ok("photoCapForPlan managed -> premium cap", photoCapForPlan("managed") === PREM
   const near = storageUpsellNote("core", BASE_PHOTO_CAP - 2);
   ok("storageUpsell: near cap remaining 2", near.remaining === 2);
   ok("storageUpsell: near cap not at cap", near.atCap === false);
-  ok("storageUpsell: near cap shows", near.showUpsell === true);
+  // S728: no higher plan is sold, so the nudge never shows (S734 fixed the stale check).
+  ok("storageUpsell: near cap does not show, no higher plan on sale", near.showUpsell === false);
 
   // At the base cap on a non-premium plan: nudge shows + atCap.
   const at = storageUpsellNote("plus", BASE_PHOTO_CAP);
   ok("storageUpsell: at cap remaining 0", at.remaining === 0);
   ok("storageUpsell: at cap true", at.atCap === true);
-  ok("storageUpsell: at cap shows", at.showUpsell === true);
+  ok("storageUpsell: at cap does not show, no higher plan on sale", at.showUpsell === false);
 
   // Premium/Managed share the top photo capacity -> never nudged, even at cap.
   const premiumAt = storageUpsellNote("premium", PREMIUM_PHOTO_CAP);

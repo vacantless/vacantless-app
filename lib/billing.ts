@@ -623,7 +623,10 @@ export type RobotPostingOrg = {
 // (the webhook drops it to free) never pass, even with the flag left on.
 export function canUseRobotPosting(org: RobotPostingOrg | null | undefined): boolean {
   if (!org) return false;
-  return isPaidPlan(org.plan) && org.posting_addon_active === true;
+  // S734 (review item 5): the add-on works on any plan, Free included. The
+  // Stripe webhook owns the flag, so it is on only while a subscription that
+  // carries the add-on item (alone, or beside Growth) is active.
+  return org.posting_addon_active === true;
 }
 
 // The landlord line shown on a robot site instead of its post / sign-in button.
@@ -635,7 +638,7 @@ export const POSTING_OFFER = {
   title: "Add 3 more sites, posted for you",
   body:
     "We post this ad on Kijiji, Rentals.ca and Zumper + PadMapper for you. You sign in to each site once, about three minutes. We never see your password. You approve every ad before it goes up.",
-  price: "$49 a month with Growth.",
+  price: "$49 a month, on Free or Growth.",
   fees: "Site fees: Kijiji gives one free ad per account, then $33.84 each. Rentals.ca and Zumper are free.",
   action: "Post on 3 more sites",
 } as const;
@@ -706,6 +709,8 @@ export type PostingAddonOffer =
   | "on_bought"
   | "on_included"
   | "add"
+  /** S734: Free with no live subscription: buy Posting on its own ($49). */
+  | "add_free"
   | "needs_growth";
 export function postingAddonOffer(input: {
   priceConfigured: boolean;
@@ -725,6 +730,10 @@ export function postingAddonOffer(input: {
     subscriptionGrantsPlan(input.subscriptionStatus)
   ) {
     return "add";
+  }
+  // S734: a Free account with no live subscription buys Posting alone.
+  if (!isPaidPlan(input.plan) && !(input.hasSubscription && subscriptionGrantsPlan(input.subscriptionStatus))) {
+    return "add_free";
   }
   return "needs_growth";
 }
@@ -748,7 +757,8 @@ export function postingAddonPending(
   params: { addon?: string | null; checkout?: string | null },
 ): PostingAddonPending {
   if (params.addon === "added" && offer === "add") return "switching_on";
-  if (params.checkout === "success" && offer === "needs_growth") return "switching_on";
+  if (params.checkout === "success" && (offer === "needs_growth" || offer === "add_free")) return "switching_on";
+  if (params.checkout === "posting" && offer === "add_free") return "switching_on";
   if (params.addon === "removed" && offer === "on_bought") return "switching_off";
   return null;
 }

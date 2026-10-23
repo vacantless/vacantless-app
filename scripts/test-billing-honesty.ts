@@ -151,7 +151,7 @@ ok("homepage says the day-before reminder is email", home.includes("a reminder e
 // --- 7. Privacy providers ---------------------------------------------------
 const privacy = read("app/privacy/page.tsx");
 ok("privacy names Anthropic", privacy.includes("(Anthropic)"));
-ok("privacy names Quo and Twilio", privacy.includes("(Quo or Twilio)"));
+ok("privacy names Twilio (Quo retired S724)", privacy.includes("(Twilio)"));
 
 // --- 8. Chexy plain link ----------------------------------------------------
 const tenancy = read("app/dashboard/tenancies/[id]/page.tsx");

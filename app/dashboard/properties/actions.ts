@@ -88,6 +88,8 @@ import type { ChannelAccountStatus } from "@/lib/distribution-capabilities";
 import { isCopilotChannel } from "@/lib/distribution-capabilities";
 import { recordVerificationAndAttempt } from "@/lib/distribution-verification-write";
 import {
+  apiAutomaticChannelOrNull,
+  authorizeChannelAutomationCore,
   postFacebookPageNow,
   postInstagramNow,
 } from "./distribution-actions";
@@ -1273,12 +1275,44 @@ async function publishAuthorizedInstantChannelsAfterPageLive({
     if (runId) {
       const { data: existingItems } = await supabase
         .from("distribution_run_items")
-        .select("channel")
+        .select("id, channel, transport, publish_status")
         .eq("run_id", runId);
-      const have = new Set(
-        ((existingItems ?? []) as Array<{ channel: string | null }>).map((r) => r.channel),
-      );
+      const existing = (existingItems ?? []) as Array<{
+        id: string;
+        channel: string | null;
+        transport: string | null;
+        publish_status: string | null;
+      }>;
+      const have = new Set(existing.map((r) => r.channel));
       const nowISO = new Date().toISOString();
+      // S734: a rental that was leased or taken off the market keeps an
+      // active run whose Facebook Page item is the finished takedown
+      // (transport "takedown", skipped). Set Live again found that item,
+      // queued nothing, and the Page never got the new post. A finished
+      // takedown item (or a skipped one) becomes the queued post item again.
+      const reusable = existing.filter(
+        (r) =>
+          r.channel &&
+          instantKeys.includes(r.channel) &&
+          (r.transport === "takedown" || r.publish_status === "skipped"),
+      );
+      for (const r of reusable) {
+        await supabase
+          .from("distribution_run_items")
+          .update({
+            transport: null,
+            mode: "automatic",
+            status: "pending",
+            publish_status: "queued",
+            listing_post_id: null,
+            external_url: null,
+            operator_action_url: null,
+            blockers: [],
+            audit_message: "Ready to post again after a takedown.",
+            updated_at: nowISO,
+          })
+          .eq("id", r.id);
+      }
       const missing = instantKeys.filter((k) => !have.has(k));
       if (missing.length > 0) {
         await supabase.from("distribution_run_items").insert(
@@ -1348,6 +1382,49 @@ async function publishAuthorizedInstantChannelsAfterPageLive({
       }
     }
   }
+}
+
+/**
+ * S734 (review item 1): "Allow and post now". One click on the rental's
+ * Facebook Page or Instagram row authorizes posting AND posts the rental when
+ * it is already live, then lands on the results card. Before S734 the landlord
+ * pressed Allow, read a banner, then found "Post your edits to every site".
+ */
+export async function allowChannelAndPostNow(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) redirect("/dashboard/properties");
+  const channel = await apiAutomaticChannelOrNull(formData);
+  if (!channel) redirect(`/dashboard/properties/${propertyId}?dist=channel_auto_badchannel#distribute`);
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const { data: owned } = await supabase
+    .from("properties")
+    .select("id, status")
+    .eq("id", propertyId)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  if (!owned) redirect("/dashboard/properties?forbidden=1");
+
+  const result = await authorizeChannelAutomationCore({ orgId: org.id, propertyId, channel });
+  if (!result.ok) {
+    if (result.reason === "forbidden") redirect("/dashboard/properties?forbidden=1");
+    redirect(`/dashboard/properties/${propertyId}?dist=${result.reason}&ch=${encodeURIComponent(channel)}#distribute`);
+  }
+
+  const isLive = (owned as { status: string | null }).status === "available";
+  if (isLive) {
+    await maybePrepareAvailableListing(supabase, org, propertyId);
+    await publishAuthorizedInstantChannelsAfterPageLive({ supabase, orgId: org.id, propertyId });
+  }
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(
+    isLive
+      ? `/dashboard/properties/${propertyId}?published=1`
+      : `/dashboard/properties/${propertyId}?dist=channel_auto_on&ch=${encodeURIComponent(channel)}#distribute`,
+  );
 }
 
 /**
