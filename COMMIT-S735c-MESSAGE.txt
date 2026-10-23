@@ -1,0 +1,16 @@
+S735c: the rental page finds the Marketplace helper even when it starts late
+
+Seen live 2026-10-23 with the helper installed: the row said "Add the
+Vacantless helper" because the page pinged once, in its first 1.5
+seconds, before the helper's script (document_idle) was listening, then
+settled on "absent" for good. The page now pings four times over three
+seconds, keeps listening while the row is shown, and switches to "Fill
+Marketplace for me" whenever the helper answers.
+
+Proven the same day with the helper loaded in Chrome: 251 Manitoba's kit
+filled Marketplace's form with 3 photos, rent, townhouse, beds, baths,
+price, address, description, square feet, date, parking and AC; Next lit
+up; nothing posted.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017xAx92wUE4EGqDc8joCS9Z

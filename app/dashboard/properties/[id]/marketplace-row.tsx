@@ -33,25 +33,32 @@ export type MarketplaceKitData = {
 
 // S735: is the Vacantless helper installed in this Chrome? The app pings the
 // page; the helper's content script answers with its version. Nothing else
-// on the window is read.
+// on the window is read. The helper's script starts at document_idle, which
+// can be after this effect's first ping (seen live 2026-10-23: the page said
+// "absent" while the helper was installed), so the page pings four times over
+// three seconds, keeps listening for the life of the row, and turns "ready"
+// whenever a pong arrives, even after it has shown "absent".
 function useMarketplaceHelper(): "unknown" | "absent" | "old" | "ready" {
   const [state, setState] = useState<"unknown" | "absent" | "old" | "ready">("unknown");
   useEffect(() => {
-    let settled = false;
+    let answered = false;
     const onMessage = (event: MessageEvent) => {
       if (event.source !== window || event.origin !== window.location.origin) return;
       if (!isHelperPong(event.data)) return;
-      settled = true;
+      answered = true;
       setState(helperVersionOk(event.data.version) ? "ready" : "old");
     };
     window.addEventListener("message", onMessage);
-    window.postMessage({ source: MARKETPLACE_HELPER_APP_SOURCE, type: "ping" }, window.location.origin);
-    const timer = window.setTimeout(() => {
-      if (!settled) setState("absent");
-    }, 1500);
+    const ping = () =>
+      window.postMessage({ source: MARKETPLACE_HELPER_APP_SOURCE, type: "ping" }, window.location.origin);
+    const timers = [0, 600, 1500, 3000].map((ms) => window.setTimeout(ping, ms));
+    const giveUp = window.setTimeout(() => {
+      if (!answered) setState("absent");
+    }, 3500);
     return () => {
       window.removeEventListener("message", onMessage);
-      window.clearTimeout(timer);
+      timers.forEach((t) => window.clearTimeout(t));
+      window.clearTimeout(giveUp);
     };
   }, []);
   return state;
