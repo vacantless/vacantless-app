@@ -726,18 +726,9 @@ export function PublishEverywhere({
             robotPostingAllowed={robotPostingAllowed}
             capNotes={capNotes}
             adPreview={adPreview}
-          >
-            {[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows].map((r) => (
-              <ChannelRow
-                key={r.key}
-                row={r}
-                propertyId={propertyId}
-                wizardEnabled={wizardEnabled}
-                live={liveStateFor(r)}
-                addonLocked={!robotPostingAllowed && isRobotPostedChannel(r.key)}
-              />
-            ))}
-          </ForYouHandoff>
+            otherRows={[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows]}
+            liveStateFor={liveStateFor}
+          />
         )}
       </div>
 
@@ -791,11 +782,16 @@ function ForYouHandoff({
   robotPostingAllowed = false,
   capNotes = {},
   adPreview = null,
-  children,
+  otherRows = [],
+  liveStateFor,
 }: {
   capNotes?: Readonly<Record<string, string>>;
   adPreview?: AdPreview | null;
-  children?: React.ReactNode;
+  /** S734: the one-line rows (connected sites, sign-in sites), partitioned
+   *  with the for-you rows so a locked Rentals.ca or Zumper row sits under
+   *  the Posting offer, not above it. */
+  otherRows?: ResolvedRow[];
+  liveStateFor?: (row: ResolvedRow) => { isLive: boolean; liveUrl: string | null } | null;
   marketplaceKit?: MarketplaceKitData | null;
   robotPostingAllowed?: boolean;
   propertyId: string;
@@ -856,27 +852,43 @@ function ForYouHandoff({
             adPreview={adPreview}
           />
         );
+        const renderOther = (r: ResolvedRow) => (
+          <ChannelRow
+            key={r.key}
+            row={r}
+            propertyId={propertyId}
+            wizardEnabled={wizardEnabled}
+            live={liveStateFor ? liveStateFor(r) : null}
+            addonLocked={locked(r)}
+          />
+        );
+        const otherBox = (list: ResolvedRow[]) =>
+          list.length > 0 ? (
+            <div className="mt-3 rounded-xl border border-indigo-100 bg-white px-3 py-1">
+              {list.map(renderOther)}
+            </div>
+          ) : null;
         const open = rows.filter((row) => !locked(row));
         const held = rows.filter(locked);
-        const childBox = children ? (
-          <div className="mt-3 rounded-xl border border-indigo-100 bg-white px-3 py-1">{children}</div>
-        ) : null;
-        if (robotPostingAllowed || held.length === 0) {
+        const otherOpen = otherRows.filter((row) => !locked(row));
+        const otherHeld = otherRows.filter(locked);
+        if (robotPostingAllowed || (held.length === 0 && otherHeld.length === 0)) {
           return (
             <>
               <ul className="mt-3 space-y-2.5">{rows.map(renderRow)}</ul>
-              {childBox}
+              {otherBox(otherRows)}
             </>
           );
         }
         return (
           <>
             <ul className="mt-3 space-y-2.5">{open.map(renderRow)}</ul>
-            {childBox}
+            {otherBox(otherOpen)}
             <ul className="mt-3 space-y-2.5">
               {!postingBlocker && <PostingOfferCard />}
               {held.map(renderRow)}
             </ul>
+            {otherBox(otherHeld)}
           </>
         );
       })()}

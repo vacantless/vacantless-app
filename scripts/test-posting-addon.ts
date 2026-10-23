@@ -187,7 +187,8 @@ ok("sign-in page shows the note, not the form", signinPage.includes("access.allo
 
 const pe = read("app/dashboard/properties/[id]/publish-everywhere.tsx");
 ok("site rows get the add-on lock", pe.includes("const locked = (row: ResolvedRow) => !robotPostingAllowed && isRobotPostedChannel(row.key);") && pe.includes("addonLocked={locked(row)}"));
-ok("other rows get the add-on lock", pe.includes("addonLocked={!robotPostingAllowed && isRobotPostedChannel(r.key)}"));
+// S734c: the one-line rows render inside ForYouHandoff with the same lock.
+ok("other rows get the add-on lock", pe.includes("addonLocked={locked(r)}"));
 // S734: one Posting offer card under the list, no note per locked row.
 ok("locked rows share one Posting offer card", pe.includes("<PostingOfferCard />") && !pe.includes("<PostingAddonNote"));
 ok("UI defaults closed", pe.includes("robotPostingAllowed = false"));
