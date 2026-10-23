@@ -1,0 +1,26 @@
+S735b: Marketplace in one click through the Vacantless helper; sign in to all three in one sitting
+
+Facebook has no Marketplace API and only a person's own profile may post
+a rental, so the kit was five steps (copy, download, open, paste, reply).
+The rental page now pings for the Vacantless helper (a Chrome extension
+in the landlord's own browser). With it installed the Marketplace row
+offers one button: the page hands the helper the kit (title, price,
+beds, baths, address, description, laundry, parking, air conditioning,
+heating, up to 10 photo links; same-origin postMessage, no app route, no
+token) and the helper opens Marketplace's rental form and fills it,
+photos included. The landlord checks it and presses Facebook's own Post
+button. Without the helper the row says where to get it; the
+step-by-step kit stays. Dropdown words match the live form (read
+2026-10-23).
+
+Review item 7, first half: /dashboard/site-signin runs the Kijiji,
+Rentals.ca and Zumper sign-in windows back to back. One button opens the
+first; when a window is done the panel counts down six seconds and opens
+the next site still to sign in to (Open it now, Stop here). Sign in to
+your sites offers it when two or more sites still need a sign-in.
+Creating the account for the landlord is not in this slice: Zumper
+checks ID and Rentals.ca emails a code, so the window can at most open
+the sign-up page filled in; that is a worker change for a later session.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017xAx92wUE4EGqDc8joCS9Z

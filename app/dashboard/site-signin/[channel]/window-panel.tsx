@@ -7,6 +7,7 @@ import {
   siteSigninPassword,
   siteSigninSafeViewUrl,
   siteSigninView,
+  SITE_SIGNIN_LABEL,
   type SiteSigninChannel,
 } from "@/lib/site-signin";
 import {
@@ -14,8 +15,12 @@ import {
   confirmSiteSignin,
   failStalledSiteSignin,
   readSiteSigninWindow,
+  startNextSiteSignin,
   type SiteSigninWindowRead,
 } from "./actions";
+
+/** S735: seconds between "done" and the next site's window opening. */
+const NEXT_DELAY_S = 6;
 
 /** S728: how long "starting" may last before the page gives up on it. */
 const STARTING_LIMIT_MS = 3 * 60_000;
@@ -30,11 +35,29 @@ const TONE: Record<string, string> = {
 export function WindowPanel({
   channel,
   initial,
+  nextChannel = null,
+  propertyId = null,
 }: {
   channel: SiteSigninChannel;
   initial: NonNullable<SiteSigninWindowRead>;
+  /** S735 (item 7): in one-sitting mode, the site whose window opens when this one is done. */
+  nextChannel?: SiteSigninChannel | null;
+  propertyId?: string | null;
 }) {
   const [win, setWin] = useState(initial);
+  // S735: count down, then open the next site's window. "Stop here" cancels it.
+  const [nextIn, setNextIn] = useState<number | null>(null);
+  const [stopped, setStopped] = useState(false);
+  useEffect(() => {
+    if (win.status !== "done" || !nextChannel || stopped) return;
+    if (nextIn == null) setNextIn(NEXT_DELAY_S);
+    if (nextIn === 0) {
+      void startNextSiteSignin(nextChannel, propertyId);
+      return;
+    }
+    const t = setTimeout(() => setNextIn((n) => (n == null ? n : n - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [win.status, nextChannel, stopped, nextIn, propertyId]);
   const [pending, startTransition] = useTransition();
   const [asked, setAsked] = useState(false);
   const router = useRouter();
@@ -86,6 +109,27 @@ export function WindowPanel({
     <div className={`rounded-2xl border p-5 shadow-sm ${TONE[view.tone]}`}>
       <h2 className="text-base font-semibold text-gray-900">{view.title}</h2>
       <p className="mt-1 max-w-xl text-sm text-gray-600">{view.body}</p>
+
+      {win.status === "done" && nextChannel && !stopped && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-gray-800">
+            Next: {SITE_SIGNIN_LABEL[nextChannel]}. Its window opens in {nextIn ?? NEXT_DELAY_S} seconds.
+          </span>
+          <button
+            type="button"
+            onClick={() => setNextIn(0)}
+            className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white shadow-sm"
+          >
+            Open it now
+          </button>
+          <button type="button" onClick={() => setStopped(true)} className="text-sm text-gray-500 underline">
+            Stop here
+          </button>
+        </div>
+      )}
+      {win.status === "done" && nextChannel && stopped && (
+        <p className="mt-3 text-sm text-gray-600">Stopped. You can sign in to {SITE_SIGNIN_LABEL[nextChannel]} any time from Your rental sites.</p>
+      )}
 
       {win.status === "starting" && (
         <div className="mt-4 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-gray-100">

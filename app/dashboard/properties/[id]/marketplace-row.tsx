@@ -1,8 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MarketplaceKitSteps, type MarketplaceKitFact } from "@/components/marketplace-kit-steps";
 import type { MarketplaceKitAgent } from "@/lib/marketplace-kit";
+import {
+  MARKETPLACE_HELPER_APP_SOURCE,
+  MARKETPLACE_HELPER_INSTALL_URL,
+  helperVersionOk,
+  isHelperPong,
+  type MarketplaceHelperKit,
+} from "@/lib/marketplace-helper";
 import { addListingPost } from "../actions";
 import { sendMarketplaceKit } from "./marketplace-actions";
 
@@ -20,7 +27,42 @@ export type MarketplaceKitData = {
   agents: MarketplaceKitAgent[];
   /** Result of the last "Send to an agent" press, from the URL (?mkt=). */
   sendNotice: "sent" | "notsent" | "noagent" | "pick" | null;
+  /** S735: the kit the Chrome helper fills into Marketplace's form. */
+  helperKit?: MarketplaceHelperKit | null;
 };
+
+// S735: is the Vacantless helper installed in this Chrome? The app pings the
+// page; the helper's content script answers with its version. Nothing else
+// on the window is read.
+function useMarketplaceHelper(): "unknown" | "absent" | "old" | "ready" {
+  const [state, setState] = useState<"unknown" | "absent" | "old" | "ready">("unknown");
+  useEffect(() => {
+    let settled = false;
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      if (!isHelperPong(event.data)) return;
+      settled = true;
+      setState(helperVersionOk(event.data.version) ? "ready" : "old");
+    };
+    window.addEventListener("message", onMessage);
+    window.postMessage({ source: MARKETPLACE_HELPER_APP_SOURCE, type: "ping" }, window.location.origin);
+    const timer = window.setTimeout(() => {
+      if (!settled) setState("absent");
+    }, 1500);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      window.clearTimeout(timer);
+    };
+  }, []);
+  return state;
+}
+
+function sendKitToHelper(kit: MarketplaceHelperKit) {
+  window.postMessage(
+    { source: MARKETPLACE_HELPER_APP_SOURCE, type: "marketplace_fill", kit },
+    window.location.origin,
+  );
+}
 
 const SEND_NOTICE: Record<NonNullable<MarketplaceKitData["sendNotice"]>, string> = {
   sent: "Sent. They have the steps by email.",
@@ -37,19 +79,59 @@ export function MarketplaceRow({
   kit: MarketplaceKitData;
 }) {
   const [open, setOpen] = useState(kit.sendNotice != null);
+  const helper = useMarketplaceHelper();
+  const [sentToHelper, setSentToHelper] = useState(false);
+  const helperKit = kit.helperKit ?? null;
   return (
     <div className="mt-2">
       <p className="text-[12px] text-gray-600">
         Facebook lets only people post rentals on Marketplace. So you or a showing agent posts it
         from your own Facebook. It takes a few minutes.
       </p>
+      {helperKit && helper === "ready" && (
+        <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+          <p className="text-[12.5px] font-semibold text-emerald-900">The Vacantless helper is in your Chrome.</p>
+          <p className="mt-0.5 text-[12px] text-emerald-900">
+            One click opens Marketplace and fills the form, photos included. You check it and press Facebook's own Post button.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              sendKitToHelper(helperKit);
+              setSentToHelper(true);
+            }}
+            className="mt-2 inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-emerald-800"
+          >
+            Fill Marketplace for me →
+          </button>
+          {sentToHelper && (
+            <p className="mt-2 text-[12px] text-emerald-900">
+              Marketplace is opening in a new tab. When the ad is up, paste its link in step 4 below.
+            </p>
+          )}
+        </div>
+      )}
+      {helperKit && helper === "old" && (
+        <p className="mt-2 text-[12px] text-amber-800">
+          Your Vacantless helper is an older version. Update it in Chrome, then reload this page.
+        </p>
+      )}
+      {helperKit && helper === "absent" && (
+        <p className="mt-2 text-[12px] text-gray-600">
+          Posting from a computer?{" "}
+          <a href={MARKETPLACE_HELPER_INSTALL_URL} className="font-semibold text-indigo-700 hover:underline">
+            Add the Vacantless helper to Chrome
+          </a>{" "}
+          and it fills the Marketplace form for you, photos included.
+        </p>
+      )}
       {!open ? (
         <button
           type="button"
           onClick={() => setOpen(true)}
           className="mt-2 inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
         >
-          Post it on Marketplace →
+          {helper === "ready" ? "Or do it step by step →" : "Post it on Marketplace →"}
         </button>
       ) : (
         <div className="mt-3 space-y-4">

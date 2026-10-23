@@ -45,6 +45,10 @@ async function allowed(): Promise<{ orgId: string; userId: string | null } | nul
 export async function startSiteSignin(formData: FormData): Promise<void> {
   const channel = String(formData.get("channel") ?? "");
   const propertyId = cleanPropertyId(formData.get("property"));
+  // S735 (item 7): in one-sitting mode the page opens the next site's window
+  // by itself when this one finishes; the flag rides on every redirect.
+  const chain = formData.get("chain") != null;
+  const here = (href: string) => (chain ? withQuery(href, "chain", "1") : href);
   if (!isSiteSigninChannel(channel)) redirect("/dashboard/link-portals");
   const who = await allowed();
   if (!who) redirect("/dashboard/link-portals");
@@ -52,10 +56,10 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
   // S713: signing in is for robot posting, which is the paid Posting add-on.
   // No window (and no worker run) without it.
   const access = await readRobotPostingAccess(createClient(), who.orgId);
-  if (!access.allowed) redirect(withQuery(siteSigninHref(channel, propertyId), "err", "addon"));
+  if (!access.allowed) redirect(here(withQuery(siteSigninHref(channel, propertyId), "err", "addon")));
 
   const admin = createAdminClient();
-  if (!admin) redirect(withQuery(siteSigninHref(channel, propertyId), "err", "config"));
+  if (!admin) redirect(here(withQuery(siteSigninHref(channel, propertyId), "err", "config")));
 
   const { data: open } = await admin
     .from(TABLE)
@@ -66,7 +70,7 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
     .limit(1)
     .maybeSingle();
   if (open && siteSigninIsOpen(open.status as string) && Date.parse(open.expires_at as string) > Date.now()) {
-    redirect(siteSigninHref(channel, propertyId));
+    redirect(here(siteSigninHref(channel, propertyId)));
   }
 
   const { data: created, error } = await admin
@@ -74,7 +78,7 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
     .insert({ organization_id: who.orgId, channel, requested_by: who.userId, status: "starting" })
     .select("id")
     .single();
-  if (error || !created) redirect(withQuery(siteSigninHref(channel, propertyId), "err", "save"));
+  if (error || !created) redirect(here(withQuery(siteSigninHref(channel, propertyId), "err", "save")));
 
   const dispatched = await triggerSigninWindow(created.id as string, channel);
   if (!dispatched) {
@@ -83,7 +87,16 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
       .update({ status: "failed", detail: "dispatch", updated_at: new Date().toISOString() })
       .eq("id", created.id);
   }
-  redirect(siteSigninHref(channel, propertyId));
+  redirect(here(siteSigninHref(channel, propertyId)));
+}
+
+/** S735: the window panel opens the next site in the chain (a client call, so it builds the form itself). */
+export async function startNextSiteSignin(channel: string, propertyId: string | null): Promise<void> {
+  const fd = new FormData();
+  fd.set("channel", channel);
+  if (propertyId) fd.set("property", propertyId);
+  fd.set("chain", "1");
+  await startSiteSignin(fd);
 }
 
 export type SiteSigninWindowRead = {

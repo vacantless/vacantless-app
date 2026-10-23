@@ -11,9 +11,12 @@ import {
   siteSigninEnabled,
   siteSigninIsOpen,
   siteSigninView,
+  buildSigninChain,
+  nextSigninChannel,
   SITE_SIGNIN_ACCOUNT_FIRST,
   SITE_SIGNIN_LABEL,
 } from "@/lib/site-signin";
+import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
 import { startSiteSignin } from "./actions";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { POSTING_ADDON_HREF, POSTING_ADDON_NOTE } from "@/lib/billing";
@@ -31,7 +34,7 @@ export default async function SiteSigninPage({
   searchParams,
 }: {
   params: { channel: string };
-  searchParams: { err?: string; property?: string };
+  searchParams: { err?: string; property?: string; chain?: string };
 }) {
   const channel = params.channel;
   if (!isSiteSigninChannel(channel)) notFound();
@@ -74,6 +77,19 @@ export default async function SiteSigninPage({
     }
   }
   const backHref = propertyId ? `/dashboard/link-portals?property=${propertyId}` : "/dashboard/link-portals";
+  // S735 (item 7): one sitting. When this window finishes, the panel opens the
+  // next site still to sign in to. Read the tile states now so "next" is true
+  // at render time; the panel re-checks nothing, it just moves on.
+  const chainOn = searchParams.chain === "1";
+  let nextChannel: ReturnType<typeof nextSigninChannel> = null;
+  let chainSteps: ReturnType<typeof buildSigninChain> = [];
+  if (chainOn) {
+    const tiles = await listChannelTileStatuses(org.id);
+    const stateByChannel: Record<string, string> = {};
+    for (const t of tiles) stateByChannel[t.channel] = t.state;
+    chainSteps = buildSigninChain(stateByChannel, (c) => isHiddenForOrg(c, org.id));
+    nextChannel = nextSigninChannel(chainSteps, channel);
+  }
   const intro = siteSigninView(channel, null);
   // S705: a finished window can always be redone (sign in again, or a
   // different account). Only an open window blocks a new one.
@@ -98,6 +114,27 @@ export default async function SiteSigninPage({
         )}
         <h1 className="mt-2 text-2xl font-bold text-gray-900">{intro.title}</h1>
         <p className="mt-2 text-sm text-gray-600">{intro.body}</p>
+        {chainOn && chainSteps.length > 0 && (
+          <ol className="mt-3 flex flex-wrap gap-2 text-xs">
+            {chainSteps
+              .filter((s) => s.state !== "off")
+              .map((s) => (
+                <li
+                  key={s.channel}
+                  className={`rounded-full border px-2.5 py-1 ${
+                    s.channel === channel
+                      ? "border-brand bg-brand/10 font-semibold text-gray-900"
+                      : s.state === "done"
+                        ? "border-green-200 bg-green-50 text-green-800"
+                        : "border-gray-200 bg-white text-gray-600"
+                  }`}
+                >
+                  {s.state === "done" && s.channel !== channel ? "✓ " : ""}
+                  {s.label}
+                </li>
+              ))}
+          </ol>
+        )}
       </div>
 
       {searchParams.err && ERR[searchParams.err] && (
@@ -119,6 +156,8 @@ export default async function SiteSigninPage({
       {access.allowed && recent && (
         <WindowPanel
           channel={channel}
+          nextChannel={nextChannel}
+          propertyId={propertyId}
           initial={{
             id: recent.id as string,
             status: recent.status as string,
@@ -133,6 +172,7 @@ export default async function SiteSigninPage({
         <form action={startSiteSignin} className="rounded-2xl border border-gray-200 bg-white p-5">
           <input type="hidden" name="channel" value={channel} />
           {propertyId && <input type="hidden" name="property" value={propertyId} />}
+          {chainOn && <input type="hidden" name="chain" value="1" />}
           {recent?.status !== "done" && (
             <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
               {SITE_SIGNIN_ACCOUNT_FIRST[channel].text}{" "}

@@ -203,3 +203,57 @@ export function siteSigninView(
       };
   }
 }
+
+// ---- S735 (review item 7): sign in to all three in one sitting ------------
+// One screen runs the sign-ins back to back: Kijiji, Rentals.ca, Zumper. When
+// a window finishes, the next site's window opens by itself. A Rentsync-style
+// feed is closed to us, so this is the ceiling for the three robot sites.
+
+/** The order the chain runs. Kijiji first: it is where most renters are. */
+export const SITE_SIGNIN_ORDER: readonly SiteSigninChannel[] = ["kijiji", "rentals_ca", "zumper"];
+
+export type SiteSigninChainStep = {
+  channel: SiteSigninChannel;
+  label: string;
+  /** done = a session we can post from; todo = needs a sign-in; off = hidden for this org. */
+  state: "done" | "todo" | "off";
+};
+
+/** A tile state that means "no usable session yet". */
+export function signinNeeded(tileState: string | null | undefined): boolean {
+  return tileState === "not_linked" || tileState === "dead_session" || tileState === "connected_needs_authorization";
+}
+
+export function buildSigninChain(
+  tileStateByChannel: Readonly<Record<string, string | null | undefined>>,
+  hiddenFor: (channel: SiteSigninChannel) => boolean = () => false,
+): SiteSigninChainStep[] {
+  return SITE_SIGNIN_ORDER.map((channel) => ({
+    channel,
+    label: SITE_SIGNIN_LABEL[channel],
+    state: hiddenFor(channel) ? "off" : signinNeeded(tileStateByChannel[channel]) ? "todo" : "done",
+  }));
+}
+
+/** The next site still to sign in to, after `after` (or the first one when `after` is null). */
+export function nextSigninChannel(
+  chain: readonly SiteSigninChainStep[],
+  after: SiteSigninChannel | null,
+): SiteSigninChannel | null {
+  const start = after ? SITE_SIGNIN_ORDER.indexOf(after) + 1 : 0;
+  for (let i = start; i < SITE_SIGNIN_ORDER.length; i++) {
+    const step = chain.find((s) => s.channel === SITE_SIGNIN_ORDER[i]);
+    if (step && step.state === "todo") return step.channel;
+  }
+  return null;
+}
+
+/** "2 of 3 sites still need a sign-in" for the one-sitting screen. */
+export function signinChainSummary(chain: readonly SiteSigninChainStep[]): string {
+  const shown = chain.filter((s) => s.state !== "off");
+  const todo = shown.filter((s) => s.state === "todo").length;
+  if (shown.length === 0) return "No sites to sign in to.";
+  if (todo === 0) return "You are signed in to every site. We post your approved ads from now on.";
+  if (todo === shown.length) return `Sign in to ${shown.length} sites, one after the other. About ${shown.length * 2} minutes.`;
+  return `${todo} of ${shown.length} sites still need a sign-in.`;
+}
