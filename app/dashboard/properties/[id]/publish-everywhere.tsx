@@ -35,6 +35,7 @@
 // ============================================================================
 
 import { MarketplaceRow, type MarketplaceKitData } from "./marketplace-row";
+import { BrokerageRequestCard, type BrokerageRequestCardData } from "./brokerage-request-card";
 import type { AdPreview } from "@/lib/ad-preview";
 import { useState } from "react";
 import { Icons } from "@/components/icons";
@@ -387,6 +388,7 @@ export function PublishEverywhere({
   wizardEnabled = false,
   shownChannelKeys = null,
   marketplaceKit = null,
+  brokerage = null,
   robotPostingAllowed = false,
   capNotes = {},
   adPreview = null,
@@ -420,6 +422,8 @@ export function PublishEverywhere({
   shownChannelKeys?: readonly string[] | null;
   /** S712: the Facebook Marketplace kit (every org posts it from its own team). */
   marketplaceKit?: MarketplaceKitData | null;
+  /** S735: Realtor.ca through a partner agent (a request a person answers, never a tile). */
+  brokerage?: BrokerageRequestCardData | null;
   /** S713: canUseRobotPosting. False = Kijiji, Rentals.ca and Zumper show the add-on note. */
   robotPostingAllowed?: boolean;
   /** S723: per-site warning shown in the approval box (Rentals.ca free cap). */
@@ -723,6 +727,7 @@ export function PublishEverywhere({
             allSetSummary={liveForYouAllSet}
             postingBlocker={postingBlocker}
             marketplaceKit={marketplaceKit}
+            brokerage={brokerage}
             robotPostingAllowed={robotPostingAllowed}
             capNotes={capNotes}
             adPreview={adPreview}
@@ -779,6 +784,7 @@ function ForYouHandoff({
   allSetSummary,
   postingBlocker,
   marketplaceKit = null,
+  brokerage = null,
   robotPostingAllowed = false,
   capNotes = {},
   adPreview = null,
@@ -793,6 +799,7 @@ function ForYouHandoff({
   otherRows?: ResolvedRow[];
   liveStateFor?: (row: ResolvedRow) => { isLive: boolean; liveUrl: string | null } | null;
   marketplaceKit?: MarketplaceKitData | null;
+  brokerage?: BrokerageRequestCardData | null;
   robotPostingAllowed?: boolean;
   propertyId: string;
   addressLabel: string;
@@ -897,6 +904,9 @@ function ForYouHandoff({
           A site shows Live once the link to your ad is saved.
         </p>
       )}
+      {/* S735: Realtor.ca is an MLS listing a licensed agent places, so it is
+          a request under the list, never a site tile (S710 decision). */}
+      {brokerage && <BrokerageRequestCard propertyId={propertyId} data={brokerage} />}
     </section>
   );
 }

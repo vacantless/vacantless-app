@@ -1051,6 +1051,25 @@ export default async function SettingsPage({
                   shown on your listings. Leave blank if you do not want these emails.
                 </span>
               </label>
+              <label className="flex items-start gap-3 sm:col-span-2">
+                <input
+                  type="checkbox"
+                  name="browse_listed"
+                  defaultChecked={org.browse_listed !== false}
+                  className="mt-1 h-4 w-4 rounded border-gray-300"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-gray-700">
+                    Show my rentals on vacantless.com
+                  </span>
+                  <span className="mt-1 block text-xs text-gray-400">
+                    Renters who browse vacantless.com see your available rentals
+                    and book a viewing from there. Your phone and email are never
+                    shown. Rentals with no ad and no inquiry for 45 days drop off
+                    by themselves.
+                  </span>
+                </span>
+              </label>
               <div className="sm:col-span-2">
                 <button className="rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
                   Save contact details

@@ -70,6 +70,7 @@ import {
 import { PublishEverywhere } from "./publish-everywhere";
 import type { AdPreview } from "@/lib/ad-preview";
 import type { MarketplaceKitData } from "./marketplace-row";
+import type { BrokerageRequestCardData } from "./brokerage-request-card";
 
 
 // S695: the run-item view types moved here from launch-run-panel.tsx when the
@@ -296,6 +297,7 @@ export function DistributeTab({
   wizardEnabled,
   shownChannelKeys = null,
   marketplaceKit = null,
+  brokerage = null,
   robotPostingAllowed = false,
   capNotes = {},
   adPreview = null,
@@ -323,6 +325,8 @@ export function DistributeTab({
   shownChannelKeys?: readonly string[] | null;
   /** S712: Facebook Marketplace kit, passed straight through to PublishEverywhere. */
   marketplaceKit?: MarketplaceKitData | null;
+  /** S735: Realtor.ca through a partner agent, passed through. */
+  brokerage?: BrokerageRequestCardData | null;
   /** S713: the Posting add-on gate (canUseRobotPosting), passed through. */
   robotPostingAllowed?: boolean;
   /** S723: per-site approval warnings (Rentals.ca free cap), passed through. */
@@ -428,6 +432,7 @@ export function DistributeTab({
         postingBlocker={publishEverywherePostingBlocker}
         shownChannelKeys={shownChannelKeys}
         marketplaceKit={marketplaceKit}
+        brokerage={brokerage}
         robotPostingAllowed={robotPostingAllowed}
         capNotes={capNotes}
         adPreview={adPreview}

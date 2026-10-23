@@ -270,6 +270,9 @@ import {
 } from "@/lib/asset-capture";
 import { localDateString } from "@/lib/leasing-snapshot";
 import { marketplaceKitAgents } from "@/lib/marketplace-kit";
+import { buildMarketplaceHelperKit } from "@/lib/marketplace-helper";
+import { brokerageRouteFor } from "@/lib/brokerage-request";
+import type { BrokerageRequestCardData } from "./brokerage-request-card";
 import { formatAvailability } from "@/lib/property-features";
 import type { MarketplaceKitData } from "./marketplace-row";
 import type { AddressDisplayMode } from "@/lib/address-privacy";
@@ -876,6 +879,7 @@ export default async function PropertyDetailPage({
     post?: string;
     pn?: string; // post-submit nonce that remounts the add-post form (form reset)
     mkt?: string; // S712: result of "Email them these steps" (Marketplace kit)
+    brk?: string; // S735: result of the Realtor.ca request form
     posterr?: string;
     photos?: string;
     waitlist?: string;
@@ -1588,6 +1592,53 @@ export default async function PropertyDetailPage({
       ),
       sendNotice:
         mkt === "sent" || mkt === "notsent" || mkt === "noagent" || mkt === "pick" ? mkt : null,
+      // S735: what the Chrome helper fills into Marketplace's form, photos included.
+      helperKit: buildMarketplaceHelperKit({
+        propertyId: p.id,
+        address: p.address,
+        rentCents: p.rent_cents,
+        beds: p.beds,
+        baths: p.baths,
+        sqft: p.sqft,
+        unitType: p.unit_type,
+        description: fbCopy.body,
+        availableDate: p.available_date,
+        laundry: p.laundry,
+        parkingType: p.parking_type,
+        parkingCount: p.parking_count,
+        parkingText: p.parking,
+        airConditioning: p.air_conditioning,
+        acType: p.ac_type,
+        heatingType: p.heating_type,
+        photoUrls: photoRows.map((row) => row.url),
+        publicUrl,
+      }),
+    };
+  }
+  // --- S735: Realtor.ca through a partner agent (request, never a tile) ----
+  let brokerage: BrokerageRequestCardData | null = null;
+  if (org && normalizedStatus !== "leased") {
+    const { data: brkRows } = await supabase
+      .from("brokerage_requests")
+      .select("created_at, contact_phone, contact_email, status")
+      .eq("property_id", p.id)
+      .eq("organization_id", org.id)
+      .neq("status", "closed")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const brkRow = ((brkRows ?? []) as { created_at: string; contact_phone: string | null; contact_email: string | null }[])[0] ?? null;
+    const {
+      data: { user: brkUser },
+    } = await supabase.auth.getUser();
+    const brk = String(searchParams.brk ?? "");
+    brokerage = {
+      route: brokerageRouteFor(p.address),
+      existing: brkRow
+        ? { createdAt: brkRow.created_at, contactPhone: brkRow.contact_phone, contactEmail: brkRow.contact_email }
+        : null,
+      contactPhone: org.public_contact_phone ?? null,
+      contactEmail: brkUser?.email ?? org.public_contact_email ?? null,
+      notice: brk === "sent" || brk === "contact" || brk === "email" || brk === "error" ? brk : null,
     };
   }
   // The channel copy is only as good as the description it's built from. Flag a
@@ -4509,6 +4560,7 @@ export default async function PropertyDetailPage({
           wizardEnabled={distributionWizardEnabled()}
           shownChannelKeys={shownChannelKeys}
           marketplaceKit={marketplaceKit}
+          brokerage={brokerage}
           robotPostingAllowed={robotPostingAccess.allowed}
           capNotes={capNotes}
           adPreview={adPreview}

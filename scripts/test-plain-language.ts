@@ -65,6 +65,9 @@ const SURFACES: Surface[] = [
   // S734 wave 2: where renters come from, on the rental.
   { file: "app/dashboard/properties/[id]/renter-sources-card.tsx", mode: "ui" },
   { file: "lib/renter-sources.ts", mode: "ui" },
+  // S735: Realtor.ca through a partner agent (a request, never a tile).
+  { file: "app/dashboard/properties/[id]/brokerage-request-card.tsx", mode: "ui" },
+  { file: "lib/brokerage-request.ts", mode: "ui" },
   // S705: the Facebook Page Connect / Disconnect card, moved out of the
   // removed Advanced tools view.
   { file: "app/dashboard/settings/facebook-page-card.tsx", mode: "ui" },
@@ -72,6 +75,8 @@ const SURFACES: Surface[] = [
   { file: "app/dashboard/site-signin/[channel]/page.tsx", mode: "ui" },
   { file: "app/dashboard/site-signin/[channel]/window-panel.tsx", mode: "ui" },
   { file: "lib/site-signin.ts", mode: "ui" },
+  // S735: sign in to all three in one sitting.
+  { file: "app/dashboard/site-signin/page.tsx", mode: "ui" },
   // S705: what is left of the Get online tab after the Advanced tools cut:
   // Publish Everywhere wrapper plus the live-ad-link list.
   { file: "app/dashboard/properties/[id]/distribute-tab.tsx", mode: "ui" },

@@ -417,6 +417,8 @@ export async function updatePublicContact(formData: FormData) {
     .update({
       ...result.values,
       landlord_campaign_email: landlordEmail.value,
+      // S735: the public browse pages list this organization's rentals.
+      browse_listed: formData.get("browse_listed") != null,
     })
     .eq("id", org.id);
   if (error) {

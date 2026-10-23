@@ -59,6 +59,8 @@ export type Org = {
   public_contact_phone: string | null;
   public_contact_email: string | null;
   landlord_campaign_email: string | null;
+  // S735: the landlord's rentals appear on the public /rentals pages (default on).
+  browse_listed: boolean;
   compliance_calendar_enabled: boolean;
   showing_arrival_phone: string | null;
   // Standard-policy profile defaults (0048). Inherited by every unit unless the
@@ -80,7 +82,7 @@ export type Org = {
 };
 
 const ORG_COLUMNS =
-  "id, name, slug, brand_color, brand_color_secondary, logo_url, mail_alias, reply_to_email, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, subscription_cancel_at, pilot_started_at, pilot_deposit_status, pilot_deposit_payment_intent_id, pilot_deposit_amount_cents, pilot_deposit_paid_at, booking_timezone, booking_requires_confirmation, feedback_enabled, feedback_delay_hours, nurture_enabled, sms_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, auto_assign_agents, showing_confirm_mode, auto_release_unconfirmed_enabled, auto_release_unconfirmed_hours, showing_autoclose_enabled, showing_autoclose_after_hours, outcome_nudge_max, screening_enabled, screening_income_multiple, screening_max_movein_days, screening_flag_pets, screening_gate_booking, screening_reason_income, screening_reason_movein, screening_reason_pets, screening_ask_income, screening_ask_movein, screening_ask_pets, screening_ask_occupants, inquiry_require_phone, public_contact_phone, public_contact_email, landlord_campaign_email, compliance_calendar_enabled, showing_arrival_phone, policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size, dispatch_terms_accepted_at";
+  "id, name, slug, brand_color, brand_color_secondary, logo_url, mail_alias, reply_to_email, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, subscription_cancel_at, pilot_started_at, pilot_deposit_status, pilot_deposit_payment_intent_id, pilot_deposit_amount_cents, pilot_deposit_paid_at, booking_timezone, booking_requires_confirmation, feedback_enabled, feedback_delay_hours, nurture_enabled, sms_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, auto_assign_agents, showing_confirm_mode, auto_release_unconfirmed_enabled, auto_release_unconfirmed_hours, showing_autoclose_enabled, showing_autoclose_after_hours, outcome_nudge_max, screening_enabled, screening_income_multiple, screening_max_movein_days, screening_flag_pets, screening_gate_booking, screening_reason_income, screening_reason_movein, screening_reason_pets, screening_ask_income, screening_ask_movein, screening_ask_pets, screening_ask_occupants, inquiry_require_phone, public_contact_phone, public_contact_email, landlord_campaign_email, browse_listed, compliance_calendar_enabled, showing_arrival_phone, policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size, dispatch_terms_accepted_at";
 
 // The active org for the signed-in user. A user can belong to several orgs
 // (multi-org agents); the ACTIVE one is resolved from the `selected_org` cookie,
