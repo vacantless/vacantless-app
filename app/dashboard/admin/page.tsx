@@ -139,6 +139,9 @@ export default async function AdminConsolePage({
         >
           Publish-for-me desk →
         </a>
+        {/* S733: the Node.js patch level the server actually runs, so a
+            Node security release can be checked against production. */}
+        <p className="text-xs text-slate-400">Node.js on this server: {process.version}</p>
       </header>
 
       <OnboardLandlordForm />
