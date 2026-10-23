@@ -137,10 +137,13 @@ function boolSelect(value: string): boolean | null {
 function parsedBoolSelect(
   parsedValue: boolean,
   aiValue: boolean | null | undefined,
+  parsedTenantPays = false,
 ): string {
   if (parsedValue) return "true";
   if (aiValue === true) return "true";
   if (aiValue === false) return "false";
+  // S733: "tenant pays hydro" in a pasted ad shows "Tenant pays", not "Unknown".
+  if (parsedTenantPays) return "false";
   return "";
 }
 
@@ -178,14 +181,17 @@ export function addPropertyV2DraftFromListing(
     heat_included: parsedBoolSelect(
       parsed.heatIncluded,
       aiDraft?.heatIncluded,
+      parsed.tenantPays?.heat ?? false,
     ),
     hydro_included: parsedBoolSelect(
       parsed.hydroIncluded,
       aiDraft?.hydroIncluded,
+      parsed.tenantPays?.hydro ?? false,
     ),
     water_included: parsedBoolSelect(
       parsed.waterIncluded,
       aiDraft?.waterIncluded,
+      parsed.tenantPays?.water ?? false,
     ),
     internet_included:
       aiDraft?.internetIncluded == null ? "" : String(aiDraft.internetIncluded),

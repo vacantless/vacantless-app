@@ -67,6 +67,13 @@ export interface ParsedListing {
   heatIncluded: boolean;
   hydroIncluded: boolean;
   waterIncluded: boolean;
+  /**
+   * S733: utilities the ad says the TENANT pays ("tenant pays hydro", "hydro
+   * extra", "Hydro Incl: N"). Kept apart from the *Included booleans, where
+   * false also means "not mentioned", so Add rental can show "Tenant pays"
+   * instead of "Unknown". Never true for a utility the ad says is included.
+   */
+  tenantPays?: { heat: boolean; hydro: boolean; water: boolean };
   /** Human labels of the fields we actually filled, for the review banner. */
   foundFields: string[];
 }
@@ -790,8 +797,10 @@ function extractUtilities(lines: string[], rawText: string): {
   heat: boolean;
   hydro: boolean;
   water: boolean;
+  pays: { heat: boolean; hydro: boolean; water: boolean };
 } {
   const out = { heat: false, hydro: false, water: false };
+  const pays = { heat: false, hydro: false, water: false };
   const includesVal = labelValue(
     lines,
     [
@@ -848,7 +857,39 @@ function extractUtilities(lines: string[], rawText: string): {
   if (heatFlag !== null) out.heat = heatFlag;
   if (hydroFlag !== null) out.hydro = hydroFlag;
   if (waterFlag !== null) out.water = waterFlag;
-  return out;
+
+  // S733: what the tenant pays. "Tenant pays hydro", "tenant responsible for
+  // heat and hydro", "plus utilities", "hydro extra", "water not included",
+  // or an explicit "Hydro Incl: N" column.
+  const markPays = (words: string) => {
+    if (/\b(utilities|all)\b/.test(words)) {
+      pays.heat = pays.hydro = pays.water = true;
+      return;
+    }
+    if (/\b(heat|heating|gas)\b/.test(words)) pays.heat = true;
+    if (/\b(hydro|electric(?:ity)?|electrical)\b/.test(words)) pays.hydro = true;
+    if (/\bwater\b/.test(words)) pays.water = true;
+  };
+  const utilWords =
+    "(?:(?:heat|heating|gas|hydro|electricity|water|utilities|all utilities)\\s*(?:,|and|&|\\+|\\/)?\\s*){1,6}";
+  const payRes = [
+    new RegExp(`\\b(?:tenants?|renters?)\\s+(?:pays?|to pay|responsible for|covers?|pays for)\\s+(?:for\\s+)?(?:the\\s+|own\\s+)?(${utilWords})`, "g"),
+    new RegExp(`\\bplus\\s+(${utilWords})`, "g"),
+    new RegExp(`\\+\\s*(${utilWords})`, "g"),
+    new RegExp(`\\b(${utilWords})(?:are\\s+|is\\s+)?(?:extra|not included|separate|additional)\\b`, "g"),
+  ];
+  for (const re of payRes) {
+    let pm: RegExpExecArray | null;
+    while ((pm = re.exec(all)) !== null) markPays(pm[1]);
+  }
+  if (heatFlag === false) pays.heat = true;
+  if (hydroFlag === false) pays.hydro = true;
+  if (waterFlag === false) pays.water = true;
+  // Included always wins over a looser "pays" read.
+  if (out.heat) pays.heat = false;
+  if (out.hydro) pays.hydro = false;
+  if (out.water) pays.water = false;
+  return { ...out, pays };
 }
 
 // --- main -------------------------------------------------------------------
@@ -858,7 +899,7 @@ function extractUtilities(lines: string[], rawText: string): {
 // deterministic review banner uses.
 type ParsedListingFieldKey = keyof Omit<
   ParsedListing,
-  "foundFields" | "propertyType"
+  "foundFields" | "propertyType" | "tenantPays"
 >;
 
 export const FIELD_LABELS: Record<ParsedListingFieldKey, string> = {
@@ -930,6 +971,7 @@ export function parseMlsListing(text: string): ParsedListing {
   out.heatIncluded = util.heat;
   out.hydroIncluded = util.hydro;
   out.waterIncluded = util.water;
+  if (util.pays.heat || util.pays.hydro || util.pays.water) out.tenantPays = util.pays;
 
   // Build the found-fields list in a stable, display order.
   const order: ParsedListingFieldKey[] = [

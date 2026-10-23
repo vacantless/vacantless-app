@@ -363,5 +363,33 @@ First and last month required. Listed by owner.`;
   ok("2 underground parking spaces", (r.parking ?? "").startsWith("2 underground parking spaces"));
 }
 
+// S733: what the tenant pays, kept apart from "not mentioned".
+{
+  const r = parseMlsListing(CLASSIFIED);
+  ok("classified: tenant pays hydro", r.tenantPays?.hydro === true);
+  ok("classified: heat and water are not 'tenant pays'", r.tenantPays?.heat === false && r.tenantPays?.water === false);
+}
+{
+  const r = parseMlsListing("2 bedroom apartment, $1,800 plus utilities.");
+  ok("plus utilities -> tenant pays all three", r.tenantPays?.heat === true && r.tenantPays?.hydro === true && r.tenantPays?.water === true);
+}
+{
+  const r = parseMlsListing("Rent $1,400 + hydro. Water included.");
+  ok("+ hydro -> tenant pays hydro", r.tenantPays?.hydro === true);
+  ok("water included is not tenant pays", r.waterIncluded === true && r.tenantPays?.water === false);
+}
+{
+  const r = parseMlsListing("Heat Incl: Y\nHydro Incl: N\nWater Incl: Y");
+  ok("Hydro Incl: N -> tenant pays hydro", r.tenantPays?.hydro === true && r.tenantPays?.heat === false);
+}
+{
+  const r = parseMlsListing("Tenant responsible for heat and hydro. Hydro is extra.");
+  ok("tenant responsible for heat and hydro", r.tenantPays?.heat === true && r.tenantPays?.hydro === true && r.tenantPays?.water === false);
+}
+{
+  const r = parseMlsListing("Bright 1 bedroom, 600 sq ft, near transit.");
+  ok("no utility words -> no tenantPays", r.tenantPays === undefined);
+}
+
 console.log(`\nmls-import: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

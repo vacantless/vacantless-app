@@ -54,6 +54,7 @@ import {
 } from "../actions";
 import type { GeocodeSuggestion } from "@/lib/geocode";
 import { mergeAddressSuggestion } from "@/lib/address-merge";
+import { POSTING_ADDON_HREF } from "@/lib/billing";
 
 const PDF_WORKER_SRC = "/pdf.worker.min.mjs";
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
@@ -121,7 +122,43 @@ const READINESS_SHOWN = new Set<ChannelReadiness["channel"]>([
   "instagram",
 ]);
 
-function ReadinessMeter({ entries: allEntries }: { entries: ChannelReadiness[] }) {
+// S733: the missing item that lives in Settings, not in this form. It opens in a
+// new tab so the unsaved rental is not lost.
+const CONTACT_PHONE_HREF = "/dashboard/settings?tab=brand#public-contact-phone";
+const isContactPhoneItem = (item: string) => /contact phone/i.test(item);
+
+function MissingList({ items }: { items: string[] }) {
+  return (
+    <>
+      {items.map((item, i) => (
+        <span key={item}>
+          {i > 0 ? ", " : ""}
+          {isContactPhoneItem(item) ? (
+            <a
+              href={CONTACT_PHONE_HREF}
+              target="_blank"
+              rel="noopener"
+              className="font-semibold underline"
+            >
+              Contact phone, add it in Settings
+            </a>
+          ) : (
+            item
+          )}
+        </span>
+      ))}
+    </>
+  );
+}
+
+function ReadinessMeter({
+  entries: allEntries,
+  postingAddonChannels = [],
+}: {
+  entries: ChannelReadiness[];
+  /** S733: sites only the Posting add-on posts, for an org without it. */
+  postingAddonChannels?: readonly string[];
+}) {
   const entries = allEntries.filter((entry) => READINESS_SHOWN.has(entry.channel));
   return (
     <aside className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:sticky lg:top-4">
@@ -144,6 +181,29 @@ function ReadinessMeter({ entries: allEntries }: { entries: ChannelReadiness[] }
             key={entry.channel}
             className="rounded-lg border border-gray-100 bg-gray-50/70 p-3"
           >
+            {postingAddonChannels.includes(entry.channel) ? (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-gray-900">{entry.label}</p>
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                    Posting add-on
+                  </span>
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-gray-500">
+                  We post it for you with the{" "}
+                  <a
+                    href={POSTING_ADDON_HREF}
+                    target="_blank"
+                    rel="noopener"
+                    className="font-semibold underline"
+                  >
+                    Posting add-on
+                  </a>
+                  .
+                </p>
+              </>
+            ) : (
+            <>
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-medium text-gray-900">{entry.label}</p>
               <span
@@ -169,15 +229,17 @@ function ReadinessMeter({ entries: allEntries }: { entries: ChannelReadiness[] }
             )}
             {entry.missingRequired.length > 0 && (
               <p className="mt-2 text-xs leading-relaxed text-red-700">
-                Needs: {entry.missingRequired.join(", ")}
+                Needs: <MissingList items={entry.missingRequired} />
               </p>
             )}
             {entry.missingRequired.length === 0 &&
               entry.missingRecommended.length > 0 && (
                 <p className="mt-2 text-xs leading-relaxed text-amber-700">
-                  Improves reach: {entry.missingRecommended.join(", ")}
+                  Improves reach: <MissingList items={entry.missingRecommended} />
                 </p>
               )}
+            </>
+            )}
           </div>
         ))}
       </div>
@@ -218,6 +280,7 @@ export function AddPropertyV2Form({
   defaultForRentBy = "owner",
   policyDefaults = {},
   hiddenReadinessChannels = [],
+  postingAddonChannels = [],
 }: {
   availabilityWindowCount: number;
   replyToEmail: string | null;
@@ -230,6 +293,8 @@ export function AddPropertyV2Form({
   /** S705: readiness rows for sites this org cannot use (Marketplace and
    *  Rentals.ca outside Agile), dropped from the panel. */
   hiddenReadinessChannels?: readonly string[];
+  /** S733: Kijiji, Rentals.ca and Zumper when the org has no Posting add-on. */
+  postingAddonChannels?: readonly string[];
 }) {
   const [mode, setMode] = useState<"import" | "fresh">("fresh");
   const [draft, setDraft] = useState<AddPropertyV2Draft>(
@@ -1282,6 +1347,7 @@ export function AddPropertyV2Form({
         entries={readiness.filter(
           (entry) => !hiddenReadinessChannels.includes(entry.channel),
         )}
+        postingAddonChannels={postingAddonChannels}
       />
     </div>
   );

@@ -2561,7 +2561,13 @@ export default async function PropertyDetailPage({
         .filter((key) => isRobotPostedChannel(key))
         .filter(isPortalRequirementChannelKey)
     : [];
-  const listingPacketChannels = Array.from(
+  // S733: without the Posting add-on the robot sites are not something this
+  // landlord can post, so they do not count toward "N/M sites ready" or the
+  // details the listing "needs" (a Free org read "1/2 sites ready" because
+  // Kijiji was in the default set).
+  const postableByThisOrg = (key: string) =>
+    robotPostingAccess.allowed || !isRobotPostedChannel(key);
+  const packetChannelsAll = Array.from(
     new Set([
       ...(activeLaunchPortalChannels.length > 0
         ? activeLaunchPortalChannels
@@ -2569,6 +2575,15 @@ export default async function PropertyDetailPage({
       ...robotPortalChannels,
     ]),
   );
+  const packetChannelsPostable = packetChannelsAll.filter(postableByThisOrg);
+  // An empty list means "every site" to buildListingPacketReadiness, so fall
+  // back to the default sites this org can post rather than to all of them.
+  const listingPacketChannels =
+    packetChannelsPostable.length > 0
+      ? packetChannelsPostable
+      : defaultLaunchPortalChannels.filter(postableByThisOrg).length > 0
+        ? defaultLaunchPortalChannels.filter(postableByThisOrg)
+        : packetChannelsAll;
   // S692 (SPEC-S688 Slice 2 section 4.1): once the question sheet exists
   // (wizard flag on AND migration 0226 applied), the packet facts the sheet can
   // answer come from the sheet's own held-rules, so the card and the sheet

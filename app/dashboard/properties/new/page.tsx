@@ -6,7 +6,13 @@ import { PageHeader, SECONDARY_ACTION_CLASS } from "@/components/ui";
 import { canUseListingAiImport } from "@/lib/billing";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { getCurrentOrg } from "@/lib/org";
-import { isHiddenForOrg, MARKETPLACE_CHANNEL_KEY, RENTALS_CA_CHANNEL_KEY } from "@/lib/posting-lanes";
+import {
+  isHiddenForOrg,
+  MARKETPLACE_CHANNEL_KEY,
+  RENTALS_CA_CHANNEL_KEY,
+  ROBOT_POSTED_CHANNELS,
+} from "@/lib/posting-lanes";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { createClient } from "@/lib/supabase/server";
 import { AddPropertyV2Form } from "./add-property-form";
 
@@ -38,6 +44,11 @@ export default async function NewPropertyPage({
     (orgListing as { for_rent_by?: string | null } | null)?.for_rent_by === "professional"
       ? "professional"
       : "owner";
+
+  // S733: without the Posting add-on, Kijiji, Rentals.ca and Zumper are not
+  // something this landlord can post yet; the column says so instead of
+  // listing their requirements as "Needs".
+  const robotPostingAccess = await readRobotPostingAccess(supabase, org.id);
 
   const aiImageImportEnabled =
     !!process.env.LISTING_AI_IMPORT_ENABLED && canUseListingAiImport(org.plan);
@@ -73,6 +84,7 @@ export default async function NewPropertyPage({
           smoking: org.policy_smoking ?? null,
           ac_type: org.policy_ac_type ?? null,
         }}
+        postingAddonChannels={robotPostingAccess.allowed ? [] : [...ROBOT_POSTED_CHANNELS]}
         hiddenReadinessChannels={[
           // The readiness panel names Marketplace "facebook_marketplace".
           ...(isHiddenForOrg(MARKETPLACE_CHANNEL_KEY, org.id) ? ["facebook_marketplace"] : []),

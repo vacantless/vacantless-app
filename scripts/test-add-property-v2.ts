@@ -107,6 +107,20 @@ ok("draft facts map rent", facts.rent_cents === 245000);
 ok("draft facts derive pet friendly", facts.pet_friendly === true);
 ok("draft facts keep heat included", facts.heat_included === true);
 
+// S733: "tenant pays hydro" in a pasted ad selects "Tenant pays", not "Unknown".
+{
+  const pays = {
+    ...emptyParsedListing(),
+    heatIncluded: true,
+    waterIncluded: true,
+    tenantPays: { heat: false, hydro: true, water: false },
+  };
+  const d = addPropertyV2DraftFromListing(pays, null).draft;
+  ok("tenant pays hydro -> hydro select false", d.hydro_included === "false");
+  ok("heat included stays true", d.heat_included === "true");
+  ok("no mention stays Unknown", addPropertyV2DraftFromListing(emptyParsedListing(), null).draft.hydro_included === "");
+}
+
 if (failed > 0) {
   console.error(`add-property-v2: ${passed} passed, ${failed} failed`);
   process.exit(1);
