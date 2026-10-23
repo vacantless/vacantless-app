@@ -150,6 +150,7 @@ import {
   validateImageUrl,
   isBlockedAddress,
   sniffImageType,
+  nodeHasBrotliFix,
 } from "@/lib/image-url-import";
 import {
   parseDropboxFolderUrl,
@@ -3801,6 +3802,9 @@ export async function importPropertyPhotosFromUrls(formData: FormData) {
 
   const urls = parseImageUrls(String(formData.get("photo_urls") ?? ""));
   if (urls.length === 0) fail("urlnone");
+  // S733: no fetch of a landlord-typed link while the server's Node lacks the
+  // Brotli fix (lib/image-url-import nodeHasBrotliFix).
+  if (!nodeHasBrotliFix(process.version)) fail("urlpaused");
 
   const supabase = createClient();
 

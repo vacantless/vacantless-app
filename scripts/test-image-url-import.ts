@@ -12,6 +12,7 @@ import {
   imageTypeFromContentType,
   sniffImageType,
   importUrlErrorMessage,
+  nodeHasBrotliFix,
 } from "../lib/image-url-import";
 
 let passed = 0;
@@ -161,5 +162,16 @@ ok("msg: urlfailed mentions direct", /direct/i.test(importUrlErrorMessage("urlfa
 ok("msg: unknown -> generic", /try again/i.test(importUrlErrorMessage("???")));
 
 // --- summary ---------------------------------------------------------------
+// S733: link import waits for a Node with the Brotli fix.
+for (const [v, want] of [
+  ["v24.21.0", false], ["v24.22.0", false], ["v24.22.1", true], ["v24.23.0", true],
+  ["v22.23.3", false], ["v22.23.4", true], ["v22.24.0", true],
+  ["v26.12.0", false], ["v26.12.1", true], ["v27.0.0", true],
+  ["v20.19.0", false], ["v25.9.0", false], ["", false],
+] as Array<[string, boolean]>) {
+  ok(`node fix: ${v || "empty"} -> ${want}`, nodeHasBrotliFix(v) === want);
+}
+ok("msg: urlpaused says paused, no parentheses", /paused/.test(importUrlErrorMessage("urlpaused")) && !/[()]/.test(importUrlErrorMessage("urlpaused")));
+
 console.log(`\nimage-url-import: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

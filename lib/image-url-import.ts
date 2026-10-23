@@ -244,7 +244,26 @@ export function sniffImageType(
 // Result messaging
 // ---------------------------------------------------------------------------
 
-export type ImportUrlError = "urlnone" | "urlmax" | "urlfailed";
+export type ImportUrlError = "urlnone" | "urlmax" | "urlfailed" | "urlpaused";
+
+/**
+ * S733: Node2Shell (CVE-2026-111497, fixed 2026-10-21 in 22.23.4, 24.22.1 and
+ * 26.12.1) lets a server that decodes attacker-controlled Brotli run code.
+ * fetch() decodes a Brotli response whatever we ask for, so fetching a
+ * landlord-typed link is the one path an outsider controls. Vercel sets the
+ * Node patch level (v24.21.0 on 2026-10-23), so link import stays off until
+ * the server runs a fixed Node, then turns itself back on.
+ */
+export function nodeHasBrotliFix(version: string): boolean {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec(String(version ?? "").trim());
+  if (!m) return false;
+  const [maj, min, pat] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const atLeast = (a: number, b: number) => min > a || (min === a && pat >= b);
+  if (maj === 22) return atLeast(23, 4);
+  if (maj === 24) return atLeast(22, 1);
+  if (maj === 26) return atLeast(12, 1);
+  return maj > 26;
+}
 
 /** Plain-language copy for a URL-import failure surfaced via ?photoerr=. */
 export function importUrlErrorMessage(reason: string): string {
@@ -253,6 +272,8 @@ export function importUrlErrorMessage(reason: string): string {
       return "No image links found. Paste one direct image link per line (each should end in .jpg, .png, .webp, or .gif).";
     case "urlmax":
       return "That would go over this rental's photo limit. Remove a few links and try again.";
+    case "urlpaused":
+      return "Importing photos from links is paused for a few days for a security update. Upload the photos from your computer instead.";
     case "urlfailed":
       return "None of those links could be imported. Make sure each is a direct, public image link (not a gallery or login-protected page).";
     default:
