@@ -35,6 +35,8 @@ function ok(name: string, cond: boolean) {
   ok("message includes rent", message.includes("$2,450/mo"));
   ok("message includes tracked public URL", message.includes("https://app.test/r/prop1?p=post1"));
   ok("message has no em dash", !/[—–]/.test(message));
+  ok("message sentence stands without the link (S734)", message.includes("Book a viewing online at the link below.\nhttps://app.test/r/prop1?p=post1"));
+  ok("message has no bare colon line", !/:\s*$/m.test(message));
 }
 {
   const message = buildPageFeedMessage({

@@ -187,6 +187,7 @@ import { sqftToSave } from "@/lib/sqft-estimate-server";
 import { copyBuildingPhotosTo, spreadBuildingPhotos } from "@/lib/building-photos-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
+import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
 import { isUnavailableStatus } from "@/lib/ads-still-up";
 import {
   listChannelTileStatuses as listChannelTileStatusesFromAccounts,
@@ -1186,8 +1187,17 @@ export async function updateProperty(formData: FormData) {
     await maybePrepareAvailableListing(supabase, orgAfterSave, id);
   }
 
-  // S723: the rental just left the market; email any ads still up (lib/ads-still-up.ts).
+  // S734: the rental just left the market. First delete the Facebook Page
+  // post we made (the one ad the product can take down itself), then email
+  // any ads still up on the landlord's own accounts (lib/ads-still-up.ts).
+  let facebookPostsTakenDown = 0;
   if (!isUnavailableStatus(priorStatus) && isUnavailableStatus(effectiveStatus) && orgAfterSave) {
+    const fb = await takeDownFacebookPagePosts({
+      supabase,
+      organizationId: orgAfterSave.id,
+      propertyId: id,
+    });
+    facebookPostsTakenDown = fb.removed.length;
     await notifyAdsStillUp({ supabase, org: orgAfterSave, propertyId: id });
   }
 
@@ -1208,7 +1218,7 @@ export async function updateProperty(formData: FormData) {
   redirect(
     `/dashboard/properties/${id}?${relistBlocked ? "relist=confirm" : capBlocked ? "saved=1&publish=plan" : "saved=1"}${
       tourRejected ? "&tourerr=host" : ""
-    }${videoRejected ? "&videoerr=host" : ""}${returnTab ? `&tab=${returnTab}` : ""}`,
+    }${videoRejected ? "&videoerr=host" : ""}${facebookPostsTakenDown > 0 ? "&fbdown=1" : ""}${returnTab ? `&tab=${returnTab}` : ""}`,
   );
 }
 
@@ -1745,6 +1755,7 @@ export async function archiveProperty(formData: FormData) {
   // S723: archiving does not delete outside ads; tell the landlord which are
   // still up (skipped when it was already off the market, so no repeat email).
   if (!isUnavailableStatus(p.status)) {
+    await takeDownFacebookPagePosts({ supabase, organizationId: org.id, propertyId: id });
     await notifyAdsStillUp({ supabase, org, propertyId: id });
   }
 
@@ -2078,7 +2089,11 @@ export async function addListingPost(formData: FormData) {
   // inputs clear on a soft-nav redirect (S226 QA-audit form-reset fix). The
   // `post=added` flag is kept separate so the existing success banner logic is
   // untouched.
-  redirect(`/dashboard/properties/${propertyId}?post=added&pn=${Date.now().toString(36)}`);
+  // S734: land on the sites view, where the new Live chip is, not on the
+  // (often empty) Renters tab.
+  redirect(
+    `/dashboard/properties/${propertyId}?post=added&pn=${Date.now().toString(36)}&tab=distribute#distribute-header`,
+  );
 }
 
 export async function updateListingPost(formData: FormData) {

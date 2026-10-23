@@ -54,6 +54,8 @@ import { MessageReplyCard } from "./message-reply-card";
 import { RenewAdsCard } from "./renew-ads-card";
 import { PageWeeklyPostsCard } from "./page-weekly-posts-card";
 import { MarketingKitCard } from "./marketing-kit-card";
+import { PostedResultsCard } from "./posted-results-card";
+import { postedResultsNextSteps, postedResultsSites } from "@/lib/posted-results";
 import { VideoAdCard } from "./video-ad-card";
 import { publicAddressLabel } from "@/lib/address-privacy";
 import { buildMarketingKit, qrFilename } from "@/lib/listing-marketing";
@@ -862,6 +864,8 @@ export default async function PropertyDetailPage({
     // One-click Publish (B1): published=1 confirms the rental went Live;
     // publish=needs means the basics required to share aren't set yet.
     published?: string;
+    /** S734: we deleted the Facebook Page post when the rental left the market. */
+    fbdown?: string;
     publish?: string;
     blasted?: string;
     post?: string;
@@ -2801,6 +2805,7 @@ export default async function PropertyDetailPage({
           statusPhrase={adsStatusPhrase(p.status, !!(p as { archived_at?: string | null }).archived_at)}
           posts={adsStillUp(postRows)}
           justMarked={searchParams.ad === "down"}
+          facebookTakenDown={searchParams.fbdown === "1"}
         />
       )}
 
@@ -2816,21 +2821,22 @@ export default async function PropertyDetailPage({
         </p>
       )}
 
-      {/* One-click Publish (B1): confirm the rental is now Live and point the
-          operator straight at the link to share. */}
+      {/* S734: after Set Live or Post everywhere, show every live ad with its
+          link, the booking link, what happens next and the free sites still
+          to add (lib/posted-results). Replaces the one green line. */}
       {searchParams.published && (
-        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
-          <strong>Your rental is now Live.</strong> Share this link with
-          renters so they can book a viewing:{" "}
-          <a
-            href={publicUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="break-all font-semibold underline"
-          >
-            {publicUrl}
-          </a>
-        </p>
+        <PostedResultsCard
+          publicUrl={publicUrl}
+          sites={postedResultsSites(postRows)}
+          nextSteps={postedResultsNextSteps({
+            propertyId: p.id,
+            liveKeys: postedResultsSites(postRows).map((site) => site.key),
+            facebookPageConnected:
+              channelAccountByKey.get("facebook_feed")?.status === "connected",
+            robotPostingAllowed: robotPostingAccess.allowed,
+            marketplaceKitAvailable: marketplaceKit != null,
+          })}
+        />
       )}
 
       {/* Publish blocked because the basics required to share aren't set yet. */}
@@ -2984,7 +2990,7 @@ export default async function PropertyDetailPage({
       {searchParams.post && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           {searchParams.post === "added"
-            ? "Listing post added."
+            ? "Saved. This site now shows as Live below."
             : searchParams.post === "removed"
               ? "Listing post removed."
               : searchParams.post === "renewed"

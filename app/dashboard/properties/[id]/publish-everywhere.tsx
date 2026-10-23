@@ -62,8 +62,9 @@ import {
 import {
   conciergeUsageLabel,
   POSTING_ADDON_HREF,
-  POSTING_ADDON_NOTE,
+  POSTING_OFFER,
 } from "@/lib/billing";
+import { POSTING_OFFER_PROOF } from "@/lib/proof-stats";
 import { channelByKey, firstRunCostLine, firstRunIsFree } from "@/lib/distribution-channels";
 import type {
   DistributeChannelCard,
@@ -239,16 +240,28 @@ function ChannelAutomationAction({
   return null;
 }
 
-// S713: what a robot site (Kijiji, Rentals.ca, Zumper) shows instead of its
-// post or sign-in button when the org has no Posting add-on.
-function PostingAddonNote({ className = "" }: { className?: string }) {
+// S734: one Posting offer for the three robot sites, shown once under the
+// list, instead of "Part of the Posting add-on. $49 a month. See Billing" on
+// every locked tile (three prices per tile read as "free site, but $49").
+function PostingOfferCard() {
   return (
-    <p className={`text-[12px] text-gray-600 ${className}`}>
-      {POSTING_ADDON_NOTE}{" "}
-      <a href={POSTING_ADDON_HREF} className="font-semibold text-indigo-700 hover:underline">
-        See Billing →
+    <li
+      id="posting-offer"
+      className="rounded-xl border border-indigo-200 bg-white p-4 shadow-sm"
+    >
+      <p className="text-sm font-semibold text-gray-900">{POSTING_OFFER.title}</p>
+      <p className="mt-1 text-[12.5px] leading-relaxed text-gray-600">{POSTING_OFFER.body}</p>
+      <p className="mt-1 text-[12.5px] text-gray-900">
+        <span className="font-semibold">{POSTING_OFFER.price}</span> {POSTING_OFFER.fees}
+      </p>
+      <p className="mt-1 text-[11.5px] text-gray-500">{POSTING_OFFER_PROOF}</p>
+      <a
+        href={POSTING_ADDON_HREF}
+        className="mt-3 inline-flex rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
+      >
+        {POSTING_OFFER.action} →
       </a>
-    </p>
+    </li>
   );
 }
 
@@ -285,8 +298,10 @@ function ChannelRow({
   // S705: a Facebook Page or Instagram row connects in Settings (where the
   // Connect / Disconnect controls live) and says "Connect", not "Sign in once".
   const isMetaRow = row.key === "facebook_feed" || row.key === "instagram";
+  // S734: a connected Page that only needs "Allow us to post" showed the
+  // "Connect" link again; it now shows "Needs your OK" over the Allow button.
   const connectHref =
-    row.mode !== "needs_connection" || locked
+    row.mode !== "needs_connection" || locked || row.automationAction === "authorize"
       ? null
       : isMetaRow
         ? "/dashboard/settings?tab=distribution#facebook-page"
@@ -330,7 +345,7 @@ function ChannelRow({
       {costLine ? (
         <p className="ml-10 text-[11px] leading-snug text-gray-500">{costLine}</p>
       ) : null}
-      {locked ? <PostingAddonNote className="ml-10 mt-0.5" /> : null}
+
       {propertyId && row.automationAction ? (
         <div className="ml-10">
           <ChannelAutomationAction propertyId={propertyId} row={row} />
@@ -588,7 +603,7 @@ export function PublishEverywhere({
                   className="inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
                 >
                   <Icons.bolt className="h-4 w-4" />
-                  Post your edits to every site
+                  {proofSavedCount > 0 ? "Post your edits to every site" : "Post everywhere"}
                 </button>
               )}
             </div>
@@ -836,6 +851,9 @@ function ForYouHandoff({
             adPreview={adPreview}
           />
         ))}
+        {!robotPostingAllowed &&
+          !postingBlocker &&
+          rows.some((row) => isRobotPostedChannel(row.key)) && <PostingOfferCard />}
       </ul>
       {children ? (
         <div className="mt-3 rounded-xl border border-indigo-100 bg-white px-3 py-1">
@@ -961,6 +979,8 @@ function ForYouRow({
           ? { label: "Getting it ready", cls: "bg-amber-50 text-amber-700" }
         : working
           ? { label: "We're posting it", cls: "bg-amber-50 text-amber-700" }
+          : repostable
+            ? { label: "Needs a repost", cls: "bg-amber-50 text-amber-700" }
           : paid
             ? { label: "Not posted. Site fee", cls: "bg-indigo-50 text-indigo-700" }
             : { label: "Not posted yet", cls: "bg-indigo-50 text-indigo-700" };
@@ -992,9 +1012,7 @@ function ForYouRow({
         </p>
       )}
 
-      {locked ? (
-        <PostingAddonNote className="mt-2" />
-      ) : postingBlocked && !isLive ? (
+      {locked ? null : postingBlocked && !isLive ? (
         <p className="mt-2 text-[12px] leading-relaxed text-indigo-900/70">
           Finish your listing first. Sign-in and any site fee come after the
           details are complete.

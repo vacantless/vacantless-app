@@ -7,19 +7,24 @@ export function AdsStillUpCard({
   statusPhrase,
   posts,
   justMarked,
+  facebookTakenDown,
 }: {
   propertyId: string;
   statusPhrase: string;
   posts: StillUpPost[];
   justMarked: boolean;
+  /** S734: we just deleted the Facebook Page post ourselves. */
+  facebookTakenDown?: boolean;
 }) {
   if (posts.length === 0) {
-    return justMarked ? (
+    return justMarked || facebookTakenDown ? (
       <p
         id="ads-still-up"
         className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700"
       >
-        Done. No ads are left showing this rental.
+        {facebookTakenDown
+          ? "We took your Facebook Page post down. No ads are left showing this rental."
+          : "Done. No ads are left showing this rental."}
       </p>
     ) : null;
   }
@@ -31,9 +36,12 @@ export function AdsStillUpCard({
       <p className="font-semibold">
         This rental {statusPhrase}, but {posts.length === 1 ? "1 ad still shows it" : `${posts.length} ads still show it`}.
       </p>
+      {facebookTakenDown && (
+        <p className="mt-1 text-green-800">We took your Facebook Page post down.</p>
+      )}
       <p className="mt-1 text-amber-800">
-        We can&apos;t delete ads on your own accounts. Open each one, delete it on that site, then press
-        &quot;I took it down&quot;.
+        These ads are on your own site accounts, so only you can delete them. Open each one and delete
+        it on that site. Then press &quot;I took it down&quot;.
       </p>
       <ul className="mt-3 space-y-2">
         {posts.map((post) => (

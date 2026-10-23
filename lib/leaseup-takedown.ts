@@ -12,7 +12,6 @@ import type { Org } from "@/lib/org";
 // enqueue marks these rows transport='takedown' so the publish-prep cron never
 // claims them as new-post jobs.
 export const LEASEUP_TAKEDOWN_FEATURE_FLAG = "LEASEUP_TAKEDOWN_ENABLED";
-const FB_PAGE_FEED = "facebook_feed";
 const APP_URL = (
   process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com"
 ).replace(/\/+$/, "");
@@ -335,10 +334,11 @@ export async function handleLeaseupAdLifecycle(args: {
     });
     if (!runId) continue;
 
-    const automatedDelete =
-      post.portal === FB_PAGE_FEED &&
-      automationAuthorized &&
-      account?.account_status === "connected";
+    // S734: Facebook Page posts are deleted right away by
+    // lib/facebook-page-takedown before this runs, so a Page post still live
+    // here is one we could not delete; it becomes the landlord's task like
+    // any other site. No queued "automated" item (nothing ever ran those).
+    const automatedDelete = false;
     const runItemId = await enqueueLeaseupTakedownItem(supabase, {
       organizationId: org.id,
       propertyId,

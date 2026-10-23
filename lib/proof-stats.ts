@@ -10,3 +10,9 @@ export const LEASING_PROOF_STATS: readonly { value: string; label: string }[] = 
   { value: "107", label: "viewings booked." },
   { value: "8 in 10", label: "viewings booked by the renter, with no phone tag." },
 ];
+
+// S734: the one proof line under the Posting offer (rental page, Sign in to
+// your sites). Counted from the database on 2026-10-23 for Agile Real Estate
+// Group: 276 leads, 113 showings. Update from the database, never from memory.
+export const POSTING_OFFER_PROOF =
+  "Our first customer has five rentals in Windsor. 276 renter inquiries and 113 viewings, all in one list. Counted 2026-10-23.";

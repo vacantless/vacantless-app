@@ -50,6 +50,7 @@ ok("sqft reaches the model", lines.includes("Square feet: 600"));
 eq("no location when none given", autoListingFactLines(thin).some((l) => l.startsWith("Location")), false);
 const prompt = buildAutoListingPrompt(thin, "fallback", { location: "Stranger Test Ave, Windsor" });
 ok("prompt says use every fact", /Use every fact listed/.test(prompt));
+ok("prompt keeps rent and utilities out of the prose (S734)", /except the rent, the available date and the included utilities/.test(prompt));
 ok("prompt forbids house number and neighbourhood", /never add a house number, unit, or neighbourhood/.test(prompt));
 ok("prompt still forbids inventing", /Do not add or imply any feature/.test(prompt));
 

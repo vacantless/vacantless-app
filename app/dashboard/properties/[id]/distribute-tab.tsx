@@ -23,7 +23,6 @@ import {
 import { startConciergePackCheckout } from "../../billing/actions";
 import type { PartnerStatus } from "@/lib/distribution-partner";
 import {
-  channelModeLabel,
   channelStatusLabel,
   channelStatusTone,
   daysBetween,
@@ -340,11 +339,21 @@ export function DistributeTab({
   // S705: the live-ad-link list shows the sites this landlord can see (the
   // same list as the posting surface), plus any site that already holds a
   // saved link, so no saved link is ever stranded out of sight.
+  // S734: the list used to show every channel the code knows about, so a
+  // Free landlord opened "Manage links" and found RentFaster, Viewit,
+  // SpaceList, CoStar, WhatsApp, LinkedIn and Snapchat marked "We help you
+  // post" and "Ready to post". None of those have a working path. Only sites
+  // with a working path (or a saved link) are listed; the rest go under
+  // "Other live ad links".
+  const hasWorkingPath = (card: DistributeChannelCard) =>
+    card.channel.integrationStatus === "live" ||
+    (card.channel.integrationStatus === "planned" && card.channel.selfPost === true);
   const linkCards = channelCards.filter(
     (card) =>
       card.posts.length > 0 ||
-      shownChannelKeys === null ||
-      shownChannelKeys.includes(card.channel.key as string),
+      (hasWorkingPath(card) &&
+        (shownChannelKeys === null ||
+          shownChannelKeys.includes(card.channel.key as string))),
   );
   const channelCardGroups = groupByDistributionChannelDisplayGroup(
     linkCards,
@@ -936,15 +945,10 @@ function ChannelLinks({
             <h4 className="text-sm font-semibold text-gray-900">
               {channel.label}
             </h4>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                brokerRail
-                  ? "bg-slate-900 text-white"
-                  : "bg-brand/10 text-brand"
-              }`}
-            >
-              {channelModeLabel(channel.mode)}
-            </span>
+            {/* S734: the mode chip ("We help you post", "Partner site or
+                help", "API posting") made claims the site list above does
+                not; the sites list explains each site, this list only holds
+                links. */}
             <span
               className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE_CHIP[tone]}`}
             >

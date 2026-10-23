@@ -34,6 +34,7 @@ import { loadGuidelineLookup } from "@/lib/guideline-server";
 import type { N1Snapshot } from "@/lib/n1-render";
 import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
+import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
 import {
   resolveRentReconciliation,
   type RentAdjustmentSource,
@@ -322,6 +323,9 @@ export async function createTenancy(formData: FormData) {
       .select("id")
       .maybeSingle();
     if (leasedProperty?.id) {
+      // S734: delete our own Facebook Page post before the lease-up ladder
+      // decides what is left for the landlord to take down.
+      await takeDownFacebookPagePosts({ supabase, organizationId: org.id, propertyId });
       await handleLeaseupAdLifecycle({ supabase, org, propertyId });
       // Same as the properties-page lease-up: close what nobody needs posted.
       await closeStaleConciergeItems(supabase, {

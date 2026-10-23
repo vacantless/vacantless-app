@@ -630,6 +630,16 @@ export function canUseRobotPosting(org: RobotPostingOrg | null | undefined): boo
 export const POSTING_ADDON_NOTE = "Part of the Posting add-on. $49 a month.";
 export const POSTING_ADDON_HREF = "/dashboard/billing#posting-addon";
 
+// S734: one Posting offer card instead of three price tags on three tiles.
+export const POSTING_OFFER = {
+  title: "Add 3 more sites, posted for you",
+  body:
+    "We post this ad on Kijiji, Rentals.ca and Zumper + PadMapper for you. You sign in to each site once, about three minutes. We never see your password. You approve every ad before it goes up.",
+  price: "$49 a month with Growth.",
+  fees: "Site fees: Kijiji gives one free ad per account, then $33.84 each. Rentals.ca and Zumper are free.",
+  action: "Post on 3 more sites",
+} as const;
+
 // Find the subscription item that carries a given price, or null.
 export type SubscriptionItemShape = {
   id?: string | null;

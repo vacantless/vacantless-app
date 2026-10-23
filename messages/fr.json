@@ -111,7 +111,8 @@
       "button": "Voir l'option Publication"
     },
     "subNoAddon": "La page Facebook et Instagram se connectent ici gratuitement. Kijiji, Rentals.ca et Zumper sont publiés pour vous avec l'option Publication.",
-    "kindSelfPost": "Publiée depuis la trousse Marketplace de chaque logement. Par vous ou votre agent."
+    "kindSelfPost": "Publiée depuis la trousse Marketplace de chaque logement. Par vous ou votre agent.",
+    "groupFreeFirst": "Les sites gratuits d'abord. Kijiji, Rentals.ca et Zumper viennent avec Publication."
   },
   "stage2": {
     "title": "Parlez-nous de votre logement",

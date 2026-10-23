@@ -268,11 +268,21 @@ export async function buildLinkPortalsViewModel(
     };
   };
 
+  // S734: without the Posting add-on the free, one-click sites (Facebook
+  // Page, Instagram, the Marketplace kit) come first and the group is not
+  // headed "Ready to sign in" over three tiles that have no sign-in.
+  const freeFirst = (vms: LinkPortalTileVM[]) =>
+    robotAccess.allowed
+      ? vms
+      : [...vms].sort(
+          (a, b) =>
+            Number(isRobotPostedChannel(a.channel)) - Number(isRobotPostedChannel(b.channel)),
+        );
   const groups = groupStage1ChannelRows(rows)
     .map((group) => ({
       id: group.id,
-      title: t(group.titleKey),
-      rows: group.rows.map(toVM).filter((vm): vm is LinkPortalTileVM => vm !== null),
+      title: t(group.id === "ready" && !robotAccess.allowed ? "groupFreeFirst" : group.titleKey),
+      rows: freeFirst(group.rows.map(toVM).filter((vm): vm is LinkPortalTileVM => vm !== null)),
     }))
     // S702u: no "Not yet" list. Show only sites we can post to today.
     .filter((group) => group.id !== "coming" && group.rows.length > 0);

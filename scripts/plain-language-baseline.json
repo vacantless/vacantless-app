@@ -1,8 +1,8 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-10-22",
-  "checksum": "e72ee9326eb76f4857ac35a2ef82cf56b1f5044a687bed4fa7fba06d7c42299d",
+  "generated": "2026-10-23",
+  "checksum": "fd178e8f2a9705623c1f8fd5f4646386b8071999ce3bae915e6717bf191e36f9",
   "surfaces": [
     "app/agent/[token]/marketplace/[propertyId]/page.tsx",
     "app/dashboard/(wizard)/getting-started/page.tsx",
@@ -26,6 +26,7 @@
     "app/dashboard/properties/[id]/marketplace-row.tsx",
     "app/dashboard/properties/[id]/next-action-card.tsx",
     "app/dashboard/properties/[id]/page.tsx",
+    "app/dashboard/properties/[id]/posted-results-card.tsx",
     "app/dashboard/properties/[id]/publish-everywhere.tsx",
     "app/dashboard/properties/new/add-property-form.tsx",
     "app/dashboard/properties/new/page.tsx",
@@ -57,6 +58,7 @@
     "lib/listing-health.ts",
     "lib/listing-quality.ts",
     "lib/listing-state.ts",
+    "lib/posted-results.ts",
     "lib/site-signin.ts",
     "messages/en.json",
     "messages/fr.json"
@@ -153,7 +155,7 @@
     "app/dashboard/link-portals/connect-tiles.tsx": 2,
     "app/dashboard/link-portals/page.tsx": 1,
     "app/dashboard/not-found.tsx": 5,
-    "app/dashboard/properties/[id]/ads-still-up-card.tsx": 9,
+    "app/dashboard/properties/[id]/ads-still-up-card.tsx": 11,
     "app/dashboard/properties/[id]/confirm-publish-button.tsx": 13,
     "app/dashboard/properties/[id]/distribute-tab.tsx": 78,
     "app/dashboard/properties/[id]/lifecycle-rail.tsx": 4,
@@ -161,16 +163,17 @@
     "app/dashboard/properties/[id]/marketing-kit-card.tsx": 25,
     "app/dashboard/properties/[id]/marketplace-row.tsx": 13,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
-    "app/dashboard/properties/[id]/page.tsx": 417,
-    "app/dashboard/properties/[id]/publish-everywhere.tsx": 116,
-    "app/dashboard/properties/new/add-property-form.tsx": 105,
+    "app/dashboard/properties/[id]/page.tsx": 416,
+    "app/dashboard/properties/[id]/posted-results-card.tsx": 8,
+    "app/dashboard/properties/[id]/publish-everywhere.tsx": 118,
+    "app/dashboard/properties/new/add-property-form.tsx": 112,
     "app/dashboard/properties/new/page.tsx": 5,
     "app/dashboard/properties/page.tsx": 86,
     "app/dashboard/properties/readiness-chips.tsx": 12,
     "app/dashboard/properties/standard-policy/page.tsx": 65,
     "app/dashboard/send-live/page.tsx": 4,
     "app/dashboard/settings/facebook-page-card.tsx": 10,
-    "app/dashboard/settings/page.tsx": 310,
+    "app/dashboard/settings/page.tsx": 312,
     "app/dashboard/site-signin/[channel]/page.tsx": 19,
     "app/dashboard/site-signin/[channel]/window-panel.tsx": 10,
     "app/dashboard/today-lane.tsx": 5,
@@ -193,9 +196,10 @@
     "lib/listing-health.ts": 15,
     "lib/listing-quality.ts": 34,
     "lib/listing-state.ts": 10,
+    "lib/posted-results.ts": 11,
     "lib/site-signin.ts": 27,
-    "messages/en.json": 205,
-    "messages/fr.json": 205
+    "messages/en.json": 211,
+    "messages/fr.json": 211
   },
   "entries": [
     {
@@ -255,6 +259,12 @@
     {
       "rule": "parentheses",
       "file": "app/dashboard/automations/page.tsx",
+      "text": "(from your team and reply-to - add addresses above to change this)",
+      "count": 1
+    },
+    {
+      "rule": "parentheses",
+      "file": "app/dashboard/automations/page.tsx",
       "text": "Also send to (cc)",
       "count": 1
     },
@@ -307,6 +317,18 @@
       "count": 1
     },
     {
+      "rule": "all_caps",
+      "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "Advertised pet preference for the listing and feed. In Ontario a \"no pets\" lease clause is void (RTA s.14), this is a listing/screening field, not an enforceable rule.",
+      "count": 1
+    },
+    {
+      "rule": "ampersand_or_slash",
+      "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "Advertised pet preference for the listing and feed. In Ontario a \"no pets\" lease clause is void (RTA s.14), this is a listing/screening field, not an enforceable rule.",
+      "count": 1
+    },
+    {
       "rule": "ampersand_or_slash",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "no A/C",
@@ -351,6 +373,12 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "Advertised pet preference for the listing and feed. In Ontario a \"no pets\" lease clause is void (RTA s.14), this is a listing/screening field, not an enforceable rule.",
+      "count": 1
+    },
+    {
+      "rule": "banned_word",
+      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Auto-posting authorized.",
       "count": 2
     },
@@ -382,6 +410,12 @@
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Done-for-you posting is a Growth feature.",
+      "count": 1
+    },
+    {
+      "rule": "banned_word",
+      "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "from your pasted listing. Review everything below, especially the address, rent, and pet policy, then set it Live when it's right. It's saved as a Draft for now, so renters can't see it yet.",
       "count": 1
     },
     {
@@ -561,6 +595,12 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "This rental is marked Leased. The link still works, but anyone who opens it is told the unit is no longer available, they can't inquire or book a viewing.",
+      "count": 1
+    },
+    {
+      "rule": "banned_word",
+      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "This rental is not accepting inquiries in its current status. Set it Live again when you're ready for renters.",
       "count": 1
     },
@@ -645,6 +685,12 @@
     {
       "rule": "parentheses",
       "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "Advertised pet preference for the listing and feed. In Ontario a \"no pets\" lease clause is void (RTA s.14), this is a listing/screening field, not an enforceable rule.",
+      "count": 1
+    },
+    {
+      "rule": "parentheses",
+      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Approximate (street + city only)",
       "count": 1
     },
@@ -693,6 +739,12 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "{value} {value} couldn't be imported, make sure links are direct, public images and any Dropbox folder is shared so anyone with the link can view.",
+      "count": 1
+    },
+    {
+      "rule": "sentence_length",
+      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Add an asking rent to estimate dollars lost so far; the vacancy days are still tracked.",
       "count": 1
     },
@@ -705,7 +757,19 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "Advertised pet preference for the listing and feed. In Ontario a \"no pets\" lease clause is void (RTA s.14), this is a listing/screening field, not an enforceable rule.",
+      "count": 1
+    },
+    {
+      "rule": "sentence_length",
+      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Estimated with asking rent divided by 30 days, so the number stays honest and easy to audit.",
+      "count": 1
+    },
+    {
+      "rule": "sentence_length",
+      "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "from your pasted listing. Review everything below, especially the address, rent, and pet policy, then set it Live when it's right. It's saved as a Draft for now, so renters can't see it yet.",
       "count": 1
     },
     {
@@ -807,6 +871,18 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "This rental is marked Leased. The link still works, but anyone who opens it is told the unit is no longer available, they can't inquire or book a viewing.",
+      "count": 1
+    },
+    {
+      "rule": "sentence_length",
+      "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "This rental is Paused. The link still works, but anyone who opens it is told the unit isn't currently available, they can't inquire or book a viewing.",
+      "count": 1
+    },
+    {
+      "rule": "sentence_length",
+      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Turn on your Vacantless page. Then finish only the sites that need your sign-in or the link to your ad.",
       "count": 1
     },
@@ -820,6 +896,12 @@
       "rule": "sentence_length",
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "You can prepare and copy this wording now, but it doesn't include your public listing link and the rental can't take inquiries - use Set Live at the top of the page before you post it anywhere.",
+      "count": 1
+    },
+    {
+      "rule": "sentence_length",
+      "file": "app/dashboard/properties/[id]/page.tsx",
+      "text": "Your pasted listing didn't include any, and listings with photos get far more inquiries on Kijiji, Facebook, and Zumper.",
       "count": 1
     },
     {
@@ -877,9 +959,33 @@
       "count": 2
     },
     {
+      "rule": "all_caps",
+      "file": "app/dashboard/properties/standard-policy/page.tsx",
+      "text": "Applies to dogs when they're welcome. In Ontario a \"no pets\" lease clause is void (RTA s.14), this is a listing/screening preference, not an enforceable rule.",
+      "count": 1
+    },
+    {
+      "rule": "ampersand_or_slash",
+      "file": "app/dashboard/properties/standard-policy/page.tsx",
+      "text": "Applies to dogs when they're welcome. In Ontario a \"no pets\" lease clause is void (RTA s.14), this is a listing/screening preference, not an enforceable rule.",
+      "count": 1
+    },
+    {
       "rule": "ampersand_or_slash",
       "file": "app/dashboard/properties/standard-policy/page.tsx",
       "text": "no A/C",
+      "count": 1
+    },
+    {
+      "rule": "banned_word",
+      "file": "app/dashboard/properties/standard-policy/page.tsx",
+      "text": "Set your standard policy once. Every unit inherits it on its listings, copy, and rental-site feed, so you only re-enter a value where a building or unit genuinely differs.",
+      "count": 1
+    },
+    {
+      "rule": "parentheses",
+      "file": "app/dashboard/properties/standard-policy/page.tsx",
+      "text": "Applies to dogs when they're welcome. In Ontario a \"no pets\" lease clause is void (RTA s.14), this is a listing/screening preference, not an enforceable rule.",
       "count": 1
     },
     {
@@ -904,6 +1010,18 @@
       "rule": "parentheses",
       "file": "app/dashboard/properties/standard-policy/page.tsx",
       "text": "Your portfolio-wide baseline. Every unit inherits these unless a building (below) or the unit's own page overrides them.",
+      "count": 1
+    },
+    {
+      "rule": "sentence_length",
+      "file": "app/dashboard/properties/standard-policy/page.tsx",
+      "text": "Applies to dogs when they're welcome. In Ontario a \"no pets\" lease clause is void (RTA s.14), this is a listing/screening preference, not an enforceable rule.",
+      "count": 1
+    },
+    {
+      "rule": "sentence_length",
+      "file": "app/dashboard/properties/standard-policy/page.tsx",
+      "text": "Set your standard policy once. Every unit inherits it on its listings, copy, and rental-site feed, so you only re-enter a value where a building or unit genuinely differs.",
       "count": 1
     },
     {
@@ -982,6 +1100,12 @@
       "rule": "ampersand_or_slash",
       "file": "app/dashboard/settings/page.tsx",
       "text": "Your building defaults (lease term, A/C, smoking, on-site management) now live with your Rentals. Open to manage.",
+      "count": 1
+    },
+    {
+      "rule": "banned_word",
+      "file": "app/dashboard/settings/page.tsx",
+      "text": "- aggregators require one before they accept your feed.",
       "count": 1
     },
     {
@@ -1251,6 +1375,18 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/settings/page.tsx",
+      "text": "Saved. Texts start once your account's SMS is connected - nothing is sending yet.",
+      "count": 1
+    },
+    {
+      "rule": "banned_word",
+      "file": "app/dashboard/settings/page.tsx",
+      "text": "Sends a gentle, branded sequence of up to 2 reminders (around 2 and 5 days after the inquiry) inviting them to book a viewing. It stops automatically the moment a renter books, is marked lost, or moves further along.",
+      "count": 1
+    },
+    {
+      "rule": "banned_word",
+      "file": "app/dashboard/settings/page.tsx",
       "text": "Set spend limit",
       "count": 1
     },
@@ -1383,6 +1519,12 @@
     {
       "rule": "parentheses",
       "file": "app/dashboard/settings/page.tsx",
+      "text": "Sends a gentle, branded sequence of up to 2 reminders (around 2 and 5 days after the inquiry) inviting them to book a viewing. It stops automatically the moment a renter books, is marked lost, or moves further along.",
+      "count": 1
+    },
+    {
+      "rule": "parentheses",
+      "file": "app/dashboard/settings/page.tsx",
       "text": "Some fields weren't valid. Check the brand color (a hex like #0e8c8c).",
       "count": 1
     },
@@ -1390,6 +1532,12 @@
       "rule": "parentheses",
       "file": "app/dashboard/settings/page.tsx",
       "text": "The number renters can text or call when they arrive for a viewing. We put it in their booking confirmation and reminder. You can add an extension (for example 226-778-0014 ext 5). Leave blank to use your listing contact phone.",
+      "count": 1
+    },
+    {
+      "rule": "parentheses",
+      "file": "app/dashboard/settings/page.tsx",
+      "text": "The send delay must be a whole number of hours (0 to 336).",
       "count": 1
     },
     {
@@ -1449,8 +1597,20 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/settings/page.tsx",
+      "text": "Open the live page renters see when you share a listing link - pick any listing to preview its branded inquiry and booking page.",
+      "count": 1
+    },
+    {
+      "rule": "sentence_length",
+      "file": "app/dashboard/settings/page.tsx",
       "text": "Renters get a one-tap 1–5 star rating link once you mark their viewing as Attended. Results show on the viewing and in Reports.",
       "count": 1
+    },
+    {
+      "rule": "sentence_length",
+      "file": "app/dashboard/settings/page.tsx",
+      "text": "Sends a gentle, branded sequence of up to 2 reminders (around 2 and 5 days after the inquiry) inviting them to book a viewing. It stops automatically the moment a renter books, is marked lost, or moves further along.",
+      "count": 2
     },
     {
       "rule": "sentence_length",

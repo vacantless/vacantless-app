@@ -73,7 +73,9 @@ export function buildAutoListingPrompt(
     "Write a concise residential rental listing description from ONLY the facts below.",
     "Do not add or imply any feature, renovation, neighbourhood, amenity, policy, price, or claim that is not supplied.",
     "Do not target or exclude people. Describe the unit, not the renter.",
-    "Use every fact listed below; do not leave any out.",
+    // S734: the ad prints rent, available date and included utilities on their
+    // own lines under the description, so the prose said each of them twice.
+    "Use every fact listed below except the rent, the available date and the included utilities; those are printed under the description in every ad, so do not state them in the description.",
     "The location is a street name and city only: never add a house number, unit, or neighbourhood.",
     "No links. No em dashes. Plain text only. Two or three short paragraphs.",
     "Write money with a thousands comma, for example $1,500.",
