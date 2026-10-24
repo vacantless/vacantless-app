@@ -41,6 +41,11 @@ export const SWEEP_PATHS = [
   "/api/cron/team-unsubscribe-guard",
   // S720: the daily health email to Noam (sends once a day, 8 AM Toronto).
   "/api/cron/health-digest",
+  // S736: the founding free-period job was in the GitHub backup only; the
+  // test wants both lists the same, and the job is safe to run twice.
+  "/api/cron/founding-trial",
+  // S736: buys and releases texting numbers (lib/texting-numbers).
+  "/api/cron/texting-numbers",
 ] as const;
 
 export type SweepResult = {

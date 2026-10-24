@@ -17,9 +17,7 @@ import {
 import { isOrgFeatureKey } from "@/lib/feature-entitlements";
 import { isPlatformSwitchKey } from "@/lib/platform-switches";
 import { cleanOwnNumber } from "@/lib/org-sms-numbers";
-import { textingOnEmail } from "@/lib/texting-setup-emails";
-import { getUserByIdCached } from "@/lib/auth-email-cache";
-import { sendNotificationEmail } from "@/lib/email";
+import { emailLandlordTextingOn, releaseTwilioNumber } from "@/lib/texting-numbers-server";
 
 // Operator-initiated landlord onboarding (the scale version of WORKFLOW 112).
 // Double-gated: the page 404s for non-admins, AND this action rechecks the
@@ -226,6 +224,14 @@ export async function setOrgSmsNumberAsAdmin(formData: FormData): Promise<void> 
   const admin = createAdminClient();
   if (!admin) redirect("/dashboard/admin?numbers=error");
   if (mode === "remove") {
+    // S736: a number the app bought is released in Twilio first, so it stops billing.
+    const { data: existing } = await admin
+      .from("org_sms_numbers")
+      .select("twilio_sid")
+      .eq("organization_id", orgId)
+      .maybeSingle();
+    const twilioSid = (existing as { twilio_sid?: string | null } | null)?.twilio_sid ?? null;
+    if (twilioSid && !(await releaseTwilioNumber(twilioSid))) redirect("/dashboard/admin?numbers=error");
     const del = await admin.from("org_sms_numbers").delete().eq("organization_id", orgId);
     if (del.error) redirect("/dashboard/admin?numbers=error");
   } else {
@@ -262,32 +268,5 @@ export async function setOrgSmsNumberAsAdmin(formData: FormData): Promise<void> 
   redirect("/dashboard/admin?numbers=saved");
 }
 
-// S726g: the "Texting is on" email goes to the account's owner admins.
-async function emailLandlordTextingOn(
-  admin: NonNullable<ReturnType<typeof createAdminClient>>,
-  orgId: string,
-  phoneE164: string,
-): Promise<void> {
-  const [{ data: org }, { data: members }] = await Promise.all([
-    admin.from("organizations").select("name, brand_color, logo_url, reply_to_email").eq("id", orgId).maybeSingle(),
-    admin.from("memberships").select("user_id").eq("organization_id", orgId).eq("role", "owner_admin"),
-  ]);
-  const o = (org ?? {}) as { name?: string | null; brand_color?: string | null; logo_url?: string | null };
-  const mail = textingOnEmail({ orgName: o.name ?? null, phoneE164 });
-  const seen = new Set<string>();
-  for (const m of (members ?? []) as { user_id: string }[]) {
-    const { data } = await getUserByIdCached(admin, m.user_id);
-    const to = data.user?.email?.trim().toLowerCase();
-    if (!to || seen.has(to)) continue;
-    seen.add(to);
-    await sendNotificationEmail({
-      to_email: to,
-      subject: mail.subject,
-      body: mail.body,
-      org_name: o.name ?? "Vacantless",
-      brand_color: o.brand_color ?? null,
-      logo_url: o.logo_url ?? null,
-      reply_to_email: null,
-    }).catch(() => null);
-  }
-}
+// S736: the "Texting is on" email moved to lib/texting-numbers-server (emailLandlordTextingOn),
+// shared with the automatic purchase.

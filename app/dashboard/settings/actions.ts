@@ -50,6 +50,7 @@ import {
   channelCapability,
   isChannelAccountStatus,
 } from "@/lib/distribution-capabilities";
+import { autoNumbersOn, provisionTextingNumber } from "@/lib/texting-numbers-server";
 
 const LOGO_BUCKET = "org-logos";
 
@@ -1260,10 +1261,12 @@ export async function closeAccount(formData: FormData) {
   redirect("/account-closed");
 }
 
-// S726f: a Growth landlord asks for texting. We buy a local Twilio number and
-// add their org_sms_numbers row (SKILL N+113, admin page "Texting numbers").
-// The request turns their texting setting on so texts start the moment the
-// number is added, and emails the Vacantless admins.
+// S726f: a Growth landlord asks for texting. The request turns their texting
+// setting on so texts start the moment the number exists.
+// S736: the app now buys, sets up and switches on a local number itself
+// (lib/texting-numbers-server). If that try fails, the 15-minute sweep
+// retries; staff are emailed only after 5 failed tries. TEXTING_AUTO_NUMBERS=off
+// sends requests back to staff by email, as before.
 export async function requestTexting() {
   const org = await requireSettingsOrg();
   if (!canUseRenterSms(org.plan)) redirect("/dashboard/settings?tab=comms&sms=upgrade");
@@ -1274,6 +1277,14 @@ export async function requestTexting() {
     .update({ sms_requested_at: new Date().toISOString(), sms_enabled: true })
     .eq("id", org.id);
   if (error) redirect("/dashboard/settings?tab=comms&sms=error");
+
+  const admin = createAdminClient();
+  if (admin && autoNumbersOn()) {
+    // A fresh press starts the retry count again.
+    await admin.from("organizations").update({ sms_provision_attempts: 0, sms_provision_error: null }).eq("id", org.id);
+    const result = await provisionTextingNumber(admin, org.id, { fromPress: true });
+    redirect(`/dashboard/settings?tab=comms&sms=${result.ok ? "on" : "requested"}`);
+  }
 
   const {
     data: { user },

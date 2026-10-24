@@ -1,0 +1,25 @@
+S736b: texting numbers buy, set up and release themselves
+
+Before: a Growth landlord pressed "Turn on texting", the admins got an email,
+and staff bought a Twilio number by hand. Now:
+
+- The press buys a local Canadian number through Twilio's API (area code from
+  the rental's postal code, then the province, then anywhere in Canada; only
+  numbers that need no address), points its texts and calls at our app,
+  switches it on and emails the landlord "Texting is on". Settings says so.
+- /api/cron/texting-numbers (15-minute sweep and its GitHub backup) retries a
+  failed purchase an hour apart, at most 5 times; admins are emailed once at
+  the 5th failure, the only case a person is needed.
+- A number the app bought is released in Twilio 7 days after its account left
+  a plan with texting or closed; coming back inside the 7 days keeps it.
+  Agile's hand-set number (no twilio_sid) is never released. Staff "Remove"
+  releases an app-bought number too.
+- A 10-minute claim stops a double press or the sweep buying two numbers; a
+  number bought but not saved is released at once.
+- TEXTING_AUTO_NUMBERS=off sends requests back to staff by email.
+- Migration 0259 (applied): org_sms_numbers.twilio_sid, lapsed_since;
+  organizations.sms_provision_attempts, _tried_at, _error.
+- founding-trial added to SWEEP_PATHS so the list matches the GitHub backup.
+
+Tests: test-texting-numbers (50), sweep-timer, texting-setup-emails,
+org-sms-numbers, sms, plain-language.

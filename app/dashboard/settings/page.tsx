@@ -1938,9 +1938,9 @@ export default async function SettingsPage({
                   <>
                     <p className="font-medium text-gray-800">Texting is being set up.</p>
                     <p className="mt-1">
-                      We are getting a local number for your account. Texts go out within one
-                      business day. This card will then show your number. Until then, renters get
-                      every message by email.
+                      We are getting a local number for your account. This usually takes a few
+                      minutes. This card will then show your number. Until then, renters get every
+                      message by email.
                     </p>
                   </>
                 ) : canRenterSms ? (
@@ -1950,7 +1950,7 @@ export default async function SettingsPage({
                       Renters who leave a phone number get texts as well as email. They get their
                       booking confirmation and a reminder on the day. If they have not confirmed,
                       they also get one the day before. They can reply to you, and can turn texts
-                      off. We set up a local number for your account within one business day.
+                      off. We set up a local number for your account in about a minute.
                       Included in Growth, up to {SMS_MONTHLY_LIMIT} texts a month.
                     </p>
                     <button
@@ -1974,6 +1974,11 @@ export default async function SettingsPage({
             ) : (
             <>
 
+            {smsFlash === "on" && ownSmsNumber && (
+              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+                Texting is on. Your number is {displayCanadianNumber(ownSmsNumber)}.
+              </div>
+            )}
             {smsFlash === "saved" && (
               <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
                 {smsTransportReady

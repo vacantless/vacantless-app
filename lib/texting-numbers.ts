@@ -1,0 +1,164 @@
+// S736: texting numbers without staff. Pure half (no I/O), tested in
+// scripts/test-texting-numbers.ts. Server half: lib/texting-numbers-server.ts.
+//
+// 1. A Growth landlord presses "Turn on texting": the app buys a local
+//    Canadian number in Twilio, points its texts and calls at our app, and
+//    switches it on (org_sms_numbers, twilio_sid set).
+// 2. The 15-minute sweep retries a purchase that failed (at most 5 tries, an
+//    hour apart; admins are emailed once at the 5th failure, the only case a
+//    person is needed).
+// 3. A number the app bought is released in Twilio 7 days after its account
+//    left a plan with texting, or closed. Coming back inside the 7 days keeps
+//    the number. A number staff set by hand (no twilio_sid) is never released.
+
+export const MAX_PROVISION_ATTEMPTS = 5;
+export const PROVISION_RETRY_GAP_MS = 60 * 60 * 1000;
+/** Two presses (or a press and the sweep) never buy two numbers: a try holds for this long. */
+export const PROVISION_CLAIM_MS = 10 * 60 * 1000;
+export const RELEASE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Postal code first letter (FSA) to that area's local area codes, oldest
+// (best known) first. Twilio rarely has stock in every code, so we try each.
+const BY_FSA_LETTER: Record<string, { region: string; codes: string[] }> = {
+  A: { region: "NL", codes: ["709"] },
+  B: { region: "NS", codes: ["902", "782"] },
+  C: { region: "PE", codes: ["902", "782"] },
+  E: { region: "NB", codes: ["506", "428"] },
+  G: { region: "QC", codes: ["418", "581", "367"] },
+  H: { region: "QC", codes: ["514", "438", "263"] },
+  J: { region: "QC", codes: ["450", "579", "819", "873", "354", "468"] },
+  K: { region: "ON", codes: ["613", "343", "753"] },
+  L: { region: "ON", codes: ["905", "289", "365", "742"] },
+  M: { region: "ON", codes: ["416", "647", "437"] },
+  N: { region: "ON", codes: ["519", "226", "548", "382"] },
+  P: { region: "ON", codes: ["705", "249", "683"] },
+  R: { region: "MB", codes: ["204", "431", "584"] },
+  S: { region: "SK", codes: ["306", "639", "474"] },
+  T: { region: "AB", codes: ["403", "587", "780", "825", "368"] },
+  V: { region: "BC", codes: ["604", "778", "236", "250", "672", "257"] },
+  X: { region: "NT", codes: ["867"] },
+  Y: { region: "YT", codes: ["867"] },
+};
+
+const PROVINCES = new Set(["AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT"]);
+
+export type NumberSearchPlan = { areaCodes: string[]; region: string | null };
+
+/**
+ * Where to look for a number, from the account's rental addresses (oldest
+ * first). The first address with a postal code decides; otherwise the first
+ * province seen ("..., Windsor, ON"); otherwise anywhere in Canada.
+ */
+export function numberSearchPlan(addresses: ReadonlyArray<string | null | undefined>): NumberSearchPlan {
+  for (const a of addresses) {
+    const m = /\b([ABCEGHJ-NPRSTVXY])\d[A-Z]\s?\d[A-Z]\d\b/i.exec(String(a ?? ""));
+    if (m) {
+      const hit = BY_FSA_LETTER[m[1].toUpperCase()];
+      if (hit) return { areaCodes: [...hit.codes], region: hit.region };
+    }
+  }
+  for (const a of addresses) {
+    const m = /,\s*([A-Z]{2})\b(?:\s|,|$)/.exec(String(a ?? "").toUpperCase());
+    if (m && PROVINCES.has(m[1])) return { areaCodes: [], region: m[1] };
+  }
+  return { areaCodes: [], region: null };
+}
+
+/** One entry of Twilio's AvailablePhoneNumbers list, the fields we read. */
+export type TwilioAvailableNumber = {
+  phone_number?: string;
+  address_requirements?: string;
+  capabilities?: { SMS?: boolean; sms?: boolean; voice?: boolean };
+};
+
+/** The first number we can buy with no address on file that takes texts. Pure. */
+export function pickBuyableNumber(list: ReadonlyArray<TwilioAvailableNumber> | null | undefined): string | null {
+  for (const n of list ?? []) {
+    const phone = String(n.phone_number ?? "");
+    if (!/^\+1[2-9]\d{9}$/.test(phone)) continue;
+    if ((n.address_requirements ?? "none") !== "none") continue;
+    const caps = n.capabilities ?? {};
+    if (caps.SMS === false || caps.sms === false) continue;
+    return phone;
+  }
+  return null;
+}
+
+export type ProvisionState = {
+  plan: string | null;
+  planHasTexting: boolean;
+  closed: boolean;
+  requested: boolean;
+  hasNumber: boolean;
+  attempts: number;
+  triedAtMs: number | null;
+  nowMs: number;
+  /** A button press tries straight away; the sweep waits PROVISION_RETRY_GAP_MS between tries. */
+  fromPress: boolean;
+};
+
+export type ProvisionDecision =
+  | { go: true }
+  | { go: false; why: "not_requested" | "no_texting_on_plan" | "closed" | "has_number" | "gave_up" | "too_soon" | "in_progress" };
+
+export function provisionDecision(s: ProvisionState): ProvisionDecision {
+  if (s.closed) return { go: false, why: "closed" };
+  if (!s.planHasTexting) return { go: false, why: "no_texting_on_plan" };
+  if (s.hasNumber) return { go: false, why: "has_number" };
+  if (!s.requested) return { go: false, why: "not_requested" };
+  const since = s.triedAtMs == null ? Infinity : s.nowMs - s.triedAtMs;
+  if (since < PROVISION_CLAIM_MS) return { go: false, why: "in_progress" };
+  if (!s.fromPress) {
+    if (s.attempts >= MAX_PROVISION_ATTEMPTS) return { go: false, why: "gave_up" };
+    if (since < PROVISION_RETRY_GAP_MS) return { go: false, why: "too_soon" };
+  }
+  return { go: true };
+}
+
+export type ReleaseState = {
+  boughtByApp: boolean;
+  planHasTexting: boolean;
+  closed: boolean;
+  lapsedSinceMs: number | null;
+  nowMs: number;
+};
+
+export type ReleaseDecision = "keep" | "mark_lapsed" | "clear_lapsed" | "release";
+
+/** What to do with a number on each sweep. Pure. */
+export function releaseDecision(s: ReleaseState): ReleaseDecision {
+  if (!s.boughtByApp) return "keep";
+  const stillEntitled = s.planHasTexting && !s.closed;
+  if (stillEntitled) return s.lapsedSinceMs == null ? "keep" : "clear_lapsed";
+  if (s.lapsedSinceMs == null) return "mark_lapsed";
+  return s.nowMs - s.lapsedSinceMs >= RELEASE_GRACE_MS ? "release" : "keep";
+}
+
+/** Twilio's FriendlyName for the number, so the console says whose it is. */
+export function numberFriendlyName(orgName: string | null | undefined, orgId: string): string {
+  const name = String(orgName ?? "").replace(/[^\w .,'&-]/g, "").trim().slice(0, 40);
+  return `Vacantless ${name || orgId.slice(0, 8)}`;
+}
+
+/** The admin email after the 5th failed try: the one case a person is needed. */
+export function provisionGaveUpEmail(input: {
+  orgName: string | null;
+  orgId: string;
+  lastError: string | null;
+  plan: NumberSearchPlan;
+}): { subject: string; body: string } {
+  const where = input.plan.areaCodes.length
+    ? `Area codes tried: ${input.plan.areaCodes.join(", ")}`
+    : input.plan.region
+      ? `Province searched: ${input.plan.region}`
+      : "Searched anywhere in Canada";
+  return {
+    subject: `Texting number not bought: ${input.orgName || input.orgId}`,
+    body:
+      `The app tried ${MAX_PROVISION_ATTEMPTS} times to buy a texting number for ${input.orgName || "an account"} and stopped.\n` +
+      `Account id: ${input.orgId}\n${where}\nLast error: ${input.lastError || "unknown"}\n\n` +
+      "Their renters still get every message by email.\n" +
+      "Fix the cause in Twilio (balance, address, stock), then add a number on the admin page: " +
+      "https://app.vacantless.com/dashboard/admin#texting-numbers",
+  };
+}

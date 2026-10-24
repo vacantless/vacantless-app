@@ -288,6 +288,13 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://vacantless-app.vercel.app/api/cron/founding-trial" \
             -w "\nHTTP %{http_code}\n"
+      - name: Trigger texting-numbers sweep
+        if: ${{ !cancelled() }}
+        run: |
+          curl -sS --retry 3 --retry-delay 5 --retry-all-errors --max-time 90 -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://vacantless-app.vercel.app/api/cron/texting-numbers" \
+            -w "\nHTTP %{http_code}\n"
       - name: Trigger health-digest sweep
         if: ${{ !cancelled() }}
         run: |

@@ -5,16 +5,29 @@ import { setOrgSmsNumberAsAdmin } from "./actions";
 // A number that is on sends that landlord's renter texts and receives their
 // replies. Buy the number in Twilio first, and point its incoming text and
 // call webhooks at /api/sms/inbound and /api/sms/voice before turning it on.
+// S736: the app now buys these itself when a landlord presses "Turn on
+// texting" (lib/texting-numbers). This table is for the rare case it could not
+// (an "Asked" row with an error after 5 tries) and for Agile's hand-set number.
 export async function OrgSmsNumbersSection({ flash }: { flash?: string }) {
   const admin = createAdminClient();
   if (!admin) return null;
   const [{ data: orgs }, rowsRes] = await Promise.all([
-    admin.from("organizations").select("id, name, sms_requested_at").is("closed_at", null).order("name"),
-    admin.from("org_sms_numbers").select("organization_id, phone_e164, enabled"),
+    admin
+      .from("organizations")
+      .select("id, name, sms_requested_at, sms_provision_attempts, sms_provision_error")
+      .is("closed_at", null)
+      .order("name"),
+    admin.from("org_sms_numbers").select("organization_id, phone_e164, enabled, twilio_sid, lapsed_since"),
   ]);
   const tableReady = !rowsRes.error;
   const byOrg = new Map(
-    ((rowsRes.data ?? []) as { organization_id: string; phone_e164: string; enabled: boolean }[]).map(
+    ((rowsRes.data ?? []) as {
+      organization_id: string;
+      phone_e164: string;
+      enabled: boolean;
+      twilio_sid?: string | null;
+      lapsed_since?: string | null;
+    }[]).map(
       (r) => [r.organization_id, r],
     ),
   );
@@ -58,7 +71,13 @@ export async function OrgSmsNumbersSection({ flash }: { flash?: string }) {
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
             {(
-              (orgs ?? []) as { id: string; name: string | null; sms_requested_at?: string | null }[]
+              (orgs ?? []) as {
+                id: string;
+                name: string | null;
+                sms_requested_at?: string | null;
+                sms_provision_attempts?: number | null;
+                sms_provision_error?: string | null;
+              }[]
             )
               // S726f: accounts that asked for texting and have no number yet go first.
               .sort((a, b) => Number(!!b.sms_requested_at && !byOrg.has(b.id)) - Number(!!a.sms_requested_at && !byOrg.has(a.id)))
@@ -74,6 +93,19 @@ export async function OrgSmsNumbersSection({ flash }: { flash?: string }) {
                         Asked {new Date(o.sms_requested_at as string).toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "America/Toronto" })}
                       </span>
                     )}
+                    {waiting && o.sms_provision_error ? (
+                      <span className="mt-0.5 block text-[10px] font-normal text-amber-800">
+                        Tries {o.sms_provision_attempts ?? 0} of 5. Last error: {o.sms_provision_error}
+                      </span>
+                    ) : null}
+                    {row?.twilio_sid ? (
+                      <span className="mt-0.5 block text-[10px] font-normal text-slate-500">
+                        Bought by the app
+                        {row.lapsed_since
+                          ? `. No texting on their plan since ${new Date(row.lapsed_since).toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "America/Toronto" })}; released 7 days after.`
+                          : ""}
+                      </span>
+                    ) : null}
                   </th>
                   <td className="px-3 py-2">
                     <form action={setOrgSmsNumberAsAdmin} className="flex flex-wrap items-center gap-2">
