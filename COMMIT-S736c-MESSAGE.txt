@@ -1,0 +1,9 @@
+S736c: texting number area code from the city when there is no postal code
+
+Proven live 2026-10-24: pressing Turn on texting on Lakeview Rentals bought,
+set up and switched on 249-209-9019 in about 10 seconds (Twilio routing same
+as Agile's number, Settings showed it). Its addresses ("88 Lakeview Ave,
+Windsor, ON") carry no postal code, so the search fell back to the province
+and got a 249. numberSearchPlan now reads the city before the province for
+the bigger Canadian cities (Windsor 519, Toronto 416, Ottawa 613 ...).
+Postal code still wins when present.

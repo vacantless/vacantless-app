@@ -40,6 +40,58 @@ const BY_FSA_LETTER: Record<string, { region: string; codes: string[] }> = {
   Y: { region: "YT", codes: ["867"] },
 };
 
+// S736: an address with a city but no postal code ("88 Lakeview Ave, Windsor, ON")
+// first bought a 249 number for a Windsor account. The bigger cities, by name.
+const ON_519 = ["519", "226", "548", "382"];
+const ON_416 = ["416", "647", "437"];
+const ON_905 = ["905", "289", "365", "742"];
+const ON_613 = ["613", "343", "753"];
+const ON_705 = ["705", "249", "683"];
+const BY_CITY: Record<string, { region: string; codes: string[] }> = {
+  windsor: { region: "ON", codes: ON_519 }, london: { region: "ON", codes: ON_519 },
+  kitchener: { region: "ON", codes: ON_519 }, waterloo: { region: "ON", codes: ON_519 },
+  cambridge: { region: "ON", codes: ON_519 }, guelph: { region: "ON", codes: ON_519 },
+  sarnia: { region: "ON", codes: ON_519 }, chatham: { region: "ON", codes: ON_519 },
+  brantford: { region: "ON", codes: ON_519 }, leamington: { region: "ON", codes: ON_519 },
+  lasalle: { region: "ON", codes: ON_519 }, tecumseh: { region: "ON", codes: ON_519 },
+  amherstburg: { region: "ON", codes: ON_519 }, woodstock: { region: "ON", codes: ON_519 },
+  toronto: { region: "ON", codes: ON_416 }, "north york": { region: "ON", codes: ON_416 },
+  scarborough: { region: "ON", codes: ON_416 }, etobicoke: { region: "ON", codes: ON_416 },
+  mississauga: { region: "ON", codes: ON_905 }, brampton: { region: "ON", codes: ON_905 },
+  oakville: { region: "ON", codes: ON_905 }, burlington: { region: "ON", codes: ON_905 },
+  hamilton: { region: "ON", codes: ON_905 }, markham: { region: "ON", codes: ON_905 },
+  vaughan: { region: "ON", codes: ON_905 }, "richmond hill": { region: "ON", codes: ON_905 },
+  oshawa: { region: "ON", codes: ON_905 }, whitby: { region: "ON", codes: ON_905 },
+  ajax: { region: "ON", codes: ON_905 }, pickering: { region: "ON", codes: ON_905 },
+  milton: { region: "ON", codes: ON_905 }, "st. catharines": { region: "ON", codes: ON_905 },
+  "st catharines": { region: "ON", codes: ON_905 }, "niagara falls": { region: "ON", codes: ON_905 },
+  ottawa: { region: "ON", codes: ON_613 }, kingston: { region: "ON", codes: ON_613 },
+  cornwall: { region: "ON", codes: ON_613 }, belleville: { region: "ON", codes: ON_613 },
+  barrie: { region: "ON", codes: ON_705 }, sudbury: { region: "ON", codes: ON_705 },
+  "north bay": { region: "ON", codes: ON_705 }, peterborough: { region: "ON", codes: ON_705 },
+  "sault ste. marie": { region: "ON", codes: ON_705 }, "thunder bay": { region: "ON", codes: ["807"] },
+  montreal: { region: "QC", codes: ["514", "438", "263"] }, "montréal": { region: "QC", codes: ["514", "438", "263"] },
+  laval: { region: "QC", codes: ["450", "579"] }, "quebec city": { region: "QC", codes: ["418", "581"] },
+  gatineau: { region: "QC", codes: ["819", "873"] }, sherbrooke: { region: "QC", codes: ["819", "873"] },
+  calgary: { region: "AB", codes: ["403", "587", "825"] }, edmonton: { region: "AB", codes: ["780", "587", "825"] },
+  vancouver: { region: "BC", codes: ["604", "778", "236"] }, burnaby: { region: "BC", codes: ["604", "778", "236"] },
+  surrey: { region: "BC", codes: ["604", "778", "236"] }, victoria: { region: "BC", codes: ["250", "778", "236"] },
+  kelowna: { region: "BC", codes: ["250", "778", "236"] }, winnipeg: { region: "MB", codes: ["204", "431"] },
+  regina: { region: "SK", codes: ["306", "639"] }, saskatoon: { region: "SK", codes: ["306", "639"] },
+  halifax: { region: "NS", codes: ["902", "782"] }, moncton: { region: "NB", codes: ["506"] },
+  fredericton: { region: "NB", codes: ["506"] }, "saint john": { region: "NB", codes: ["506"] },
+  "st. john's": { region: "NL", codes: ["709"] },
+};
+
+/** The city from "street, City, ON" (the part before the province), lowercased. */
+function cityOf(address: string): string | null {
+  const parts = address.split(",").map((p) => p.trim().toLowerCase()).filter(Boolean);
+  for (let i = parts.length - 1; i > 0; i--) {
+    if (/^(ab|bc|mb|nb|nl|ns|nt|nu|on|pe|qc|sk|yt)\b/.test(parts[i])) return parts[i - 1] || null;
+  }
+  return parts.length >= 2 ? parts[parts.length - 1] : null;
+}
+
 const PROVINCES = new Set(["AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT"]);
 
 export type NumberSearchPlan = { areaCodes: string[]; region: string | null };
@@ -47,7 +99,8 @@ export type NumberSearchPlan = { areaCodes: string[]; region: string | null };
 /**
  * Where to look for a number, from the account's rental addresses (oldest
  * first). The first address with a postal code decides; otherwise the first
- * province seen ("..., Windsor, ON"); otherwise anywhere in Canada.
+ * known city ("..., Windsor, ON"); otherwise the first province seen;
+ * otherwise anywhere in Canada.
  */
 export function numberSearchPlan(addresses: ReadonlyArray<string | null | undefined>): NumberSearchPlan {
   for (const a of addresses) {
@@ -56,6 +109,11 @@ export function numberSearchPlan(addresses: ReadonlyArray<string | null | undefi
       const hit = BY_FSA_LETTER[m[1].toUpperCase()];
       if (hit) return { areaCodes: [...hit.codes], region: hit.region };
     }
+  }
+  for (const a of addresses) {
+    const city = cityOf(String(a ?? ""));
+    const hit = city ? BY_CITY[city] : undefined;
+    if (hit) return { areaCodes: [...hit.codes], region: hit.region };
   }
   for (const a of addresses) {
     const m = /,\s*([A-Z]{2})\b(?:\s|,|$)/.exec(String(a ?? "").toUpperCase());

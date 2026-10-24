@@ -33,8 +33,14 @@ ok("Toronto postal code: 416 first", numberSearchPlan(["506 Manning Ave, Toronto
 ok("Ottawa postal code", numberSearchPlan(["1 Main St, Ottawa ON k1p1j1"]).areaCodes[0] === "613");
 ok("Vancouver postal code", numberSearchPlan(["1 A St, Vancouver, BC V6B 1A1"]).region === "BC");
 ok("first address with a postal code wins", numberSearchPlan(["no code here", "1 B St, Calgary, AB T2P 1J9"]).areaCodes[0] === "403");
-const provOnly = numberSearchPlan(["100 Lakeview Ave, Windsor, ON"]);
-ok("province only when no postal code", provOnly.areaCodes.length === 0 && provOnly.region === "ON");
+// S736: Lakeview's first number came out 249 because its addresses have no postal code.
+ok("Windsor by city name: 519 first", numberSearchPlan(["88 Lakeview Ave, Windsor, ON"]).areaCodes[0] === "519");
+ok("Toronto by city name", numberSearchPlan(["1 A St, Toronto, ON"]).areaCodes[0] === "416");
+ok("city name with a unit", numberSearchPlan(["88 Lakeview Ave Unit 2, Windsor, ON"]).areaCodes[0] === "519");
+ok("Calgary by city name", numberSearchPlan(["1 A St, Calgary, AB"]).areaCodes[0] === "403");
+ok("postal code beats city name", numberSearchPlan(["1 A St, Windsor, ON M6G 2V7"]).areaCodes[0] === "416");
+const provOnly = numberSearchPlan(["100 Lakeview Ave, Smalltown, ON"]);
+ok("province only when the city is unknown", provOnly.areaCodes.length === 0 && provOnly.region === "ON");
 const none = numberSearchPlan([null, "", "somewhere"]);
 ok("anywhere in Canada when nothing is known", none.areaCodes.length === 0 && none.region === null);
 ok("a US zip is not a postal code", numberSearchPlan(["1 A St, Detroit, MI 48201"]).region === null);
