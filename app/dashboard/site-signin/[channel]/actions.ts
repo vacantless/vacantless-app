@@ -15,6 +15,7 @@ import {
   cleanPropertyId,
   withQuery,
   siteSigninIsOpen,
+  cleanSignupPrefill,
 } from "@/lib/site-signin";
 import { triggerSigninWindow } from "@/lib/site-signin-dispatch";
 import { triggerPostNow } from "@/lib/post-now";
@@ -48,6 +49,16 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
   // S735 (item 7): in one-sitting mode the page opens the next site's window
   // by itself when this one finishes; the flag rides on every redirect.
   const chain = formData.get("chain") != null;
+  // S736 (item 7 second half): "Make my <site> account" with the landlord's own details.
+  const signup = formData.get("mode") === "signup";
+  const prefill = signup
+    ? cleanSignupPrefill({
+        first_name: formData.get("first_name"),
+        last_name: formData.get("last_name"),
+        email: formData.get("email"),
+        phone: formData.get("phone"),
+      })
+    : null;
   const here = (href: string) => (chain ? withQuery(href, "chain", "1") : href);
   if (!isSiteSigninChannel(channel)) redirect("/dashboard/link-portals");
   const who = await allowed();
@@ -75,7 +86,15 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
 
   const { data: created, error } = await admin
     .from(TABLE)
-    .insert({ organization_id: who.orgId, channel, requested_by: who.userId, status: "starting" })
+    .insert({
+      organization_id: who.orgId,
+      channel,
+      requested_by: who.userId,
+      status: "starting",
+      // S736: "Make my <site> account" opens the sign-up page with these filled in.
+      mode: signup ? "signup" : "signin",
+      prefill: signup ? prefill : null,
+    })
     .select("id")
     .single();
   if (error || !created) redirect(here(withQuery(siteSigninHref(channel, propertyId), "err", "save")));

@@ -70,17 +70,17 @@ export const SITE_SIGNIN_ACCOUNT_FIRST: Record<
   { text: string; href: string; linkLabel: string }
 > = {
   kijiji: {
-    text: "You need a Kijiji account. If you do not have one, make it on Kijiji first. Then come back here.",
+    text: "You need a Kijiji account. No account yet? Make it with us below, or on Kijiji.",
     href: "https://www.kijiji.ca/",
     linkLabel: "Open Kijiji",
   },
   zumper: {
-    text: "You need a Zumper landlord account. Zumper checks your ID before you can post. If you do not have one, make it on Zumper first. Then come back here.",
+    text: "You need a Zumper landlord account. Zumper checks your ID before you can post. No account yet? Make it with us below, or on Zumper.",
     href: "https://www.zumper.com/manage",
     linkLabel: "Open Zumper",
   },
   rentals_ca: {
-    text: "You need a Rentals.ca account. If you do not have one, make it on Rentals.ca first. Then come back here. If Rentals.ca sends you a code, type it in the window.",
+    text: "You need a Rentals.ca account. No account yet? Make it with us below, or on Rentals.ca. If Rentals.ca sends you a code, type it in the window.",
     href: "https://rentals.ca/",
     linkLabel: "Open Rentals.ca",
   },
@@ -168,7 +168,13 @@ export function siteSigninView(
             ? `${name} just emailed you a code. Type it into the box in the window. Then press Submit there. We do the rest.`
             : detail === "not_signed_in_yet"
               ? `We checked and ${name} does not show you as signed in yet. Finish signing in, then press the button again.`
-              : `Open the window and sign in to your ${name} account. You type your password into ${name} itself, so it stays with you.`,
+              : detail === "signup_filled"
+                ? `We opened the ${name} sign-up page and filled in your details. Choose a password and finish the steps there. You type your password into ${name} itself, so it stays with you.`
+                : detail === "signup_open"
+                  ? `We opened the ${name} sign-up page. Fill it in and finish the steps there. Your password stays with you.`
+                  : detail === "signup_link_missing"
+                    ? `Press Sign up in the window, then make your ${name} account there. Your password stays with you.`
+                    : `Open the window and sign in to your ${name} account. You type your password into ${name} itself, so it stays with you.`,
       };
     case "saving":
       return { tone: "wait", title: "Signed in. Saving", body: "One moment." };
@@ -256,4 +262,39 @@ export function signinChainSummary(chain: readonly SiteSigninChainStep[]): strin
   if (todo === 0) return "You are signed in to every site. We post your approved ads from now on.";
   if (todo === shown.length) return `Sign in to ${shown.length} sites, one after the other. About ${shown.length * 2} minutes.`;
   return `${todo} of ${shown.length} sites still need a sign-in.`;
+}
+
+// ---- S736 (review item 7 second half): "create the account for me" -------
+// A landlord with no account presses "Make my <site> account". The same
+// window opens on the site's sign-up page with these details filled in; the
+// landlord chooses the password and finishes (worker signup-prefill-logic).
+
+/** What each site still asks of the landlord after we fill the form. */
+export const SITE_SIGNUP_NOTE: Record<SiteSigninChannel, string> = {
+  kijiji: "Kijiji may email you a link to confirm your address. Open it, then come back to the window.",
+  zumper: "Zumper also checks your ID before you can post. If that takes a while, sign in here once Zumper approves you.",
+  rentals_ca: "Rentals.ca emails you a code. Type it in the window.",
+};
+
+export type SignupPrefill = { first_name: string | null; last_name: string | null; email: string | null; phone: string | null };
+
+/** The details the landlord typed, cleaned. Null email = nothing worth sending. */
+export function cleanSignupPrefill(input: {
+  first_name?: unknown;
+  last_name?: unknown;
+  email?: unknown;
+  phone?: unknown;
+}): SignupPrefill {
+  const clean = (v: unknown, max: number) => {
+    const t = typeof v === "string" ? v.replace(/[\u0000-\u001f]/g, "").trim().slice(0, max) : "";
+    return t || null;
+  };
+  const email = clean(input.email, 120);
+  const phone = clean(input.phone, 30);
+  return {
+    first_name: clean(input.first_name, 60),
+    last_name: clean(input.last_name, 60),
+    email: email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email.toLowerCase() : null,
+    phone: phone && phone.replace(/\D/g, "").length >= 10 ? phone : null,
+  };
 }

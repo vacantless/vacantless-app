@@ -15,6 +15,7 @@ import {
   nextSigninChannel,
   SITE_SIGNIN_ACCOUNT_FIRST,
   SITE_SIGNIN_LABEL,
+  SITE_SIGNUP_NOTE,
 } from "@/lib/site-signin";
 import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
 import { startSiteSignin } from "./actions";
@@ -199,6 +200,56 @@ export default async function SiteSigninPage({
             className="mt-4 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm"
           >
             {recent?.status === "done" ? "Sign in again" : recent ? "Try again" : `Sign in to ${name}`}
+          </button>
+        </form>
+      )}
+
+      {/* S736 (item 7 second half): no account yet. We open the sign-up page
+          and fill in these details; the landlord chooses the password. */}
+      {canStart && recent?.status !== "done" && (
+        <form action={startSiteSignin} className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5">
+          <input type="hidden" name="channel" value={channel} />
+          <input type="hidden" name="mode" value="signup" />
+          {propertyId && <input type="hidden" name="property" value={propertyId} />}
+          {chainOn && <input type="hidden" name="chain" value="1" />}
+          <p className="text-sm font-semibold text-gray-900">No {name} account yet?</p>
+          <p className="mt-1 text-sm text-gray-700">
+            We open the {name} sign-up page and fill in these details. You choose a password and finish there.
+          </p>
+          <p className="mt-1 text-xs text-gray-500">{SITE_SIGNUP_NOTE[channel]}</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <label className="text-xs text-gray-600">
+              First name
+              <input name="first_name" autoComplete="given-name" className="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" />
+            </label>
+            <label className="text-xs text-gray-600">
+              Last name
+              <input name="last_name" autoComplete="family-name" className="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm" />
+            </label>
+            <label className="text-xs text-gray-600">
+              Email
+              <input
+                name="email"
+                type="email"
+                defaultValue={user?.email ?? ""}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+              />
+            </label>
+            <label className="text-xs text-gray-600">
+              Phone
+              <input
+                name="phone"
+                type="tel"
+                defaultValue={org.public_contact_phone ?? ""}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+              />
+            </label>
+          </div>
+          <button
+            type="submit"
+            className="mt-4 rounded-lg border border-brand bg-white px-4 py-2 text-sm font-medium text-brand shadow-sm"
+          >
+            Make my {name} account
           </button>
         </form>
       )}

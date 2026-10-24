@@ -1,0 +1,20 @@
+S736e: "Make my <site> account" on the sign-in page (review item 7 second half)
+
+A landlord with no Kijiji, Zumper or Rentals.ca account no longer has to
+leave, sign up on each site and come back. The sign-in page now has a "No
+<site> account yet?" box: first and last name, email (their login) and
+phone (the account's contact phone), then "Make my <site> account". It opens
+the same secure window on the site's sign-up page with those details filled
+in (worker S736w); they choose the password and finish there, and the window
+saves the sign-in as usual.
+
+- Migration 0261 (applied): site_signin_windows.mode ('signin' | 'signup')
+  and prefill jsonb (never a password).
+- lib/site-signin.ts: cleanSignupPrefill, SITE_SIGNUP_NOTE (Kijiji confirm
+  link, Zumper ID check, Rentals.ca code), window copy for the sign-up
+  details, account hints point at the new box.
+- actions.ts: startSiteSignin stores mode and prefill; same Posting check.
+- scripts/test-site-signup.ts: 23 checks.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019bgsEvp3bixNdrqDfohAWe
