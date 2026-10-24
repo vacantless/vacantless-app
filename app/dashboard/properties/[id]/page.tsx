@@ -269,11 +269,16 @@ import {
   scanExpensePrefillFromQuery,
 } from "@/lib/asset-capture";
 import { localDateString } from "@/lib/leasing-snapshot";
-import { marketplaceKitAgents } from "@/lib/marketplace-kit";
+import {
+  marketplaceKitAgents,
+  marketplaceKitFacts,
+  marketplaceKitPhotoUrls,
+  marketplacePhoneKitPath,
+} from "@/lib/marketplace-kit";
+import { phoneKitSecret, signPhoneKitToken } from "@/lib/marketplace-phone-link";
 import { buildMarketplaceHelperKit } from "@/lib/marketplace-helper";
 import { brokerageRouteFor } from "@/lib/brokerage-request";
 import type { BrokerageRequestCardData } from "./brokerage-request-card";
-import { formatAvailability } from "@/lib/property-features";
 import type { MarketplaceKitData } from "./marketplace-row";
 import type { AddressDisplayMode } from "@/lib/address-privacy";
 import { shareLinkStatus } from "@/lib/documents";
@@ -1573,25 +1578,35 @@ export default async function PropertyDetailPage({
       .from("showing_agents")
       .select("id, name, email, archived")
       .eq("organization_id", org.id);
-    const facts: { label: string; value: string }[] = [];
-    if (p.rent_cents) facts.push({ label: "Price per month", value: `$${Math.round(p.rent_cents / 100).toLocaleString("en-US")}` });
-    if (p.beds != null) facts.push({ label: "Bedrooms", value: String(p.beds) });
-    if (p.baths != null) facts.push({ label: "Bathrooms", value: String(p.baths) });
-    if (p.sqft) facts.push({ label: "Square feet", value: String(p.sqft) });
-    if (p.address) facts.push({ label: "Address", value: p.address });
-    facts.push({ label: "Available", value: formatAvailability(p.available_date).replace(/^Available /, "") });
+    // S736: one facts builder for every kit page.
+    const facts = marketplaceKitFacts(p);
+    // S736 (review item 9): the phone half. A signed no-sign-in link to the
+    // kit on the landlord's phone, shown as a code to scan, and the photo
+    // links the phone saves through its share sheet.
+    const phoneToken = signPhoneKitToken({ propertyId: p.id, orgId: org.id, nowMs: Date.now() }, phoneKitSecret());
+    const phoneUrl = phoneToken
+      ? `${process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com"}${marketplacePhoneKitPath(phoneToken)}`
+      : null;
     const mkt = String(searchParams.mkt ?? "");
     marketplaceKit = {
       adText: fbCopy.body,
       facts,
       photosHref: `/dashboard/properties/${p.id}/marketplace-photos`,
       photoCount: photoRows.length,
+      photoUrls: marketplaceKitPhotoUrls(
+        photoRows.map((ph) => ph.url),
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+      ),
+      phoneUrl,
+      phoneQrSvg: phoneUrl ? await qrSvg(phoneUrl, { width: 132 }) : null,
       renterReply: buildRenterMessageReply({ publicUrl, phone: org.public_contact_phone ?? null }),
       agents: marketplaceKitAgents(
         (agentRows ?? []) as { id: string; name: string | null; email: string | null; archived: boolean | null }[],
       ),
       sendNotice:
-        mkt === "sent" || mkt === "notsent" || mkt === "noagent" || mkt === "pick" ? mkt : null,
+        mkt === "sent" || mkt === "notsent" || mkt === "noagent" || mkt === "pick" || mkt === "mailed" || mkt === "mailfail"
+          ? mkt
+          : null,
       // S735: what the Chrome helper fills into Marketplace's form, photos included.
       helperKit: buildMarketplaceHelperKit({
         propertyId: p.id,

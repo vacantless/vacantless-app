@@ -57,6 +57,9 @@ const SURFACES: Surface[] = [
   { file: "app/dashboard/properties/[id]/marketplace-row.tsx", mode: "ui" },
   { file: "components/marketplace-kit-steps.tsx", mode: "ui" },
   { file: "app/agent/[token]/marketplace/[propertyId]/page.tsx", mode: "ui" },
+  // S736: the Marketplace kit on the landlord's phone (review item 9).
+  { file: "app/kit/[token]/page.tsx", mode: "ui" },
+  { file: "lib/marketplace-phone-email.ts", mode: "ui" },
   { file: "app/dashboard/properties/[id]/next-action-card.tsx", mode: "ui" },
   { file: "app/dashboard/properties/[id]/ads-still-up-card.tsx", mode: "ui" },
   // S734: the results card after posting and the Posting offer text.

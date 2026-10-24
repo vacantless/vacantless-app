@@ -1,0 +1,19 @@
+S736: Marketplace kit on the phone (review item 9)
+
+Most small landlords post from the Facebook app, so the kit now works on a
+phone end to end.
+
+- Photos: on a phone, step 2 saves every photo through the share sheet
+  ("Save N images"). Where that is not offered, a grid to press and hold;
+  a computer keeps the zip.
+- Getting there: the rental page on a computer shows a code to scan and an
+  "Email me the link" button. Both open /kit/<signed token>, a no-sign-in kit
+  page that works for 14 days (lib/marketplace-phone-link, HMAC, nothing
+  stored), kept out of search.
+- Step 4: the facebook.com/share/... link the Facebook app copies is followed
+  to the ad's own /marketplace/item/<id>/ link before the save check
+  (resolveMarketplaceAdUrl), for the landlord, agent and phone saves.
+- One facts builder and one rental loader for every kit page.
+
+Tests: test-marketplace-phone (60), test-marketplace-kit, listing-distribution,
+marketplace-helper; plain-language baseline records the two new surfaces.

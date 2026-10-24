@@ -185,6 +185,7 @@ import { plateFieldsToQuery, normalizePendingDocId, type AssetDraft } from "@/li
 import { validateExpenseInput } from "@/lib/expenses";
 import { parseMoneyToCents } from "@/lib/tenancy";
 import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
+import { resolveMarketplaceAdUrl } from "@/lib/marketplace-kit-server";
 import { sqftToSave } from "@/lib/sqft-estimate-server";
 import { copyBuildingPhotosTo, spreadBuildingPhotos } from "@/lib/building-photos-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
@@ -2116,7 +2117,9 @@ export async function addListingPost(formData: FormData) {
 
   const portal = normalizePortal(formData.get("portal"));
   const status = normalizeListingStatus(formData.get("status"));
-  const url = normalizeUrl(formData.get("url"));
+  // S736: Facebook's app copies a facebook.com/share/... link; turn it into the ad's own link.
+  const rawUrl = normalizeUrl(formData.get("url"));
+  const url = portal === "facebook" ? await resolveMarketplaceAdUrl(rawUrl) : rawUrl;
   const check = validateListingPost({ portal, status, url });
   if (!check.ok) {
     redirect(`/dashboard/properties/${propertyId}?posterr=${check.code}`);

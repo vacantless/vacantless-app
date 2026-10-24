@@ -6,7 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { sendOrgNotification } from "@/lib/notifications-server";
-import { agentMarketplaceKitPath } from "@/lib/marketplace-kit";
+import { agentMarketplaceKitPath, marketplacePhoneKitPath } from "@/lib/marketplace-kit";
+import { phoneKitSecret, signPhoneKitToken } from "@/lib/marketplace-phone-link";
+import { phoneKitEmail } from "@/lib/marketplace-phone-email";
+import { sendNotificationEmail } from "@/lib/email";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
 
@@ -75,4 +78,47 @@ export async function sendMarketplaceKit(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(back(result.delivered ? "sent" : "notsent"));
+}
+
+// S736 (review item 9): email the signed-in landlord the no-sign-in link to
+// this rental's Marketplace kit, so they can post from the Facebook app on
+// their phone. Goes only to the person pressing the button, never to a renter.
+export async function emailMarketplacePhoneLink(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+  const back = (q: string) => `/dashboard/properties/${propertyId}?tab=distribute&mkt=${q}#for-you-facebook`;
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const { data: prop } = await supabase
+    .from("properties")
+    .select("id, address")
+    .eq("id", propertyId)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  if (!prop) redirect("/dashboard/properties?forbidden=1");
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const to = user?.email?.trim();
+  const token = signPhoneKitToken({ propertyId, orgId: org.id, nowMs: Date.now() }, phoneKitSecret());
+  if (!to || !token) redirect(back("mailfail"));
+
+  const url = `${APP_URL}${marketplacePhoneKitPath(token)}`;
+  const mail = phoneKitEmail({ address: (prop as { address: string | null }).address });
+  const result = await sendNotificationEmail({
+    to_email: to,
+    subject: mail.subject,
+    body: mail.body,
+    action_label: "Open it on my phone",
+    action_url: url,
+    org_name: org.name ?? "Vacantless",
+    brand_color: org.brand_color ?? null,
+    logo_url: org.logo_url ?? null,
+    reply_to_email: null,
+  }).catch(() => ({ sent: false }));
+  redirect(back(result.sent ? "mailed" : "mailfail"));
 }

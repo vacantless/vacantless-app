@@ -11,7 +11,7 @@ import {
   type MarketplaceHelperKit,
 } from "@/lib/marketplace-helper";
 import { addListingPost } from "../actions";
-import { sendMarketplaceKit } from "./marketplace-actions";
+import { emailMarketplacePhoneLink, sendMarketplaceKit } from "./marketplace-actions";
 
 // S712: what the Facebook Marketplace row shows before the ad is live, for
 // every org. Marketplace has no API, so the landlord's own team posts it: the
@@ -23,10 +23,15 @@ export type MarketplaceKitData = {
   facts: MarketplaceKitFact[];
   photosHref: string;
   photoCount: number;
+  /** S736: the photo links a phone saves through its share sheet. */
+  photoUrls?: string[];
+  /** S736: the no-sign-in kit link for the landlord's phone, and its code to scan. */
+  phoneUrl?: string | null;
+  phoneQrSvg?: string | null;
   renterReply: string;
   agents: MarketplaceKitAgent[];
   /** Result of the last "Send to an agent" press, from the URL (?mkt=). */
-  sendNotice: "sent" | "notsent" | "noagent" | "pick" | null;
+  sendNotice: "sent" | "notsent" | "noagent" | "pick" | "mailed" | "mailfail" | null;
   /** S735: the kit the Chrome helper fills into Marketplace's form. */
   helperKit?: MarketplaceHelperKit | null;
 };
@@ -76,7 +81,11 @@ const SEND_NOTICE: Record<NonNullable<MarketplaceKitData["sendNotice"]>, string>
   notsent: "The email did not go out. Check the agent's email address and try again.",
   noagent: "That agent has no email address on file.",
   pick: "Pick an agent first.",
+  mailed: "Sent. Open the email on your phone.",
+  mailfail: "The email did not go out. Try again in a minute.",
 };
+
+const PHONE_NOTICES = new Set(["mailed", "mailfail"]);
 
 export function MarketplaceRow({
   propertyId,
@@ -142,11 +151,48 @@ export function MarketplaceRow({
         </button>
       ) : (
         <div className="mt-3 space-y-4">
+          {kit.phoneUrl ? (
+            // S736 (review item 9): most landlords post from the Facebook app.
+            // Computers only; on a phone the steps below already fit.
+            <div className="hidden rounded-lg border border-indigo-100 bg-indigo-50/60 p-3 md:flex md:items-center md:gap-3">
+              {kit.phoneQrSvg ? (
+                <div
+                  className="h-[96px] w-[96px] shrink-0 overflow-hidden rounded-md border border-gray-200 bg-white p-1 [&>svg]:block [&>svg]:h-full [&>svg]:w-full"
+                  // Generated server-side by the qrcode package from our own
+                  // signed kit link, not user input, so the markup is trusted.
+                  dangerouslySetInnerHTML={{ __html: kit.phoneQrSvg }}
+                />
+              ) : null}
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-gray-900">Rather post from your phone?</p>
+                <p className="mt-0.5 text-[12px] text-gray-600">
+                  Scan this with your phone camera. The same steps open there, photos included.
+                </p>
+                <form action={emailMarketplacePhoneLink} className="mt-2">
+                  <input type="hidden" name="property_id" value={propertyId} />
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-indigo-600 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-indigo-700 hover:bg-indigo-50"
+                  >
+                    Email me the link
+                  </button>
+                </form>
+                {kit.sendNotice && PHONE_NOTICES.has(kit.sendNotice) ? (
+                  <p
+                    className={`mt-2 text-[12px] ${kit.sendNotice === "mailed" ? "text-emerald-700" : "text-amber-700"}`}
+                  >
+                    {SEND_NOTICE[kit.sendNotice]}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <MarketplaceKitSteps
             adText={kit.adText}
             facts={kit.facts}
             photosHref={kit.photosHref}
             photoCount={kit.photoCount}
+            photoUrls={kit.photoUrls ?? []}
             renterReply={kit.renterReply}
             saveAction={addListingPost}
             hiddenFields={{ property_id: propertyId, portal: "facebook", status: "live" }}
@@ -186,7 +232,7 @@ export function MarketplaceRow({
                 </a>
               </p>
             )}
-            {kit.sendNotice ? (
+            {kit.sendNotice && !PHONE_NOTICES.has(kit.sendNotice) ? (
               <p
                 className={`mt-2 text-[12px] ${kit.sendNotice === "sent" ? "text-emerald-700" : "text-amber-700"}`}
               >

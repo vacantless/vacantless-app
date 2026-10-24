@@ -71,7 +71,8 @@ ok("send scopes rental and agent to the org", (send.match(/\.eq\("organization_i
 const agentPage = readFileSync("app/agent/[token]/marketplace/[propertyId]/page.tsx", "utf8");
 ok("agent page reads no renter data", !/from\("leads"\)/.test(agentPage));
 const ctx = readFileSync("lib/marketplace-kit-server.ts", "utf8");
-ok("agent context scopes the rental to the agent's org", ctx.includes('.eq("organization_id", agent.organization_id)'));
+// S736: the rental half moved into loadKitRental, called with the agent's org.
+ok("agent context scopes the rental to the agent's org", ctx.includes("loadKitRental(admin, agent.organization_id, propertyId)") && ctx.includes('.eq("organization_id", orgId)'));
 ok("archived agent sees nothing", ctx.includes("agent.archived) return null"));
 const zip = readFileSync("lib/marketplace-photos-server.ts", "utf8");
 ok("zip only fetches our own photo bucket", zip.includes("/storage/v1/object/public/property-photos/"));

@@ -3,10 +3,10 @@ import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { buildListingCopy, buildRenterMessageReply } from "@/lib/listing-copy";
-import { formatAvailability } from "@/lib/property-features";
 import { listingPostErrorMessage } from "@/lib/listing-distribution";
 import { loadAgentMarketplaceContext } from "@/lib/marketplace-kit-server";
-import { agentMarketplaceKitPath } from "@/lib/marketplace-kit";
+import { agentMarketplaceKitPath, marketplaceKitFacts, marketplaceKitPhotoUrls } from "@/lib/marketplace-kit";
+import { sortPhotos } from "@/lib/photos";
 import { MarketplaceKitSteps } from "@/components/marketplace-kit-steps";
 import { saveMarketplaceAdFromToken } from "./actions";
 
@@ -54,14 +54,9 @@ export default async function AgentMarketplaceKitPage({
     },
     "facebook",
   );
-  const facts: { label: string; value: string }[] = [];
   const p = ctx.property;
-  if (p.rent_cents) facts.push({ label: "Price per month", value: `$${Math.round(p.rent_cents / 100).toLocaleString("en-US")}` });
-  if (p.beds != null) facts.push({ label: "Bedrooms", value: String(p.beds) });
-  if (p.baths != null) facts.push({ label: "Bathrooms", value: String(p.baths) });
-  if (p.sqft) facts.push({ label: "Square feet", value: String(p.sqft) });
-  if (p.address) facts.push({ label: "Address", value: p.address });
-  facts.push({ label: "Available", value: formatAvailability(p.available_date).replace(/^Available /, "") });
+  // S736: one facts builder for every kit page.
+  const facts = marketplaceKitFacts(p);
 
   const brand = accessibleBrand(ctx.org.brand_color || DEFAULT_BRAND_COLOR);
   const brandBg = brandGradientCss(ctx.org.brand_color, ctx.org.brand_color_secondary);
@@ -102,6 +97,7 @@ export default async function AgentMarketplaceKitPage({
             facts={facts}
             photosHref={`${kitPath}/photos`}
             photoCount={ctx.photos.length}
+            photoUrls={marketplaceKitPhotoUrls(sortPhotos(ctx.photos).map((ph) => ph.url), process.env.NEXT_PUBLIC_SUPABASE_URL)}
             renterReply={buildRenterMessageReply({ publicUrl, phone: ctx.org.public_contact_phone })}
             saveAction={saveMarketplaceAdFromToken}
             hiddenFields={{ token: params.token, property_id: ctx.property.id }}

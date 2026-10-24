@@ -444,7 +444,7 @@ export function listingPostErrorMessage(code: unknown): string {
     case "kijiji_url_required":
       return "Use the link to your Kijiji ad, like https://www.kijiji.ca/v-apartments-condos/.../1234567890, not a search or sign-in page.";
     case "facebook_url_required":
-      return "Use the link to your Marketplace ad, like https://www.facebook.com/marketplace/item/1234567890/, not a profile or share link.";
+      return "That link does not open your Marketplace ad. Open the ad, tap Share, then Copy link. Or paste a link like https://www.facebook.com/marketplace/item/1234567890/.";
     case "viewit_url_required":
       return "Use the link to your Viewit listing. It has a listing number. Not the home or sign-in page.";
     default:

@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { MARKETPLACE_CREATE_RENTAL_URL } from "@/lib/marketplace-kit";
+import { useEffect, useState } from "react";
+import { MARKETPLACE_CREATE_RENTAL_URL, marketplacePhotoFileName } from "@/lib/marketplace-kit";
 
 // S712: the four Marketplace steps, shared by the landlord's rental page and
 // the showing agent's no-login page. Facebook Marketplace has no API, so a
 // person posts the ad from their own Facebook; this makes it a few taps:
 // copy the ad, save the photos, open Marketplace, paste the ad link back.
+//
+// S736 (review item 9): on a phone, step 2 saves the photos through the
+// phone's own share sheet ("Save N images" on iPhone) instead of a zip a phone
+// cannot open. Where the share sheet cannot take files, the photos show as a
+// grid to press and hold. A computer keeps the zip.
 
 export type MarketplaceKitFact = { label: string; value: string };
 
@@ -45,11 +50,125 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   );
 }
 
+
+type PhoneSave = "checking" | "computer" | "share" | "grid";
+
+// A phone that can share files gets one button; the photos are fetched when the
+// step shows, so the tap opens the share sheet straight away (iPhone refuses a
+// share that waits on a download after the tap).
+function PhotoSaver({ photoUrls, photosHref, photoCount }: { photoUrls: string[]; photosHref: string; photoCount: number }) {
+  const [mode, setMode] = useState<PhoneSave>("checking");
+  const [files, setFiles] = useState<File[] | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const urlsKey = photoUrls.join("|");
+
+  useEffect(() => {
+    let phone = false;
+    try {
+      phone = window.matchMedia("(pointer: coarse)").matches;
+    } catch {
+      phone = false;
+    }
+    if (!phone || photoUrls.length === 0) {
+      setMode("computer");
+      return;
+    }
+    let canShareFiles = false;
+    try {
+      const probe = new File([new Uint8Array([0])], "probe.jpg", { type: "image/jpeg" });
+      canShareFiles = typeof navigator.canShare === "function" && navigator.canShare({ files: [probe] });
+    } catch {
+      canShareFiles = false;
+    }
+    if (!canShareFiles) {
+      setMode("grid");
+      return;
+    }
+    setMode("share");
+    let cancelled = false;
+    (async () => {
+      try {
+        const got = await Promise.all(
+          photoUrls.map(async (url, i) => {
+            const res = await fetch(url, { cache: "force-cache" });
+            if (!res.ok) throw new Error(String(res.status));
+            const blob = await res.blob();
+            return new File([blob], marketplacePhotoFileName(i, url), { type: blob.type || "image/jpeg" });
+          }),
+        );
+        if (!cancelled) setFiles(got);
+      } catch {
+        if (!cancelled) setMode("grid");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // urlsKey stands for photoUrls: a new array with the same links must not refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlsKey]);
+
+  const n = photoUrls.length || photoCount;
+  const plural = n === 1 ? "" : "s";
+
+  if (mode === "share") {
+    return (
+      <>
+        <button
+          type="button"
+          disabled={!files}
+          onClick={async () => {
+            if (!files) return;
+            try {
+              await navigator.share({ files });
+              setNote("Saved. Add them from your photos in step 3.");
+            } catch (e) {
+              if ((e as { name?: string })?.name !== "AbortError") setMode("grid");
+            }
+          }}
+          className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+        >
+          {files ? `Save ${n} photo${plural} to your phone` : `Getting ${n} photo${plural} ready...`}
+        </button>
+        <p>Then choose Save images. They go to your phone's photos.</p>
+        {note ? <p className="text-emerald-700">{note}</p> : null}
+      </>
+    );
+  }
+
+  if (mode === "grid") {
+    return (
+      <>
+        <p>Press and hold each photo, then choose Save to Photos.</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {photoUrls.map((url, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={url} src={url} alt={`Photo ${i + 1}`} className="aspect-square w-full rounded-md object-cover" />
+          ))}
+        </div>
+        <a href={photosHref} className="font-semibold text-indigo-700 hover:underline">
+          Or download them as one zip file
+        </a>
+      </>
+    );
+  }
+
+  return (
+    <a
+      href={photosHref}
+      className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
+    >
+      Download {photoCount} photo{photoCount === 1 ? "" : "s"}
+    </a>
+  );
+}
+
 export function MarketplaceKitSteps({
   adText,
   facts,
   photosHref,
   photoCount,
+  photoUrls = [],
   renterReply,
   saveAction,
   hiddenFields,
@@ -59,6 +178,8 @@ export function MarketplaceKitSteps({
   facts: MarketplaceKitFact[];
   photosHref: string;
   photoCount: number;
+  /** S736: the photo links a phone saves through its share sheet. */
+  photoUrls?: string[];
   renterReply: string;
   saveAction: (formData: FormData) => void | Promise<void>;
   hiddenFields: Record<string, string>;
@@ -76,12 +197,7 @@ export function MarketplaceKitSteps({
 
       <Step n={2} title="Save the photos">
         {photoCount > 0 ? (
-          <a
-            href={photosHref}
-            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
-          >
-            Download {photoCount} photo{photoCount === 1 ? "" : "s"}
-          </a>
+          <PhotoSaver photoUrls={photoUrls} photosHref={photosHref} photoCount={photoCount} />
         ) : (
           <p className="text-amber-700">This rental has no photos yet. Marketplace needs at least one.</p>
         )}
@@ -112,6 +228,7 @@ export function MarketplaceKitSteps({
 
       <Step n={4} title="Paste the link to your ad">
         <p>Once the ad is up, open it and copy its link. Paste it here.</p>
+        <p>In the Facebook app, open your ad, tap Share, then Copy link.</p>
         <p>Then the rental shows the ad as live.</p>
         <form action={saveAction} className="flex flex-wrap items-center gap-2">
           {Object.entries(hiddenFields).map(([k, v]) => (
