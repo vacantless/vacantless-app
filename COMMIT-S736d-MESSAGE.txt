@@ -1,0 +1,15 @@
+S736d: email the landlord when a site signs them out; server Node in the health email
+
+- /api/cron/signin-lost (15-minute sweep and its GitHub backup): when the
+  worker's session check finds Kijiji, Zumper or Rentals.ca signed a Posting
+  landlord out (alive=false, needs_login or no_session), the account's owners
+  get "Sign in to <site> again" once, with a button to the sign-in page.
+  A working sign-in clears the stamp, so the next sign-out emails again.
+  Before this, posting there stopped quietly until the landlord looked at the
+  site tiles; only our own health email showed it.
+- Migration 0260: distribution_channel_sessions.lost_notified_at.
+- Health email: a "Server Node" line (fix not out yet / fix is in, roll the
+  Stripe key), and the 15-minute log keeps the version for the daily check.
+
+Tests: test-signin-lost (19), health-digest (34), sweep-timer (46),
+plain-language (lib/signin-lost.ts gated, nothing new or worse).

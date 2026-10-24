@@ -36,6 +36,8 @@ export type HealthInput = {
   parserNotes: ParserNoteLead[];
   robot: RobotProblem[];
   signIns: SignInProblem[];
+  /** S736: the server's Node (process.version), so the email says when the security fix lands. */
+  serverNode?: { version: string; fixed: boolean } | null;
 };
 
 const PORTAL_OK = new Set(["lead_created", "duplicate"]);
@@ -159,6 +161,14 @@ export function buildHealthDigest(input: HealthInput): { subject: string; body: 
   parts.push(
     `Checked: ${okRuns} of ${runs} background sweeps clean, email delivery${input.emails.checked ? "" : " (not checked)"}, renter emails from sites, robot posts and site sign-ins. Not checked here: app errors in Vercel's logs.`,
   );
+  // S736: the Node2Shell watch (lib/image-url-import nodeHasBrotliFix). Information, not a problem.
+  if (input.serverNode) {
+    parts.push(
+      input.serverNode.fixed
+        ? `Server Node: ${input.serverNode.version}. The security fix is in. Roll the Stripe key now if not done yet (WORKFLOW 306 step 6).`
+        : `Server Node: ${input.serverNode.version}. The security fix is not on the server yet.`,
+    );
+  }
   return { subject, body: parts.join("\n\n"), problems };
 }
 

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { adminEmails } from "@/lib/provisioning-server";
 import { canUseRobotPosting } from "@/lib/billing";
+import { nodeHasBrotliFix } from "@/lib/image-url-import";
 import {
   DIGEST_LOCAL_HOUR,
   buildHealthDigest,
@@ -175,7 +176,7 @@ export async function GET(req: NextRequest) {
       .map((s) => ({ org: orgName(s.organization_id), channel: s.channel, code: s.last_check_code })),
   };
 
-  const email = buildHealthDigest(input);
+  const email = buildHealthDigest({ ...input, serverNode: { version: process.version, fixed: nodeHasBrotliFix(process.version) } });
   if (dry) return NextResponse.json({ ok: true, dry: true, ...email });
   // This route runs inside a sweep, which logs itself only when it finishes.
   // Right after the log table appeared there is no line yet; wait one tick

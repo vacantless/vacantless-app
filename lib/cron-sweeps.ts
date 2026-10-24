@@ -44,6 +44,8 @@ export const SWEEP_PATHS = [
   // S736: the founding free-period job was in the GitHub backup only; the
   // test wants both lists the same, and the job is safe to run twice.
   "/api/cron/founding-trial",
+  // S736: emails a landlord once when a site signs them out (lib/signin-lost).
+  "/api/cron/signin-lost",
   // S736: buys and releases texting numbers (lib/texting-numbers).
   "/api/cron/texting-numbers",
 ] as const;

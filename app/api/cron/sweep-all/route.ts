@@ -82,7 +82,8 @@ export async function GET(req: NextRequest) {
         ok: summary.failed.length === 0,
         ran: summary.ran,
         failed: summary.failed,
-        details: sweepDetails(results),
+        // S736: the server Node rides along so a daily check can see the security fix land.
+        details: { ...sweepDetails(results), "server-node": { status: null, reason: process.version } },
       });
       await admin
         .from("sweep_runs")

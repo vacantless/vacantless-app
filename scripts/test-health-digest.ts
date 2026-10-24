@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 // S720: the daily health email's rules. Run: npx tsx scripts/test-health-digest.ts
 import { buildHealthDigest, healthSections, portalOutcomeIsProblem, torontoDateHour, type HealthInput } from "../lib/health-digest";
 
@@ -130,6 +131,18 @@ ok("portal: not_parsed is a problem", portalOutcomeIsProblem("not_parsed"));
 }
 ok("toronto: 12:30Z is 8 AM local", torontoDateHour(now).hour === 8 && torontoDateHour(now).date === "2026-10-16", torontoDateHour(now));
 ok("toronto: 03:00Z is the previous local day", torontoDateHour(new Date("2026-10-16T03:00:00Z")).date === "2026-10-15");
+
+// S736: the server Node line (information, never a problem).
+{
+  const waiting = buildHealthDigest({ ...clean, serverNode: { version: "v24.21.0", fixed: false } });
+  ok("node: unpatched line", waiting.body.includes("Server Node: v24.21.0. The security fix is not on the server yet."), waiting.body);
+  ok("node: unpatched is not a problem", waiting.problems === 0 && waiting.subject.endsWith("all clear"));
+  const fixed = buildHealthDigest({ ...clean, serverNode: { version: "v24.22.1", fixed: true } });
+  ok("node: patched says roll the Stripe key", fixed.body.includes("Roll the Stripe key now"), fixed.body);
+  ok("node: no line when not given", !buildHealthDigest(clean).body.includes("Server Node"));
+  ok("node: route passes the server Node", readFileSync("app/api/cron/health-digest/route.ts", "utf8").includes("nodeHasBrotliFix(process.version)"));
+  ok("node: the 15-minute log keeps it", readFileSync("app/api/cron/sweep-all/route.ts", "utf8").includes('"server-node": { status: null, reason: process.version }'));
+}
 
 console.log(`\nhealth-digest: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
