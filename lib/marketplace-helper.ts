@@ -26,8 +26,10 @@ export const MARKETPLACE_HELPER_EXT_SOURCE = "vacantless-helper";
 /** The smallest helper version that understands a v1 kit. */
 export const MARKETPLACE_HELPER_MIN_VERSION = "1.0.0";
 
-/** Where a landlord gets the helper. The unlisted store page comes with the first store release. */
-export const MARKETPLACE_HELPER_INSTALL_URL = "https://www.vacantless.com/how-to#marketplace-helper";
+/** Where a landlord gets the helper: its Chrome Web Store page (unlisted,
+ *  approved 2026-10-25, item mpohpdjmkpeillnmjbhnfhcgofdenepc). */
+export const MARKETPLACE_HELPER_INSTALL_URL =
+  "https://chromewebstore.google.com/detail/vacantless-helper/mpohpdjmkpeillnmjbhnfhcgofdenepc";
 
 export const MARKETPLACE_HELPER_MAX_PHOTOS = 10;
 

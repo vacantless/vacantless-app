@@ -135,7 +135,7 @@ export function MarketplaceRow({
       {helperKit && helper === "absent" && (
         <p className="mt-2 text-[12px] text-gray-600">
           Posting from a computer?{" "}
-          <a href={MARKETPLACE_HELPER_INSTALL_URL} className="font-semibold text-indigo-700 hover:underline">
+          <a href={MARKETPLACE_HELPER_INSTALL_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo-700 hover:underline">
             Add the Vacantless helper to Chrome
           </a>{" "}
           and it fills the Marketplace form for you, photos included.

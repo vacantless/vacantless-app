@@ -1,0 +1,9 @@
+S737: "Add the Vacantless helper" opens its Chrome Web Store page
+
+The store approved the helper (v1.0.0, unlisted) on 2026-10-25. The link
+on the Marketplace row pointed at how-to#marketplace-helper, a section
+that does not exist; it now opens the store page in a new tab:
+chromewebstore.google.com/detail/vacantless-helper/mpohpdjmkpeillnmjbhnfhcgofdenepc
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019bgsEvp3bixNdrqDfohAWe

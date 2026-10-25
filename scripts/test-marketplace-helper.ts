@@ -2,6 +2,7 @@
 // Run: npx tsx scripts/test-marketplace-helper.ts
 import assert from "node:assert/strict";
 import {
+  MARKETPLACE_HELPER_INSTALL_URL,
   marketplaceAirConditioning,
   marketplaceHeating,
   marketplaceLaundry,
@@ -83,5 +84,11 @@ assert.equal(helperVersionOk(undefined), false);
 assert.equal(isHelperPong({ source: "vacantless-helper", type: "pong", version: "1.0.0" }), true);
 assert.equal(isHelperPong({ source: "vacantless-extension", type: "pong", version: "0.3.0" }), false);
 assert.equal(isHelperPong(null), false);
+
+// S737: the install link is the approved store page (unlisted), not the how-to page.
+assert.equal(
+  MARKETPLACE_HELPER_INSTALL_URL,
+  "https://chromewebstore.google.com/detail/vacantless-helper/mpohpdjmkpeillnmjbhnfhcgofdenepc",
+);
 
 console.log("test-marketplace-helper: all passed");
