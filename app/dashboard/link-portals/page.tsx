@@ -80,7 +80,9 @@ export default async function LinkPortalsPage({
 
       <ConnectTiles initial={vm} />
 
-      <PortalInboxCard orgId={org.id} />
+      {/* S737 (review item 1): the forwarding setup only helps once we post
+          for them; a Free landlord saw a step that did nothing for them. */}
+      {vm.postingAddon && <PortalInboxCard orgId={org.id} />}
 
       {/* S710 audit: opened from the menu (no rental in hand) this is a
           settings page, not a wizard step; Back and Next Step led nowhere. */}

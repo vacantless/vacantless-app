@@ -1,0 +1,18 @@
+S737b: "your ads are live" email; forwarding setup only with Posting
+
+Review items 2 and 1 (claude/REVIEW-S734-SYNDICATION-SELLABLE.md):
+
+- New 15-minute sweep /api/cron/posted-results-email (and its GitHub
+  backup): two hours after a rental's first live ad, the owners get one
+  email listing every live ad with its link, the booking link, what
+  happens next, and the biggest free site still to add. One email per
+  turn (properties.results_emailed_at, migration 0262, applied); a later
+  turn with new ads gets its own. Rentals first posted more than three
+  days ago never get one, so nothing old sends on deploy. Agile is
+  skipped. ?dry=1 reports without sending. 27 tests.
+- Sign in to your sites: the email-forwarding card shows only with the
+  Posting add-on; a Free landlord saw a setup step that did nothing for
+  them.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019bgsEvp3bixNdrqDfohAWe

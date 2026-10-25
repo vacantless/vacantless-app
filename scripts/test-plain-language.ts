@@ -62,6 +62,7 @@ const SURFACES: Surface[] = [
   { file: "lib/marketplace-phone-email.ts", mode: "ui" },
   // S736: the email when a site signs a landlord out.
   { file: "lib/signin-lost.ts", mode: "ui" },
+  { file: "lib/posted-results-email.ts", mode: "ui" },
   { file: "app/dashboard/properties/[id]/next-action-card.tsx", mode: "ui" },
   { file: "app/dashboard/properties/[id]/ads-still-up-card.tsx", mode: "ui" },
   // S734: the results card after posting and the Posting offer text.

@@ -48,6 +48,8 @@ export const SWEEP_PATHS = [
   "/api/cron/signin-lost",
   // S736: buys and releases texting numbers (lib/texting-numbers).
   "/api/cron/texting-numbers",
+  // S737: one "your ads are live" email per rental turn (lib/posted-results-email).
+  "/api/cron/posted-results-email",
 ] as const;
 
 export type SweepResult = {
