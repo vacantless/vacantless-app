@@ -531,7 +531,7 @@ ok("free set = the six free lanes", ["facebook", "kijiji", "rentals_ca", "zumper
 
 // --- S699: per-site refresh windows --------------------------------------------
 ok("S699: kijiji window 28", refreshDaysForChannel("kijiji") === 28);
-ok("S699: facebook window 7", refreshDaysForChannel("facebook") === 7);
+ok("S737: facebook window 9 (Renew opens ~9 days after the last)", refreshDaysForChannel("facebook") === 9);
 ok("S699: zumper never on age", refreshDaysForChannel("zumper") === null);
 ok("S699: rentals_ca never on age", refreshDaysForChannel("rentals_ca") === null);
 ok("S699: others keep the default", refreshDaysForChannel("rentfaster") === DEFAULT_REFRESH_DAYS);

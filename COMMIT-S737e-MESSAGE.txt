@@ -1,0 +1,9 @@
+S737e: Facebook Marketplace ads count as old after 9 days, not 7
+
+Read live 2026-10-26 on Noam's Marketplace listings: ads renewed Oct 19
+showed "Renew (2 days)", greyed out. Facebook opens Renew about 9 days
+after the last renewal, so the 7-day reminder and Renew box sent people
+to a button they could not press.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019bgsEvp3bixNdrqDfohAWe

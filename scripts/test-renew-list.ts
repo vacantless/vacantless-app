@@ -27,14 +27,14 @@ const post = (id: string, prop: string, portal: string, postedOn: string, status
   lastHealthAlertedAt: null,
 });
 const channels = listingHealthChannels({
-  posts: [post("a", "p3", "facebook", "2026-10-18"), post("b", "p33", "facebook", "2026-10-18"), post("c", "p36", "facebook", "2026-10-25")],
+  posts: [post("a", "p3", "facebook", "2026-10-15"), post("b", "p33", "facebook", "2026-10-15"), post("c", "p36", "facebook", "2026-10-25")],
   today: "2026-10-25",
   nowISO,
 });
 const items = renewListItems(channels, nowISO);
 ok("two old Facebook ads listed", items.length === 2);
 ok("fresh ad not listed", !items.some((i) => i.propertyId === "p36"));
-ok("row has address, site and age", items[0].address === "Addr p3" && items[0].portal === "facebook" && items[0].days === 8);
+ok("row has address, site and age", items[0].address === "Addr p3" && items[0].portal === "facebook" && items[0].days === 11);
 
 const d = buildListingHealthDigest(channels, "https://app.vacantless.com", nowISO);
 ok("several units: button opens the Renew box on the list", d.actionUrl === "https://app.vacantless.com/dashboard/properties#renew-ads");
