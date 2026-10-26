@@ -53,7 +53,7 @@ ok("page's own message is not the helper", !isHelperMessage({ source: "vacantles
 
 // Wiring.
 const layout = readFileSync("app/dashboard/layout.tsx", "utf8");
-ok("every dashboard page syncs the helper", layout.includes("<MarketplaceHelperSync loadAds={helperAdList} saveCaptured={helperSaveCapturedAds} />"));
+ok("every dashboard page syncs the helper", layout.includes("<MarketplaceHelperSync loadAds={helperAdList} saveCaptured={helperSaveCapturedAds}"));
 const actions = readFileSync("app/dashboard/marketplace-helper-actions.ts", "utf8");
 ok("actions check the signed-in person", actions.includes("auth.getUser()") && actions.includes("helperOrgIds("));
 ok("captured input is cleaned first", actions.indexOf("cleanCapturedAds(raw)") < actions.indexOf("signedInOrgIds()", actions.indexOf("helperSaveCapturedAds")));

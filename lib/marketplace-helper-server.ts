@@ -2,12 +2,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildTrackedLink } from "@/lib/listing-distribution";
 import { recordMarketplaceAd } from "@/lib/marketplace-kit-server";
 import { roleCan } from "@/lib/roles";
+import { localDateString } from "@/lib/leasing-snapshot";
 import {
   helperReplyTemplate,
   marketplaceItemIdFrom,
   shortRentalName,
   type HelperAdEntry,
   type HelperCapturedAd,
+  type HelperRenewedAd,
+  renewedPostedOn,
 } from "@/lib/marketplace-helper";
 
 // S738: the server half of the helper's ad list and link capture. The caller
@@ -119,3 +122,45 @@ export async function saveHelperCapturedAds(
   }
   return done;
 }
+
+/**
+ * S739: record Facebook renewals the helper saw the landlord press. Same rule
+ * as "I already renewed it" (markAdsRenewed): the live ad's posted date moves
+ * to the renewal day in the account's own time zone, never backwards. Only
+ * ads in this person's accounts. Returns every ad id the helper may forget
+ * (saved, already up to date, or not an ad Vacantless follows).
+ */
+export async function saveHelperRenewedAds(
+  admin: SupabaseClient,
+  orgIds: string[],
+  items: HelperRenewedAd[],
+): Promise<string[]> {
+  const done: string[] = [];
+  if (orgIds.length === 0) return done;
+  const { data: orgs } = await admin.from("organizations").select("id, booking_timezone").in("id", orgIds);
+  const tzByOrg = new Map(
+    ((orgs ?? []) as { id: string; booking_timezone: string | null }[]).map((o) => [o.id, o.booking_timezone || "America/Toronto"]),
+  );
+  for (const item of items) {
+    const { data: rows, error } = await admin
+      .from("listing_posts")
+      .select("id, organization_id, posted_on")
+      .in("organization_id", orgIds)
+      .eq("portal", "facebook")
+      .eq("status", "live")
+      .ilike("url", `%/marketplace/item/${item.itemId}%`)
+      .limit(5);
+    if (error) continue; // kept by the helper, tried again on the next page
+    let failed = false;
+    for (const r of (rows ?? []) as { id: string; organization_id: string; posted_on: string | null }[]) {
+      const day = localDateString(item.at, tzByOrg.get(r.organization_id) ?? "America/Toronto");
+      const next = renewedPostedOn(r.posted_on, day);
+      if (!next) continue;
+      const { error: upErr } = await admin.from("listing_posts").update({ posted_on: next }).eq("id", r.id);
+      if (upErr) failed = true;
+    }
+    if (!failed) done.push(item.itemId);
+  }
+  return done;
+}
+

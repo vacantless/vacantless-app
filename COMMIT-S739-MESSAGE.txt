@@ -1,0 +1,14 @@
+S739: save the Facebook renewals the helper sees (app half of helper 1.2.0)
+
+Helper 1.2.0 notes when the landlord presses Facebook's own Renew on an ad
+Vacantless knows. Any dashboard page now asks a 1.2.0 helper for those
+notes (get_renewed) and saves them under the signed-in person's own
+accounts: each live Facebook ad's posted date moves to the renewal day in
+the account's time zone, never backwards, the same rule as "I already
+renewed it". The helper then forgets what was saved (renewed_saved).
+
+Reports are checked first (cleanRenewedAds): a real ad id, pressed within
+the last 7 days, not in the future. Older helpers are not asked.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012B2GCwk2eBNKjYcgCWuToN

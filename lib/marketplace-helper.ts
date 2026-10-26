@@ -344,3 +344,34 @@ export function isHelperMessage(data: unknown, type: string): data is Record<str
   const d = data as Record<string, unknown>;
   return d.source === MARKETPLACE_HELPER_EXT_SOURCE && d.type === type;
 }
+
+// S739: Facebook renewals the helper saw the landlord press on Your listings
+// (the ad's own "..." menu, whose "View listing" link names the ad).
+export type HelperRenewedAd = { itemId: string; at: number };
+
+/** Helper 1.2.0 and up reports renewals. */
+export const MARKETPLACE_HELPER_RENEW_MIN_VERSION = "1.2.0";
+
+/** Renewal reports as the helper sent them, checked: a real ad id, pressed in the last 7 days. */
+export function cleanRenewedAds(raw: unknown, now: number = Date.now()): HelperRenewedAd[] {
+  if (!Array.isArray(raw)) return [];
+  const out: HelperRenewedAd[] = [];
+  const seen = new Set<string>();
+  for (const r of raw.slice(0, 50)) {
+    if (!r || typeof r !== "object") continue;
+    const itemId = String((r as Record<string, unknown>).itemId ?? "");
+    const at = Number((r as Record<string, unknown>).at);
+    if (!/^\d{6,20}$/.test(itemId) || seen.has(itemId)) continue;
+    if (!Number.isFinite(at) || at > now + 5 * 60_000 || now - at > 7 * 24 * 60 * 60_000) continue;
+    seen.add(itemId);
+    out.push({ itemId, at });
+  }
+  return out;
+}
+
+/** Move a live ad's posted date to the renewal day, never backwards. Pure. */
+export function renewedPostedOn(current: string | null | undefined, renewedDay: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(renewedDay)) return null;
+  if (current && /^\d{4}-\d{2}-\d{2}$/.test(current) && current >= renewedDay) return null;
+  return renewedDay;
+}
