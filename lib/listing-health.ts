@@ -219,7 +219,10 @@ function plural(count: number, one: string, many: string): string {
   return count === 1 ? one : many;
 }
 
-const RENTALS_LIST_PATH = "/dashboard/properties";
+// S737: several units land on the Renew box at the top of the rentals list
+// (renew-list-card.tsx). Before, the button opened the plain list, which
+// showed no ads to renew (Noam, 2026-10-25: "then what?").
+const RENTALS_LIST_PATH = "/dashboard/properties#renew-ads";
 
 function distributeUrl(appUrl: string, propertyId: string): string {
   // S715: land on the Renew box (renew-ads-card.tsx), not the top of the tab.
@@ -268,7 +271,7 @@ export function buildListingHealthDigest(
     })
     .join("\n");
   const actionUrl = oneUnit ? firstDistributeUrl : appUrl.replace(/\/+$/, "") + RENTALS_LIST_PATH;
-  const actionLabel = oneUnit ? "Open the rental" : "Open your rentals";
+  const actionLabel = oneUnit ? "Open the rental" : "Renew your ads";
   return { adCount, unitCount, firstDistributeUrl, summaryText, detailsText, actionUrl, actionLabel };
 }
 
@@ -305,4 +308,25 @@ export function buildListingHealthSnapshotLine(
   return summary.firstDistributeUrl
     ? `${line} Renew them here: ${summary.firstDistributeUrl}`
     : line;
+}
+
+/** S737: one row per old live ad, for the Renew box on the rentals list. Pure. */
+export type RenewListItem = {
+  propertyId: string;
+  address: string;
+  portal: string;
+  label: string;
+  days: number | null;
+};
+
+export function renewListItems(channels: ListingHealthChannel[], nowISO: string): RenewListItem[] {
+  return channels
+    .filter((c) => c.reason === "stale" && c.liveUrl)
+    .map((c) => ({
+      propertyId: c.propertyId,
+      address: c.address,
+      portal: c.channel,
+      label: c.channelLabel,
+      days: adAgeDays(c.lastPostedOn, nowISO),
+    }));
 }

@@ -2230,6 +2230,32 @@ export async function updateListingPost(formData: FormData) {
 }
 
 /**
+ * S737: "I renewed them all" on the rentals list's Renew box. Each pair is
+ * "<property id>|<site>"; RLS scopes every update to the caller's org, and
+ * only LIVE ads move to today, same as markAdsRenewed.
+ */
+export async function markAllAdsRenewed(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const org = await getCurrentOrg();
+  const today = localDateString(Date.now(), org?.booking_timezone || "America/Toronto");
+  const supabase = createClient();
+  const pairs = formData.getAll("pair").map(String).slice(0, 200);
+  for (const pair of pairs) {
+    const [propertyId, rawPortal] = pair.split("|");
+    const portal = normalizePortal(rawPortal);
+    if (!propertyId || !isPortalKey(portal)) continue;
+    await supabase
+      .from("listing_posts")
+      .update({ posted_on: today })
+      .eq("property_id", propertyId)
+      .eq("portal", portal)
+      .eq("status", "live");
+  }
+  revalidatePath("/dashboard/properties");
+  redirect("/dashboard/properties?renewed=1#renew-ads");
+}
+
+/**
  * S702g: "I renewed it today". Facebook and Kijiji ads go stale on a timer and
  * the daily snapshot lists them as old until their posted date moves. Before
  * this the only way to clear one was to edit the ad's posted date by hand
@@ -2274,6 +2300,8 @@ export async function markAdsRenewed(formData: FormData) {
       redirect(adUrl);
     }
   }
+  // S737: from the Renew box on the rentals list, stay on the list.
+  if (formData.get("back") === "list") redirect("/dashboard/properties?renewed=1#renew-ads");
   redirect(`/dashboard/properties/${propertyId}?tab=distribute&post=renewed#distribute`);
 }
 

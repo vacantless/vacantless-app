@@ -34,8 +34,8 @@ function finalBody(d: ReturnType<typeof buildListingHealthDigest>) {
 // Two units: every unit keeps its own link; the button opens the rentals list.
 const two = buildListingHealthDigest([ch("p3", "833 Pillette Rd, Unit 3"), ch("p33", "833 Pillette Rd, Unit 33")], APP, "2026-10-15T12:00:00Z");
 const twoBody = finalBody(two);
-ok("two units: button opens the rentals list", two.actionUrl === `${APP}/dashboard/properties`, two.actionUrl);
-ok("two units: button label", two.actionLabel === "Open your rentals");
+ok("two units: button opens the Renew box on the rentals list", two.actionUrl === `${APP}/dashboard/properties#renew-ads`, two.actionUrl);
+ok("two units: button label", two.actionLabel === "Renew your ads");
 ok("two units: Unit 3 link kept", twoBody.includes("/dashboard/properties/p3?tab=distribute#renew-ads"), twoBody);
 ok("two units: Unit 33 link kept", twoBody.includes("/dashboard/properties/p33?tab=distribute#renew-ads"), twoBody);
 ok("two units: each link sits under its ad", /Unit 3: Facebook Marketplace, posted 14 days ago\n\s+\S+p3\?/.test(twoBody), twoBody);

@@ -1,0 +1,20 @@
+S737c: the refresh email lands on a Renew box; Posting proof on pricing
+
+Noam, 2026-10-25: the "4 ads need a refresh" email's button opened the
+rentals list, which showed nothing to renew ("then what?").
+
+- Rentals list: a Renew box at the top (renew-list-card.tsx) lists every
+  old live ad across all rentals (same rule as the email,
+  lib/listing-health renewListItems) with "Renew on <site>" (opens the
+  ad) and "I already renewed it" (stays on the list).
+- Email with several rentals: the button is "Renew your ads" and opens
+  /dashboard/properties#renew-ads; the body says where the Renew button is.
+- Pricing (review item 12): a proof block under the Posting card, figures
+  in lib/proof-stats.ts POSTING_PROOF, counted 2026-10-25: 16 ads posted
+  to Kijiji, Rentals.ca and Zumper for our first customer; nearly 9 in 10
+  renters (97 of 112) booked within an hour of asking; 276 inquiries,
+  112 viewings since May.
+- Tests: renew-list 10; s718 refresh links updated (10).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019bgsEvp3bixNdrqDfohAWe

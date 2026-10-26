@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { MarketingHeader } from "@/components/marketing-chrome";
 import { OPERATOR_LINE } from "@/lib/operator-line";
-import { LEASING_PROOF_STATS } from "@/lib/proof-stats";
+import { LEASING_PROOF_STATS, POSTING_PROOF } from "@/lib/proof-stats";
 import { TIERS } from "@/lib/billing";
 import { HOW_TO_COUNT_WORD } from "@/lib/how-to-videos";
 import type { ReactNode } from "react";
@@ -568,6 +568,17 @@ function PostingAddonCard() {
         <p className="text-[0.84rem] leading-snug text-[#59655f]">
           Kijiji charges its own fee for each ad. Facebook Page posting and the Marketplace kit (ready to paste in) are free on every plan.
         </p>
+        {/* S737 (review item 12): what Posting did on real rentals. Figures
+            live in lib/proof-stats.ts and must stay true. */}
+        <div className="mt-4 rounded-lg border border-[#d9e1dc] bg-[#f4f7f5] p-4">
+          <p className="mb-1 text-[0.9rem] font-semibold text-[#15211d]">{POSTING_PROOF.title}</p>
+          <p className="text-[0.86rem] leading-snug text-[#273832]">{POSTING_PROOF.lines.join(" ")}</p>
+          <p className="mt-3 text-[0.86rem] leading-snug text-[#273832]">
+            <b className="text-[1.15rem] font-extrabold text-[#15211d]">{POSTING_PROOF.statValue}</b>{" "}
+            {POSTING_PROOF.statLabel} Every renter from every site lands in one list, with the booking link right away.
+          </p>
+          <p className="mt-2 text-[0.78rem] leading-snug text-[#59655f]">{POSTING_PROOF.footnote}</p>
+        </div>
       </div>
     </article>
   );

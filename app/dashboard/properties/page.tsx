@@ -26,6 +26,8 @@ import { MlsPdfImport } from "./mls-pdf-import";
 import { ListingImageImport } from "./listing-image-import";
 import { ReadinessChips } from "./readiness-chips";
 import { DeleteOrArchiveControl } from "./row-actions";
+import { RenewListCard } from "./renew-list-card";
+import { loadRenewItems } from "@/lib/renew-list-load";
 
 export const dynamic = "force-dynamic";
 
@@ -232,6 +234,7 @@ export default async function PropertiesPage({
     archived?: string;
     restored?: string;
     delete_blocked?: string;
+    renewed?: string;
   };
 }) {
   const supabase = createClient();
@@ -268,6 +271,9 @@ export default async function PropertiesPage({
     // S710: weekly windows OR dated hours still to come (lib/viewing-times-count).
     countViewingTimes(supabase, org.id, org.booking_timezone || undefined).then((count) => ({ count })),
   ]);
+
+  // S737: old ads across every rental, for the Renew box (lib/renew-list-load).
+  const renewItems = await loadRenewItems(supabase, org.id, org.booking_timezone || "America/Toronto");
 
   const allRows = (properties ?? []) as PropertyRow[];
   const activeRows = allRows.filter((row) => !row.archived_at);
@@ -410,6 +416,8 @@ export default async function PropertiesPage({
           ) : undefined
         }
       />
+
+      <RenewListCard items={renewItems} renewed={!!searchParams.renewed} />
 
       {searchParams.added && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">

@@ -1,7 +1,7 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-10-25",
+  "generated": "2026-10-26",
   "checksum": "fd178e8f2a9705623c1f8fd5f4646386b8071999ce3bae915e6717bf191e36f9",
   "surfaces": [
     "app/agent/[token]/marketplace/[propertyId]/page.tsx",
@@ -34,6 +34,7 @@
     "app/dashboard/properties/new/page.tsx",
     "app/dashboard/properties/page.tsx",
     "app/dashboard/properties/readiness-chips.tsx",
+    "app/dashboard/properties/renew-list-card.tsx",
     "app/dashboard/properties/standard-policy/page.tsx",
     "app/dashboard/send-live/page.tsx",
     "app/dashboard/settings/facebook-page-card.tsx",
@@ -181,6 +182,7 @@
     "app/dashboard/properties/new/page.tsx": 5,
     "app/dashboard/properties/page.tsx": 86,
     "app/dashboard/properties/readiness-chips.tsx": 12,
+    "app/dashboard/properties/renew-list-card.tsx": 10,
     "app/dashboard/properties/standard-policy/page.tsx": 65,
     "app/dashboard/send-live/page.tsx": 4,
     "app/dashboard/settings/facebook-page-card.tsx": 10,

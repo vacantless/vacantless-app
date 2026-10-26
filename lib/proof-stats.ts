@@ -16,3 +16,23 @@ export const LEASING_PROOF_STATS: readonly { value: string; label: string }[] = 
 // Group: 276 leads, 113 showings. Update from the database, never from memory.
 export const POSTING_OFFER_PROOF =
   "Our first customer has five rentals in Windsor. 276 renter inquiries and 113 viewings, all in one list. Counted 2026-10-23.";
+
+// S737 (review item 12): the proof under the Posting card on the pricing
+// section. Counted from the database on 2026-10-25 for Agile Real Estate
+// Group: 16 ads on Kijiji, Rentals.ca and Zumper posted by us (listing_posts
+// live, removed or expired); 276 leads, 112 renters with a viewing; 97 of the
+// 112 booked within an hour of their first inquiry (86.6%, "nearly 9 in 10").
+// Update from the database, never from memory. Every figure must stay true.
+export const POSTING_PROOF = {
+  title: "What Posting does for our first customer",
+  lines: [
+    "Five rentals in Windsor.",
+    "We posted 16 ads to Kijiji, Rentals.ca and Zumper for them.",
+    "We kept them up and took them down when they rented.",
+    "Nobody retyped an ad.",
+  ],
+  statValue: "Nearly 9 in 10",
+  statLabel: "renters booked their viewing within an hour of asking.",
+  footnote:
+    "276 renter inquiries and 112 viewings since May. Counted 2026-10-25 from rentals the founder runs. Your own results will vary.",
+} as const;
