@@ -1,0 +1,21 @@
+S738b: the helper's Marketplace ad list and saved ad links
+
+The robot posts wherever a site allows it; the Vacantless helper covers
+what lives on the landlord's own Facebook. This is the app half of
+helper 1.1.0. Still no app route and no token in the helper: everything
+goes through the dashboard page the landlord has open.
+
+- Every dashboard page (MarketplaceHelperSync in the layout) answers a
+  1.1.0+ helper with the live Marketplace ads across every account the
+  person manages: ad id, rental, still available, and the reply with its
+  tracked booking link (same words as the kit's renter reply, with the
+  renter's name; "This one is rented now" when it is not available).
+- The helper hands back the links it noted on the landlord's own new ads;
+  the page saves them under the person's own sign-in through
+  recordMarketplaceAd (same as "Save the link to your ad"), skipping
+  rentals outside their accounts and ads already saved.
+- helperVersionOk now uses the shared versionAtLeast.
+- Tests: helper-ad-list 26 (new), marketplace-helper.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Coi7uFYGzbhE1kx4ScmSff

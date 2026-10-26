@@ -11,6 +11,8 @@ import { isOwnAddress } from "@/lib/new-account-watch";
 import { planLabelOf, type PlanKey } from "@/lib/billing";
 import { AdConversionFire } from "@/components/ad-tags";
 import { recordAdConversions } from "./ad-conversion-actions";
+import { MarketplaceHelperSync } from "@/components/marketplace-helper-sync";
+import { helperAdList, helperSaveCapturedAds } from "./marketplace-helper-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +129,7 @@ export default async function DashboardLayout({
       {adEvents.length > 0 && (
         <AdConversionFire cfg={adCfg} events={adEvents} record={recordAdConversions} />
       )}
+      <MarketplaceHelperSync loadAds={helperAdList} saveCaptured={helperSaveCapturedAds} />
     </div>
   );
 }

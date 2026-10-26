@@ -226,13 +226,7 @@ export function buildMarketplaceHelperKit(input: {
 
 /** True when a helper's version answers a kit of this shape. */
 export function helperVersionOk(version: unknown): boolean {
-  if (typeof version !== "string") return false;
-  const parse = (v: string) => v.split(".").map((n) => Number(n) || 0);
-  const [a, b, c] = parse(version);
-  const [x, y, z] = parse(MARKETPLACE_HELPER_MIN_VERSION);
-  if (a !== x) return a > x;
-  if (b !== y) return b > y;
-  return c >= z;
+  return versionAtLeast(version, MARKETPLACE_HELPER_MIN_VERSION);
 }
 
 /** The pong the helper sends; anything else on the window is ignored. */
@@ -240,4 +234,113 @@ export function isHelperPong(data: unknown): data is { source: string; type: "po
   if (!data || typeof data !== "object") return false;
   const d = data as Record<string, unknown>;
   return d.source === MARKETPLACE_HELPER_EXT_SOURCE && d.type === "pong" && typeof d.version === "string";
+}
+
+// ---- S738: the helper's Marketplace ad list, the chat reply, link capture ---
+// The robot posts wherever a site allows it; the helper covers what lives on
+// the landlord's own Facebook. Two jobs, still with no network call and no
+// token in the helper:
+//  1. In a Marketplace chat, "Fill booking reply" writes this rental's reply
+//     with its tracked booking link into Facebook's message box. The landlord
+//     presses Send. The ad list it needs comes from any open Vacantless page.
+//  2. On the landlord's own new ad, the helper notes the ad's link and hands it
+//     to the next Vacantless page, which saves it like "Save the link to your ad".
+
+/** The smallest helper version that takes the ad list and hands back ad links. */
+export const MARKETPLACE_HELPER_AD_LIST_MIN_VERSION = "1.1.0";
+
+/** Where the renter's first name goes in a reply template. */
+export const HELPER_REPLY_NAME = "{name}";
+
+export type HelperAdEntry = {
+  /** Facebook's ad id, the digits in /marketplace/item/<id>/. */
+  itemId: string;
+  propertyId: string;
+  /** Short rental name for the helper's chip, e.g. "833 Pillette Rd, Unit 3". */
+  rental: string;
+  available: boolean;
+  /** The reply with HELPER_REPLY_NAME where the renter's first name goes. */
+  reply: string;
+};
+
+export type HelperCapturedAd = { itemId: string; propertyId: string };
+
+export function versionAtLeast(version: unknown, min: string): boolean {
+  if (typeof version !== "string") return false;
+  const parse = (v: string) => v.split(".").map((n) => Number(n) || 0);
+  const [a, b, c] = parse(version);
+  const [x, y, z] = parse(min);
+  if (a !== x) return a > x;
+  if (b !== y) return b > y;
+  return c >= z;
+}
+
+/** Facebook's ad id from a Marketplace ad link, or null. */
+export function marketplaceItemIdFrom(url: string | null | undefined): string | null {
+  const m = /facebook\.com\/marketplace\/item\/(\d{6,20})/i.exec(String(url ?? ""));
+  return m ? m[1] : null;
+}
+
+/** "833 Pillette Rd, Unit 3, Windsor, ON N8Y 3B4" -> "833 Pillette Rd, Unit 3". */
+export function shortRentalName(address: string | null | undefined): string {
+  const parts = String(address ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return "Your rental";
+  if (parts.length > 1 && /^(unit|apt|suite|#)/i.test(parts[1])) return `${parts[0]}, ${parts[1]}`;
+  return parts[0];
+}
+
+/**
+ * The reply the helper writes into a Marketplace chat. Same words as the kit's
+ * renter reply (lib/listing-copy buildRenterMessageReply), with the renter's
+ * name, so a landlord's replies read the same everywhere.
+ */
+export function helperReplyTemplate(input: {
+  available: boolean;
+  bookingUrl: string;
+  phone?: string | null;
+}): string {
+  if (!input.available) {
+    return `Hi ${HELPER_REPLY_NAME}, thanks for asking. This one is rented now.`;
+  }
+  const lines = [
+    `Hi ${HELPER_REPLY_NAME}, yes it is still available. You can pick a viewing time here: ${input.bookingUrl}`,
+  ];
+  const p = input.phone?.trim();
+  if (p) lines.push(`If you would rather not fill out the form, you can also call ${p}.`);
+  return lines.join(" ");
+}
+
+/** The template with the renter's first name, or a plain "Hi," when there is none. */
+export function fillHelperReply(template: string, renterName: string | null | undefined): string {
+  const first = String(renterName ?? "").trim().split(/\s+/)[0] ?? "";
+  const clean = /^[\p{L}][\p{L}'-]{0,30}$/u.test(first) ? first : "";
+  return clean ? template.split(HELPER_REPLY_NAME).join(clean) : template.split(` ${HELPER_REPLY_NAME}`).join("");
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** What the helper handed back, checked: at most 10, ad id digits, rental id a uuid, no repeats. */
+export function cleanCapturedAds(raw: unknown): HelperCapturedAd[] {
+  if (!Array.isArray(raw)) return [];
+  const out: HelperCapturedAd[] = [];
+  const seen = new Set<string>();
+  for (const r of raw.slice(0, 10)) {
+    if (!r || typeof r !== "object") continue;
+    const itemId = String((r as Record<string, unknown>).itemId ?? "");
+    const propertyId = String((r as Record<string, unknown>).propertyId ?? "");
+    if (!/^\d{6,20}$/.test(itemId) || !UUID_RE.test(propertyId) || seen.has(itemId)) continue;
+    seen.add(itemId);
+    out.push({ itemId, propertyId });
+  }
+  return out;
+}
+
+/** A message from the helper of the given type (same window, helper source). */
+export function isHelperMessage(data: unknown, type: string): data is Record<string, unknown> {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  return d.source === MARKETPLACE_HELPER_EXT_SOURCE && d.type === type;
 }
