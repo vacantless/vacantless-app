@@ -249,6 +249,16 @@ export function siteSetupNotice(
       action: "Open Rentals.ca",
     };
   }
+  // S738: another Vacantless account already posts from this Rentals.ca
+  // account (2026-10-19: a second account on Agile's switched Bruce 303 off).
+  if (errorCode === "account_shared") {
+    return {
+      message:
+        "Another Vacantless account already posts from this Rentals.ca account. Posting here too would switch off its ads. Sign in to Rentals.ca with an account only you use, then approve again.",
+      href: "/dashboard/site-signin/rentals_ca",
+      action: "Sign in to Rentals.ca",
+    };
+  }
   // S724 (V251-31/33): the free plan on the landlord's Rentals.ca account is full.
   if (errorCode === "free_limit_reached") {
     return {

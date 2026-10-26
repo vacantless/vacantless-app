@@ -57,6 +57,8 @@ async function main() {
   }
   ok("ready says the password stays with them", /stays with you/.test(siteSigninView("kijiji", "ready").body));
   ok("a failed check says so", /not show you as signed in yet/.test(siteSigninView("kijiji", "ready", "not_signed_in_yet").body));
+  ok("shared Rentals.ca account says so", /already in use/.test(siteSigninView("rentals_ca", "failed", "account_shared").title) && /only you use/.test(siteSigninView("rentals_ca", "failed", "account_shared").body));
+  ok("other failures keep their words", siteSigninView("rentals_ca", "failed", "error").title === "The window did not open");
   ok("done says each post is still approved", /approve each post/.test(siteSigninView("zumper", "done").body));
 
   const req = signinWindowRequest("t0k", "win-1", "vacantless/vacantless-worker");

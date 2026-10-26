@@ -1,0 +1,13 @@
+S738: say why when a Rentals.ca account is already in use
+
+Pairs with worker S738w (one Rentals.ca account per Vacantless account).
+
+- Post card: error_code account_shared reads "Another Vacantless account
+  already posts from this Rentals.ca account..." with a button to the
+  Rentals.ca sign-in page.
+- Sign-in page: a window refused as account_shared says the account is
+  already in use and that we did not save it.
+- Tests: s724-posting-stop 5, site-signin 65.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Coi7uFYGzbhE1kx4ScmSff

@@ -193,6 +193,14 @@ export function siteSigninView(
     case "cancelled":
       return { tone: "bad", title: "Stopped", body: "Your account stays as it was. Try again any time." };
     case "failed":
+      // S738: one Rentals.ca account per Vacantless account.
+      if (detail === "account_shared") {
+        return {
+          tone: "bad",
+          title: `That ${name} account is already in use`,
+          body: `Another Vacantless account already posts from this ${name} account. Sharing it would switch off each other's ads, so we did not save it. Sign in with a ${name} account only you use.`,
+        };
+      }
       return {
         tone: "bad",
         title: "The window did not open",
