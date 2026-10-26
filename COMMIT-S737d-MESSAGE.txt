@@ -1,0 +1,10 @@
+S737d: the refresh email counts days in the account's own time zone
+
+Live check after 4313af9: Agile's Renew box was empty while the 8 PM
+email said four Facebook ads were old. The email's sweep counted from
+the UTC date (already tomorrow at 8 PM in Toronto), the rental page and
+the Renew box from the account's date. The email now uses the account's
+date too, so it never points at an empty box.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019bgsEvp3bixNdrqDfohAWe

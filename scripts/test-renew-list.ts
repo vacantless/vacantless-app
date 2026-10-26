@@ -52,5 +52,8 @@ ok("renew all button", card.includes("I renewed them all"));
 ok("all Marketplace ads in one page", card.includes("facebook.com/marketplace/you/selling"));
 ok("action returns to the list", actions.includes('formData.get("back") === "list"'));
 
+const cron = readFileSync("app/api/cron/distribution-freshness/route.ts", "utf8");
+ok("refresh email uses the account's own date", cron.includes("today: localDateString(Date.parse(nowISO), org.booking_timezone"));
+
 console.log(`\nrenew-list: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

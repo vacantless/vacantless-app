@@ -1,6 +1,7 @@
 import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { localDateString } from "@/lib/leasing-snapshot";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
@@ -421,7 +422,14 @@ async function sendListingHealthAlerts({
       }
 
       const channels = alertableListingHealthChannels(
-        listingHealthChannels({ posts, today, nowISO }),
+        // S737: the account's own date, as on the rental page and the Renew
+        // box. The UTC date made a 6-day-old Facebook ad "old" at 8 PM in
+        // Toronto, and the box it linked to showed nothing.
+        listingHealthChannels({
+          posts,
+          today: localDateString(Date.parse(nowISO), org.booking_timezone || "America/Toronto"),
+          nowISO,
+        }),
       );
       if (channels.length === 0) {
         summary.skipped++;
