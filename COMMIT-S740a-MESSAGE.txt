@@ -1,0 +1,9 @@
+S740a: refresh-rule comment says the robot renews free Rentals.ca ads
+
+The comment on CHANNEL_REFRESH_DAYS said free Rentals.ca ads "stay up".
+They do not: the free Limited plan ends after about 21 days, and since
+S739w the home live check renews it in place at day 18. Comment only,
+no behaviour change.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq9n8YojHcBsbWTHkV

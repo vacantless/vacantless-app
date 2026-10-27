@@ -1425,15 +1425,20 @@ export function channelStatusTone(value: unknown): StatusTone {
 export const DEFAULT_REFRESH_DAYS = 14;
 
 // S699: one 14-day rule for every site flagged live, healthy ads as "needs a
-// refresh" (free Zumper and Rentals.ca ads stay up and the daily live check
-// proves it). Each site now has its own rule:
+// refresh" (free Zumper ads stay up, free Rentals.ca ads are renewed by the
+// robot, and the daily live check proves both). Each site now has its own rule:
 //   - kijiji: a paid Lite ad runs 31 days, so flag it 3 days before it ends.
 //   - facebook (Marketplace): renewing bumps the ad back up. S737: Facebook
 //     offers Renew about 9 days after the last renewal (read live 2026-10-26:
 //     renewed Oct 19, "Renew (2 days)" on Oct 26), so 7 sent people to a
 //     greyed-out button.
-//   - zumper, rentals_ca: never on age. These are free ads that stay up; the
-//     listing-post live check marks them removed when the site drops them.
+//   - zumper: never on age. Free Zumper ads stay up; the listing-post live
+//     check marks them removed when the site drops them.
+//   - rentals_ca: never on age for the landlord. A free Limited plan ends
+//     after about 21 days; S739w: the home live check renews it in place at
+//     day 18, so nothing is asked of the landlord. A sign-in page or code
+//     box stops that org's renewals for the day (tried again next day); the
+//     live check marks the ad removed only once the site drops it.
 // Anything else keeps DEFAULT_REFRESH_DAYS. null means "never stale by age".
 export const CHANNEL_REFRESH_DAYS: Readonly<Record<string, number | null>> = {
   kijiji: 28,
