@@ -1,0 +1,14 @@
+S739e: Instagram carousel prepares its photos at the same time
+
+Proven live 2026-10-27 on Growth Test: Set Live posted a five-photo
+carousel to Instagram (instagram.com/p/DfAkVqXlyHs, five slides, caption
+and booking link right). But one container at a time, each with its own
+readiness wait, took about 40 seconds inside the Set Live request.
+
+The item containers are now created and checked in parallel; the
+carousel keeps photo order (children follow the photo list, not the
+order Instagram answers). Error handling unchanged: a true sign-in code
+stops the post, any other refused photo falls back to the cover.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012B2GCwk2eBNKjYcgCWuToN

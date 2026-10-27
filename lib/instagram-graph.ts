@@ -202,13 +202,17 @@ export async function postToInstagram(args: {
   let creation: GraphStep | null = null;
   let photoCount = 1;
   if (photos.length >= 2) {
+    // All photos at once (S739 live test: one by one took about 40 seconds
+    // for five photos inside Set Live). Order is kept by index.
+    const made = await Promise.all(
+      photos.map((url) => createContainer(version, igUserId, { image_url: url, is_carousel_item: "true" }, accessToken)),
+    );
     const children: string[] = [];
     let failed: GraphStep | null = null;
-    for (const url of photos) {
-      const child = await createContainer(version, igUserId, { image_url: url, is_carousel_item: "true" }, accessToken);
+    for (const child of made) {
       if (!child.ok) {
-        failed = child;
-        break;
+        failed = failed && signInGone(failed) ? failed : child;
+        continue;
       }
       children.push(child.id);
     }

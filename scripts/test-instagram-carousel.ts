@@ -44,7 +44,9 @@ async function main() {
   const cr = creates(calls);
   ok("carousel posts", r.ok && r.photoCount === 3, r);
   ok("three items then one carousel", cr.length === 4 && cr.slice(0, 3).every((c) => c.body.is_carousel_item === "true" && !c.body.caption), cr.map((c) => c.body));
-  ok("carousel holds the three in order", cr[3].body.media_type === "CAROUSEL" && cr[3].body.children === "c1,c2,c3" && cr[3].body.caption === base.caption, cr[3]?.body);
+  const items = cr.slice(0, 3);
+  const idFor = (u: string) => `c${items.findIndex((c) => c.body.image_url === u) + 1}`;
+  ok("carousel holds the three in photo order", cr[3].body.media_type === "CAROUSEL" && cr[3].body.children === [A, B, C].map(idFor).join(",") && cr[3].body.caption === base.caption, cr[3]?.body);
   ok("publishes the carousel", calls.some((c) => c.path.endsWith("/media_publish") && c.body.creation_id === "c4"));
 }
 // One photo: as before.
