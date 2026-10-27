@@ -1,0 +1,21 @@
+S739f: one "Keep it fresh" card on Get online (review item 10)
+
+The weekly Facebook Page posts card and the "N ads are old" card become
+one card. Every live ad gets one line on how it stays near the top, and a
+Renew button only where the landlord has something to press:
+
+- Facebook Marketplace: "Renew opens in N days" until day 9, then Renew.
+- Kijiji: "Ad ends <date>" (31-day paid ad).
+- Rentals.ca: "We renew this free ad for you" where the robot posts for
+  the account (S739 worker renewal), else "Free ad ends <date>" with
+  Renew from day 18.
+- Zumper: stays up while the rental is open.
+- Facebook Page: the weekly posts switch, inside the card.
+
+Same actions as before (markAdsRenewed, setPageWeeklyPosts), and the card
+keeps id="renew-ads" so the emailed "Renew your ads" link lands on it.
+The wording is pure in lib/keep-fresh.ts (scripts/test-keep-fresh.ts, 16
+checks); both files are under the plain-language gate.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012B2GCwk2eBNKjYcgCWuToN

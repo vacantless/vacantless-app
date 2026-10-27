@@ -51,8 +51,8 @@ import {
 } from "@/lib/listing-copy";
 import { ListingCopyCard } from "./listing-copy-card";
 import { MessageReplyCard } from "./message-reply-card";
-import { RenewAdsCard } from "./renew-ads-card";
-import { PageWeeklyPostsCard } from "./page-weekly-posts-card";
+import { KeepFreshCard } from "./keep-fresh-card";
+import { keepFreshRows } from "@/lib/keep-fresh";
 import { MarketingKitCard } from "./marketing-kit-card";
 import { PostedResultsCard } from "./posted-results-card";
 import { RenterSourcesCard } from "./renter-sources-card";
@@ -178,7 +178,6 @@ import { MarketRentPanel } from "./market-rent-panel";
 import {
   DISTRIBUTION_CHANNELS,
   computeChannelStatus,
-  daysBetween,
 } from "@/lib/distribution-channels";
 import {
   buildRunSteps,
@@ -4531,28 +4530,35 @@ export default async function PropertyDetailPage({
             c.status.value === "posted" || c.status.value === "needs_refresh",
         )}
       >
-        {/* S705: only once the Page is connected. Connecting it is one row
-            in the site list ("Facebook Page: Connect"), not a second card. */}
-        {facebookPageEnabled &&
-          channelAccountByKey.get("facebook_feed")?.status === "connected" && (
-          <PageWeeklyPostsCard
-            propertyId={p.id}
-            accountStatus={channelAccountByKey.get("facebook_feed")?.status ?? null}
-            pageName={channelAccountByKey.get("facebook_feed")?.externalAccountLabel ?? null}
-            on={pageWeeklyPostsOn}
-            flash={searchParams.pageposts}
-          />
-        )}
-        <RenewAdsCard
+        {/* S739 (review item 10): one "Keep it fresh" card. The weekly Page
+            posts switch shows only once the Page is connected (S705). */}
+        <KeepFreshCard
           propertyId={p.id}
-          items={distributeChannelCards
-            .filter((c) => c.status.value === "needs_refresh" && c.status.liveUrl)
-            .map((c) => ({
-              portal: c.channel.key,
+          rows={keepFreshRows(
+            distributeChannelCards.map((c) => ({
+              key: c.channel.key,
               label: c.channel.label,
-              days: daysBetween(c.status.lastPostedOn, distributeToday),
-              liveUrl: c.status.liveUrl as string,
-            }))}
+              status: c.status.value,
+              lastPostedOn: c.status.lastPostedOn,
+              liveUrl: c.status.liveUrl,
+            })),
+            {
+              today: distributeToday,
+              rentalsRobotRenews:
+                robotPostingAccess.allowed &&
+                channelAccountByKey.get("rentals_ca")?.status === "connected",
+            },
+          )}
+          weekly={
+            facebookPageEnabled && channelAccountByKey.get("facebook_feed")?.status === "connected"
+              ? {
+                  on: pageWeeklyPostsOn,
+                  pageName: channelAccountByKey.get("facebook_feed")?.externalAccountLabel ?? null,
+                  needsLogin: false,
+                  flash: typeof searchParams.pageposts === "string" ? searchParams.pageposts : undefined,
+                }
+              : null
+          }
         />
         <DistributeTab
           propertyId={p.id}
