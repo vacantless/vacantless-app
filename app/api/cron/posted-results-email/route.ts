@@ -57,10 +57,13 @@ export async function GET(req: NextRequest) {
   const ids = Array.from(new Set(((recent ?? []) as { property_id: string | null }[]).map((r) => r.property_id).filter(Boolean))) as string[];
   if (ids.length === 0) return NextResponse.json({ ok: true, sent: 0, dry, report: [] });
 
+  // S739: name the direct link. concierge_leaseup_claims (0172) also joins
+  // properties to organizations, so a bare organizations(...) embed is
+  // ambiguous and PostgREST refuses it (PGRST201, every run from 2026-10-26).
   const { data: props, error } = await admin
     .from("properties")
     .select(
-      "id, organization_id, address, status, results_emailed_at, organization:organizations(name, plan, posting_addon_active, closed_at, brand_color, logo_url)",
+      "id, organization_id, address, status, results_emailed_at, organization:organizations!properties_organization_id_fkey(name, plan, posting_addon_active, closed_at, brand_color, logo_url)",
     )
     .in("id", ids);
   if (error) return NextResponse.json({ ok: false, reason: `read:${error.code ?? "failed"}` }, { status: 500 });

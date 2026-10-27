@@ -297,7 +297,10 @@ export default async function PublicListingPage({
     if (admin) {
       const { data: prop } = await admin
         .from("properties")
-        .select("organizations(closed_at, plan)")
+        // S739: name the direct link (concierge_leaseup_claims makes a bare
+        // embed ambiguous, PGRST201), or a closed account and the waiting list
+        // are never read here.
+        .select("organizations!properties_organization_id_fkey(closed_at, plan)")
         .eq("id", params.propertyId)
         .maybeSingle();
       const orgRel = (prop as { organizations?: unknown } | null)?.organizations;

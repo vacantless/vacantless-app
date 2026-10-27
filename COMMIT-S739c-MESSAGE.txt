@@ -1,0 +1,20 @@
+S739c: fix the results email (PGRST201) and a leased rental's renter page
+
+properties joins organizations two ways: its own organization_id and
+concierge_leaseup_claims (0172, keyed on organization and property). A bare
+organizations(...) embed on a properties query is therefore ambiguous and
+PostgREST refuses it with PGRST201.
+
+- /api/cron/posted-results-email failed every 15-minute sweep from
+  2026-10-26 18:30Z, the first run that found a qualifying rental
+  (Pillette 36's new Marketplace ad; Agile is skipped, so no landlord
+  missed an email).
+- /r/<rental> for a rental no longer available read neither a closed
+  account nor the plan, so it never offered the waiting list.
+
+Both now name the link (organizations!properties_organization_id_fkey).
+scripts/test-org-embed-hint.ts fails on any bare organizations(...) embed
+on a properties query in app/ or lib/.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012B2GCwk2eBNKjYcgCWuToN
