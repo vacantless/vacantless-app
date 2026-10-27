@@ -74,6 +74,7 @@ import {
 } from "@/lib/facebook-page-oauth";
 import {
   buildInstagramCaption,
+  instagramPhotoUrls,
   postToInstagram,
 } from "@/lib/instagram-graph";
 import { confirmLeaseupTakedownRemoved } from "@/lib/leaseup-takedown-confirm";
@@ -1650,6 +1651,8 @@ export async function postInstagramNow(formData: FormData) {
         | string
         | undefined) ?? ""
     : "";
+  // S739: up to five photos as an Instagram carousel, cover first.
+  const imageUrls = instagramPhotoUrls(pubPhotos);
   if (!imageUrl) {
     await releaseReservation();
     backTo(propertyId, "ig_needsphoto");
@@ -1686,6 +1689,7 @@ export async function postInstagramNow(formData: FormData) {
     igUserId,
     pageAccessToken,
     imageUrl,
+    imageUrls,
     caption,
   });
   if (!graph.ok) {

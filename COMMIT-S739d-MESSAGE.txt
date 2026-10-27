@@ -1,0 +1,20 @@
+S739d: Instagram posts carry up to five photos (carousel)
+
+Review item 6, second half. The Page post already carries up to five
+photos (d430a96); Instagram still went out with the cover alone.
+
+postToInstagram now takes imageUrls (cover first, up to five, public https,
+no repeats). With two or more it makes one item container per photo, then
+a CAROUSEL container holding them, then publishes, and reads the permalink
+as before. If any photo is refused it falls back to the captioned cover
+post, so a rental never loses its Instagram ad over one photo. Only true
+sign-in codes (190, 102, 10, 200) stop the post: Facebook marks nearly
+every Graph error "OAuthException", bad photos included (9004), so the
+carousel does not read that alone as a lost sign-in. The single-photo path
+and its error handling are unchanged.
+
+scripts/test-instagram-carousel.ts drives the whole exchange against a
+fake Graph API (17 checks). Not yet posted to a real Instagram account.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012B2GCwk2eBNKjYcgCWuToN

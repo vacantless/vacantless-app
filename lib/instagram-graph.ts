@@ -6,7 +6,7 @@ import {
 } from "@/lib/facebook-page-graph";
 
 // Instagram content publishing reuses the Facebook Graph surface (same host,
-// same access token — the linked Page's token — same error shape). The one
+// same access token (the linked Page's token), same error shape). The one
 // structural difference vs. the Page feed lane: publishing is a TWO-step
 // container -> publish flow, it REQUIRES a public image_url, and the permalink
 // must be read back from the API. Egress stays graph.facebook.com ONLY.
@@ -96,12 +96,89 @@ async function waitForContainerReady(
   return { ok: true };
 }
 
+// S739: up to this many photos per Instagram post, the same as the Page album
+// (lib/facebook-page-photos FB_ALBUM_MAX_PHOTOS). Instagram allows more; five
+// keeps a Set Live inside one server action.
+export const IG_CAROUSEL_MAX_PHOTOS = 5;
+
+/** The photos to post: public https links, no repeats, cover first, at most the max. Pure. */
+export function instagramPhotoUrls(photos: unknown, max = IG_CAROUSEL_MAX_PHOTOS): string[] {
+  if (!Array.isArray(photos)) return [];
+  const out: string[] = [];
+  for (const p of photos) {
+    const u = typeof p === "string" ? p.trim() : "";
+    if (!/^https:\/\//i.test(u) || out.includes(u)) continue;
+    out.push(u);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+type GraphStep = { ok: true; id: string } | { ok: false; error: string; code?: number; isAuthError: boolean };
+
+// Facebook stamps "OAuthException" on nearly every Graph error, bad photos
+// included (9004 "Only photo or video can be accepted", 36003 aspect ratio), so
+// isAuthError alone would stop a carousel over one photo. Only these codes mean
+// the sign-in itself is gone: 190 token, 102 session, 10 and 200 permission.
+const SIGN_IN_CODES = new Set([190, 102, 10, 200]);
+function signInGone(step: GraphStep): step is Extract<GraphStep, { ok: false }> {
+  return !step.ok && step.isAuthError && typeof step.code === "number" && SIGN_IN_CODES.has(step.code);
+}
+
+async function graphPost(version: string, path: string, body: URLSearchParams, what: string): Promise<GraphStep> {
+  let res: Response;
+  try {
+    res = await fetch(`https://graph.facebook.com/${version}/${path}`, { method: "POST", body, cache: "no-store" });
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Instagram Graph request failed", isAuthError: false };
+  }
+  let payload: unknown = null;
+  try {
+    payload = await res.json();
+  } catch {
+    payload = null;
+  }
+  if (!res.ok) return { ok: false, ...classifyFacebookGraphError(payload) };
+  const id = payload && typeof payload === "object" ? (payload as { id?: unknown }).id : null;
+  if (typeof id !== "string" || !id.trim()) return { ok: false, error: `Instagram did not return ${what}.`, isAuthError: false };
+  return { ok: true, id: id.trim() };
+}
+
+/** One container, then its readiness check. */
+async function createContainer(
+  version: string,
+  igUserId: string,
+  fields: Record<string, string>,
+  accessToken: string,
+): Promise<GraphStep> {
+  const made = await graphPost(
+    version,
+    `${encodeURIComponent(igUserId)}/media`,
+    new URLSearchParams({ ...fields, access_token: accessToken }),
+    "a media container id",
+  );
+  if (!made.ok) return made;
+  const ready = await waitForContainerReady(version, made.id, accessToken);
+  if (!ready.ok) return ready;
+  return made;
+}
+
+/**
+ * Post a rental to Instagram. With two or more photos it is a carousel (S739):
+ * one item container per photo, then a CAROUSEL container holding them, then
+ * publish. If any photo is refused for a reason other than the sign-in, it
+ * falls back to the single cover photo, so a rental never loses its post over
+ * one bad photo. A sign-in error stops at once (the caller marks the account).
+ */
 export async function postToInstagram(args: {
   igUserId: string;
   pageAccessToken: string;
+  /** The cover photo; used alone when imageUrls has fewer than two. */
   imageUrl: string;
+  /** S739: cover first, up to IG_CAROUSEL_MAX_PHOTOS. */
+  imageUrls?: string[];
   caption: string;
-}): Promise<InstagramPostResult> {
+}): Promise<InstagramPostResult & { photoCount?: number }> {
   const igUserId = args.igUserId.trim();
   const accessToken = args.pageAccessToken.trim();
   const imageUrl = args.imageUrl.trim();
@@ -120,88 +197,54 @@ export async function postToInstagram(args: {
     };
   }
   const version = fbGraphVersion();
+  const photos = instagramPhotoUrls([imageUrl, ...(args.imageUrls ?? [])]);
 
-  // 1. Create the media container.
-  const createBody = new URLSearchParams({
-    image_url: imageUrl,
-    caption: args.caption,
-    access_token: accessToken,
-  });
-  let createRes: Response;
-  try {
-    createRes = await fetch(
-      `https://graph.facebook.com/${version}/${encodeURIComponent(igUserId)}/media`,
-      { method: "POST", body: createBody, cache: "no-store" },
-    );
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Instagram Graph request failed",
-      isAuthError: false,
-    };
+  let creation: GraphStep | null = null;
+  let photoCount = 1;
+  if (photos.length >= 2) {
+    const children: string[] = [];
+    let failed: GraphStep | null = null;
+    for (const url of photos) {
+      const child = await createContainer(version, igUserId, { image_url: url, is_carousel_item: "true" }, accessToken);
+      if (!child.ok) {
+        failed = child;
+        break;
+      }
+      children.push(child.id);
+    }
+    if (failed && signInGone(failed)) return failed;
+    if (!failed) {
+      const parent = await createContainer(
+        version,
+        igUserId,
+        { media_type: "CAROUSEL", children: children.join(","), caption: args.caption },
+        accessToken,
+      );
+      if (signInGone(parent)) return parent;
+      if (parent.ok) {
+        creation = parent;
+        photoCount = children.length;
+      }
+    }
   }
-  let createPayload: unknown = null;
-  try {
-    createPayload = await createRes.json();
-  } catch {
-    createPayload = null;
+  // One photo, or the carousel could not be built: the cover alone.
+  if (!creation) {
+    creation = await createContainer(version, igUserId, { image_url: imageUrl, caption: args.caption }, accessToken);
+    photoCount = 1;
   }
-  if (!createRes.ok) return { ok: false, ...classifyFacebookGraphError(createPayload) };
-  const creationId =
-    createPayload && typeof createPayload === "object"
-      ? (createPayload as { id?: unknown }).id
-      : null;
-  if (typeof creationId !== "string" || !creationId.trim()) {
-    return {
-      ok: false,
-      error: "Instagram did not return a media container id.",
-      isAuthError: false,
-    };
-  }
+  if (!creation.ok) return creation;
 
-  // 2. Bounded readiness check.
-  const ready = await waitForContainerReady(version, creationId.trim(), accessToken);
-  if (!ready.ok) return ready;
+  // Publish the container.
+  const published = await graphPost(
+    version,
+    `${encodeURIComponent(igUserId)}/media_publish`,
+    new URLSearchParams({ creation_id: creation.id, access_token: accessToken }),
+    "a media id",
+  );
+  if (!published.ok) return published;
 
-  // 3. Publish the container.
-  const publishBody = new URLSearchParams({
-    creation_id: creationId.trim(),
-    access_token: accessToken,
-  });
-  let publishRes: Response;
-  try {
-    publishRes = await fetch(
-      `https://graph.facebook.com/${version}/${encodeURIComponent(igUserId)}/media_publish`,
-      { method: "POST", body: publishBody, cache: "no-store" },
-    );
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Instagram Graph request failed",
-      isAuthError: false,
-    };
-  }
-  let publishPayload: unknown = null;
-  try {
-    publishPayload = await publishRes.json();
-  } catch {
-    publishPayload = null;
-  }
-  if (!publishRes.ok) return { ok: false, ...classifyFacebookGraphError(publishPayload) };
-  const mediaId =
-    publishPayload && typeof publishPayload === "object"
-      ? (publishPayload as { id?: unknown }).id
-      : null;
-  if (typeof mediaId !== "string" || !mediaId.trim()) {
-    return {
-      ok: false,
-      error: "Instagram did not return a media id.",
-      isAuthError: false,
-    };
-  }
-
-  // 4. Read the permalink (proof). Never mark live without it.
-  const permalink = await fetchInstagramPermalink(mediaId.trim(), accessToken);
+  // Read the permalink (proof). Never mark live without it.
+  const permalink = await fetchInstagramPermalink(published.id, accessToken);
   if (!permalink) {
     return {
       ok: false,
@@ -210,5 +253,5 @@ export async function postToInstagram(args: {
     };
   }
 
-  return { ok: true, mediaId: mediaId.trim(), permalink };
+  return { ok: true, mediaId: published.id, permalink, photoCount };
 }
