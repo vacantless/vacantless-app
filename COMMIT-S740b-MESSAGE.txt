@@ -1,0 +1,15 @@
+S740b: health email lists robot posts only for accounts that can robot-post
+
+The 2026-10-28 health email reported 4 problems. Two were Growth Test
+facebook and kijiji items stuck at needs_login since August. Growth Test
+has no Posting add-on, so no one will ever sign in to clear them; a Set
+Live on 2026-10-27 touched their updated_at and pulled them into the
+24-hour window. Site sign-ins were already limited to robot-posting
+accounts; robot posts now follow the same rule.
+
+The other two were real but already closed: posted-results-email failed
+5 times between 12:00 and 13:00 UTC 2026-10-27 (PGRST201, fixed in S739,
+clean since), and one team-unsubscribe-guard timeout.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq9n8YojHcBsbWTHkV

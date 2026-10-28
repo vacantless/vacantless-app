@@ -161,6 +161,11 @@ export async function GET(req: NextRequest) {
       // purpose, not a failure. Its first run closed 26 old items and filled
       // the 2026-10-21 digest with 26 false "problems".
       .filter((r) => r.error_code !== "closed_stale")
+      // S740: only accounts that can robot-post, same rule as signIns below.
+      // Growth Test (no Posting add-on) kept two August facebook/kijiji items
+      // at needs_login; a Set Live on 2026-10-27 touched updated_at and put
+      // them in the 2026-10-28 digest as two "problems" nobody can fix.
+      .filter((r) => orgs.get(r.organization_id)?.robot)
       .map((r) => ({
       org: orgName(r.organization_id),
       channel: r.channel,
