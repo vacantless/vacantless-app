@@ -66,6 +66,19 @@ export function RenewListCard({ items, renewed }: { items: RenewListItem[]; rene
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {item.portal === "facebook" ? (
+                // S740: same fix as the rental's Keep it fresh card (S740d).
+                // The form recorded the renewal on the click and opened the
+                // ad page, which has no Renew; Renew lives on Your listings.
+                <a
+                  href={FACEBOOK_YOUR_LISTINGS}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                >
+                  Open my Marketplace ads
+                </a>
+              ) : (
               <form action={markAdsRenewed}>
                 <input type="hidden" name="property_id" value={item.propertyId} />
                 <input type="hidden" name="portal" value={item.portal} />
@@ -77,6 +90,7 @@ export function RenewListCard({ items, renewed }: { items: RenewListItem[]; rene
                   Renew on {item.label}
                 </button>
               </form>
+              )}
               <form action={markAdsRenewed}>
                 <input type="hidden" name="property_id" value={item.propertyId} />
                 <input type="hidden" name="portal" value={item.portal} />

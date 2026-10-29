@@ -55,5 +55,8 @@ ok("S740: facebook row tells where Renew is", due[0].line.includes("Renew listin
 const notif = readFileSync("lib/notifications.ts", "utf8");
 ok("S740: email no longer says the ad page has Renew", !notif.includes("Press Renew there") && notif.includes("then Renew listing"));
 
+const listCard = readFileSync("app/dashboard/properties/renew-list-card.tsx", "utf8");
+ok("S740f: rentals-list Renew box sends Facebook to Your listings, records nothing", listCard.includes('item.portal === "facebook"') && listCard.includes("Open my Marketplace ads"));
+
 console.log(`keep-fresh: ${p} passed, ${f} failed`);
 if (f) process.exit(1);

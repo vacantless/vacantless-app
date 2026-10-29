@@ -1,0 +1,11 @@
+S740f: the Rentals list Renew box sends Facebook to Your listings too
+
+Re-walked after S740e: the Renew box at the top of Rentals still had
+"Renew on Facebook Marketplace" (markAdsRenewed then=open), which recorded
+the renewal on the click and opened the ad page, where Facebook has no
+Renew. Facebook rows now link to Your listings and record nothing, the same
+as the rental's Keep it fresh card (S740d). "I already renewed it" and
+"I renewed them all" stay the manual record; Kijiji keeps renew-and-open.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq9n8YojHcBsbWTHkV
