@@ -49,5 +49,11 @@ const cardSrc = readFileSync("app/dashboard/properties/[id]/keep-fresh-card.tsx"
 ok("emailed link anchor kept", cardSrc.includes('id="renew-ads"'));
 ok("same actions as before", cardSrc.includes("markAdsRenewed") && cardSrc.includes("setPageWeeklyPosts") && cardSrc.includes('name="then" value="open"'));
 
+// S740: Facebook's button opens Your listings and records nothing; Kijiji keeps renew-and-open.
+ok("S740: facebook button is a link to Your listings", cardSrc.includes("https://www.facebook.com/marketplace/you/selling") && cardSrc.includes('r.key === "facebook"'));
+ok("S740: facebook row tells where Renew is", due[0].line.includes("Renew listing"), due);
+const notif = readFileSync("lib/notifications.ts", "utf8");
+ok("S740: email no longer says the ad page has Renew", !notif.includes("Press Renew there") && notif.includes("then Renew listing"));
+
 console.log(`keep-fresh: ${p} passed, ${f} failed`);
 if (f) process.exit(1);

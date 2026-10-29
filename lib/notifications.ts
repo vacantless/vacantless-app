@@ -332,7 +332,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     defaultSubject:
       "{{affected_ads_label}} a refresh",
     defaultBody:
-      "{{listing_health_summary}}\n\n{{listing_health_details}}\n\nOld ads sink lower on the site. Press the button below. Each ad has a Renew button that opens it on the site. Press Renew there.\n\nRenewed it already? Tap \"I already renewed it\" so we stop reminding you.\n\nOpen the rental: {{dashboard_url}}",
+      "{{listing_health_summary}}\n\n{{listing_health_details}}\n\nOld ads sink lower on the site. Press the button below to see which ads to renew. For Facebook, open your Marketplace ads, press ... on the ad, then Renew listing.\n\nRenewed it already? Tap \"I already renewed it\" so we stop reminding you.\n\nOpen the rental: {{dashboard_url}}",
     defaultAccent: "#d97706",
     active: true,
   },

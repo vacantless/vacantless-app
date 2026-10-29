@@ -1,6 +1,8 @@
 import { markAdsRenewed, setPageWeeklyPosts } from "../actions";
 import type { KeepFreshRow } from "@/lib/keep-fresh";
 
+const FACEBOOK_YOUR_LISTINGS = "https://www.facebook.com/marketplace/you/selling";
+
 /**
  * S739 (review item 10): one "Keep it fresh" card on Get online. It replaces
  * the weekly Page posts card and the old-ads card: every live ad gets one
@@ -80,6 +82,21 @@ export function KeepFreshCard({
             </div>
             {r.renew && (
               <div className="flex flex-wrap items-center gap-2">
+                {r.key === "facebook" ? (
+                  // S740: a plain link to Your listings, where Facebook keeps Renew
+                  // (inside each ad's "..." menu). It records nothing: the old form
+                  // marked the ad renewed on the click, then opened the ad page,
+                  // which has no Renew button (walked live 2026-10-28). The helper
+                  // notes the real press; "I already renewed it" is the fallback.
+                  <a
+                    href={FACEBOOK_YOUR_LISTINGS}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                  >
+                    Open my Marketplace ads
+                  </a>
+                ) : (
                 <form action={markAdsRenewed}>
                   <input type="hidden" name="property_id" value={propertyId} />
                   <input type="hidden" name="portal" value={r.key} />
@@ -88,6 +105,7 @@ export function KeepFreshCard({
                     Renew on {r.label}
                   </button>
                 </form>
+                )}
                 <form action={markAdsRenewed}>
                   <input type="hidden" name="property_id" value={propertyId} />
                   <input type="hidden" name="portal" value={r.key} />

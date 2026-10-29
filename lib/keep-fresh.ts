@@ -65,7 +65,7 @@ export function keepFreshRows(
       case "facebook": {
         if (age === null) line = "Renew it on Facebook when it offers Renew.";
         else if (age >= FACEBOOK_RENEW_DAYS || stale) {
-          line = "Facebook lets you renew it now. Old ads sink lower.";
+          line = "Facebook lets you renew it now: on your Marketplace ads, press ... on this ad, then Renew listing.";
           renew = true;
         } else line = `Renew opens in ${plural(FACEBOOK_RENEW_DAYS - age, "day")}.`;
         break;

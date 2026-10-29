@@ -1,0 +1,16 @@
+S740d: Facebook "Renew" opens Your listings and records nothing
+
+Walked the 2026-10-28 refresh email as a landlord: "Open the rental" lands
+on Keep it fresh; "Renew on Facebook Marketplace" marked the ad renewed on
+the click, then opened the ad's own page, which has no Renew (only Edit,
+Mark as rented, Mark as pending). Renew lives on Your listings, inside each
+ad's "..." menu, as "Renew listing". A landlord who gave up there still had
+the ad recorded as renewed, so reminders stopped while it sank.
+
+The Facebook row now has "Open my Marketplace ads" (a plain link to Your
+listings, records nothing) beside "I already renewed it"; the helper notes
+the real press. The card line and the email say where Renew is. Kijiji
+keeps renew-and-open.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq9n8YojHcBsbWTHkV
