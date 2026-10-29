@@ -1,0 +1,15 @@
+S740c: refresh reminder is not held back by an alert sent before the ad was due
+
+The 2026-10-28 refresh email listed only Assumption 9, though Bruce 303,
+Pillette 3 and Pillette 33 were also at day 9 (Facebook's Renew opens about
+then). Those three had been emailed 2026-10-25 at day 7, under the old
+7-day Facebook rule while Renew was still greyed, and the 7-day cooldown
+held them back until 2026-11-02 (day 14).
+
+A live ad's alert now counts toward the cooldown only if it was sent on or
+after the ad's due date (posted_on + the site's refresh days). Alerts on
+time still wait the 7 days, so nothing nags daily. Two new checks in
+scripts/test-listing-health.ts.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq9n8YojHcBsbWTHkV

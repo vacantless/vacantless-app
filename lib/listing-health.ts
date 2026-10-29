@@ -5,6 +5,7 @@
 
 import {
   computeChannelStatus,
+  refreshDaysForChannel,
   type ChannelPost,
 } from "./distribution-channels";
 import {
@@ -108,9 +109,24 @@ function daysSince(iso: string | null | undefined, nowISO: string): number | nul
   return Math.floor((now - then) / 86_400_000);
 }
 
-function alertable(post: ListingHealthPost, nowISO: string, cooldownDays: number): boolean {
+function alertable(
+  post: ListingHealthPost,
+  nowISO: string,
+  cooldownDays: number,
+  refreshDays: number | null,
+): boolean {
   const age = daysSince(post.lastHealthAlertedAt, nowISO);
-  return age == null || age >= cooldownDays;
+  if (age == null || age >= cooldownDays) return true;
+  // S740: an alert sent BEFORE this ad became due does not count. On
+  // 2026-10-25 Bruce 303, Pillette 3 and 33 were emailed at day 7 (the old
+  // Facebook rule, Renew still greyed); at day 9, when Renew opens, the 7-day
+  // cooldown held them back until 2026-11-02 and only Assumption 9 went out.
+  const posted = post.postedOn ?? (post.createdAt ? post.createdAt.slice(0, 10) : null);
+  if (!posted || refreshDays == null || !post.lastHealthAlertedAt) return false;
+  const due = Date.parse(`${posted.slice(0, 10)}T00:00:00Z`) + refreshDays * 86_400_000;
+  const alerted = Date.parse(post.lastHealthAlertedAt);
+  if (Number.isNaN(due) || Number.isNaN(alerted)) return false;
+  return alerted < due;
 }
 
 function groupKey(post: ListingHealthPost): string {
@@ -185,7 +201,12 @@ export function listingHealthChannels(input: ListingHealthInput): ListingHealthC
       .filter((p) =>
         reason === "expired_or_removed"
           ? !p.lastHealthAlertedAt
-          : alertable(p, input.nowISO, cooldownDays),
+          : alertable(
+              p,
+              input.nowISO,
+              cooldownDays,
+              input.refreshDays ?? refreshDaysForChannel(p.portal),
+            ),
       )
       .map((p) => p.id);
     const first = posts[0];
