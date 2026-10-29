@@ -20,6 +20,7 @@ import {
 import { PageHeader, EmptyState } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { TriageQueue } from "./triage-queue";
+import { answeredLeadIds } from "@/lib/lead-answered";
 import { ScreenshotLeadCard } from "./screenshot-lead-card";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +63,12 @@ export default async function LeadsPage({
     .order("created_at", { ascending: false });
 
   const all = (data ?? []) as unknown as LeadRow[];
+  // S740: renters the auto-reply already answered are not "Needs a reply".
+  const answered = await answeredLeadIds(
+    supabase,
+    org.id,
+    all.filter((l) => l.status === "new").map((l) => l.id),
+  );
   const timeZone = org.booking_timezone ?? "America/Toronto";
   const today = new Date().toLocaleDateString("en-CA", { timeZone });
   const filter =
@@ -275,7 +282,7 @@ export default async function LeadsPage({
           />
         )
       ) : (
-        <TriageQueue rows={rows} today={today} timeZone={timeZone} />
+        <TriageQueue rows={rows.map((l) => ({ ...l, answered: answered.has(l.id) }))} today={today} timeZone={timeZone} />
       )}
     </div>
   );

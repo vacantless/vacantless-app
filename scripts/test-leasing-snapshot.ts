@@ -5,6 +5,7 @@ import {
   snapshotWindow,
   shouldSendSnapshot,
   buildSnapshotBlock,
+  snapshotAction,
   snapshotCounts,
   snapshotHasContent,
   formatSnapshotTime,
@@ -219,6 +220,19 @@ ok("route content gate reads the gated summary", routeSource.includes("snapshotH
 
 // S708: leads already marked lost (held scams) do not count as new.
 ok("new bucket excludes lost leads", routeSource.includes("SNAPSHOT_NEW_EXCLUDED_STATUSES.join") && readFileSync("lib/leasing-snapshot.ts", "utf8").includes('SNAPSHOT_NEW_EXCLUDED_STATUSES = ["lost"]'));
+
+// S740: no open viewing time leads the email; the button goes to the most urgent job.
+{
+  const blackHealth = { status: "black" } as Parameters<typeof buildSnapshotBlock>[2];
+  const b = buildSnapshotBlock(empty, TZ, blackHealth);
+  ok("S740: black health leads with renters can't book", b.startsWith("RENTERS CAN'T BOOK"));
+  ok("S740: green health has no such line", !buildSnapshotBlock(empty, TZ, { status: "green" } as Parameters<typeof buildSnapshotBlock>[2]).includes("CAN'T BOOK"));
+  ok("S740: no em dash in the line", !b.includes("\u2014"));
+  ok("S740: action viewing times when black", snapshotAction(empty, { status: "black" }, 3).path === "/dashboard/availability");
+  ok("S740: action renew when only ads", snapshotAction(empty, { status: "green" }, 3).path === "/dashboard/properties#renew-ads");
+  ok("S740: action inquiries when new leads", snapshotAction({ newLeads: [lead()] }, { status: "green" }, 3).path === "/dashboard/leads");
+  ok("S740: window has a 14-day cutoff", win.cutoff14dIso === new Date(Date.parse(win.cutoff7dIso) - 7 * 86_400_000).toISOString());
+}
 
 console.log(`\nleasing-snapshot: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -32,6 +32,7 @@ import {
   snapshotWindow,
   shouldSendSnapshot,
   buildSnapshotBlock,
+  snapshotAction,
   snapshotCounts,
   snapshotHasContent,
   snapshotDateLabel,
@@ -358,7 +359,9 @@ export async function GET(req: NextRequest) {
         .from("leads")
         .select("id, name, phone, move_in, source, created_at, properties(address)")
         .eq("organization_id", org.id)
-        .gt("created_at", win.cutoff7dIso)
+        // S740: 14 days, not 7. Ginger and Sandra (asked Oct 21, unbooked)
+        // dropped off the Oct 29 email while still waiting.
+        .gt("created_at", win.cutoff14dIso)
         .lte("created_at", win.cutoff24hIso)
         .in("status", SNAPSHOT_NUDGE_STATUSES as unknown as string[])
         .order("created_at", { ascending: true });
@@ -528,6 +531,7 @@ export async function GET(req: NextRequest) {
       }
 
       const snapshotBlock = buildSnapshotBlock(buckets, tz, health, listingHealth);
+      const action = snapshotAction(buckets, health, listingHealth?.adCount ?? 0);
       const vars: Record<string, string> = {
         org_name: org.name ?? "",
         property_address: "",
@@ -535,7 +539,8 @@ export async function GET(req: NextRequest) {
         new_count: String(counts.newCount),
         showings_today_count: String(counts.showingsTodayCount),
         snapshot: snapshotBlock,
-        dashboard_url: `${APP_URL}/dashboard/leads`,
+        dashboard_url: `${APP_URL}${action.path}`,
+        action_label: action.label,
       };
 
       // Operator fallback recipients: members who manage leads, else the org's
@@ -599,7 +604,7 @@ export async function GET(req: NextRequest) {
         eventKey: EVENT_KEY,
         vars,
         operatorFallback,
-        action: { label: "Open your inquiries", url: `${APP_URL}/dashboard/leads` },
+        action: { label: action.label, url: `${APP_URL}${action.path}` },
       });
 
       // Stamp regardless of whether the event was enabled/had recipients — the

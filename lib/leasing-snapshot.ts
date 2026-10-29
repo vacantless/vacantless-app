@@ -121,6 +121,8 @@ export type SnapshotWindow = {
   endWeekIso: string;
   cutoff24hIso: string;
   cutoff7dIso: string;
+  /** S740: "waiting for a viewing" keeps renters for 14 days, like Today. */
+  cutoff14dIso: string;
   localDate: string; // 'YYYY-MM-DD' local
 };
 
@@ -144,6 +146,7 @@ export function snapshotWindow(nowMs: number, tz: string): SnapshotWindow {
     endWeekIso: new Date(startTodayMs + 7 * DAY_MS).toISOString(),
     cutoff24hIso: new Date(nowMs - DAY_MS).toISOString(),
     cutoff7dIso: new Date(nowMs - 7 * DAY_MS).toISOString(),
+    cutoff14dIso: new Date(nowMs - 14 * DAY_MS).toISOString(),
     localDate: `${p.y}-${pad2(p.mo)}-${pad2(p.d)}`,
   };
 }
@@ -449,7 +452,6 @@ export function buildSnapshotBlock(
   health?: LeasingHealth | null,
   listingHealth?: ListingHealthSnapshotSummary | null,
 ): string {
-  void health;
   const viewings = [...b.showingsToday, ...b.showingsWeek];
   const adCount = listingHealth?.adCount ?? 0;
   const summary = [
@@ -459,7 +461,16 @@ export function buildSnapshotBlock(
     ...(adCount > 0 ? [plural(adCount, "ad to refresh", "ads to refresh")] : []),
   ].join(" · ");
 
-  const sections: string[] = [summary];
+  // S740 (review item 1): no viewing time is open on any live rental (health
+  // status black), so renters cannot book. Four snapshots in a row said
+  // "0 viewings this week" without the reason. It leads the email now.
+  const sections: string[] =
+    health?.status === "black"
+      ? [
+          "RENTERS CAN'T BOOK: no viewing times are open, so your rental pages ask renters to wait. Add viewing times and they can pick one.",
+          summary,
+        ]
+      : [summary];
   if (b.newLeads.length > 0) {
     sections.push(capped("NEW IN THE LAST 24 HOURS", b.newLeads.map((l) => leadLines(l, tz, false))));
   }
@@ -473,6 +484,21 @@ export function buildSnapshotBlock(
   }
   if (listingHealth && adCount > 0) sections.push(adsSection(listingHealth));
   return sections.join("\n\n");
+}
+
+/**
+ * S740 (review item 5): the snapshot's one button goes to the most urgent
+ * thing of the day: viewing times when renters cannot book, then renewing
+ * ads when that is the only work, else the inquiries. Pure.
+ */
+export function snapshotAction(
+  b: Pick<SnapshotBuckets, "newLeads">,
+  health: Pick<LeasingHealth, "status"> | null | undefined,
+  adCount: number,
+): { label: string; path: string } {
+  if (health?.status === "black") return { label: "Add viewing times", path: "/dashboard/availability" };
+  if (b.newLeads.length === 0 && adCount > 0) return { label: "Renew your ads", path: "/dashboard/properties#renew-ads" };
+  return { label: "Open your inquiries", path: "/dashboard/leads" };
 }
 
 /** Subject-friendly date, e.g. "Thursday, June 25". */

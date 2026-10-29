@@ -723,10 +723,11 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
       "viewings_today_label",
       "snapshot",
       "dashboard_url",
+      "action_label",
     ],
     defaultSubject:
       "Leasing snapshot, {{snapshot_date}}: {{new_count}} new, {{viewings_today_label}} today",
-    defaultBody: "{{snapshot}}\n\nOpen your inquiries: {{dashboard_url}}",
+    defaultBody: "{{snapshot}}\n\n{{action_label}}: {{dashboard_url}}",
     active: true,
   },
   // Weekly viewing-times reminder (S500). Audience operator; one email on the

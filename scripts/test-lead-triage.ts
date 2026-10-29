@@ -128,5 +128,14 @@ const base: TriageInput = {
   );
 }
 
+// S740: a new renter the auto-reply answered is Working, not Needs you now.
+{
+  const nowMs = Date.parse("2026-10-29T14:00:00Z");
+  const answered = triageLead({ status: "new", followUp: "none", qualifiedOut: false, createdAt: "2026-10-29T10:00:00Z", nowMs, answered: true });
+  ok("S740: answered new lead is in progress", answered.bucket === "in_progress" && answered.reason === null);
+  const fresh = triageLead({ status: "new", followUp: "none", qualifiedOut: false, createdAt: "2026-10-29T10:00:00Z", nowMs, answered: false });
+  ok("S740: unanswered new lead still needs you", fresh.bucket === "needs_you" && fresh.reason === "Needs a reply");
+}
+
 console.log(`\nlead-triage: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

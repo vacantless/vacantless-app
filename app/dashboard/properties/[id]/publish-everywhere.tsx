@@ -1085,6 +1085,15 @@ function ForYouRow({
         <MarketplaceRow propertyId={propertyId} kit={marketplaceKit} />
       ) : item == null || repostable ? (
         linkIsLive ? (
+          <>
+          {/* S740: the free-cap warning showed only inside the approval
+              popup, so "Post it again" on Unit 3 gave no sign Agile already
+              had all 3 free Rentals.ca listings in use. */}
+          {capNote ? (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-950">
+              {capNote}
+            </p>
+          ) : null}
           <form
             action={startSitePost}
             className="mt-2 flex flex-wrap items-center gap-2"
@@ -1098,6 +1107,7 @@ function ForYouRow({
               {repostable ? "Post it again →" : "Add this site →"}
             </button>
           </form>
+          </>
         ) : (
           <p className="mt-2 text-[12px] text-gray-500">
             Post first, then come back to this step.

@@ -29,6 +29,8 @@ export type QueueLead = {
   next_action_at: string | null;
   qualified_out: boolean;
   property: { address: string } | null;
+  /** S740: an auto-reply or any outbound email or text already went out. */
+  answered?: boolean;
 };
 
 // Reason-chip colour by urgency (needs-you rows only).
@@ -56,6 +58,7 @@ export function TriageQueue({
       qualifiedOut: l.qualified_out,
       createdAt: l.created_at,
       nowMs,
+      answered: l.answered,
     }),
   }));
 

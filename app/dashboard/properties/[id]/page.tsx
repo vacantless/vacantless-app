@@ -544,6 +544,11 @@ function buildSyndicationBlockerSummary({
   const login = new Map<string, string>();
   const proof = new Map<string, string>();
   const refresh = new Map<string, string>();
+  // S740 (review item 4): the header said "3 need refresh" while the Keep it
+  // fresh card said "1 ad to renew". A live ad to renew and a gone ad to post
+  // again are different jobs; the header now counts them apart, and its renew
+  // count is the card's (live ads due, by the same status).
+  const repost = new Map<string, string>();
   const labelFor = (key: string, fallback?: string | null) =>
     fallback || labelByKey.get(key) || key;
 
@@ -553,7 +558,10 @@ function buildSyndicationBlockerSummary({
     if (accountStatus === "needs_payment") payment.set(card.channel.key, label);
     if (accountStatus === "needs_login") login.set(card.channel.key, label);
     if (card.status.value === "problem") proof.set(card.channel.key, label);
-    if (card.status.value === "needs_refresh") refresh.set(card.channel.key, label);
+    if (card.status.value === "needs_refresh") {
+      if (card.status.liveUrl) refresh.set(card.channel.key, label);
+      else repost.set(card.channel.key, label);
+    }
   }
 
   for (const item of runItems) {
@@ -569,7 +577,7 @@ function buildSyndicationBlockerSummary({
       login.set(item.channel, label);
     }
     if (item.liveWithoutUrl) proof.set(item.channel, label);
-    if (item.staleRefresh) refresh.set(item.channel, label);
+    if (item.staleRefresh && !refresh.has(item.channel)) repost.set(item.channel, label);
   }
 
   const summary = (
@@ -617,8 +625,15 @@ function buildSyndicationBlockerSummary({
       "need refresh",
       // S699: a live ad that is due a refresh still counts as live; the old
       // "before it counts as live" contradicted "4 ads live" on the same card.
-      (label) => `${label} is due a refresh or repost.`,
-      (list) => `${list} are due a refresh or repost.`,
+      (label) => `${label} is due a renew.`,
+      (list) => `${list} are due a renew.`,
+    ) ??
+    summary(
+      [...repost.values()],
+      "needs a repost",
+      "need a repost",
+      (label) => `${label} is no longer up. Post it again when you want it back.`,
+      (list) => `${list} are no longer up. Post them again when you want them back.`,
     )
   );
 }

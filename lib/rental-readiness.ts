@@ -149,6 +149,19 @@ function photosSignal(status: string, photoCount: number): ReadinessSignal {
 
 function viewingsSignal(status: string, windowCount: number): ReadinessSignal {
   const closed = closedPublicStatus(status);
+  // S740 (review item 4): an off-market rental showed "Needs viewing times";
+  // renters cannot book it, so it is muted. A draft keeps the warning (set
+  // times before going live).
+  if (status === "off_market") {
+    return {
+      key: "viewings",
+      label: "Viewings",
+      ok: false,
+      tone: "muted",
+      detail: "not live",
+      hint: "Viewing times matter again if this rental goes back on the market.",
+    };
+  }
   if (closed) {
     return {
       key: "viewings",

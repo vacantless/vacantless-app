@@ -238,6 +238,11 @@ export function InquiryForm({
   const prepareRevealed =
     detailsRevealed && name.trim() !== "" && email.trim() !== "";
   const stepClass = (revealed: boolean) => (revealed ? "" : "vl-step-collapsed");
+  const hasRequiredQuestion =
+    showCustomQuestions &&
+    screeningQuestions.some(
+      (q) => q.required && !(q.qtype === "units" && (q.choices?.length ?? 0) === 0),
+    );
 
   const chipStyle = (active: boolean) =>
     active
@@ -475,7 +480,10 @@ export function InquiryForm({
         >
           <legend className="px-1 text-sm font-medium text-gray-700">
             Help us prepare for your showing{" "}
-            <span className="font-normal text-gray-400">(optional)</span>
+            {/* S740: Employment (required) sat under an "(optional)" title. */}
+            {!hasRequiredQuestion && (
+              <span className="font-normal text-gray-400">(optional)</span>
+            )}
           </legend>
 
           {askMovein && (
@@ -743,7 +751,11 @@ export function InquiryForm({
 
         {/* STEP 4 — Confirm (revealed with the optional group, once contact is
             filled) ------------------------------------------------------- */}
-        <div className={`space-y-5 ${stepClass(prepareRevealed)}`}>
+        {/* S740 (review item 3): the button shows as soon as the details step
+            does. It was hidden until name and email were typed, so a renter on
+            a phone saw three boxes and no button. The browser's own required
+            checks still stop an empty submit. */}
+        <div className={`space-y-5 ${stepClass(detailsRevealed)}`}>
           {selectedSlotLabel && (
             <p className="text-sm text-gray-600">
               Selected viewing:{" "}
@@ -760,7 +772,12 @@ export function InquiryForm({
           >
             {confirmLabel}
           </InquirySubmitButton>
-          {hasSlots && !selectedSlot && (
+          {!prepareRevealed && (
+            <p className="-mt-2 text-center text-xs text-gray-400">
+              Add your name and email to continue.
+            </p>
+          )}
+          {prepareRevealed && hasSlots && !selectedSlot && (
             <p className="-mt-2 text-center text-xs text-gray-400">
               No time selected. We&apos;ll reach out to arrange one.
             </p>

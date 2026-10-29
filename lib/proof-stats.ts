@@ -1,21 +1,25 @@
-// The one copy of the founder-rental proof figures shown on the home and About
-// pages (S710 audit: they were typed twice). Counted from the database on
-// 2026-10-09 for Agile Real Estate Group: 258 renter enquiries (all leads, the
-// first on 2026-05-08) and 107 viewings (the first on 2026-06-26), 89 of the 107
-// booked by the renter on the listing page. S710 re-check: leads since
-// 2026-06-26 are only 210, so the page says "since May", not "since June".
-// Update them from the database, never from memory.
+// S740 (review item 4): ONE set of founder-rental proof figures for every
+// page. The home page showed 258 / 107 / "8 in 10" in the hero and 276 / 112 /
+// "nearly 9 in 10" in the Posting block. Counted from the database on
+// 2026-10-29 for Agile Real Estate Group: 279 leads (the first 2026-05-08),
+// 112 renters with a viewing, 97 of the 112 booked within an hour of their
+// first inquiry (86.6%). Update PROOF only, from the database, never from
+// memory; everything below reads from it.
+export const PROOF = {
+  inquiries: 279,
+  viewings: 112,
+  withinHour: "Nearly 9 in 10",
+  countedOn: "2026-10-29",
+} as const;
+
 export const LEASING_PROOF_STATS: readonly { value: string; label: string }[] = [
-  { value: "258", label: "renter inquiries, all in one list." },
-  { value: "107", label: "viewings booked." },
-  { value: "8 in 10", label: "viewings booked by the renter, with no phone tag." },
+  { value: String(PROOF.inquiries), label: "renter inquiries, all in one list." },
+  { value: String(PROOF.viewings), label: "viewings booked." },
+  { value: PROOF.withinHour, label: "renters booked their viewing within an hour of asking." },
 ];
 
-// S734: the one proof line under the Posting offer (rental page, Sign in to
-// your sites). Counted from the database on 2026-10-23 for Agile Real Estate
-// Group: 276 leads, 113 showings. Update from the database, never from memory.
-export const POSTING_OFFER_PROOF =
-  "Our first customer has five rentals in Windsor. 276 renter inquiries and 113 viewings, all in one list. Counted 2026-10-23.";
+// The one proof line under the Posting offer (rental page, Sign in to your sites).
+export const POSTING_OFFER_PROOF = `Our first customer has five rentals in Windsor. ${PROOF.inquiries} renter inquiries and ${PROOF.viewings} viewings, all in one list. Counted ${PROOF.countedOn}.`;
 
 // S737 (review item 12): the proof under the Posting card on the pricing
 // section. Counted from the database on 2026-10-25 for Agile Real Estate
@@ -28,11 +32,11 @@ export const POSTING_PROOF = {
   lines: [
     "Five rentals in Windsor.",
     "We posted 16 ads to Kijiji, Rentals.ca and Zumper for them.",
-    "We kept them up and took them down when they rented.",
+    "We check them daily and tell you when a site drops one.",
     "Nobody retyped an ad.",
   ],
-  statValue: "Nearly 9 in 10",
+  statValue: PROOF.withinHour,
   statLabel: "renters booked their viewing within an hour of asking.",
   footnote:
-    "276 renter inquiries and 112 viewings since May. Counted 2026-10-25 from rentals the founder runs. Your own results will vary.",
-} as const;
+    `${PROOF.inquiries} renter inquiries and ${PROOF.viewings} viewings since May. Counted ${PROOF.countedOn} from rentals the founder runs. Your own results will vary.`,
+};

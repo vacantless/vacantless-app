@@ -69,8 +69,10 @@ export function needsReplyToday(
   status: string,
   createdAt: string | null | undefined,
   nowMs: number,
+  /** S740: an auto-reply or any outbound email or text already went out. */
+  answered = false,
 ): boolean {
-  if (!needsReply(status) || !createdAt) return false;
+  if (answered || !needsReply(status) || !createdAt) return false;
   const t = new Date(createdAt).getTime();
   if (Number.isNaN(t)) return false;
   return nowMs - t <= TODAY_REPLY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
@@ -83,7 +85,7 @@ export function needsReplyToday(
  * covered by exactly one segment, so segment counts sum to the stage counts.
  */
 export const PIPELINE_SEGMENTS = [
-  { key: "needs_reply", label: "No reply yet", stages: ["new"] },
+  { key: "needs_reply", label: "New, not booked yet", stages: ["new"] },
   { key: "in_conversation", label: "In conversation", stages: ["replied", "contacted"] },
   { key: "viewing", label: "Viewing", stages: ["booked", "showed"] },
   { key: "deciding", label: "Deciding", stages: ["applied"] },

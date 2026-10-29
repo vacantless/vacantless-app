@@ -165,6 +165,18 @@ const ZERO: TodayInput = {
   ok("followUpsDue omitted -> nothing", buildTodayLane({ ...ZERO }).length === 0);
 }
 
+// S740: no viewing times open leads the lane; auto-replied renters do not need a reply.
+{
+  const items = buildTodayLane({ ...ZERO, inquiriesNeedingReply: 2, noViewingTimes: { waiting: 8 } });
+  ok("S740: no-times card first", items[0]?.key === "no-viewing-times" && items[0].tone === "urgent");
+  ok("S740: no-times card names waiting renters", items[0]?.detail.includes("8 renters are waiting"));
+  ok("S740: no-times card goes to viewing times", items[0]?.href === "/dashboard/availability");
+  ok("S740: noViewingTimes null -> no card", buildTodayLane({ ...ZERO, noViewingTimes: null }).length === 0);
+  const now = Date.parse("2026-10-29T14:00:00Z");
+  ok("S740: answered new lead does not need a reply", !needsReplyToday("new", "2026-10-29T10:00:00Z", now, true));
+  ok("S740: unanswered new lead still does", needsReplyToday("new", "2026-10-29T10:00:00Z", now, false));
+}
+
 console.log(`\ndashboard-today: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
 

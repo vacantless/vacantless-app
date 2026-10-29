@@ -80,6 +80,7 @@ const complete: RentalReadinessInput = {
   const off = { ...complete, status: "off_market" };
   ok("off_market link reads retired (S672: its page still loads)", sig(off, "link").detail === "retired" && sig(off, "link").tone === "muted");
   ok("off_market feed is not called paused", sig(off, "feed").detail === "not live");
+  ok("S740: off_market viewings muted, not Needs viewing times", sig({ ...off, availabilityWindowCount: 0 }, "viewings").tone === "muted");
 }
 
 // --- photos signal ----------------------------------------------------------

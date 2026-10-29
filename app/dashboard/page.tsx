@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { answeredLeadIds } from "@/lib/lead-answered";
+import { countViewingTimes } from "@/lib/viewing-times-count";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import {
@@ -298,6 +300,12 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   // so the runtime value is a single object (or null). Cast through unknown,
   // matching the upcomingShowings projection above.
   const allLeads = (leads ?? []) as unknown as LeadRow[];
+  // S740: renters the auto-reply already answered do not "need a reply".
+  const answeredIds = await answeredLeadIds(
+    supabase,
+    org.id,
+    allLeads.filter((l) => l.status === "new").map((l) => l.id),
+  );
   const openLeads = allLeads.filter((l) => OPEN_STATUSES.includes(l.status));
   // S710 audit: "Open inquiries 258" counted every renter since May. The tile
   // now counts open renters who asked in the last 30 days.
@@ -383,10 +391,20 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       new Date(s.scheduled_at).toLocaleDateString("en-CA", { timeZone }) ===
         today,
   ).length;
+  // S740 (review item 1): live rentals with no viewing time open.
+  const openViewingTimes =
+    (liveRentalCount ?? 0) > 0 ? await countViewingTimes(supabase, org.id, timeZone) : 1;
+  const notBookedRecent = allLeads.filter(
+    (l) =>
+      (l.status === "new" || l.status === "replied" || l.status === "contacted") &&
+      !!l.created_at &&
+      Date.now() - new Date(l.created_at).getTime() <= 14 * 24 * 60 * 60 * 1000,
+  ).length;
   const todayItems = buildTodayLane({
+    noViewingTimes: openViewingTimes === 0 ? { waiting: notBookedRecent } : null,
     // S708: only leads from the last 14 days; older `new` leads stay in Renters.
     inquiriesNeedingReply: allLeads.filter((l) =>
-      needsReplyToday(l.status, l.created_at, Date.now()),
+      needsReplyToday(l.status, l.created_at, Date.now(), answeredIds.has(l.id)),
     ).length,
     // S702: a renter whose viewing was cancelled goes back to "contacted" with a
     // follow-up due today; without this the lane said "all caught up".
@@ -506,8 +524,14 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
           icon={<Icons.bolt className="h-4 w-4" />}
         />
         <StatCard
-          label="Rentals"
-          value={activeRentalCount ?? 0}
+          label="Rentals live"
+          value={liveRentalCount ?? 0}
+          hint={
+            /* S740: "RENTALS 7" counted leased and off-market units too. */
+            (activeRentalCount ?? 0) > (liveRentalCount ?? 0)
+              ? `${(activeRentalCount ?? 0) - (liveRentalCount ?? 0)} not live`
+              : undefined
+          }
           icon={<Icons.building className="h-4 w-4" />}
         />
       </div>
@@ -773,7 +797,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
                       Possible mismatch
                     </span>
                   )}
-                  {needsReply(l.status) && (
+                  {needsReply(l.status) && !answeredIds.has(l.id) && (
                     <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                       Needs reply
                     </span>

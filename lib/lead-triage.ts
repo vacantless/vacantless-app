@@ -30,6 +30,8 @@ export type TriageInput = {
    *  window goes to Gone quiet instead of Needs you now. */
   createdAt?: string | null;
   nowMs?: number;
+  /** S740: an auto-reply or any outbound email or text already went out. */
+  answered?: boolean;
 };
 
 // Bucket bases keep the three groups contiguous when sorting the flat list.
@@ -76,6 +78,11 @@ export function triageLead(input: TriageInput): LeadTriage {
     ) {
       return { bucket: "gone_quiet", rank: BASE.gone_quiet, reason: null };
     }
+    // S740: answered automatically (auto-reply or nurture email sent), so the
+    // renter is not waiting on the landlord; they have the booking link.
+    if (input.answered) {
+      return { bucket: "in_progress", rank: BASE.in_progress + 5, reason: null };
+    }
     return { bucket: "needs_you", rank: BASE.needs_you + 0, reason: "Needs a reply" };
   }
   if (followUp === "overdue") {
@@ -96,7 +103,7 @@ export function triageLead(input: TriageInput): LeadTriage {
 export const TRIAGE_BUCKET_LABEL: Record<TriageBucket, string> = {
   needs_you: "Needs you now",
   in_progress: "Working",
-  gone_quiet: "Gone quiet: asked over two weeks ago, never answered",
+  gone_quiet: "Gone quiet: asked over two weeks ago, never booked",
   closed: "Closed",
 };
 

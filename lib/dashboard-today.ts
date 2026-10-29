@@ -45,6 +45,12 @@ export type TodayInput = {
   rentIncreasesOverdue: number;
   /** Open work orders flagged urgent. */
   urgentWorkOrders: number;
+  /**
+   * S740 (review item 1): set when the account has a live rental and no
+   * viewing times open (no weekly window, no dated hours from today on).
+   * `waiting` = recent renters not booked yet.
+   */
+  noViewingTimes?: { waiting: number } | null;
 };
 
 function plural(n: number, one: string, many: string): string {
@@ -55,6 +61,23 @@ function plural(n: number, one: string, many: string): string {
 // is > 0, so the lane is exactly the set of things needing action right now.
 export function buildTodayLane(input: TodayInput): TodayItem[] {
   const items: TodayItem[] = [];
+
+  // S740: renters cannot book anything, so it leads the lane. Agile showed
+  // "9 inquiries need a reply" on top while every renter page said "we'll
+  // reach out" because no viewing time was open after Oct 23.
+  if (input.noViewingTimes) {
+    const w = input.noViewingTimes.waiting;
+    items.push({
+      key: "no-viewing-times",
+      label: "Renters can't book a viewing",
+      detail:
+        w > 0
+          ? `No viewing times are open. ${plural(w, "renter is", "renters are")} waiting. Add times and they can pick one.`
+          : "No viewing times are open, so your rental pages ask renters to wait. Add times and they can pick one.",
+      href: "/dashboard/availability",
+      tone: "urgent",
+    });
+  }
 
   if (input.inquiriesNeedingReply > 0) {
     items.push({

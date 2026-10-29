@@ -35,8 +35,15 @@ function visibleNeedLabel(signal: ReadinessSignal) {
  * page. Keep the exact signals for titles/a11y, but group the visible surface
  * into proof + needs so the list stays scan-friendly.
  */
-export function ReadinessChips({ signals }: { signals: ReadinessSignal[] }) {
-  const actionable = signals.filter((s) => s.tone === "warn");
+export function ReadinessChips({
+  signals,
+  skipNeeds = [],
+}: {
+  signals: ReadinessSignal[];
+  /** S740: needs the row badge already says ("Needs viewings"), shown once. */
+  skipNeeds?: ReadinessSignal["key"][];
+}) {
+  const actionable = signals.filter((s) => s.tone === "warn" && !skipNeeds.includes(s.key));
   const allReady = signals.every((s) => s.ok);
   const link = signals.find((s) => s.key === "link");
   const feed = signals.find((s) => s.key === "feed");

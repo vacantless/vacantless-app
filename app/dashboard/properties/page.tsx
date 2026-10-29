@@ -658,7 +658,10 @@ export default async function PropertiesPage({
                   decide whether a rental can actually pull inquiries, link,
                   photos, viewings, feed, surfaced inline so an operator sees
                   what's missing without opening the rental. */}
-              <ReadinessChips signals={readiness} />
+              <ReadinessChips
+                signals={readiness}
+                skipNeeds={launch.label === "Needs viewings" ? ["viewings"] : []}
+              />
             </li>
             );
           })}

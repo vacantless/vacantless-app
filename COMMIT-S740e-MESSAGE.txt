@@ -1,0 +1,27 @@
+S740e: Fable review fixes (new and returning user, 2026-10-29)
+
+1. Renters can't book: when an account has a live rental and no viewing
+   time open, Today leads with "Renters can't book a viewing" (how many
+   are waiting, link to viewing times) and the daily snapshot's first line
+   says so. Agile had no time open after Oct 23 while Today led with
+   "9 inquiries need a reply".
+2. "Needs a reply" no longer counts renters the auto-reply or a nurture
+   email already answered (lib/lead-answered.ts reads outbound messages).
+   They move to Working; the Renters segment reads "New, not booked yet";
+   Gone quiet says "never booked", not "never answered".
+3. Renter form: the submit button shows with the details step ("Add your
+   name and email to continue" until they are filled); "(optional)" is
+   dropped from the group title when a question in it is required.
+4. Counts that agree: one dated proof set (lib/proof-stats PROOF, recounted
+   2026-10-29: 279 inquiries, 112 viewings, 97 of 112 within an hour) for
+   the hero and the Posting block; off-market rentals no longer say
+   "Needs viewing times"; a row's viewing-times need shows once; the rental
+   header counts ads to renew (live) apart from ads to post again; the
+   Today tile is "Rentals live" with "N not live"; the Rentals.ca free-cap
+   warning shows beside "Post it again", not only in the approval popup.
+5. Snapshot: its button goes to the most urgent job (viewing times, then
+   renewing ads, then inquiries); "waiting for a viewing" keeps renters
+   for 14 days, not 7 (Ginger and Sandra dropped off while unbooked).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq9n8YojHcBsbWTHkV
