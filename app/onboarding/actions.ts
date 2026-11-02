@@ -136,5 +136,8 @@ export async function createOrganization(formData: FormData) {
   // plan they chose, instead of dead-ending on free (Codex P2). Any other value
   // (or none) lands on the dashboard as before.
   const planIntent = String(formData.get("plan") ?? "").trim();
+  // S742g: "Start free, add Posting" from the pricing page lands on Billing,
+  // where the Posting card is, instead of losing the intent.
+  if (planIntent === "posting") redirect("/dashboard/billing#posting-addon");
   redirect(isPaidPlan(planIntent) ? `/dashboard/billing?plan=${planIntent}` : "/dashboard/getting-started");
 }

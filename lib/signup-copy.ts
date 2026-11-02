@@ -14,12 +14,16 @@
 export function signupEyebrow(plan: string | null | undefined): string {
   if (plan === "growth") return "Growth plan";
   if (plan === "premium") return "Premium plan";
+  if (plan === "posting") return "Start free, add Posting";
   return "Start free";
 }
 
 export function signupSubtitle(plan: string | null | undefined): string {
   if (plan === "growth" || plan === "premium") {
     return "First, set up your sign-in details. Next you'll name your business, then pick how to pay.";
+  }
+  if (plan === "posting") {
+    return "First, set up your sign-in details. Next you'll name your business, then add Posting on your Billing page. No credit card to start.";
   }
   return "First, set up your sign-in details. Next you'll name your business. No credit card to start.";
 }

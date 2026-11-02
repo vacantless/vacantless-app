@@ -1,0 +1,23 @@
+S742g: what a stranger sees first, tidied
+
+Four small things from the S742 walk, each one a trust nick in front of
+a new landlord.
+
+1. The rental's Renters tab listed every request flat: a renter who
+   asked twice twice, test leads and a phishing "Rentals Alert" (both
+   already Lost) between live renters. Now open requests come first, one
+   line per person ("asked 2 times"), and leased or lost ones fold away
+   under "Closed (N)". lib/renter-rows.ts, pure.
+2. The Posting card on the pricing section was the one card with no
+   button (S740 review, item 3). "Start free, add Posting" carries
+   plan=posting through sign-up and onboarding and lands on the Billing
+   page at the Posting card.
+3. The getting-started checklist and the Today card read "Set your
+   viewing times: Done" for Agile, which has no bookable time, because
+   every custom date ever written counted. Only today or later counts.
+4. Sign-up copy for the new intent.
+
+Tests: scripts/test-renter-rows.ts (6).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq1am5xVeS4zx9Rz1r

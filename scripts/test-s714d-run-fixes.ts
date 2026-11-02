@@ -34,6 +34,7 @@ ok("sign-up page checks for an existing account before other errors", signup.ind
 // 6. Headers follow the plan picked.
 ok("growth header", signupEyebrow("growth") === "Growth plan");
 ok("free header", signupEyebrow(null) === "Start free" && signupEyebrow("free") === "Start free");
+ok("posting header (S742g)", signupEyebrow("posting") === "Start free, add Posting");
 ok("growth subtitle drops 'no credit card'", !/No credit card/.test(signupSubtitle("growth")) && /No credit card/.test(signupSubtitle(null)));
 ok("onboarding names the pay step for growth", /choose how to pay/.test(onboardingNextStep("growth")));
 ok("onboarding free next step unchanged", onboardingNextStep(undefined) === "Next: add your first rental.");
@@ -61,7 +62,8 @@ const pe = read("app/dashboard/properties/[id]/publish-everywhere.tsx");
 ok("'live too' only when a site is live", pe.includes('proofSavedCount > 0 ? "Your Vacantless page is live too. " : ""'));
 
 // 7. Free Facebook Page posting is named.
-ok("homepage Free plan names Facebook Page", read("app/page.tsx").includes('"Posts to your Facebook Page, free"'));
+// S728 moved the plan bullets to lib/billing.ts (one list for the homepage and Billing); S742g re-pointed the check.
+ok("Free plan names Facebook Page", read("lib/billing.ts").includes('"Posts to your Facebook Page, free"') && read("app/page.tsx").includes("TIERS.free.features"));
 const wiz = read("lib/onboarding-wizard.ts");
 ok("checklist names Facebook Page and Posting", /Facebook Page for free/.test(wiz) && /With Posting, we post it to Kijiji, Rentals.ca and Zumper/.test(wiz)); // S717: Rentals.ca for every landlord
 ok("checklist step still never names Marketplace (S710 rule)", !/Marketplace/.test(wiz.slice(wiz.indexOf('key: "get_online"'), wiz.indexOf('key: "tenancy"'))));

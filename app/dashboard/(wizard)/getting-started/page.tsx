@@ -76,10 +76,13 @@ export default async function GettingStartedPage({
         .from("availability_rules")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", org.id),
+      // S742g: a custom date in the past is not a viewing time anyone can
+      // book; only today or later counts (Agile read "Done" with none open).
       supabase
         .from("availability_overrides")
         .select("id", { count: "exact", head: true })
-        .eq("organization_id", org.id),
+        .eq("organization_id", org.id)
+        .gte("day", new Date().toISOString().slice(0, 10)),
     ]);
 
   const row = onboarding as OnboardingRow | null;

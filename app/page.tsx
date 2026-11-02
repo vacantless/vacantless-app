@@ -579,6 +579,11 @@ function PostingAddonCard() {
           </p>
           <p className="mt-2 text-[0.78rem] leading-snug text-[#59655f]">{POSTING_PROOF.footnote}</p>
         </div>
+        {/* S742g: the one card on the page with no button (S740 review, item 3). */}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <SecondaryButton href="/signup?plan=posting">Start free, add Posting</SecondaryButton>
+          <span className="text-[0.84rem] text-[#59655f]">You add it on your Billing page after your first rental is in.</span>
+        </div>
       </div>
     </article>
   );

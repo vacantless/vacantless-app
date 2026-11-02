@@ -16,6 +16,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { getRoleForOrg } from "@/lib/membership";
 import { roleCan } from "@/lib/roles";
 import { statusLabel, type LeadStatus } from "@/lib/pipeline";
+import { groupRenterRows } from "@/lib/renter-rows";
 import {
   PROPERTY_STATUSES,
   propertyStatusLabel,
@@ -960,6 +961,7 @@ export default async function PropertyDetailPage({
     .eq("property_id", p.id)
     .order("created_at", { ascending: false });
   const leadRows = (leads ?? []) as LeadRow[];
+  const renterGroups = groupRenterRows(leadRows);
   // S734 (review item 3): which site brought each renter, on the rental.
   const renterSources = renterSourcesForRental(
     leadRows.map((l) => ({
@@ -4704,8 +4706,14 @@ export default async function PropertyDetailPage({
         />
       ) : (
         <>
+        {/* S742g: open requests first, one line per person; closed ones folded. */}
+        {renterGroups.open.length === 0 ? (
+          <p className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 shadow-sm">
+            No open requests on this rental.
+          </p>
+        ) : (
         <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {leadRows.map((l) => (
+          {renterGroups.open.map(({ row: l, requests }) => (
             <li key={l.id}>
               <Link
                 href={`/dashboard/leads/${l.id}`}
@@ -4713,6 +4721,9 @@ export default async function PropertyDetailPage({
               >
                 <span className="text-gray-900">
                   {l.name || l.email || "Unnamed renter"}
+                  {requests > 1 && (
+                    <span className="ml-2 text-xs text-gray-500">asked {requests} times</span>
+                  )}
                 </span>
                 <StatusChip tone={leadStatusTone(l.status)}>
                   {statusLabel(l.status)}
@@ -4721,6 +4732,27 @@ export default async function PropertyDetailPage({
             </li>
           ))}
         </ul>
+        )}
+        {renterGroups.closed.length > 0 && (
+          <details className="mt-3 rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-gray-700">
+              {renterGroups.closed.length} closed: rented or no longer looking
+            </summary>
+            <ul className="divide-y divide-gray-100 border-t border-gray-100">
+              {renterGroups.closed.map((l) => (
+                <li key={l.id}>
+                  <Link
+                    href={`/dashboard/leads/${l.id}`}
+                    className="flex items-center justify-between px-4 py-3 hover:bg-gray-50"
+                  >
+                    <span className="text-gray-700">{l.name || l.email || "Unnamed renter"}</span>
+                    <StatusChip tone={leadStatusTone(l.status)}>{statusLabel(l.status)}</StatusChip>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         <Link
           href={`/dashboard/leads?property=${p.id}`}
           className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
