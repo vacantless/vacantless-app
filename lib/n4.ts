@@ -54,12 +54,24 @@ export function endOfMonthISO(iso: string): string {
 }
 
 /**
- * RTA s.59(1) minimum notice for an N4: 7 days for a daily/weekly tenancy, else
- * 14 days (bi-weekly / monthly / yearly / longer — the LTB N4 instructions state
- * bi-weekly is 14). CHECKLIST value — verify against the current statute + form
- * before serve-on-behalf (design section 6).
+ * The day Bill 60 (Fighting Delays, Building Faster Act, 2025) changed the
+ * N4: from this service date on, the termination date may be as soon as 7
+ * days after service for every tenancy, not 14 for monthly and longer
+ * [verified 2026-11-01 via nowtoronto.com and money.ca; confirm against the
+ * LTB's current N4 instructions before serving].
  */
-export function minN4NoticeDays(unit: RentPeriodUnit): 7 | 14 {
+export const N4_SEVEN_DAY_RULE_FROM = "2026-09-21";
+
+/**
+ * Minimum notice for an N4. Before 2026-09-21 (RTA s.59(1) as it was): 7 days
+ * for a daily or weekly tenancy, else 14 (the LTB N4 instructions counted
+ * bi-weekly as 14). From 2026-09-21: 7 days for every tenancy. The service
+ * date decides which rule applies; today when none is given. CHECKLIST value,
+ * verify against the current statute and form before serve-on-behalf.
+ */
+export function minN4NoticeDays(unit: RentPeriodUnit, serviceDateISO?: string): 7 | 14 {
+  const service = serviceDateISO ?? new Date().toISOString().slice(0, 10);
+  if (service >= N4_SEVEN_DAY_RULE_FROM) return 7;
   return unit === "daily" || unit === "weekly" ? 7 : 14;
 }
 
@@ -74,7 +86,7 @@ export function deriveN4TerminationDate(
   serviceDateISO: string,
   unit: RentPeriodUnit,
 ): string {
-  return addDaysISO(serviceDateISO, minN4NoticeDays(unit));
+  return addDaysISO(serviceDateISO, minN4NoticeDays(unit, serviceDateISO));
 }
 
 // --- arrears ledger ---------------------------------------------------------

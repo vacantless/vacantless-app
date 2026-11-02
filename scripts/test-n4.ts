@@ -41,11 +41,19 @@ eq(addDaysISO("2028-02-27", 2), "2028-02-29", "leap day");
 eq(addDaysISO("2027-02-27", 2), "2027-03-01", "non-leap Feb rolls to Mar");
 
 // --- minimum notice + termination date --------------------------------------
-eq(minN4NoticeDays("monthly"), 14, "monthly => 14");
-eq(minN4NoticeDays("yearly"), 14, "yearly => 14");
-eq(minN4NoticeDays("weekly"), 7, "weekly => 7");
-eq(minN4NoticeDays("daily"), 7, "daily => 7");
-eq(minN4NoticeDays("bi_weekly"), 14, "bi-weekly => 14 (per LTB N4 instructions)");
+// Before Bill 60 took effect (service date before 2026-09-21).
+eq(minN4NoticeDays("monthly", "2026-07-12"), 14, "monthly => 14 (old rule)");
+eq(minN4NoticeDays("yearly", "2026-07-12"), 14, "yearly => 14 (old rule)");
+eq(minN4NoticeDays("weekly", "2026-07-12"), 7, "weekly => 7 (old rule)");
+eq(minN4NoticeDays("daily", "2026-07-12"), 7, "daily => 7 (old rule)");
+eq(minN4NoticeDays("bi_weekly", "2026-07-12"), 14, "bi-weekly => 14 (old rule, per LTB N4 instructions)");
+// From 2026-09-21 (S742f): 7 days for every tenancy.
+eq(minN4NoticeDays("monthly", "2026-09-21"), 7, "monthly => 7 from the first day of the new rule");
+eq(minN4NoticeDays("yearly", "2026-11-01"), 7, "yearly => 7 under the new rule");
+eq(minN4NoticeDays("bi_weekly", "2026-11-01"), 7, "bi-weekly => 7 under the new rule");
+eq(minN4NoticeDays("monthly", "2026-09-20"), 14, "the day before the rule is still 14");
+eq(minN4NoticeDays("monthly"), 7, "no service date = today, which is under the new rule");
+eq(deriveN4TerminationDate("2026-11-01", "monthly"), "2026-11-08", "new rule: termination = notice + 7");
 eq(
   deriveN4TerminationDate("2026-07-12", "monthly"),
   "2026-07-26",

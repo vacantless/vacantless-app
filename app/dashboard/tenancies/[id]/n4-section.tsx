@@ -143,6 +143,13 @@ export function TenancyN4Section({
       </p>
 
       <p className="text-xs text-gray-500">
+        Since September 21, 2026 the pay-by date can be as soon as 7 days after you serve the
+        notice (it was 14 for monthly rent). The LTB replaced several of its forms in 2026 and
+        the form on file here is the 2022 N4, so check the current form at tribunalsontario.ca
+        before you serve one.
+      </p>
+
+      <p className="text-xs text-gray-500">
         v1 records <strong>in-person</strong> service. Mail or courier service shifts the deemed
         service date (and the termination date), so those are coming with the legal-verification
         step — for now, serve in person.

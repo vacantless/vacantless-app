@@ -1,0 +1,21 @@
+S742f: N4 pay-by date follows Bill 60 (7 days since 2026-09-21)
+
+lib/n4.ts still gave a monthly tenancy 14 days between service and the
+N4 termination date. Bill 60 made it 7 days for every tenancy from
+September 21, 2026 [verified 2026-11-01 via two news reports; confirm
+against the LTB's current N4 instructions before serving]. Over-notice
+does not void an N4, so nothing prepared so far is wrong, but the
+"earliest lawful date" the product showed was a week late.
+
+minN4NoticeDays now takes the service date: 14 (monthly and longer) or
+7 (daily, weekly) before 2026-09-21, and 7 for every tenancy from that
+day. deriveN4TerminationDate passes the date through. The N4 section
+says so in plain words and tells the landlord the form on file is the
+2022 N4, to check tribunalsontario.ca for the current one before
+serving (the LTB replaced several forms in 2026).
+
+Tests: scripts/test-n4.ts (+7); snapshot and PDF tests unchanged (their
+fixtures serve in July 2026, under the old rule).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq1am5xVeS4zx9Rz1r
