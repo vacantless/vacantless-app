@@ -1,0 +1,23 @@
+S744c: Ontario Standard Lease signed on page 7, frozen at send
+
+2229E slice 2. S743b printed the form but left Section 17 blank, and it
+read live tenancy fields even after the lease went out for signature.
+
+- Page 7: each SIGNED lease_signers row is stamped in its own row. The
+  landlord row for the landlord; a tenant on the row printed with their
+  name, else the first blank row. Never on a row printed with someone
+  else's name: an unmatched signer (or a fifth tenant) is listed on the
+  attachment instead. Typed signatures print as text; drawn ones as their
+  PNG, fitted to the box. A broken image leaves the box for wet ink.
+- Date column: the day signed, in Toronto, in the form's yyyy/mm/dd.
+- Frozen at send: sendLeaseForSignature saves the Standard Form input in
+  rendered_snapshot.standardForm. Once the lease is not a draft, the PDF
+  prints from that copy and the snapshot's clauses. Withdraw already
+  clears the snapshot, so a corrected draft reads live again. Older sent
+  leases without the copy still print from live data.
+
+Tests: scripts/test-standard-lease-signatures.ts (25, incl. a real
+render), test-standard-lease (33), tsc clean, all suites green.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGnmqUWKqR5TALveY4a

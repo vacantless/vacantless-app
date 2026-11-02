@@ -23,7 +23,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string; 
   });
   if (!loaded) return new NextResponse("Lease not found", { status: 404 });
 
-  const bytes = await fillStandardLease({ ...loaded.input, additionalTerms: loaded.additionalTerms });
+  const bytes = await fillStandardLease({
+    ...loaded.input,
+    additionalTerms: loaded.additionalTerms,
+    signatures: loaded.signatures,
+  });
   return new NextResponse(Buffer.from(bytes), {
     status: 200,
     headers: {

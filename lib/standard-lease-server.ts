@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { StandardLeaseDetails, StandardLeaseInput } from "@/lib/standard-lease";
+import type { SignedSigner, StandardLeaseDetails, StandardLeaseInput } from "@/lib/standard-lease";
 import { carryForwardDetails } from "@/lib/standard-lease";
 
 // S743: load one lease's Standard Form input. RLS scopes every read to the
@@ -12,7 +12,26 @@ export type StandardLeaseLoaded = {
   title: string;
   /** True when these details came from this landlord's last lease, not this one. */
   carried: boolean;
+  /** S744c: signed signers, for the page 7 stamps. */
+  signatures: SignedSigner[];
+  /** S744c: true when the form shows the copy frozen when the lease was sent. */
+  frozen: boolean;
 };
+
+/**
+ * S744c: once a lease is sent, the form is printed from the copy frozen at send
+ * (rendered_snapshot.standardForm), never from live tenancy fields, so what was
+ * signed can't change underneath it. Pure; exported for the tests.
+ */
+export function frozenStandardInput(
+  status: string,
+  snapshot: unknown,
+): { input: StandardLeaseInput; terms: string | null } | null {
+  if (status === "draft" || !snapshot || typeof snapshot !== "object") return null;
+  const snap = snapshot as { standardForm?: StandardLeaseInput; clauseBody?: string | null };
+  if (!snap.standardForm || typeof snap.standardForm !== "object") return null;
+  return { input: snap.standardForm, terms: snap.clauseBody ?? null };
+}
 
 export async function loadStandardLease(
   supabase: SupabaseClient,
@@ -20,12 +39,46 @@ export async function loadStandardLease(
 ): Promise<StandardLeaseLoaded | null> {
   const { data: leaseRow } = await supabase
     .from("lease_documents")
-    .select("id, title, status, assembled_body, standard_form")
+    .select("id, title, status, assembled_body, standard_form, rendered_snapshot")
     .eq("id", args.leaseId)
     .eq("tenancy_id", args.tenancyId)
     .maybeSingle();
   if (!leaseRow) return null;
-  const lease = leaseRow as { title: string; status: string; assembled_body: string | null; standard_form: StandardLeaseDetails | null };
+  const lease = leaseRow as {
+    title: string; status: string; assembled_body: string | null;
+    standard_form: StandardLeaseDetails | null; rendered_snapshot: unknown;
+  };
+
+  const { data: signerRows } = await supabase
+    .from("lease_signers")
+    .select("role, name, signed_name, signature_kind, signature_data, signed_at, sign_order, status")
+    .eq("lease_document_id", args.leaseId)
+    .eq("status", "signed");
+  const signatures: SignedSigner[] = ((signerRows ?? []) as {
+    role: string; name: string | null; signed_name: string | null; signature_kind: string | null;
+    signature_data: string | null; signed_at: string | null; sign_order: number;
+  }[]).map((r) => ({
+    role: r.role,
+    name: r.name,
+    signedName: r.signed_name,
+    kind: r.signature_kind === "typed" || r.signature_kind === "drawn" ? r.signature_kind : null,
+    data: r.signature_data,
+    signedAt: r.signed_at,
+    signOrder: r.sign_order,
+  }));
+
+  const frozen = frozenStandardInput(lease.status, lease.rendered_snapshot);
+  if (frozen) {
+    return {
+      input: frozen.input,
+      additionalTerms: frozen.terms,
+      status: lease.status,
+      title: lease.title,
+      carried: false,
+      signatures,
+      frozen: true,
+    };
+  }
 
   const { data: tRow } = await supabase
     .from("tenancies")
@@ -78,5 +131,7 @@ export async function loadStandardLease(
     status: lease.status,
     title: lease.title,
     carried,
+    signatures,
+    frozen: false,
   };
 }

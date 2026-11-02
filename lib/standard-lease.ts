@@ -488,3 +488,96 @@ export function carryForwardDetails(prev: StandardLeaseDetails | null | undefine
   const { parking: _p, partialRentCents: _a, partialRentPaidOn: _b, partialFrom: _c, partialTo: _d, ...rest } = prev;
   return rest;
 }
+
+// ---------------------------------------------------------------------------
+// S744c: Section 17 signatures. Each SIGNED lease_signers row is drawn on page
+// 7 in its own row: the landlord row for the landlord, and for a tenant the
+// row whose printed name matches theirs (else the next free row). A typed
+// signature prints as text; a drawn one is its PNG. The date is the day it was
+// signed, in Toronto.
+// ---------------------------------------------------------------------------
+
+export type SignedSigner = {
+  role: string; // landlord | tenant | guarantor
+  name: string | null;
+  signedName: string | null;
+  kind: "typed" | "drawn" | null;
+  data: string | null;
+  signedAt: string | null;
+  signOrder: number;
+};
+
+export type SignaturePlacement = {
+  page: 7;
+  row: "landlord" | number; // tenant row index 0..3
+  box: Box;
+  dateBox: Box;
+  kind: "typed" | "drawn";
+  data: string; // the typed text, or a PNG data: URL
+  dateText: string;
+};
+
+const normName = (s: string | null | undefined) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+
+/** "2026/11/02" (the form's yyyy/mm/dd) for an ISO instant, as the calendar day in Toronto. */
+export function torontoDay(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d).replace(/-/g, "/");
+}
+
+function usablePng(data: string | null | undefined): boolean {
+  return typeof data === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(data) && data.length < 2_000_000;
+}
+
+/** Where each signed signature goes. Unsigned rows stay blank for wet ink. */
+export function signaturePlacements(tenantNames: string[], signers: SignedSigner[]): {
+  placed: SignaturePlacement[];
+  /** Signed tenants with no row of their own on the form (more than 4, or a name that matches no row). */
+  overflow: SignedSigner[];
+} {
+  const placed: SignaturePlacement[] = [];
+  const overflow: SignedSigner[] = [];
+  // All four rows exist on the form, named or not.
+  const rows = Array.from({ length: FORM_TENANT_ROWS }, (_, i) => normName(tenantNames[i]));
+  const taken = new Set<number>();
+  const signed = signers
+    .filter((s) => s.signedAt && s.data && (s.kind === "typed" || s.kind === "drawn"))
+    .slice()
+    .sort((a, b) => a.signOrder - b.signOrder);
+
+  const make = (s: SignedSigner, row: "landlord" | number, box: { signature: readonly number[]; date: readonly number[] }): SignaturePlacement | null => {
+    if (s.kind === "drawn" && !usablePng(s.data)) return null;
+    const text = s.kind === "typed" ? String(s.data).trim() : String(s.data);
+    if (!text) return null;
+    return {
+      page: 7, row,
+      box: [box.signature[0], box.signature[1], box.signature[2], box.signature[3]],
+      dateBox: [box.date[0], box.date[1], box.date[2], box.date[3]],
+      kind: s.kind as "typed" | "drawn",
+      data: text,
+      dateText: torontoDay(s.signedAt),
+    };
+  };
+
+  for (const s of signed) {
+    if (s.role === "landlord") {
+      if (placed.some((p) => p.row === "landlord")) continue;
+      const p = make(s, "landlord", SIGNATURE_BOXES.landlord);
+      if (p) placed.push(p);
+      continue;
+    }
+    if (s.role !== "tenant") continue;
+    let idx = rows.findIndex((n, i) => !taken.has(i) && n !== "" && (n === normName(s.name) || n === normName(s.signedName)));
+    // Else the first free row with no printed name. Never a row printed with
+    // someone else's name: an unmatched signer is listed on the attachment.
+    if (idx < 0) idx = rows.findIndex((n, i) => !taken.has(i) && n === "");
+    if (idx < 0) { overflow.push(s); continue; }
+    const p = make(s, idx, SIGNATURE_BOXES.tenants[idx]);
+    if (p) { taken.add(idx); placed.push(p); }
+  }
+  return { placed, overflow };
+}

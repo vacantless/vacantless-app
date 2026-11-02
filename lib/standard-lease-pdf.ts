@@ -6,7 +6,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { standardLeasePlacements, overflowLines, type Placement, type StandardLeaseInput } from "@/lib/standard-lease";
+import {
+  standardLeasePlacements,
+  overflowLines,
+  signaturePlacements,
+  torontoDay,
+  type Placement,
+  type SignedSigner,
+  type StandardLeaseInput,
+} from "@/lib/standard-lease";
 
 const TEMPLATE_REL = "lib/forms/ontario-2229e-2020-12-flat.pdf";
 export const STANDARD_LEASE_VERSION = "2229E (2020/12)";
@@ -88,7 +96,19 @@ function drawPlacement(page: PDFPage, p: Placement, font: PDFFont, bold: PDFFont
 export type StandardLeasePdfInput = StandardLeaseInput & {
   /** Section 15 attachment text (lease_documents.assembled_body). */
   additionalTerms: string | null;
+  /** S744c: e-signatures to stamp on page 7 (lease_signers rows). */
+  signatures?: SignedSigner[];
 };
+
+/** Fit an image into a box, keeping its shape, left-aligned and centred up and down. */
+export function fitImage(imgW: number, imgH: number, box: [number, number, number, number], pad = 1.5) {
+  const bw = box[2] - box[0] - pad * 2;
+  const bh = box[3] - box[1] - pad * 2;
+  const k = Math.min(bw / imgW, bh / imgH);
+  const w = imgW * k;
+  const h = imgH * k;
+  return { x: box[0] + pad, y: box[1] + pad + (bh - h) / 2, width: w, height: h };
+}
 
 /** The filled 2229E plus the additional-terms pages. */
 export async function fillStandardLease(input: StandardLeasePdfInput): Promise<Uint8Array> {
@@ -101,7 +121,33 @@ export async function fillStandardLease(input: StandardLeasePdfInput): Promise<U
     if (page) drawPlacement(page, p, font, bold);
   }
 
-  const extra = overflowLines(input);
+  // S744c: Section 17 e-signatures.
+  const sig = signaturePlacements(input.tenantNames, input.signatures ?? []);
+  const page7 = pages[6];
+  if (page7 && sig.placed.length) {
+    const oblique = await pdf.embedFont(StandardFonts.HelveticaOblique);
+    for (const p of sig.placed) {
+      if (p.kind === "drawn") {
+        try {
+          const png = await pdf.embedPng(Buffer.from(p.data.split(",")[1], "base64"));
+          page7.drawImage(png, fitImage(png.width, png.height, p.box));
+        } catch {
+          // A broken image never stops the lease: leave the box for wet ink.
+          continue;
+        }
+      } else {
+        drawPlacement(page7, { page: 7, kind: "text", x: p.box[0], y: p.box[1], w: p.box[2] - p.box[0], h: p.box[3] - p.box[1], text: p.data }, oblique, bold);
+      }
+      if (p.dateText) {
+        drawPlacement(page7, { page: 7, kind: "text", x: p.dateBox[0], y: p.dateBox[1], w: p.dateBox[2] - p.dateBox[0], h: p.dateBox[3] - p.dateBox[1], text: p.dateText }, font, bold);
+      }
+    }
+  }
+  const sigOverflow = sig.overflow.map(
+    (s) => `${s.signedName || s.name || "Tenant"} signed electronically on ${torontoDay(s.signedAt)}.`,
+  );
+
+  const extra = [...overflowLines(input), ...(sigOverflow.length ? ["", "Signatures that did not fit on page 7:", ...sigOverflow] : [])];
   const terms = (input.additionalTerms ?? "").trim();
   if (terms || extra.length) {
     const W = 612, H = 792, M = 54, size = 10, lead = 13.5;

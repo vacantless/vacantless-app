@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { formatRentCents } from "@/lib/tenancy";
+import { loadStandardLease } from "@/lib/standard-lease-server";
 import {
   resolveCurrentClauses,
   buildLeaseVars,
@@ -243,6 +244,12 @@ export async function sendLeaseForSignature(formData: FormData) {
     clauseBody: lease.assembled_body ?? "",
   };
 
+  // S744c: freeze the Ontario Standard Form input with the snapshot, so the
+  // printed 2229E matches what was sent even if the tenancy changes later.
+  const standard = await loadStandardLease(supabase, {
+    tenancyId, leaseId: lease.id, orgId: org.id, orgName: org.name,
+  });
+
   // Freeze + hash the EXACT bytes the signer will see (tamper-evidence anchor).
   const documentHash = hashDocument(renderLeaseDocumentHtml(model));
 
@@ -269,7 +276,7 @@ export async function sendLeaseForSignature(formData: FormData) {
     .update({
       status: "sent",
       sent_at: new Date().toISOString(),
-      rendered_snapshot: model,
+      rendered_snapshot: standard ? { ...model, standardForm: standard.input } : model,
       document_hash: documentHash,
       updated_at: new Date().toISOString(),
     })
