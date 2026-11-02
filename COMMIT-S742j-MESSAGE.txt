@@ -1,0 +1,9 @@
+S742j: the renter list knows one person by phone and name too
+
+Re-walked after S742g: Avani still showed twice on Assumption 9. She
+wrote from two addresses with the same phone. The Renters tab now joins
+rows by the same email, the same phone (last ten digits) or the same
+name, so one person is one line with "asked 2 times".
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq1am5xVeS4zx9Rz1r

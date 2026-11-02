@@ -13,9 +13,13 @@ const rows = [
   { id: "8", name: "No Email", email: null, status: "new", created_at: "2026-10-01" },
   { id: "9", name: "no email", email: "", status: "replied", created_at: "2026-09-30" },
   { id: "10", name: "Done", email: "d@x.test", status: "leased", created_at: "2026-09-01" },
+  // S742: one person, two addresses, one phone (formatted two ways).
+  { id: "11", name: "Priya Shah", email: "w0856965@myscc.ca", phone: "03828800724", status: "new", created_at: "2026-08-15" },
+  { id: "12", name: "P. Shah", email: "varsha@x.test", phone: "+1 382 880 0724", status: "new", created_at: "2026-08-04" },
 ];
 const g = groupRenterRows(rows);
-ok("open keeps the newest per person", g.open.map((o) => o.row.id).join(",") === "1,2,4,8");
+ok("open keeps the newest per person", g.open.map((o) => o.row.id).join(",") === "1,2,4,8,11");
+ok("same name or same phone joins the person", g.open.find((o) => o.row.id === "11")?.requests === 2);
 ok("a repeat request is counted, not listed twice", g.open.find((o) => o.row.id === "1")?.requests === 2);
 ok("same name without email groups too", g.open.find((o) => o.row.id === "8")?.requests === 2);
 ok("closed holds lost and leased, in order", g.closed.map((r) => r.id).join(",") === "3,5,6,10");

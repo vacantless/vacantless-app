@@ -391,6 +391,7 @@ type LeadRow = {
   id: string;
   name: string | null;
   email: string | null;
+  phone?: string | null;
   status: LeadStatus;
   price_drop_notified_cents: number | null;
   listing_post_id: string | null;
@@ -956,7 +957,7 @@ export default async function PropertyDetailPage({
   const { data: leads } = await supabase
     .from("leads")
     .select(
-      "id, name, email, status, price_drop_notified_cents, listing_post_id, created_at, source, leased_date",
+      "id, name, email, phone, status, price_drop_notified_cents, listing_post_id, created_at, source, leased_date",
     )
     .eq("property_id", p.id)
     .order("created_at", { ascending: false });
