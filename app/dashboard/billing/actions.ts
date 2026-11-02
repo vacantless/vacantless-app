@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import {
@@ -39,7 +40,9 @@ import {
 
 // Start a 30-day, founder-led pilot ($0/month, refundable $200 setup deposit
 // collected out-of-band). Records plan='pilot' + pilot_started_at=now via the
-// RLS-scoped client (owner updates their own org). Idempotent + guarded: a paid
+// service-role client: S745a locks the plan and billing columns against
+// signed-in writes (migration 0266), so only the server can set them, after
+// the owner-only check below. Idempotent + guarded: a paid
 // org can't downgrade into a pilot, and an existing pilot is never restarted
 // (which would extend the window). Redirect-based, per the S170 503 WATCH.
 export async function startPilot() {
@@ -51,8 +54,9 @@ export async function startPilot() {
   if (isPaidPlan(org.plan)) redirect("/dashboard/billing?error=already_paid");
   if (org.pilot_started_at) redirect("/dashboard/billing?pilot=already");
 
-  const supabase = createClient();
-  const { error } = await supabase
+  const admin = createAdminClient();
+  if (!admin) redirect("/dashboard/billing?error=pilot");
+  const { error } = await admin
     .from("organizations")
     .update({
       plan: "pilot",
@@ -104,14 +108,17 @@ async function ensureCustomer(
     metadata: { org_id: org.id },
   });
 
-  // Persist via the RLS-scoped client (owner updates their own org). The
-  // webhook also backfills this from checkout.session.completed, so a failure
-  // here is self-healing, but we write it now to avoid creating duplicates.
-  const supabase = createClient();
-  await supabase
-    .from("organizations")
-    .update({ stripe_customer_id: customer.id })
-    .eq("id", org.id);
+  // Persist via the service-role client (S745a: stripe_customer_id is locked
+  // against signed-in writes, migration 0266). The webhook also backfills this
+  // from checkout.session.completed, so a failure here is self-healing, but we
+  // write it now to avoid creating duplicates.
+  const admin = createAdminClient();
+  if (admin) {
+    await admin
+      .from("organizations")
+      .update({ stripe_customer_id: customer.id })
+      .eq("id", org.id);
+  }
 
   return customer.id;
 }

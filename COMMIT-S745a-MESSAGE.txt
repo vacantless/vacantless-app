@@ -1,0 +1,24 @@
+S745a: only Vacantless can change an account's plan and billing
+
+A signed-in landlord, or a teammate, could set their own plan to Premium
+through the public database API: every member may update the account row
+and the plan, subscription and Stripe columns had no guard. Feature
+switches had the same gap (an override beats the plan).
+
+App, deployed before migration 0266:
+- startPilot and ensureCustomer write through the service role, after the
+  owner-only check.
+- The staff feature switch writes organization_feature_flags through the
+  service role.
+
+Migration 0266 (applied after this deploy): a trigger refuses signed-in
+changes to plan, subscription, Stripe ids, pilot deposit, concierge,
+closed and texting-number retry fields. One move stays open: the
+create_organization default 'trial' down to 'free', which sign-up and
+the agent quick onboard make. Landlords lose write access to
+organization_feature_flags.
+
+Test: scripts/test-billing-columns-locked.ts (18 checks).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGouwukHStbfHLKW66n

@@ -984,7 +984,11 @@ export async function updateOrganizationFeatureFlag(formData: FormData) {
     redirect("/dashboard/settings?tab=account&features=invalid");
   }
 
-  const supabase = createClient();
+  // S745a: landlords can no longer write organization_feature_flags (migration
+  // 0266 revokes it; a plan feature switched on there skipped the plan). Staff
+  // write through the service role.
+  const supabase = createAdminClient();
+  if (!supabase) redirect("/dashboard/settings?tab=account&features=error");
   const query = supabase
     .from("organization_feature_flags")
     .delete()
