@@ -32,6 +32,7 @@ import {
 } from "@/lib/mail-alias-provisioning";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decideAccountClosure, OPEN_RENTAL_STATUSES } from "@/lib/account-closure";
+import { describeWipe, wipeOrgSecrets } from "@/lib/account-closure-server";
 import { adminEmails } from "@/lib/provisioning-server";
 import { textingRequestEmail } from "@/lib/texting-setup-emails";
 import { isAdminEmail } from "@/lib/provisioning";
@@ -1229,6 +1230,11 @@ export async function closeAccount(formData: FormData) {
     .eq("id", org.id);
   if (orgErr) redirect("/dashboard/settings?tab=account&close=error#close-account");
 
+  // S742d: the secrets go now (site logins, Facebook Page token, bank tokens,
+  // open sign-in windows, the texting number); posting accounts pause. The
+  // landlord's records stay for the 30-day deletion.
+  const wipe = await wipeOrgSecrets(admin, org.id);
+
   // Tell us, so the 30-day deletion happens. Best-effort: a failed email must
   // not leave the landlord half-closed.
   const closureRecipients = adminEmails();
@@ -1240,7 +1246,7 @@ export async function closeAccount(formData: FormData) {
         subject: `Account closed: ${org.name ?? org.id}`,
         body:
           `${org.name ?? "An organization"} was closed by ${user.email ?? user.id}.\nOrg id: ${org.id}\nClosed at: ${closedAt}\n\n` +
-          "Rentals are off the market. Nobody can sign in. Delete the stored data within 30 days.",
+          `Rentals are off the market. Nobody can sign in. ${describeWipe(wipe)}. Delete the stored data within 30 days.`,
         org_name: "Vacantless",
         brand_color: null,
         logo_url: null,

@@ -1,0 +1,22 @@
+S742d: closing an account removes its secrets the same minute
+
+Close this account used to put rentals off market, stamp closed_at,
+remove logins and email us, and leave behind the encrypted site logins
+(Kijiji, Zumper, Rentals.ca and the Facebook Page token), the Plaid
+access tokens, any open sign-in window, and the texting number (released
+only when the daily sweep noticed). The /data-deletion page promised
+more than that.
+
+New lib/account-closure-server.ts wipeOrgSecrets: deletes the channel
+sessions and sign-in windows, deletes the bank tokens and marks the
+connections disconnected, pauses every posting account, and gives the
+texting number back to Twilio (the sweep retries if Twilio is down).
+Each step is independent; one failure is reported and the rest still
+runs. The closure email to us now says what was removed. The landlord's
+records (renters, tenancies, documents) stay for the 30-day deletion as
+before.
+
+Tests: scripts/test-account-closure-server.ts (15).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq1am5xVeS4zx9Rz1r
