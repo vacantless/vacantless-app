@@ -1742,6 +1742,119 @@ export async function sendNurtureEmail(p: NurturePayload): Promise<SendResult> {
 }
 
 // ---------------------------------------------------------------------------
+// S742e: "this one rented, here are the others". When a rental is marked
+// leased, every renter still waiting on it (New, Replied, Contacted) is told,
+// and shown the landlord's other open homes with a link to book. Marketing
+// kind: a renter who unsubscribed is skipped (lib/renter-email-block).
+// ---------------------------------------------------------------------------
+
+export type RentedNoticeOtherUnit = {
+  property_id: string;
+  address: string | null;
+  rent_cents: number | null;
+  beds: number | null;
+  baths: number | null;
+};
+
+export type RentedNoticePayload = {
+  lead_id: string;
+  /** The rented one; its page lists the org's open units when nothing else is passed. */
+  property_id: string;
+  renter_name: string | null;
+  renter_email: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  mail_alias?: string | null;
+  reply_to_email: string | null;
+  property_address: string | null;
+  others: RentedNoticeOtherUnit[];
+};
+
+/** Subject line. Pure. */
+export function rentedNoticeSubject(address: string | null): string {
+  return address ? `${address} has been rented` : "That rental has been rented";
+}
+
+function bedsBaths(beds: number | null, baths: number | null): string {
+  const parts: string[] = [];
+  if (beds != null) parts.push(`${beds} bed`);
+  if (baths != null) parts.push(`${baths} bath`);
+  return parts.join(" / ");
+}
+
+export function rentedNoticeHtml(p: RentedNoticePayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.renter_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : "the rental you asked about";
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+  const others = p.others.slice(0, 3);
+  const cards = others
+    .map((u) => {
+      const rent = formatRent(u.rent_cents);
+      const facts = [bedsBaths(u.beds, u.baths), rent ? `${rent}/month` : null].filter(Boolean).join(" · ");
+      return `<div style="margin:0 0 12px;padding:14px 16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
+        <p style="margin:0 0 4px;"><strong>${escapeHtml(u.address || "Another home")}</strong></p>
+        ${facts ? `<p style="margin:0 0 10px;color:#52525b;font-size:14px;">${escapeHtml(facts)}</p>` : ""}
+        <a href="${escapeHtml(listingUrl(u.property_id))}" style="display:inline-block;background:${escapeHtml(brand)};color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px;">See it and book a viewing</a>
+      </div>`;
+    })
+    .join("");
+  const othersBlock = others.length > 0
+    ? `<p style="margin:0 0 12px;">We have ${others.length === 1 ? "another home" : "other homes"} open right now:</p>${cards}`
+    : `<p style="margin:0 0 16px;">Nothing else is open with us today. Reply to this email if you would like us to keep you in mind, and we will write when something opens.</p>`;
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 16px;">Thank you for your interest in ${addr}. It has been rented, so we are closing your request for it.</p>
+      ${othersBlock}
+      <p style="margin:24px 0 0;color:#52525b;">All the best,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you inquired about this listing with us.${unsubscribeFooterHtml(renterUnsubscribeUrl(p.lead_id), brand)}
+    </div>
+  </div>
+</body></html>`;
+}
+
+/** Best-effort. Never throws. */
+export async function sendRentedNoticeEmail(p: RentedNoticePayload): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
+  const subject = rentedNoticeSubject(p.property_address);
+  const body = {
+    sender: senderOf(p.mail_alias, p.org_name),
+    to: [{ email: p.renter_email, ...(p.renter_name ? { name: p.renter_name } : {}) }],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: rentedNoticeHtml(p),
+    tags: ["kind:rented_notice"],
+  };
+  try {
+    const res = await brevoFetch({
+      method: "POST",
+      headers: { "api-key": apiKey, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Settings "Send a test email". Emails the operator a copy of the branded
 // renter auto-reply (using their own saved branding + realistic sample data) so
 // they can confirm deliverability and how their brand looks before sharing the
@@ -2266,9 +2379,14 @@ export async function sendAutoReply(p: AutoReplyPayload): Promise<SendResult> {
     : defaultSubject(p);
 
   // Operator template body is treated as HTML (they author it); otherwise the
-  // branded default. Token-substitute either way.
+  // branded default. S742a: the VALUES that fill the tokens come from the
+  // renter (name, question) and the ad (address), so they are escaped before
+  // they land in the operator's HTML. The template itself stays HTML.
+  const htmlVars: Record<string, string> = Object.fromEntries(
+    Object.entries(vars).map(([k, v]) => [k, escapeHtml(v)]),
+  );
   const htmlContent = p.template_body
-    ? applyTokens(p.template_body, vars)
+    ? applyTokens(p.template_body, htmlVars)
     : defaultHtml(p);
 
   const body = {

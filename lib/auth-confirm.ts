@@ -34,7 +34,12 @@ export function safeNextPath(
   raw: string | null | undefined,
   fallback = "/dashboard",
 ): string {
-  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : fallback;
+  const next = (raw ?? "").trim();
+  if (!next.startsWith("/") || next.startsWith("//")) return fallback;
+  // S742a: "/\\evil.com" is read as "//evil.com" by browsers, and a control
+  // character can split the URL; both leave the site, so both fall back.
+  if (next.includes("\\") || /[\u0000-\u001f]/.test(next)) return fallback;
+  return next;
 }
 
 export type ConfirmParams = {

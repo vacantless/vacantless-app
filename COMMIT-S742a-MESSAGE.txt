@@ -1,0 +1,20 @@
+S742a: auto-reply templates escape renter text; one redirect guard
+
+Two findings from the S742 security review.
+
+1. When a landlord wrote their own auto-reply template, the values that
+   fill {{renter_name}} and {{answer}} went in as raw HTML. A renter's
+   name field is renter-typed, so a crafted name could plant a link in an
+   email sent from the landlord's own address. The template is still
+   treated as HTML; the values are escaped first. The default (no
+   template) path already escaped.
+
+2. /auth/callback accepted ?next=/\evil.com, which the browser reads as
+   //evil.com, and sent a signed-in landlord off site. The callback now
+   uses the shared guard in lib/auth-confirm, which also refuses a
+   backslash or a control character.
+
+Tests: test-auto-reply-booking-link (+3), test-auth-confirm (+3).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq1am5xVeS4zx9Rz1r

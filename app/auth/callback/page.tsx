@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { AuthShell, AUTH_BUTTON_CLASS } from "@/components/auth-shell";
+import { safeNextPath } from "@/lib/auth-confirm";
 
 // Finalizes an auth redirect for BOTH Supabase flows, then forwards to `next`:
 //   - PKCE ("?code="): the forgot-password + signup-confirmation emails, where
@@ -22,13 +23,9 @@ function AuthCallbackInner() {
 
   useEffect(() => {
     const supabase = createClient();
-    const rawNext = params.get("next") ?? "/dashboard";
-    // Only allow an internal, same-origin relative path (guard against an
-    // open redirect via a crafted ?next=//evil.com or ?next=https://...).
-    const next =
-      rawNext.startsWith("/") && !rawNext.startsWith("//")
-        ? rawNext
-        : "/dashboard";
+    // Only an internal, same-origin path (no //host, no https://, no
+    // backslash); the shared guard in lib/auth-confirm decides (S742a).
+    const next = safeNextPath(params.get("next"));
     const code = params.get("code");
     const hashError =
       typeof window !== "undefined" && window.location.hash.includes("error");

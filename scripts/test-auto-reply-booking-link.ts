@@ -61,6 +61,20 @@ async function main() {
   await sendAutoReply({ ...base, booking_url: 'https://x.test/r/p1?a="><script>' });
   ok("url is escaped", !(sent[4]?.htmlContent ?? "").includes('"><script>'));
 
+  // S742a: a renter's name and question are escaped before they fill an
+  // operator template, so a crafted name cannot plant a link in the landlord's
+  // branded email.
+  await sendAutoReply({
+    ...base,
+    template_body: "<p>Hi {{renter_name}}, {{answer}}</p>",
+    renter_name: '<a href="https://evil.test">Click</a> Pat',
+    answer_text: "<img src=x onerror=alert(1)>",
+  });
+  const tpl = sent[5]?.htmlContent ?? "";
+  ok("template name escaped", !tpl.includes('<a href="https://evil.test">') && tpl.includes("&lt;a"));
+  ok("template answer escaped", !tpl.includes("<img") && tpl.includes("&lt;img"));
+  ok("template itself stays html", tpl.startsWith("<p>Hi "));
+
   console.log(`\nauto-reply-booking-link: ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }

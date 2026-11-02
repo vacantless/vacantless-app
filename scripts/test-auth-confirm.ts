@@ -36,6 +36,11 @@ ok(
   safeNextPath(null, "/onboarding") === "/onboarding",
 );
 ok("non-slash rejected", safeNextPath("reset-password") === "/dashboard");
+// S742a: a backslash reads as a slash in the browser, so "/\\evil.com" would
+// leave the site; a control character can split the URL the same way.
+ok("backslash rejected", safeNextPath("/\\evil.com") === "/dashboard");
+ok("control char rejected", safeNextPath("/dashboard\n/x") === "/dashboard");
+ok("surrounding spaces trimmed", safeNextPath("  /dashboard/leads ") === "/dashboard/leads");
 
 // --- planEmailConfirm ------------------------------------------------------
 ok("valid recovery plan", (() => {
