@@ -1,0 +1,18 @@
+S742h: one test command, run on every push
+
+The app had 338 test scripts covering 297 modules and nothing that ran
+them all: each commit script named the few its author chose, no
+workflow ran tsc or any test on push, and a regression in any other
+module reached production. Switching the gate on found nine scripts
+already red at HEAD (stale source-text or date assertions, no product
+fault), one of which (test-s714d-run-fixes) was fixed in S742g.
+
+scripts/run-all-tests.mjs runs every scripts/test-*.ts (about 100 s),
+reports ok / FAIL / red* (known) / skipped (needs services), and fails
+the run on any new failure. npm test now points at it. The nine known
+reds sit in scripts/tests-known-red.txt, which is meant to shrink.
+.github/workflows/ci.yml runs tsc and the full set on every push to
+main and every pull request.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq1am5xVeS4zx9Rz1r

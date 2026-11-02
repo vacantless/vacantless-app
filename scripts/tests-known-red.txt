@@ -1,0 +1,13 @@
+# S742h: tests that were already red when the all-tests gate was switched on
+# (2026-11-01). Each is a stale source-text or date assertion, not a product
+# fault. Fix the test or the code and REMOVE the line; never add to this list
+# to make a run pass.
+test-channel-mutation-stale-render.ts
+test-lead-no-suitable-time.ts
+test-ai-reply.ts
+test-open-house-double-booking.ts
+test-s724-ad-preview.ts
+test-compliance-calendar.ts
+test-renew-ads.ts
+test-notifications.ts
+test-s702-walk-fixes.ts

@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "test": "tsx scripts/test-lead-detail.ts",
+    "test": "node scripts/run-all-tests.mjs",
+    "test:lead-detail": "tsx scripts/test-lead-detail.ts",
     "test:ai-reply": "tsx scripts/test-ai-reply.ts",
     "test:property-qa": "tsx scripts/test-property-qa.ts",
     "test:feature-entitlements": "tsx scripts/test-feature-entitlements.ts",

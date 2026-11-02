@@ -1,0 +1,28 @@
+# S742h: the test gate. Until now no workflow ran tsc or any test on push;
+# each commit script ran the few tests its author named, and a regression in
+# any other module reached production. This runs the type check and every
+# scripts/test-*.ts on every push to main and every pull request.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: node scripts/run-all-tests.mjs

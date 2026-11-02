@@ -1,0 +1,2 @@
+# S742h: tests that need the database or a live service and so do not run in
+# the all-tests gate. None today: every test ran green or known-red offline.
