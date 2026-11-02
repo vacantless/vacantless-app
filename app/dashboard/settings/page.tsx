@@ -47,6 +47,8 @@ import { SettingsTabs, type SettingsTab } from "@/components/settings-tabs";
 import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { messageSetupFlash } from "@/lib/message-setup-save";
 import { PageHeader, IconTile } from "@/components/ui";
+import { TeamSection } from "./team-section";
+import { roleCan } from "@/lib/roles";
 import {
   facebookOAuthConfigured,
   fbPageChannelEnabled,
@@ -124,10 +126,12 @@ function resolveTab(sp: Record<string, string | undefined>): SettingsTab {
     t === "distribution" ||
     t === "comms" ||
     t === "banking" ||
-    t === "account"
+    t === "account" ||
+    t === "team"
   ) {
     return t;
   }
+  if (sp.team) return "team";
   if (sp.distribution || sp.fb) return "distribution";
   if (sp.rotessa || sp.stripeconnect) return "banking";
   if (sp.features) return "account";
@@ -347,6 +351,7 @@ export default async function SettingsPage({
     feed?: string; // Public Page & Brand → syndication contact flash
     distribution?: string; // Distribution → channel account/setup flash
     fb?: string; // Distribution → Facebook Page connect/disconnect flash (S705)
+    team?: string; // S744: Team tab flash
   };
 }) {
   const org = await getCurrentOrg();
@@ -2937,6 +2942,17 @@ export default async function SettingsPage({
             </div>
           )}
         </div>
+      )}
+
+      {/* ================= S744: Team ================= */}
+      {tab === "team" && (
+        <TeamSection
+          orgId={org.id}
+          plan={org.plan}
+          callerUserId={user?.id ?? null}
+          canManage={currentOrgRole != null && roleCan(currentOrgRole, "manage_team")}
+          flash={searchParams.team}
+        />
       )}
     </div>
   );

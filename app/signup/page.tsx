@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/client";
 import {
   AuthShell,
@@ -102,7 +103,11 @@ export default function SignupPage() {
       setLoading(false);
       return;
     }
-    router.push(onboardingHref);
+    // S744: a team invite sends people here with ?next=/join/<token>; go back
+    // there so they join the team instead of setting up a second account.
+    const next = search.get("next");
+    const target = next && safeNextPath(next) === next ? next : onboardingHref;
+    router.push(target);
     router.refresh();
   }
 

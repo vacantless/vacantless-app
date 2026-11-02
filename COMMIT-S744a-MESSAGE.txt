@@ -1,0 +1,33 @@
+S744a: team invites (owner adds a teammate without sharing a password)
+
+Roadmap item 14. An owner could not add a leasing assistant except by
+sharing their own login; Agile's operator was added by hand in July.
+
+Settings > Team lists who can sign in, open invites, and lets the owner
+invite by email, cancel an invite, or take someone off the team. The
+email links to /join/<token>: the invitee signs in or creates a login
+with that email, then joins. Onboarding also offers any open invite, so
+a new teammate never sets up a second, empty account by mistake.
+
+- team_invites (migration 0265): RLS on, no policies, browser roles
+  revoked; only a SHA-256 of the token is stored; 14-day expiry; one
+  open invite per email per account (a resend cancels the old link).
+- Accepting needs the signed-in user's CONFIRMED email to equal the
+  invited email; the token only finds the row. The invite is closed
+  before the membership is added, so a double click can't reuse it.
+- Seats (S201 rule): Free stays one login; Growth owner + 2 teammates;
+  Premium/Managed/pilot + 5. Open invites use seats.
+- Slice 1 invites the Teammate (operator) role only. The viewing-helper
+  role waits until dashboard pages hide what a helper must not see.
+- New owner-only capability manage_team (like billing).
+- Fix: getCurrentRole() read the caller's FIRST membership with no
+  account filter. With invites, an owner of their own account who joins
+  another as a teammate could get owner powers inside it. It now reads
+  the role in the active account (same cookie rule as getCurrentOrg).
+- /join added to the safe ?next= paths; signup returns to it.
+
+Tests: scripts/test-team-invites.ts (46), test-roles updated (34),
+plain-language gate green, tsc clean.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGnmqUWKqR5TALveY4a

@@ -187,6 +187,8 @@ const OUT_OF_SCOPE_DIRS: Record<string, string> = {
  * with clean copy passes discovery silently and is never listed here.
  */
 const OUT_OF_SCOPE: Record<string, string> = {
+  // S744. Server actions only: redirect URLs with a ?team= flash key, no copy.
+  "app/dashboard/settings/team-actions.ts": "server actions, redirect urls only, renders no landlord copy",
   // The property page's other tabs. Real landlord copy, but not syndication:
   // the word contract reaches them after the roadmap, not during it.
   "app/dashboard/properties/[id]/appliances-section.tsx": "unit facts tab, not syndication",

@@ -6,7 +6,8 @@
 //
 // Only same-site app pages are allowed (no "//host", no "https://", no
 // backslash tricks), so ?next= can never send someone to another site.
-const ALLOWED_PREFIXES = ["/dashboard", "/onboarding"];
+// S744: /join (team invites) too, so "I have a login" returns to the invite.
+const ALLOWED_PREFIXES = ["/dashboard", "/onboarding", "/join"];
 
 export const DEFAULT_AFTER_LOGIN = "/dashboard";
 

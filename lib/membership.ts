@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeRole, roleCan, type Capability, type OrgRole } from "@/lib/roles";
+import { readSelectedOrgCookie, validateSelectedOrg } from "@/lib/selected-org";
 
 // Server-side membership/role resolution + capability guards for server actions.
 //
@@ -9,8 +10,14 @@ import { normalizeRole, roleCan, type Capability, type OrgRole } from "@/lib/rol
 // missing roles are floored to the most restrictive role by normalizeRole, so a
 // bad value can never over-grant. See lib/roles.ts for the capability matrix.
 
-// The current user's role, or null when there is no authenticated user / no
-// membership yet (pre-onboarding).
+// The current user's role IN THE ACCOUNT THEY ARE LOOKING AT, or null when
+// there is no authenticated user / no membership yet (pre-onboarding).
+//
+// S744: this used to read the caller's FIRST membership with no account filter.
+// Once team invites exist, an owner of their own account who joins another as
+// a teammate could get owner powers inside the other account. The active
+// account is resolved exactly as getCurrentOrg() does (selected_org cookie,
+// re-validated against the caller's memberships), and its role is returned.
 export async function getCurrentRole(): Promise<OrgRole | null> {
   const supabase = createClient();
   const {
@@ -20,11 +27,25 @@ export async function getCurrentRole(): Promise<OrgRole | null> {
 
   const { data } = await supabase
     .from("memberships")
-    .select("role")
-    .eq("user_id", user.id)
-    .limit(1);
+    .select("organization_id, role")
+    .eq("user_id", user.id);
 
-  const raw = data?.[0]?.role as string | undefined;
+  const rows = (data ?? []) as { organization_id: string | null; role: string | null }[];
+  return roleForActiveOrg(rows, readSelectedOrgCookie());
+}
+
+// Pure: the role on the membership row of the active account. Exported for
+// scripts/test-team-invites.ts.
+export function roleForActiveOrg(
+  rows: readonly { organization_id: string | null; role: string | null }[],
+  cookieOrgId: string | null,
+): OrgRole | null {
+  const ids = rows
+    .map((r) => r.organization_id)
+    .filter((id): id is string => id != null);
+  const active = validateSelectedOrg(cookieOrgId, ids);
+  if (!active) return null;
+  const raw = rows.find((r) => r.organization_id === active)?.role;
   if (raw == null) return null;
   return normalizeRole(raw);
 }

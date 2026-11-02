@@ -2357,6 +2357,88 @@ export async function sendSenderConfirmation(
   }
 }
 
+// S744 (roadmap item 14): an owner invited someone to their team.
+export type TeamInvitePayload = {
+  to_email: string;
+  org_name: string | null;
+  inviter_email: string | null;
+  role_label: string;
+  token: string;
+  brand_color?: string | null;
+  reply_to_email?: string | null;
+};
+
+export function teamInviteUrl(token: string): string {
+  return `${APP_BASE_URL}/join/${encodeURIComponent(token)}`;
+}
+
+export function teamInviteSubject(orgName: string | null): string {
+  return `You're invited to join ${orgName || "a team"} on Vacantless`;
+}
+
+export function teamInviteHtml(p: TeamInvitePayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "a landlord");
+  const who = p.inviter_email ? escapeHtml(p.inviter_email) : org;
+  const url = escapeHtml(teamInviteUrl(p.token));
+  const to = escapeHtml(p.to_email);
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      <p style="margin:0 0 16px;font-size:16px;">You're invited to join <strong>${org}</strong></p>
+      <p style="margin:0 0 16px;">${who} added you as a ${escapeHtml(p.role_label.toLowerCase())}. You'll share their rentals, renters and viewings.</p>
+      <p style="margin:0 0 16px;">Use <strong>${to}</strong> to log in or create your login.</p>
+      <p style="margin:0 0 16px;text-align:center;">
+        <a href="${url}" style="display:inline-block;background:${escapeHtml(
+          brand,
+        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Join the team</a>
+      </p>
+      <p style="margin:0 0 8px;font-size:14px;color:#3f3f46;">If the button does not open, copy this link:</p>
+      <p style="margin:0 0 16px;padding:12px;background:#f4f4f5;border-radius:8px;font-size:14px;color:#3f3f46;word-break:break-all;">${url}</p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      Not expecting this? You can ignore it. The link expires in 14 days.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/** Best-effort team invite email. Never throws. */
+export async function sendTeamInvite(p: TeamInvitePayload): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.to_email) return { sent: false, reason: "no_recipient" };
+  const subject = teamInviteSubject(p.org_name);
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [{ email: p.to_email }],
+    replyTo: replyToOf(p.reply_to_email ?? p.inviter_email, p.org_name),
+    subject,
+    htmlContent: teamInviteHtml(p),
+    tags: ["kind:team_invite"],
+  };
+  try {
+    const res = await brevoFetch({
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
 /**
  * Best-effort branded auto-reply. Never throws — callers can ignore the result.
  */

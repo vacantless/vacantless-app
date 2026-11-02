@@ -36,16 +36,19 @@ export const CAPABILITIES = [
   "add_notes", // add a timeline note to a lead
   "manage_showings", // mark a showing's outcome (attended/no-show/cancelled)
   "view_reports", // owner reporting dashboard
+  "manage_team", // S744: invite, cancel and remove teammates (owner only, like billing)
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 const ALL: Capability[] = [...CAPABILITIES];
 
 // The capability matrix. owner_admin gets everything; operator gets everything
-// except billing; showing_helper gets only its two job functions.
+// except billing and the team (S744: a teammate can't add or remove people);
+// showing_helper gets only its two job functions.
+const OWNER_ONLY: ReadonlySet<Capability> = new Set<Capability>(["manage_billing", "manage_team"]);
 const MATRIX: Record<OrgRole, ReadonlySet<Capability>> = {
   owner_admin: new Set(ALL),
-  operator: new Set(ALL.filter((c) => c !== "manage_billing")),
+  operator: new Set(ALL.filter((c) => !OWNER_ONLY.has(c))),
   showing_helper: new Set<Capability>(["add_notes", "manage_showings"]),
 };
 

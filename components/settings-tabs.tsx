@@ -14,7 +14,8 @@ export type SettingsTab =
   | "distribution"
   | "comms"
   | "banking"
-  | "account";
+  | "account"
+  | "team";
 
 // Settings sections are driven by ?tab= so redirect-based saves keep operators
 // on the same setup surface.
@@ -28,6 +29,7 @@ const TABS: {
   { key: "distribution", label: "Rental site accounts", icon: "link" },
   { key: "comms", label: "Message setup", icon: "mail" },
   { key: "banking", label: "Banking & rent", icon: "card" },
+  { key: "team", label: "Team", icon: "users" },
   { key: "account", label: "Plan & admin", icon: "key" },
 ];
 

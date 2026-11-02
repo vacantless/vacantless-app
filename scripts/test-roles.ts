@@ -47,7 +47,7 @@ ok(
 ok("operator cannot manage_billing", !roleCan("operator", "manage_billing"));
 ok(
   "operator has every non-billing capability",
-  CAPABILITIES.filter((c) => c !== "manage_billing").every((c) =>
+  CAPABILITIES.filter((c) => c !== "manage_billing" && c !== "manage_team").every((c) =>
     roleCan("operator", c),
   ),
 );
@@ -85,7 +85,9 @@ ok(
 
 // --- capabilitiesFor + labels ----------------------------------------------
 ok("capabilitiesFor(owner_admin) is full set", capabilitiesFor("owner_admin").length === CAPABILITIES.length);
-ok("capabilitiesFor(operator) drops one (billing)", capabilitiesFor("operator").length === CAPABILITIES.length - 1);
+ok("capabilitiesFor(operator) drops two (billing, team)", capabilitiesFor("operator").length === CAPABILITIES.length - 2);
+ok("operator cannot manage_team", !roleCan("operator", "manage_team"));
+ok("manage_team is owner_admin-only", ORG_ROLES.filter((r) => roleCan(r, "manage_team")).join(",") === "owner_admin");
 ok("capabilitiesFor(showing_helper) is 2", capabilitiesFor("showing_helper").length === 2);
 ok("roleLabel owner_admin", roleLabel("owner_admin") === "Owner / admin");
 ok("roleLabel operator", roleLabel("operator") === "Operator");
