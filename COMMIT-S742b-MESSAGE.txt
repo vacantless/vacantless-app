@@ -1,0 +1,21 @@
+S742b: the public renter form gets a limit and a hidden field
+
+The form at /r/<id> is open to anyone, and each submit emails the
+landlord, emails the renter, may call the AI once and may book and text.
+Nothing capped it except texts (500 a month). One script could flood a
+landlord's inbox, spend the email and AI budget, and use the landlord's
+own sender as a relay.
+
+Now: a hidden field people never see (scripts that fill every box get a
+quiet non-answer); 12 submits per connection per 10 minutes; 40 submits
+per rental per hour; 20 AI answers per rental per hour. All far above a
+real renter's use. The counter is a service-role function (migration
+0263, public_submit_hit). Every check fails OPEN: no function, no
+service key or a database error lets the renter through, so the code is
+safe to deploy before the migration runs. A blocked submit sees a plain
+"too many requests, wait a few minutes" line.
+
+Tests: scripts/test-public-submit-limit.ts (23).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq1am5xVeS4zx9Rz1r

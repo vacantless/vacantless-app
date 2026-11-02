@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -42,6 +42,13 @@ import {
 } from "@/lib/showing-agents";
 import { publicLeadSubmitEffects } from "@/lib/public-lead-dedup";
 import { answerRenterQuestion } from "@/lib/ai-enquiry-server";
+import {
+  LIMITS,
+  allowHit,
+  allowPublicSubmit,
+  clientIpFrom,
+  honeypotTripped,
+} from "@/lib/public-submit-limit";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
@@ -645,6 +652,22 @@ export async function submitLead(formData: FormData) {
   const propertyId = String(formData.get("property_id") ?? "");
   if (!propertyId) return;
 
+  // S742b: a hidden field people never see. Text in it means a script, not a
+  // renter; answer as if it worked and do nothing.
+  if (honeypotTripped((k) => formData.get(k))) {
+    redirect(`/r/${propertyId}?submitted=1`);
+  }
+  // S742b: one connection or one rental past its limit is turned away with a
+  // plain message. Counter errors never block anyone (fails open).
+  {
+    const hdrs = headers();
+    const gate = await allowPublicSubmit(createAdminClient(), {
+      ip: clientIpFrom((n) => hdrs.get(n)),
+      propertyId,
+    });
+    if (!gate.allowed) redirect(`/r/${propertyId}?error=limit`);
+  }
+
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
@@ -858,7 +881,11 @@ export async function submitLead(formData: FormData) {
       let answerText: string | null = null;
       try {
         const admin = createAdminClient();
-        if (admin && notes) answerText = await answerRenterQuestion(admin, propertyId, notes);
+        // S742b: at most LIMITS.aiPerProperty answers an hour per rental.
+        const aiOk = notes
+          ? await allowHit(admin, `ai:${propertyId}`, LIMITS.aiPerProperty)
+          : false;
+        if (admin && notes && aiOk) answerText = await answerRenterQuestion(admin, propertyId, notes);
       } catch {
         answerText = null;
       }

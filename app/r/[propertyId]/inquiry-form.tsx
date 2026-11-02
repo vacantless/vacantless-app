@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useFormStatus } from "react-dom";
+import { HONEYPOT_FIELD } from "@/lib/public-submit-fields";
 import {
   type DaySlots,
   selectedSlotIsRendered,
@@ -69,6 +70,8 @@ export type InquiryFormProps = {
   days: DaySlots[];
   hasClustered: boolean;
   showError: boolean;
+  /** S742b: a specific message for the error box (the limit notice). */
+  errorText?: string;
   screeningEnabled: boolean;
   // Per-built-in ask toggles (S438 Slice 2). Each gates whether its fieldset
   // renders on the form; all default true so an org that never touched them
@@ -117,6 +120,7 @@ export function InquiryForm({
   days,
   hasClustered,
   showError,
+  errorText,
   screeningEnabled,
   askIncome,
   askMovein,
@@ -300,7 +304,7 @@ export function InquiryForm({
       </p>
       {showError && (
         <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          Sorry, something went wrong. Please try again.
+          {errorText ?? "Sorry, something went wrong. Please try again."}
         </p>
       )}
 
@@ -310,6 +314,13 @@ export function InquiryForm({
         onSubmit={() => setSubmitStarted(true)}
       >
         <input type="hidden" name="property_id" value={propertyId} />
+        {/* S742b: a field no person sees or fills. Scripts that fill every box
+            trip it and get a quiet non-answer. Not a hidden input on purpose:
+            bots skip type=hidden. */}
+        <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", width: 1, height: 1, overflow: "hidden" }}>
+          <label htmlFor="vl-company-website">Company website</label>
+          <input id="vl-company-website" type="text" name={HONEYPOT_FIELD} tabIndex={-1} autoComplete="off" defaultValue="" />
+        </div>
         {trackedPostId && (
           <input type="hidden" name="listing_post_id" value={trackedPostId} />
         )}

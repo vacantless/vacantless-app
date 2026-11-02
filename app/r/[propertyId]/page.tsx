@@ -861,6 +861,11 @@ export default async function PublicListingPage({
               days={days}
               hasClustered={hasClustered}
               showError={Boolean(searchParams.error)}
+              errorText={
+                searchParams.error === "limit"
+                  ? "Too many requests from this connection in a short time. Please wait a few minutes and try again."
+                  : undefined
+              }
               screeningEnabled={l.screening_enabled}
               askIncome={l.screening_ask_income ?? true}
               askMovein={l.screening_ask_movein ?? true}
