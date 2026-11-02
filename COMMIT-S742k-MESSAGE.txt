@@ -1,0 +1,12 @@
+S742k: the lockfile npm ci can install
+
+The first two ci runs failed in seven seconds: package-lock.json was
+missing one transitive entry (next-intl's copy of @swc/helpers 0.5.23),
+so npm ci refused it. Vercel never noticed because it runs npm install.
+Regenerated the lock (one entry added, nothing else changed) and the
+commit script now runs npm ci --dry-run as a gate so a stale lock cannot
+land again. Also moved the two actions off the Node 20 runtime GitHub
+is retiring (checkout v5, setup-node v6).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq1am5xVeS4zx9Rz1r
