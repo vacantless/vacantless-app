@@ -185,6 +185,12 @@ export function TenancyLeaseSection({
                       >
                         View / print
                       </a>
+                      <a
+                        href={`/dashboard/tenancies/${tenancyId}/lease/${d.id}/standard`}
+                        className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Ontario Standard Lease
+                      </a>
                       {isExecuted && (
                         <a
                           href={`/dashboard/tenancies/${tenancyId}/lease/${d.id}/certificate`}

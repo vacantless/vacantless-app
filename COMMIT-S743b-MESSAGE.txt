@@ -1,0 +1,23 @@
+S743b: Ontario Standard Lease (2229E) filled from the tenancy
+
+Ontario requires its Standard Form of Lease for most residential tenancies.
+The lease vault wrote the additional terms and signed them, but never
+produced the form itself; liv.rent and others do.
+
+Each lease document now has an "Ontario Standard Lease" page: the 2229E
+questions the tenancy does not hold (notice address, email notices,
+emergency contact, how rent is paid, services and utilities, key deposit,
+smoking, insurance), saved on the lease (migration 0264,
+lease_documents.standard_form) and carried from the landlord's last lease.
+The download prints the tenancy and those answers onto the government's
+flat 2229E (2020/12, unmodified) and attaches the clauses as Section 15.
+
+The fillable 2229E is a dynamic XFA form no PDF library fills and the
+static one is encrypted, so values are drawn onto the flat copy at the
+static copy's field boxes (read with pdf.js). Pages 1 to 6 line up to the
+pixel; page 7 rows were measured from the flat page. Checked by rendering a
+filled sample of every page. Flags an NSF charge over $20 and a deposit over
+one month's rent, the form's own limits.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGmnPSRPq5QNbzkYWWG

@@ -37,6 +37,8 @@ const nextConfig = {
     outputFileTracingIncludes: {
       "/n1/[token]/official": ["./lib/forms/ltb-n1-2022.pdf"],
       "/notice/[token]/official": ["./lib/forms/ltb-n4-2022.pdf"],
+      // S743: Ontario Standard Form of Lease (2229E) flat copy.
+      "/dashboard/tenancies/[id]/lease/[leaseId]/standard/pdf": ["./lib/forms/ontario-2229e-2020-12-flat.pdf"],
     },
   },
   webpack: (config) => {
