@@ -1,0 +1,13 @@
+S744b: Billing tells a teammate only the owner can change it
+
+Live walk of S744a on North Star Rentals QA: a teammate (operator) can
+open Billing and sees every checkout button. Every billing action already
+refuses them (requireCapability manage_billing), but the refusal bounced
+back to /dashboard/billing?forbidden=1 with no message.
+
+The page now reads the role in the active account and shows one line,
+"Only the account owner can change the plan or billing.", to anyone who
+can't manage billing, and after a refused press.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGnmqUWKqR5TALveY4a

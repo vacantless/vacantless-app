@@ -1,4 +1,6 @@
 import { getCurrentOrg } from "@/lib/org";
+import { getRoleForOrg } from "@/lib/membership";
+import { roleCan } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import {
   TIERS,
@@ -58,10 +60,16 @@ export default async function BillingPage({
     plan?: string;
     addon?: string;
     founding?: string;
+    forbidden?: string;
   };
 }) {
   const org = await getCurrentOrg();
   if (!org) return null;
+  // S744b: a teammate (team invites) can open this page, but every billing
+  // action refuses them (requireCapability manage_billing). Say so up front,
+  // instead of a button that bounces back with no message.
+  const billingRole = await getRoleForOrg(org.id);
+  const canManageBilling = billingRole != null && roleCan(billingRole, "manage_billing");
 
   const view = buildBillingView({
     plan: org.plan,
@@ -238,6 +246,12 @@ export default async function BillingPage({
         title="Billing"
         subtitle="Your plan. Billed monthly - change or cancel anytime, no contract."
       />
+
+      {(!canManageBilling || searchParams.forbidden === "1") && (
+        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Only the account owner can change the plan or billing.
+        </div>
+      )}
 
       {overCapNotice && (
         <div

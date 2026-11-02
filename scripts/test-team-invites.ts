@@ -108,5 +108,8 @@ ok("accept runs checkAccept before writing", server.indexOf("checkAccept(") < se
 const join = readFileSync("app/join/actions.ts", "utf8");
 ok("accept passes email_confirmed_at", join.includes("email_confirmed_at != null"));
 
+const billing = readFileSync("app/dashboard/billing/page.tsx", "utf8");
+ok("billing tells a teammate only the owner can change it (S744b)", billing.includes('roleCan(billingRole, "manage_billing")') && billing.includes("Only the account owner can change the plan or billing."));
+
 console.log(`team invites: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
