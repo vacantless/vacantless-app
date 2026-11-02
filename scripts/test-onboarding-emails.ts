@@ -45,7 +45,9 @@ ok("route needs CRON_SECRET", route.includes("CRON_SECRET"));
 ok("route skips old accounts", route.includes("ONBOARDING_EMAILS_START"));
 ok("route skips quiet test orgs", route.includes("isQuietNotificationOrg"));
 ok("route skips closed accounts", route.includes('.is("closed_at", null)'));
-ok("route stamps the step after sending", route.includes("onboarding_email_step: email.step"));
+// S742c: the step is claimed BEFORE the send (one runner wins), not stamped after.
+ok("route claims the step before sending", route.includes('claimStep(admin, "organizations", { id: o.id }, "onboarding_email_step", email.step'));
+ok("route releases the claim on a failed send", route.includes("releaseClaim(admin, \"organizations\""));
 ok("route passes the add-page flag", route.includes("addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED)"));
 
 console.log(`\nonboarding-emails: ${pass} passed, ${fail} failed`);

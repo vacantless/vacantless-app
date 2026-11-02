@@ -5,6 +5,7 @@ import { sendNotificationEmail } from "@/lib/email";
 import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { postedResultsNextSteps, postedResultsSites } from "@/lib/posted-results";
 import { resultsEmail, resultsEmailDecision, type ResultsEmailPost } from "@/lib/posted-results-email";
+import { claimNull } from "@/lib/claim-stamp";
 
 // S737 (review item 2): email the landlord the list of live ads once per
 // rental turn, two hours after the first ad went live (lib/posted-results-email).
@@ -106,6 +107,13 @@ export async function GET(req: NextRequest) {
       appUrl: APP_URL,
       nextStep: next,
     });
+    // S742c: claim the stamp first (kept even with no owner email, so the
+    // sweep does not retry every 15 minutes); a second runner skips.
+    const claim = await claimNull(admin, "properties", { id: p.id }, "results_emailed_at");
+    if (claim.outcome !== "claimed") {
+      report.push({ property: p.id, action: claim.outcome === "taken" ? "already_claimed" : `claim_failed:${claim.error}` });
+      continue;
+    }
     const { data: members } = await admin
       .from("memberships")
       .select("user_id")
@@ -130,8 +138,6 @@ export async function GET(req: NextRequest) {
       }).catch(() => ({ sent: false }));
       if (res.sent) sent++;
     }
-    // Stamp even with no owner email, so the sweep does not retry every 15 minutes.
-    await admin.from("properties").update({ results_emailed_at: new Date().toISOString() }).eq("id", p.id);
   }
   return NextResponse.json({ ok: true, sent, dry, report });
 }

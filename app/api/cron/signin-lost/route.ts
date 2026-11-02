@@ -10,6 +10,7 @@ import {
   siteSigninLinksOn,
 } from "@/lib/site-signin";
 import { signinLostAction, signinLostEmail } from "@/lib/signin-lost";
+import { claimNull } from "@/lib/claim-stamp";
 
 // S736: email the landlord once when Kijiji, Zumper or Rentals.ca signs them
 // out (lib/signin-lost). Runs in the 15-minute sweep. Only accounts with the
@@ -85,6 +86,17 @@ export async function GET(req: NextRequest) {
       .select("user_id")
       .eq("organization_id", r.organization_id)
       .eq("role", "owner_admin");
+    // S742c: claim the stamp first (kept even when no owner had an email).
+    const claim = await claimNull(
+      admin,
+      "distribution_channel_sessions",
+      { organization_id: r.organization_id, channel: r.channel },
+      "lost_notified_at",
+    );
+    if (claim.outcome !== "claimed") {
+      report.push({ org: r.organization_id, channel: r.channel, action: claim.outcome === "taken" ? "already_claimed" : `claim_failed:${claim.error}` });
+      continue;
+    }
     const seen = new Set<string>();
     for (const m of (members ?? []) as { user_id: string }[]) {
       const { data } = await getUserByIdCached(admin, m.user_id);
@@ -104,12 +116,6 @@ export async function GET(req: NextRequest) {
       }).catch(() => ({ sent: false }));
       if (res.sent) sent++;
     }
-    // Stamp even when no owner had an email, so the sweep does not retry every 15 minutes.
-    await admin
-      .from("distribution_channel_sessions")
-      .update({ lost_notified_at: new Date().toISOString() })
-      .eq("organization_id", r.organization_id)
-      .eq("channel", r.channel);
   }
   return NextResponse.json({ ok: true, sent, dry, report });
 }

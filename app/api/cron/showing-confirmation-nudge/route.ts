@@ -19,6 +19,7 @@ import {
   pendingRescheduleShowingIds,
   type PendingRescheduleProposalRow,
 } from "@/lib/reminders";
+import { claimNull, releaseClaim } from "@/lib/claim-stamp";
 
 // Pre-showing UNCONFIRMED-nudge sweep (S440, showing routing Slice 3) — the
 // mirror of the post-showing outcome nudge. When an assigned viewing is coming up
@@ -315,6 +316,14 @@ export async function GET(req: NextRequest) {
             continue;
           }
 
+          // S742c: claim the one allowed nudge before sending; released below
+          // when nothing was delivered, so the retry-once rule still holds.
+          const claim = await claimNull(admin, "showings", { id: row.id }, CONFIRMATION_NUDGE_SENT_COLUMN);
+          if (claim.outcome !== "claimed") {
+            summary.skipped++;
+            summary.details.push({ org: org.id, showing: row.id, skipped: claim.outcome === "taken" ? "already_claimed" : `claim_failed:${claim.error}` });
+            continue;
+          }
           const result = await sendOrgNotification({
             client: admin,
             org: {
@@ -336,6 +345,7 @@ export async function GET(req: NextRequest) {
           // recipient resolution must NOT consume the one allowed nudge — leave the
           // row unstamped so the next sweep retries once the cause clears.
           if (!result.delivered) {
+            await releaseClaim(admin, "showings", { id: row.id }, { [CONFIRMATION_NUDGE_SENT_COLUMN]: null });
             summary.skipped++;
             summary.details.push({
               org: org.id,
@@ -347,11 +357,6 @@ export async function GET(req: NextRequest) {
             });
             continue;
           }
-
-          await admin
-            .from("showings")
-            .update({ [CONFIRMATION_NUDGE_SENT_COLUMN]: new Date().toISOString() })
-            .eq("id", row.id);
 
           summary.sent++;
           summary.details.push({ org: org.id, showing: row.id, sent: true });

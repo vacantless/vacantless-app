@@ -7,6 +7,7 @@ import { isQuietNotificationOrg } from "@/lib/quiet-orgs";
 import { daysSince, stageOf, type AccountCounts } from "@/lib/new-account-watch";
 import { decideOnboardingEmail } from "@/lib/onboarding-emails";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
+import { claimStep, releaseClaim } from "@/lib/claim-stamp";
 
 // S702j: the welcome email and the next-day nudge for new accounts. Runs every
 // 30 minutes from .github/workflows/onboarding-emails.yml. Accounts made
@@ -108,6 +109,14 @@ export async function GET(req: NextRequest) {
       details.push({ org: o.id, to, step: email.step, subject: email.subject });
       continue;
     }
+    // S742c: claim the step before sending.
+    const claim = await claimStep(admin, "organizations", { id: o.id }, "onboarding_email_step", email.step, {
+      onboarding_email_last_at: now.toISOString(),
+    });
+    if (claim.outcome !== "claimed") {
+      details.push({ org: o.id, step: email.step, skipped: claim.outcome === "taken" ? "already_claimed" : `claim_failed:${claim.error}` });
+      continue;
+    }
     const r = await sendNotificationEmail({
       to_email: to,
       subject: email.subject,
@@ -121,12 +130,11 @@ export async function GET(req: NextRequest) {
     });
     if (!r.sent) {
       details.push({ org: o.id, step: email.step, error: r.reason });
+      await releaseClaim(admin, "organizations", { id: o.id }, {
+        onboarding_email_step: o.onboarding_email_step ?? 0,
+      });
       continue;
     }
-    await admin
-      .from("organizations")
-      .update({ onboarding_email_step: email.step, onboarding_email_last_at: now.toISOString() })
-      .eq("id", o.id);
     sent++;
     details.push({ org: o.id, step: email.step, sent: true });
   }

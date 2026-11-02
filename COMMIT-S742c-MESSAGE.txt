@@ -1,0 +1,23 @@
+S742c: the sending sweeps claim the stamp before they send
+
+Seven sweeps sent an email or text first and wrote the "sent" stamp
+after: viewing reminders (email and text), renter follow-ups, onboarding
+emails, the posted-results email, the agent confirmation nudge, sign-in
+lost, and the landlord campaign. With one timer that was safe. Two runs
+overlapping (a manual workflow_dispatch beside the pg_cron tick, a
+platform retry) would send every due message twice.
+
+New lib/claim-stamp.ts: claimNull writes the timestamp only where the
+column is still null; claimStep writes a step only where the watermark
+is null or below it; both return "taken" to the runner that lost, which
+skips. releaseClaim puts the row back after a failed send so the next
+run retries. Each sweep now claims, sends, and releases on failure. The
+confirmation nudge keeps its retry-once rule (released when nothing was
+delivered); posted-results and sign-in lost keep their stamp even when
+no owner had an email, as before.
+
+Tests: scripts/test-claim-stamp.ts (14); the seven route tests updated
+where they asserted the old order.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq1am5xVeS4zx9Rz1r

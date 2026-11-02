@@ -12,6 +12,7 @@ import {
   nurtureQuietNow,
   nurtureUsesNoTimeCopy,
 } from "@/lib/nurture";
+import { claimStep, releaseClaim } from "@/lib/claim-stamp";
 
 // Lead-nurture sweep (M5). Finds still-open leads (inquired, not yet booked or
 // lost) whose org has nurturing enabled and whose next drip step is due, sends
@@ -172,6 +173,17 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
+    // S742c: claim the step first so two runs never send the same email.
+    const claim = await claimStep(admin, "leads", { id: row.id }, "nurture_step_sent", step, {
+      nurture_last_sent_at: new Date().toISOString(),
+    });
+    if (claim.outcome !== "claimed") {
+      if (claim.outcome === "error") summary.errors++;
+      else summary.skipped++;
+      summary.details.push({ lead: row.id, skipped: claim.outcome === "taken" ? "already_claimed" : `claim_failed:${claim.error}` });
+      continue;
+    }
+
     const result = await sendNurtureEmail({
       lead_id: row.id,
       property_id: row.property_id ?? null,
@@ -191,21 +203,10 @@ export async function GET(req: NextRequest) {
     if (!result.sent) {
       summary.errors++;
       summary.details.push({ lead: row.id, error: result.reason });
-      continue;
-    }
-
-    // Bump the watermark + pacing stamp so this lead advances exactly one step
-    // and re-runs never double-send.
-    const { error: stampErr } = await admin
-      .from("leads")
-      .update({ nurture_step_sent: step, nurture_last_sent_at: new Date().toISOString() })
-      .eq("id", row.id);
-
-    if (stampErr) {
-      // The email went out but we couldn't stamp — surface it; a later run may
-      // re-send the same step. Rare; logged so it's visible.
-      summary.errors++;
-      summary.details.push({ lead: row.id, error: `stamp_failed:${stampErr.message}` });
+      await releaseClaim(admin, "leads", { id: row.id }, {
+        nurture_step_sent: row.nurture_step_sent ?? null,
+        nurture_last_sent_at: row.nurture_last_sent_at ?? null,
+      });
       continue;
     }
 

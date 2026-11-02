@@ -32,6 +32,7 @@ import {
   MIN_GAP_HOURS,
   STEP_THRESHOLD_DAYS,
 } from "@/lib/landlord-campaign";
+import { claimStep, releaseClaim } from "@/lib/claim-stamp";
 
 // Landlord feature-reveal sweep (Tier 1 C). Finds FREE-plan orgs with a tenancy
 // whose next reveal is due, sends the one branded reveal, and bumps
@@ -908,6 +909,15 @@ async function runLandlordCampaign(
           continue;
         }
 
+        // S742c: claim the step before sending; released on a failed send.
+        const rentClaim = await claimStep(admin, "organizations", { id: org.id }, "landlord_campaign_step_sent", due.index + 1, {
+          landlord_campaign_last_sent_at: new Date(nowMs).toISOString(),
+        });
+        if (rentClaim.outcome !== "claimed") {
+          summary.skipped++;
+          summary.details.push({ org: org.id, reveal: due.key, skipped: rentClaim.outcome === "taken" ? "already_claimed" : `claim_failed:${rentClaim.error}` });
+          continue;
+        }
         const result = await deps.sendLandlordRentConfirmEmail({
           to_email: to,
           org_name: org.name,
@@ -921,20 +931,10 @@ async function runLandlordCampaign(
         if (!result.sent) {
           summary.errors++;
           summary.details.push({ org: org.id, reveal: due.key, error: result.reason });
-          continue;
-        }
-
-        const { error: stampErr } = await admin
-          .from("organizations")
-          .update({
-            landlord_campaign_step_sent: due.index + 1,
-            landlord_campaign_last_sent_at: new Date(nowMs).toISOString(),
-          })
-          .eq("id", org.id);
-
-        if (stampErr) {
-          summary.errors++;
-          summary.details.push({ org: org.id, reveal: due.key, error: `stamp_failed:${stampErr.message}` });
+          await releaseClaim(admin, "organizations", { id: org.id }, {
+            landlord_campaign_step_sent: org.landlord_campaign_step_sent ?? 0,
+            landlord_campaign_last_sent_at: org.landlord_campaign_last_sent_at ?? null,
+          });
           continue;
         }
 
@@ -955,6 +955,15 @@ async function runLandlordCampaign(
         propertyAddress: firstAddress.get(org.id) ?? null,
       });
 
+      // S742c: claim the step before sending; released on a failed send.
+      const claim = await claimStep(admin, "organizations", { id: org.id }, "landlord_campaign_step_sent", due.index + 1, {
+        landlord_campaign_last_sent_at: new Date(nowMs).toISOString(),
+      });
+      if (claim.outcome !== "claimed") {
+        summary.skipped++;
+        summary.details.push({ org: org.id, reveal: due.key, skipped: claim.outcome === "taken" ? "already_claimed" : `claim_failed:${claim.error}` });
+        continue;
+      }
       const result = await deps.sendNotificationEmail({
         to_email: to,
         subject: copy.subject,
@@ -970,21 +979,10 @@ async function runLandlordCampaign(
       if (!result.sent) {
         summary.errors++;
         summary.details.push({ org: org.id, reveal: due.key, error: result.reason });
-        continue;
-      }
-
-      // Advance the watermark to the resolved index (skip-owned aware) + stamp.
-      const { error: stampErr } = await admin
-        .from("organizations")
-        .update({
-          landlord_campaign_step_sent: due.index + 1,
-          landlord_campaign_last_sent_at: new Date(nowMs).toISOString(),
-        })
-        .eq("id", org.id);
-
-      if (stampErr) {
-        summary.errors++;
-        summary.details.push({ org: org.id, reveal: due.key, error: `stamp_failed:${stampErr.message}` });
+        await releaseClaim(admin, "organizations", { id: org.id }, {
+          landlord_campaign_step_sent: org.landlord_campaign_step_sent ?? 0,
+          landlord_campaign_last_sent_at: org.landlord_campaign_last_sent_at ?? null,
+        });
         continue;
       }
 

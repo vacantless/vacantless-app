@@ -15,6 +15,7 @@ import {
 import { canUseRenterSms } from "@/lib/billing";
 import { releaseUnconfirmedShowing } from "@/lib/showing-release";
 import { resolveArrivalPhone } from "@/lib/showing-contact";
+import { claimNull, releaseClaim } from "@/lib/claim-stamp";
 
 // Reminder sweep. Finds booked showings that are ~24h, same-day, or optionally
 // ~2h out and haven't had that tier sent yet, then sends exactly one coordinated
@@ -442,6 +443,13 @@ export async function GET(req: NextRequest) {
 
     // --- Coordinated email reminder ---------------------------------------
     if (kind && plan.email && renterEmail) {
+      // S742c: claim the stamp first; a second runner sees "taken" and skips.
+      const emailColumn = REMINDER_SENT_COLUMN[kind];
+      const claim = await claimNull(admin, "showings", { id: row.id }, emailColumn);
+      if (claim.outcome !== "claimed") {
+        skippedReason = claim.outcome === "taken" ? "email_already_claimed" : `email_claim_failed:${claim.error}`;
+        if (claim.outcome === "error") summary.errors++;
+      } else {
       const result = await sendShowingReminder({
         lead_id: row.lead_id,
         showing_id: row.id,
@@ -464,17 +472,9 @@ export async function GET(req: NextRequest) {
         skippedReason = `email_send_failed:${result.reason ?? "unknown"}`;
         summary.errors++;
         summary.details.push({ showing: row.id, channel: "email", kind, error: result.reason });
+        await releaseClaim(admin, "showings", { id: row.id }, { [emailColumn]: null });
       } else {
-        const column = REMINDER_SENT_COLUMN[kind];
-        const { error: stampErr } = await admin
-          .from("showings")
-          .update({ [column]: new Date().toISOString() })
-          .eq("id", row.id);
-        if (stampErr) {
-          skippedReason = `email_stamp_failed:${stampErr.message}`;
-          summary.errors++;
-          summary.details.push({ showing: row.id, channel: "email", kind, error: `stamp_failed:${stampErr.message}` });
-        } else {
+        {
           await admin.from("messages").insert({
             organization_id: row.organization_id,
             lead_id: row.lead_id,
@@ -488,10 +488,17 @@ export async function GET(req: NextRequest) {
           summary.details.push({ showing: row.id, channel: "email", kind, to: renterEmail });
         }
       }
+      }
     }
 
     // --- Coordinated SMS reminder -----------------------------------------
     if (kind && plan.sms && normalizedPhone) {
+      const smsColumn = REMINDER_SMS_SENT_COLUMN[kind];
+      const smsClaim = await claimNull(admin, "showings", { id: row.id }, smsColumn);
+      if (smsClaim.outcome !== "claimed") {
+        skippedReason = smsClaim.outcome === "taken" ? "sms_already_claimed" : `sms_claim_failed:${smsClaim.error}`;
+        if (smsClaim.outcome === "error") summary.errors++;
+      } else {
       const result = await sendSms({
         organizationId: row.organization_id ?? null,
         to: normalizedPhone,
@@ -519,17 +526,9 @@ export async function GET(req: NextRequest) {
         } else {
           skippedReason = "sms_send_skipped:no_credentials";
         }
+        await releaseClaim(admin, "showings", { id: row.id }, { [smsColumn]: null });
       } else {
-        const column = REMINDER_SMS_SENT_COLUMN[kind];
-        const { error: stampErr } = await admin
-          .from("showings")
-          .update({ [column]: new Date().toISOString() })
-          .eq("id", row.id);
-        if (stampErr) {
-          skippedReason = `sms_stamp_failed:${stampErr.message}`;
-          summary.errors++;
-          summary.details.push({ showing: row.id, channel: "sms", kind, error: `stamp_failed:${stampErr.message}` });
-        } else {
+        {
           await admin.from("messages").insert({
             organization_id: row.organization_id,
             lead_id: row.lead_id,
@@ -541,6 +540,7 @@ export async function GET(req: NextRequest) {
           didSomething = true;
           summary.details.push({ showing: row.id, channel: "sms", kind, to: normalizedPhone });
         }
+      }
       }
     }
 

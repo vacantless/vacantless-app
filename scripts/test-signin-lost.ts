@@ -33,7 +33,8 @@ const route = readFileSync("app/api/cron/signin-lost/route.ts", "utf8");
 ok("only Posting accounts are emailed", route.includes("canUseRobotPosting(org)"));
 ok("closed accounts are skipped", route.includes("org.closed_at"));
 ok("goes to owners", route.includes('.eq("role", "owner_admin")'));
-ok("stamps once per sign-out", route.includes("lost_notified_at: new Date().toISOString()"));
+// S742c: the stamp is claimed before the send, so two runs never both email.
+ok("claims the stamp once per sign-out", route.includes('"lost_notified_at",') && route.includes("claimNull("));
 ok("needs the cron secret", route.includes("CRON_SECRET"));
 ok("in the 15-minute sweep", (SWEEP_PATHS as readonly string[]).includes("/api/cron/signin-lost"));
 ok("in the GitHub backup", readFileSync(".github/workflows/reminders.yml", "utf8").includes("/api/cron/signin-lost"));
