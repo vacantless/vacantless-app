@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { parseBuildingWeekdays, timeStrToMinutes } from "@/lib/booking";
+import { isViewingPresetKey, presetWindowsToAdd, type PresetWindow } from "@/lib/viewing-presets";
 
 const COMMON_TZ = new Set([
   "America/Toronto",
@@ -177,6 +178,38 @@ export async function addAvailabilityWindow(formData: FormData) {
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard");
   redirect("/dashboard/availability?saved=window");
+}
+
+// S742i: one tap from Today opens a sensible set of weekly windows. Windows
+// that already overlap an existing one on that weekday are left alone.
+export async function openViewingPreset(formData: FormData) {
+  const org = await getCurrentOrg();
+  if (!org) return;
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
+  const key = String(formData.get("preset") ?? "");
+  if (!isViewingPresetKey(key)) redirect("/dashboard");
+
+  const supabase = createClient();
+  const { data: existingRows } = await supabase
+    .from("availability_rules")
+    .select("weekday, start_minute, end_minute")
+    .eq("organization_id", org.id);
+  const toAdd = presetWindowsToAdd(key, (existingRows ?? []) as PresetWindow[]);
+  let added = 0;
+  if (toAdd.length > 0) {
+    const { error } = await supabase
+      .from("availability_rules")
+      .insert(toAdd.map((w) => ({ organization_id: org.id, ...w })));
+    if (error) {
+      console.error(`[availability-reopen] org=${org.id} preset_insert_failed=${error.message}`);
+      redirect("/dashboard/availability?error=window_invalid");
+    }
+    added = toAdd.length;
+    await stampAvailabilityReopened(supabase, org.id);
+  }
+  revalidatePath("/dashboard/availability");
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?opened=${key}&added=${added}`);
 }
 
 export async function deleteAvailabilityWindow(formData: FormData) {

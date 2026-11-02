@@ -20,8 +20,11 @@ const ICON: Record<string, React.ReactNode> = {
 export function TodayLane({
   items,
   firstRun = false,
+  noViewingTimesActions,
 }: {
   items: TodayItem[];
+  /** S742i: rendered inside the "Renters can't book" row (the one-tap presets). */
+  noViewingTimesActions?: React.ReactNode;
   // Brand-new org (nothing set up yet): the "Get set up" card above already
   // owns the day-one job, so a cheerful green "all caught up" here reads as
   // dissonant. Point back to setup instead until they have something live.
@@ -91,6 +94,11 @@ export function TodayLane({
                     →
                   </span>
                 </Link>
+                {item.key === "no-viewing-times" && noViewingTimesActions ? (
+                  <div className="border-t border-gray-100 bg-amber-50/40 px-5 py-3 pl-[4.75rem]">
+                    {noViewingTimesActions}
+                  </div>
+                ) : null}
               </li>
             );
           })}

@@ -1,0 +1,21 @@
+S742i: when nobody can book, Today opens times in one tap
+
+Agile ran ten days with four live rentals, 116 waiting renters and no
+viewing time open. Today said the right thing since S740 ("Renters
+can't book a viewing") and then offered only a link to a form. The
+second move was missing.
+
+Under that row the Today card now offers three one-tap presets (Weekday
+evenings 5 to 7 pm, Weekdays in the day 10 am to 4 pm, Saturday
+mornings 10 am to 1 pm), "Pick my own times", and, when the account has
+showing agents, "Have a showing agent cover them". A preset inserts the
+weekly windows it does not already have (an overlapping window on that
+weekday is left alone), stamps availability_reopened_at, and returns to
+Today with a green line that says what opened and that renters waiting
+on a rental in a building that shows on those days get the new times
+by email within 15 minutes (the existing availability-reopened sweep).
+
+Tests: scripts/test-viewing-presets.ts (12).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq1am5xVeS4zx9Rz1r

@@ -34,6 +34,8 @@ import { deriveRentIncrease } from "@/lib/rent-increase";
 import { loadGuidelineLookup } from "@/lib/guideline-server";
 import { RentIncreaseRow } from "@/components/rent-increase-card";
 import { buildTodayLane } from "@/lib/dashboard-today";
+import { VIEWING_PRESETS, presetOpenedNotice } from "@/lib/viewing-presets";
+import { openViewingPreset } from "./availability/actions";
 import { TodayLane } from "./today-lane";
 import {
   resolveAssignedView,
@@ -66,7 +68,7 @@ const OPEN_STATUSES: LeadStatus[] = [
 ];
 
 type OverviewPageProps = {
-  searchParams?: { assigned?: string | string[] };
+  searchParams?: { assigned?: string | string[]; opened?: string; added?: string };
 };
 
 function assignedToggleClass(view: AssignedView, target: AssignedView) {
@@ -259,10 +261,12 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     onboardingRowQuery,
     // S702: custom-date viewing hours count as viewing times for the setup
     // checklist (Agile opens one day at a time and has no weekly rule).
+    // S742g: only today or later; a past custom date is not a viewing time.
     supabase
       .from("availability_overrides")
       .select("id", { count: "exact", head: true })
-      .eq("organization_id", org.id),
+      .eq("organization_id", org.id)
+      .gte("day", new Date().toISOString().slice(0, 10)),
     // S710 audit: the Rentals tile counted archived rentals too (Agile: 12
     // shown, 7 on the Rentals page).
     supabase
@@ -400,6 +404,16 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       !!l.created_at &&
       Date.now() - new Date(l.created_at).getTime() <= 14 * 24 * 60 * 60 * 1000,
   ).length;
+  const presetNotice = presetOpenedNotice(
+    searchParams?.opened ?? null,
+    searchParams?.added != null ? Number(searchParams.added) : null,
+  );
+  const { count: agentCount } = await supabase
+    .from("showing_agents")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", org.id)
+    .eq("archived", false);
+  const hasShowingAgents = (agentCount ?? 0) > 0;
   const todayItems = buildTodayLane({
     noViewingTimes: openViewingTimes === 0 ? { waiting: notBookedRecent } : null,
     // S708: only leads from the last 14 days; older `new` leads stay in Renters.
@@ -506,7 +520,53 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         </div>
       )}
 
-      <TodayLane items={todayItems} firstRun={showFullChecklistOnTop} />
+      {presetNotice && (
+        <div role="status" className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+          {presetNotice}{" "}
+          <Link href="/dashboard/availability" className="font-medium underline">
+            Adjust the times
+          </Link>
+        </div>
+      )}
+
+      <TodayLane
+        items={todayItems}
+        firstRun={showFullChecklistOnTop}
+        noViewingTimesActions={
+          <div>
+            <p className="mb-2 text-sm text-gray-700">Open times in one tap. You can change them any time.</p>
+            <div className="flex flex-wrap gap-2">
+              {VIEWING_PRESETS.map((p) => (
+                <form key={p.key} action={openViewingPreset}>
+                  <input type="hidden" name="preset" value={p.key} />
+                  <button
+                    type="submit"
+                    title={p.detail}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-900 hover:bg-gray-50"
+                  >
+                    {p.label}
+                    <span className="ml-1 font-normal text-gray-500">{p.detail}</span>
+                  </button>
+                </form>
+              ))}
+              <Link
+                href="/dashboard/availability"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-brand hover:underline"
+              >
+                Pick my own times
+              </Link>
+              {hasShowingAgents && (
+                <Link
+                  href="/dashboard/showing-agents"
+                  className="rounded-lg px-3 py-1.5 text-sm font-medium text-brand hover:underline"
+                >
+                  Have a showing agent cover them
+                </Link>
+              )}
+            </div>
+          </div>
+        }
+      />
 
       {showCompactChecklist && (
         <LaunchChecklist checklist={checklist} variant="compact" />
