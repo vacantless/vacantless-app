@@ -34,6 +34,7 @@ import { loadGuidelineLookup } from "@/lib/guideline-server";
 import type { N1Snapshot } from "@/lib/n1-render";
 import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
+import { notifyWaitingRentersRented } from "@/lib/rented-notice-server";
 import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
 import {
   resolveRentReconciliation,
@@ -327,6 +328,8 @@ export async function createTenancy(formData: FormData) {
       // decides what is left for the landlord to take down.
       await takeDownFacebookPagePosts({ supabase, organizationId: org.id, propertyId });
       await handleLeaseupAdLifecycle({ supabase, org, propertyId });
+      // S742e: the renters still waiting on this rental are told and shown the others.
+      await notifyWaitingRentersRented({ client: supabase, org, propertyId });
       // Same as the properties-page lease-up: close what nobody needs posted.
       await closeStaleConciergeItems(supabase, {
         organizationId: org.id,

@@ -189,6 +189,7 @@ import { resolveMarketplaceAdUrl } from "@/lib/marketplace-kit-server";
 import { sqftToSave } from "@/lib/sqft-estimate-server";
 import { copyBuildingPhotosTo, spreadBuildingPhotos } from "@/lib/building-photos-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
+import { notifyWaitingRentersRented } from "@/lib/rented-notice-server";
 import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
 import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
 import { isUnavailableStatus } from "@/lib/ads-still-up";
@@ -1206,6 +1207,9 @@ export async function updateProperty(formData: FormData) {
 
   if (priorStatus !== "leased" && effectiveStatus === "leased" && orgAfterSave) {
     await handleLeaseupAdLifecycle({ supabase, org: orgAfterSave, propertyId: id });
+    // S742e: tell the renters still waiting on it, show them the other open
+    // homes, and close their requests on this one.
+    await notifyWaitingRentersRented({ client: supabase, org: orgAfterSave, propertyId: id });
     // A leased unit's outstanding "post this for me" requests are no longer
     // work. Takedown items are exempt - those the lease-up just created.
     await closeStaleConciergeItems(supabase, {

@@ -173,6 +173,7 @@ export async function loadBlockedRenterEmails(admin: Admin, emails: Array<string
 
 export const MARKETING_EMAIL_KINDS = new Set([
   "nurture_email",
+  "rented_notice",
   "viewing_times_opened",
   "waitlist_vacancy_alert",
   "price_drop_alert",

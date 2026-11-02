@@ -1,0 +1,23 @@
+S742e: when a rental rents, the renters still waiting are told
+
+Bruce 303 leased on 2026-10-31 and Laine, Mandy and Samantha were still
+"New" on it the next day. Nothing wrote to a waiting renter when a
+rental was marked leased: the public page switched to "no longer
+available" and that was all.
+
+Now both lease-up paths (the rental's status save and a new tenancy)
+call notifyWaitingRentersRented: every renter still at New, Replied or
+Contacted on that rental, who asked within 60 days and left an email,
+gets one branded email saying it has been rented, with up to three of
+the account's other open homes and a "See it and book a viewing" button
+on each (or an honest "nothing else is open today, reply and we will
+keep you in mind"). One email per address, at most 25 per rental. Every
+open request on the rented unit then closes as Lost, emailed or not, and
+the timeline gets one "Rented notice sent" line per email. The new kind
+is marketing, so an unsubscribed renter is skipped. Best effort: an
+email failure never fails the lease-up.
+
+Tests: scripts/test-rented-notice.ts (26).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGq1am5xVeS4zx9Rz1r
