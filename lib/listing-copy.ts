@@ -452,12 +452,17 @@ export function stripEmDashes(s: string): string {
 export function buildRenterMessageReply({
   publicUrl,
   phone,
+  hasViewingTimes = true,
 }: {
   publicUrl: string;
   phone?: string | null;
+  /** S743: false when the renter page has no times to pick (lib/rental-viewing-times). */
+  hasViewingTimes?: boolean;
 }): string {
   const lines = [
-    `Hi, yes it is still available. You can pick a viewing time here: ${publicUrl}`,
+    hasViewingTimes
+      ? `Hi, yes it is still available. You can pick a viewing time here: ${publicUrl}`
+      : `Hi, yes it is still available. Open the link and tap "Request a viewing". Leave your name, email and phone. We will contact you to set a time. Link: ${publicUrl}`,
   ];
   const p = phone?.trim();
   if (p) lines.push(`If you would rather not fill out the form, you can also call ${p}.`);

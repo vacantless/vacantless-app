@@ -32,6 +32,10 @@ ok("Tess gets her name and the tracked link", fillHelperReply(t, "Tess G") === `
 ok("no name reads Hi,", fillHelperReply(t, "").startsWith("Hi, yes it is still available."), fillHelperReply(t, ""));
 ok("odd name falls back", fillHelperReply(t, "🙂🙂").startsWith("Hi, yes"));
 ok("phone line when the account has one", /also call 519-555-0100\.$/.test(helperReplyTemplate({ available: true, bookingUrl: link, phone: "519-555-0100" })));
+// S743: a rental with no viewing times gets the leave-your-details reply.
+const noTimes = helperReplyTemplate({ available: true, bookingUrl: link, phone: null, hasViewingTimes: false });
+ok("no times: no pick promise", !noTimes.includes("pick a viewing time"));
+ok("no times: names the button", noTimes.includes('tap "Request a viewing"') && noTimes.includes(link));
 const rented = fillHelperReply(helperReplyTemplate({ available: false, bookingUrl: link }), "Sandra");
 ok("rented says so, no link", rented === "Hi Sandra, thanks for asking. This one is rented now.", rented);
 ok("no em dash anywhere", ![t, rented].some((s) => s.includes("—")));

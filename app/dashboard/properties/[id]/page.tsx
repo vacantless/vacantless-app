@@ -12,6 +12,7 @@ import { questionSheetFieldFacts } from "@/lib/question-sheet";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { rentalHasViewingTimes } from "@/lib/rental-viewing-times";
 import { getCurrentOrg } from "@/lib/org";
 import { getRoleForOrg } from "@/lib/membership";
 import { roleCan } from "@/lib/roles";
@@ -1067,6 +1068,8 @@ export default async function PropertyDetailPage({
   const publicPageShowsUnavailable =
     publicPageIsVisible && !publicPageIsBookable;
   const linkIsLive = publicPageIsBookable;
+  // S743: the renter reply says "pick a viewing time" only when there is one.
+  const hasViewingTimes = linkIsLive ? await rentalHasViewingTimes(supabase, p.id) : true;
   const promotionGuard = linkIsLive
     ? null
     : normalizedStatus === "leased"
@@ -1616,7 +1619,7 @@ export default async function PropertyDetailPage({
       ),
       phoneUrl,
       phoneQrSvg: phoneUrl ? await qrSvg(phoneUrl, { width: 132 }) : null,
-      renterReply: buildRenterMessageReply({ publicUrl, phone: org.public_contact_phone ?? null }),
+      renterReply: buildRenterMessageReply({ publicUrl, phone: org.public_contact_phone ?? null, hasViewingTimes }),
       agents: marketplaceKitAgents(
         (agentRows ?? []) as { id: string; name: string | null; email: string | null; archived: boolean | null }[],
       ),
@@ -4476,6 +4479,7 @@ export default async function PropertyDetailPage({
           reply={buildRenterMessageReply({
             publicUrl,
             phone: org?.public_contact_phone ?? null,
+            hasViewingTimes,
           })}
         />
       )}

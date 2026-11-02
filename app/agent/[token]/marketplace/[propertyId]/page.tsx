@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rentalHasViewingTimes } from "@/lib/rental-viewing-times";
 import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { buildListingCopy, buildRenterMessageReply } from "@/lib/listing-copy";
 import { listingPostErrorMessage } from "@/lib/listing-distribution";
@@ -35,6 +36,7 @@ export default async function AgentMarketplaceKitPage({
   const host = h.get("x-forwarded-host") ?? h.get("host");
   const proto = h.get("x-forwarded-proto") ?? "https";
   const publicUrl = host ? `${proto}://${host}/r/${ctx.property.id}` : `/r/${ctx.property.id}`;
+  const hasViewingTimes = await rentalHasViewingTimes(admin, ctx.property.id);
 
   const copy = buildListingCopy(
     {
@@ -98,7 +100,7 @@ export default async function AgentMarketplaceKitPage({
             photosHref={`${kitPath}/photos`}
             photoCount={ctx.photos.length}
             photoUrls={marketplaceKitPhotoUrls(sortPhotos(ctx.photos).map((ph) => ph.url), process.env.NEXT_PUBLIC_SUPABASE_URL)}
-            renterReply={buildRenterMessageReply({ publicUrl, phone: ctx.org.public_contact_phone })}
+            renterReply={buildRenterMessageReply({ publicUrl, phone: ctx.org.public_contact_phone, hasViewingTimes })}
             saveAction={saveMarketplaceAdFromToken}
             hiddenFields={{ token: params.token, property_id: ctx.property.id }}
             saveError={saveError}

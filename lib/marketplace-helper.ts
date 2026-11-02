@@ -301,12 +301,16 @@ export function helperReplyTemplate(input: {
   available: boolean;
   bookingUrl: string;
   phone?: string | null;
+  /** S743: false when the renter page has no times to pick. Default true. */
+  hasViewingTimes?: boolean;
 }): string {
   if (!input.available) {
     return `Hi ${HELPER_REPLY_NAME}, thanks for asking. This one is rented now.`;
   }
   const lines = [
-    `Hi ${HELPER_REPLY_NAME}, yes it is still available. You can pick a viewing time here: ${input.bookingUrl}`,
+    input.hasViewingTimes === false
+      ? `Hi ${HELPER_REPLY_NAME}, yes it is still available. Open the link and tap "Request a viewing". Leave your name, email and phone. We will contact you to set a time. Link: ${input.bookingUrl}`
+      : `Hi ${HELPER_REPLY_NAME}, yes it is still available. You can pick a viewing time here: ${input.bookingUrl}`,
   ];
   const p = input.phone?.trim();
   if (p) lines.push(`If you would rather not fill out the form, you can also call ${p}.`);

@@ -3,6 +3,7 @@ import { buildTrackedLink } from "@/lib/listing-distribution";
 import { recordMarketplaceAd } from "@/lib/marketplace-kit-server";
 import { roleCan } from "@/lib/roles";
 import { localDateString } from "@/lib/leasing-snapshot";
+import { rentalHasViewingTimes } from "@/lib/rental-viewing-times";
 import {
   helperReplyTemplate,
   marketplaceItemIdFrom,
@@ -55,6 +56,12 @@ export async function loadHelperAdList(admin: SupabaseClient, orgIds: string[]):
   const phoneByOrg = new Map(
     ((orgs ?? []) as { id: string; public_contact_phone: string | null }[]).map((o) => [o.id, o.public_contact_phone]),
   );
+  // S743: say "pick a time" only where the renter page has times to pick.
+  const timesByProp = new Map<string, boolean>(
+    await Promise.all(
+      propIds.map(async (id) => [id, await rentalHasViewingTimes(admin, id)] as [string, boolean]),
+    ),
+  );
   const seen = new Set<string>();
   const out: HelperAdEntry[] = [];
   for (const r of rows) {
@@ -73,6 +80,7 @@ export async function loadHelperAdList(admin: SupabaseClient, orgIds: string[]):
         available,
         bookingUrl: buildTrackedLink(`${APP_URL}/r/${prop.id}`, r.id),
         phone: phoneByOrg.get(r.organization_id) ?? null,
+        hasViewingTimes: timesByProp.get(prop.id) ?? true,
       }),
     });
   }

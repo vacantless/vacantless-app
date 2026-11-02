@@ -1,0 +1,17 @@
+S743a: renter replies promise a viewing time only when there is one
+
+Rez asked to view 1551 Assumption Unit 9 on Marketplace. The helper reply
+said "You can pick a viewing time here", but Agile has no viewing times, so
+the link opened a form with nothing to pick and he wrote back "it's not
+taking me anywhere". He never sent the form.
+
+lib/rental-viewing-times.ts reads the same availability RPC and slot maker
+as the renter page. With no times, the helper reply and the copy-paste
+renter reply (rental page, phone kit, agent kit) now say: open this link,
+tap "Request a viewing", leave name, email and phone, and we will contact
+you to set a time. With times, the wording is unchanged. A read error keeps
+the old wording. No helper update needed: the helper takes its reply from
+the server.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGmnPSRPq5QNbzkYWWG
