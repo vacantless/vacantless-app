@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { getStripe, postingAddonPriceId, priceMap } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { grantReferralCredit } from "@/lib/referral-credit-server";
 import {
   planForPriceId,
   planForSubscriptionEvent,
@@ -536,7 +537,16 @@ export async function POST(req: NextRequest) {
         const subId = subscriptionIdOfInvoice(invoice as unknown as RawStripeInvoice);
         if (subId) {
           const sub = await stripe.subscriptions.retrieve(subId);
-          await applySubscription(admin, sub, false);
+          const applied = await applySubscription(admin, sub, false);
+          // S746b: a referred landlord's first real payment earns both sides a
+          // $99 credit. Idempotent on org_invites.referral_credit_at; never throws.
+          if (applied.matched && applied.orgId) {
+            const credit = await grantReferralCredit(stripe, admin, applied.orgId, invoice);
+            if (credit.granted) console.log("[stripe-webhook] referral credit granted", credit);
+            else if (credit.reason !== "no_referral" && credit.reason !== "already_credited") {
+              console.log("[stripe-webhook] referral credit skipped", credit.reason);
+            }
+          }
         }
         break;
       }

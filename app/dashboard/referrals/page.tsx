@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { shapeReferralRows, referralCounts, type ReferralRow } from "@/lib/referrals";
 import { ReferAFriendForm } from "./refer-form";
+import { REFERRAL_CREDIT_COPY } from "@/lib/referral-credit";
 
 export const dynamic = "force-dynamic";
 
@@ -20,13 +21,19 @@ export default async function ReferralsPage() {
 
   const { data } = await supabase
     .from("org_invites")
-    .select("id, created_at, invited_email, invited_name, status, token, accepted_at")
+    .select("id, created_at, invited_email, invited_name, status, token, accepted_at, referral_credit_at")
     .eq("source", "referral")
     .order("created_at", { ascending: false })
     .limit(100);
 
   const rows = (data as ReferralRow[] | null) ?? [];
   const views = shapeReferralRows(rows);
+  // S746b: which referrals have paid out the $99 credit to both sides.
+  const credited = new Set(
+    ((data as Array<{ id: string; referral_credit_at: string | null }> | null) ?? [])
+      .filter((r) => r.referral_credit_at)
+      .map((r) => r.id),
+  );
   const counts = referralCounts(rows);
 
   return (
@@ -38,6 +45,11 @@ export default async function ReferralsPage() {
           they&rsquo;ll set up their own free account in a couple of minutes.
         </p>
       </header>
+
+      <section className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+        <p className="text-sm font-semibold text-green-900">{REFERRAL_CREDIT_COPY.headline}</p>
+        <p className="mt-0.5 text-sm text-green-800">{REFERRAL_CREDIT_COPY.body}</p>
+      </section>
 
       <ReferAFriendForm />
 
@@ -79,6 +91,11 @@ export default async function ReferralsPage() {
                       >
                         {v.statusLabel}
                       </span>
+                      {credited.has(v.id) && (
+                        <span className="ml-1.5 inline-block rounded-full bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white">
+                          {REFERRAL_CREDIT_COPY.statusCredited}
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-slate-500">
                       {new Date(v.createdAt).toLocaleDateString("en-CA")}

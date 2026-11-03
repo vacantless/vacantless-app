@@ -1,0 +1,23 @@
+S746b: referral credit, $99 to both sides on the first paid month
+
+The referral loop (S355) recorded who referred whom and paid nothing for
+it. Engine 1 of the subscriber plan (approved 2026-11-03) needs every
+landlord to have a reason to send the link.
+
+- When a referred landlord pays a first invoice above $0, the referrer
+  and the referred account each get a CA$99 Stripe customer-balance
+  credit (one month of Growth). A balance credit stacks with any coupon
+  and comes off the next bill, so no second coupon or trial rule.
+- Migration 0267: org_invites.referral_credit_at and
+  referral_credit_cents make the grant idempotent (claim the row before
+  paying; a referee paid without the referrer is noted, never repaid).
+- Webhook: invoice.paid runs the grant after applySubscription; never
+  throws into the event.
+- Refer a landlord page: the offer in one line, "Credit applied" on the
+  row once both sides are paid. The page is still behind
+  REFERRALS_ENABLED=1 (Vercel), turned on separately.
+
+Tests: scripts/test-referral-credit.ts (23 checks).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGoWx4KJbvmhfRQHjzE
