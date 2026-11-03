@@ -168,6 +168,25 @@ export async function TeamSection({
           )}
         </div>
       )}
+
+      {canManage && (
+        <div id="viewing-helper" className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">Add a viewing helper</h3>
+          <p className="mt-2 text-sm text-gray-600">
+            Someone who only shows rentals doesn&apos;t need a sign-in. Add them as a showing agent.
+          </p>
+          <p className="mt-1 text-sm text-gray-600">
+            They get a private page with only their viewings. It shows the renter, the time and how to get in.
+            They confirm with one tap. Your rent, expenses and tenants stay hidden.
+          </p>
+          <Link
+            href="/dashboard/showing-agents"
+            className="mt-3 inline-block rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+          >
+            Add a showing agent
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

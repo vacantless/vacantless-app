@@ -1,0 +1,18 @@
+S745b: a viewing helper is a showing agent, not a sign-in
+
+Team invites slice 2. Noam chose (2026-11-02) not to build a viewing-
+helper login. Every member's database access is the whole account (RLS
+is user_org_ids() on about 97 tables), so a helper login would see rent,
+expenses and tenants however the pages were gated. Showing agents already
+do the job with a private page that lists only their viewings.
+
+- Settings > Team: an owner-only "Add a viewing helper" card that explains
+  this and links to Showing agents.
+- Showing agents: each agent's private viewings page link is shown, so the
+  owner can send it any time, not only with an assignment email.
+- lib/team.ts: INVITABLE_ROLES stays Teammate only, with the reason.
+
+Test: scripts/test-viewing-helper-path.ts (8 checks).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGouwukHStbfHLKW66n

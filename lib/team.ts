@@ -12,10 +12,14 @@ import type { OrgRole } from "@/lib/roles";
 export const INVITE_TTL_DAYS = 14;
 
 /**
- * Roles an owner can invite today. Slice 1 offers the Teammate (operator) role
- * only. The viewing-helper role needs the dashboard pages to hide what a helper
- * must not see (all rentals, money, reports); until that ships, inviting one
- * would hand them a full view. Add "showing_helper" here once it does.
+ * Roles an owner can invite: Teammate (operator) only.
+ *
+ * S745b (Noam, 2026-11-02): no viewing-helper sign-in. Every member's database
+ * access is the whole account (RLS is user_org_ids() on ~97 tables), so a
+ * helper login would see rent, expenses and tenants however the pages are
+ * gated. A viewing helper is a showing agent instead: their private
+ * /agent/<token> page shows only the viewings routed to them. Settings > Team
+ * points there. Do not add "showing_helper" here without role-aware RLS first.
  */
 export const INVITABLE_ROLES: readonly OrgRole[] = ["operator"] as const;
 

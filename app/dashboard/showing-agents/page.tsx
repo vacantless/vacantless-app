@@ -21,8 +21,13 @@ import { calendarFeedUrl } from "@/lib/calendar-feed-server";
 
 export const dynamic = "force-dynamic";
 
+// S745b: each agent's private viewings page (/agent/<token>, no login). The
+// owner can send it any time, not only when a viewing is assigned.
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/+$/, "");
+
 type Agent = {
   id: string;
+  agent_token: string | null;
   name: string;
   email: string | null;
   phone: string | null;
@@ -64,7 +69,7 @@ export default async function ShowingAgentsPage({
   const { data } = await supabase
     .from("showing_agents")
     .select(
-      "id, name, email, phone, tier, service_area, product_types, weekly_capacity, note, archived",
+      "id, agent_token, name, email, phone, tier, service_area, product_types, weekly_capacity, note, archived",
     )
     .eq("organization_id", org.id)
     .order("name", { ascending: true });
@@ -154,6 +159,19 @@ export default async function ShowingAgentsPage({
                       url={calendarFeedUrl({ kind: "agent", orgId: org.id, agentId: a.id })}
                       label="Calendar link for this agent"
                     />
+                    {a.agent_token ? (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Their viewings page, no sign-in needed:{" "}
+                        <a
+                          href={`${APP_URL}/agent/${a.agent_token}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="break-all font-medium text-brand underline"
+                        >
+                          {`${APP_URL}/agent/${a.agent_token}`}
+                        </a>
+                      </p>
+                    ) : null}
                     <p className="mt-0.5 text-xs text-gray-500">
                       {[
                         a.email,
