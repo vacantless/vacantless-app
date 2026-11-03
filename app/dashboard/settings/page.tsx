@@ -108,6 +108,7 @@ import {
   type PortalRequirementActionPlan,
 } from "@/lib/portal-requirements";
 import { displayCanadianNumber } from "@/lib/texting-setup-emails";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -1779,7 +1780,7 @@ export default async function SettingsPage({
                       </div>
                       {account?.spend_revoked_at && !spendAuthorized && (
                         <p className="mt-2 text-xs text-gray-400">
-                          Revoked {new Date(account.spend_revoked_at).toLocaleDateString("en-CA")}
+                          Revoked {new Date(account.spend_revoked_at).toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE })}
                         </p>
                       )}
                     </div>
@@ -1803,7 +1804,7 @@ export default async function SettingsPage({
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                     <div className="text-xs text-gray-400">
                       {account?.last_setup_checked_at
-                        ? `Last checked ${new Date(account.last_setup_checked_at).toLocaleDateString("en-CA")}`
+                        ? `Last checked ${new Date(account.last_setup_checked_at).toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE })}`
                         : "Not checked yet"}
                     </div>
                     <button
@@ -2475,7 +2476,7 @@ export default async function SettingsPage({
                         {mailAliasProvision.provider_verified_at
                           ? ` - verified ${new Date(
                               mailAliasProvision.provider_verified_at,
-                            ).toLocaleDateString("en-CA")}`
+                            ).toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE })}`
                           : ""}
                       </p>
                     </>

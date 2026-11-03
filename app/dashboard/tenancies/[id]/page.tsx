@@ -172,6 +172,7 @@ import {
   partitionVaultDocuments,
 } from "@/lib/documents";
 import { personDisplayName } from "@/lib/persons";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -2199,7 +2200,7 @@ export default async function TenancyDetailPage({
                 <dt className="text-gray-500">Created</dt>
                 <dd className="font-medium text-gray-900">
                   {t.rotessa_customer_synced_at
-                    ? new Date(t.rotessa_customer_synced_at).toLocaleString()
+                    ? new Date(t.rotessa_customer_synced_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE })
                     : "—"}
                 </dd>
               </div>
@@ -2224,7 +2225,7 @@ export default async function TenancyDetailPage({
                       <dt className="text-gray-500">Set up</dt>
                       <dd className="font-medium text-gray-900">
                         {t.rotessa_schedule_synced_at
-                          ? new Date(t.rotessa_schedule_synced_at).toLocaleString()
+                          ? new Date(t.rotessa_schedule_synced_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE })
                           : "—"}
                       </dd>
                     </div>

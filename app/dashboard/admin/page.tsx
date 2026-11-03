@@ -19,6 +19,7 @@ import {
   planDefaultForFeature,
   type OrganizationFeatureFlag,
 } from "@/lib/feature-entitlements";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 // Service-role reads of org_invites must always see live rows.
@@ -317,7 +318,7 @@ export default async function AdminConsolePage({
                         {inv.handed_off_to_email ?? inv.intended_owner_email ?? "—"}
                         {inv.handed_off_at && (
                           <span className="block text-xs text-green-700">
-                            handed off {new Date(inv.handed_off_at).toLocaleDateString("en-CA")}
+                            handed off {new Date(inv.handed_off_at).toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE })}
                           </span>
                         )}
                       </td>
@@ -335,7 +336,7 @@ export default async function AdminConsolePage({
                         )}
                       </td>
                       <td className="px-3 py-2 text-slate-500">
-                        {new Date(inv.created_at).toLocaleDateString("en-CA")}
+                        {new Date(inv.created_at).toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE })}
                       </td>
                     </tr>
                   );
@@ -371,7 +372,7 @@ export default async function AdminConsolePage({
                     <td className="px-3 py-2 text-slate-800">{g.year}</td>
                     <td className="px-3 py-2 text-slate-600">{g.percent}%</td>
                     <td className="px-3 py-2 text-slate-500">{g.source ?? "\u2014"}</td>
-                    <td className="px-3 py-2 text-slate-500">{new Date(g.updated_at).toLocaleDateString("en-CA")}</td>
+                    <td className="px-3 py-2 text-slate-500">{new Date(g.updated_at).toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE })}</td>
                   </tr>
                 ))}
               </tbody>

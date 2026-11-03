@@ -16,6 +16,7 @@ import {
   revokeDocumentShareLink,
   fileExecutedLeasePdf,
 } from "./documents-actions";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 // The per-tenancy document vault section (Slices 1+2). Server component: it
 // renders the upload form + the stored-document list with short-lived signed
@@ -65,7 +66,7 @@ const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
 
 function fmtDay(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString("en-US", { timeZone: DEFAULT_TIME_ZONE });
 }
 
 export function TenancyDocumentsSection({
@@ -199,7 +200,7 @@ export function TenancyDocumentsSection({
                               <span className="text-xs text-gray-500">
                                 Read-only link · expires{" "}
                                 {s.expires_at
-                                  ? new Date(s.expires_at).toLocaleDateString()
+                                  ? new Date(s.expires_at).toLocaleDateString("en-US", { timeZone: DEFAULT_TIME_ZONE })
                                   : "—"}
                               </span>
                               <span className="flex items-center gap-2">
@@ -274,7 +275,7 @@ export function TenancyDocumentsSection({
                     </span>
                     <span className="ml-2 block text-xs text-gray-400">
                       {formatBytes(d.size_bytes)} · added{" "}
-                      {new Date(d.created_at).toLocaleDateString()}
+                      {new Date(d.created_at).toLocaleDateString("en-US", { timeZone: DEFAULT_TIME_ZONE })}
                       {d.aboutPersonName ? ` · about ${d.aboutPersonName}` : ""}
                       {activeLinks.length > 0
                         ? ` · ${activeLinks.length} active share link${
@@ -345,7 +346,7 @@ export function TenancyDocumentsSection({
                         <span className="text-xs text-gray-500">
                           Read-only link · expires{" "}
                           {l.expires_at
-                            ? new Date(l.expires_at).toLocaleDateString()
+                            ? new Date(l.expires_at).toLocaleDateString("en-US", { timeZone: DEFAULT_TIME_ZONE })
                             : "—"}
                         </span>
                         <span className="flex items-center gap-2">

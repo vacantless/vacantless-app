@@ -1,0 +1,21 @@
+S748b: server-rendered date labels name a time zone
+
+Pages run on Vercel in UTC. 23 date labels (documents uploaded and
+expiring, settings "last checked", referrals, team invites, Rotessa and
+Stripe sync times, the repair log, admin lists) were formatted with no
+time zone, so anything after 7 PM Eastern showed as the next day.
+
+Audit of every "America/Toronto" in the code (the S742 review counted 71
+files): almost all are the fallback after the account's own zone
+(organizations.booking_timezone, set from the first rental by 0268), and
+reminders, bookings, viewing times, send hours and follow-ups already use
+it. The Ontario legal forms (N1, N4, Standard Lease) stay on Toronto on
+purpose.
+
+- lib/dates.ts: DEFAULT_TIME_ZONE and displayTimeZone().
+- The 23 labels pass timeZone: DEFAULT_TIME_ZONE.
+- scripts/test-s748-dates.ts fails on any new server-side date format
+  without a time zone (six known-safe plain-date labels allowed by line).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGquEPSJsBQzPNLSDD8

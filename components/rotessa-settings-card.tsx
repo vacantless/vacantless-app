@@ -16,6 +16,7 @@ import {
   type ChipTone,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 // The Rotessa rent-collection connection panel on Settings (platform pivot step
 // 2, S210). Lets a landlord connect their OWN Rotessa account by pasting an API
@@ -101,7 +102,7 @@ export default function RotessaSettingsCard({
               <dt className="text-gray-500">Last verified</dt>
               <dd className="font-medium text-gray-900">
                 {account?.last_verified_at
-                  ? new Date(account.last_verified_at).toLocaleString()
+                  ? new Date(account.last_verified_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE })
                   : "—"}
               </dd>
             </div>

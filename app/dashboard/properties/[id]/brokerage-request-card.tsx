@@ -1,5 +1,6 @@
 import type { BrokerageRoute } from "@/lib/brokerage-request";
 import { requestBrokerageListing } from "./brokerage-actions";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 // S735: Realtor.ca through a partner agent. Not a site tile (S710 decision):
 // a request card under the site list that a person answers. Copy from the
@@ -110,5 +111,5 @@ export function BrokerageRequestCard({
 function formatDay(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "an earlier day";
-  return d.toLocaleDateString("en-CA", { month: "long", day: "numeric" });
+  return d.toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE, month: "long", day: "numeric" });
 }

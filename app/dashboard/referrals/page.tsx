@@ -3,6 +3,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { shapeReferralRows, referralCounts, type ReferralRow } from "@/lib/referrals";
 import { ReferAFriendForm } from "./refer-form";
 import { REFERRAL_CREDIT_COPY } from "@/lib/referral-credit";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -98,7 +99,7 @@ export default async function ReferralsPage() {
                       )}
                     </td>
                     <td className="px-3 py-2 text-slate-500">
-                      {new Date(v.createdAt).toLocaleDateString("en-CA")}
+                      {new Date(v.createdAt).toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE })}
                     </td>
                   </tr>
                 ))}

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { Icons } from "@/components/icons";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 // The Stripe Connect rent-collection panel on Settings (platform pivot step 2,
 // ALT provider; S215). Sibling of RotessaSettingsCard. Lets a landlord onboard
@@ -124,7 +125,7 @@ export default function StripeConnectSettingsCard({
             <div>
               <dt className="text-gray-500">Last synced</dt>
               <dd className="font-medium text-gray-900">
-                {account?.last_synced_at ? new Date(account.last_synced_at).toLocaleString() : "—"}
+                {account?.last_synced_at ? new Date(account.last_synced_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE }) : "—"}
               </dd>
             </div>
           </dl>

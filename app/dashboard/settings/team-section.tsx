@@ -7,6 +7,7 @@ import { INVITABLE_ROLES, seatsLeft, teammateLimit, teamRoleBlurb, teamRoleLabel
 import { IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { cancelTeamInvite, inviteTeammate, removeTeammate } from "./team-actions";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 const FLASH: Record<string, { tone: "ok" | "bad"; text: string }> = {
   sent: { tone: "ok", text: "Invite sent. The link works for 14 days." },
@@ -26,7 +27,7 @@ const FLASH: Record<string, { tone: "ok" | "bad"; text: string }> = {
 };
 
 function day(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE, month: "short", day: "numeric", year: "numeric" });
 }
 
 export async function TeamSection({

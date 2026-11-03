@@ -17,6 +17,7 @@ import {
   completeConciergeItem,
   rejectConciergeItem,
 } from "../concierge-actions";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 // Service-role reads of cross-org run items must always see live rows.
@@ -442,7 +443,7 @@ export default async function ConciergeDeskPage({
                     {item.operator_submit_approved_at ? (
                       <p className="text-[11px] font-medium text-emerald-700">
                         Approved for submit{" "}
-                        {new Date(item.operator_submit_approved_at).toLocaleString()}
+                        {new Date(item.operator_submit_approved_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE })}
                       </p>
                     ) : hasCapturedUnconfirmedAd ? (
                       <p className="text-[11px] font-medium text-emerald-700">
@@ -476,7 +477,7 @@ export default async function ConciergeDeskPage({
                   }
                 >
                   {item.concierge_claimed_by
-                    ? `Claimed${item.concierge_claimed_at ? " " + new Date(item.concierge_claimed_at).toLocaleString() : ""}`
+                    ? `Claimed${item.concierge_claimed_at ? " " + new Date(item.concierge_claimed_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE }) : ""}`
                     : requestAge
                       ? `Unclaimed, requested ${requestAge.label}`
                       : "Unclaimed, requested time missing"}

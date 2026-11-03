@@ -14,6 +14,7 @@ import {
   revokePropertyDocumentShareLink,
   uploadPropertyDocument,
 } from "./documents-actions";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 export type PropertyShareLinkView = {
   id: string;
@@ -51,7 +52,7 @@ const DOC_FLASH: Record<string, string> = {
 };
 
 function fmtDay(iso: string): string {
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString("en-US", { timeZone: DEFAULT_TIME_ZONE });
 }
 
 export function PropertyDocumentsSection({
@@ -165,7 +166,7 @@ export function PropertyDocumentsSection({
                       >
                         <span className="text-xs text-gray-500">
                           Read-only link - expires{" "}
-                          {l.expires_at ? new Date(l.expires_at).toLocaleDateString() : "-"}
+                          {l.expires_at ? new Date(l.expires_at).toLocaleDateString("en-US", { timeZone: DEFAULT_TIME_ZONE }) : "-"}
                         </span>
                         <span className="flex items-center gap-2">
                           <CopyLinkButton path={documentSharePath(l.token)} label="Copy link" />

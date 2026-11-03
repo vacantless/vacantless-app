@@ -15,6 +15,7 @@ import {
   sendLeaseForSignature,
   withdrawLeaseSignature,
 } from "@/app/dashboard/tenancies/[id]/lease-actions";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 // Lease documents section on the tenancy detail page (lease vault #11, slices
 // 2-7). Server component: the clause-selection conversion WIZARD (slice 7 —
@@ -173,7 +174,7 @@ export function TenancyLeaseSection({
                       <span className="ml-1 block text-xs text-gray-400">
                         {d.executed_clause_versions.length} clause
                         {d.executed_clause_versions.length === 1 ? "" : "s"} ·{" "}
-                        {new Date(d.created_at).toLocaleString()}
+                        {new Date(d.created_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE })}
                       </span>
                     </span>
                     <span className="flex shrink-0 flex-wrap items-center gap-2">

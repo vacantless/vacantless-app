@@ -108,6 +108,7 @@ import {
   clearAppointment,
   provisionTenantLink,
 } from "./actions";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
 // Public app origin for the tenant pick-your-times link (matches lib/email.ts).
 const APP_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
@@ -349,7 +350,7 @@ function fmtDateTime(ts: string | null): string {
   if (!ts) return "—";
   const d = new Date(ts);
   if (isNaN(d.getTime())) return ts;
-  return d.toLocaleString("en-CA", {
+  return d.toLocaleString("en-CA", { timeZone: DEFAULT_TIME_ZONE,
     month: "short",
     day: "numeric",
     hour: "numeric",
