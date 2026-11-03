@@ -1,0 +1,14 @@
+S747b: how-to 4 re-recorded for the Marketplace helper
+
+The Oct 21 take showed the old three manual Marketplace steps. The page now
+leads with the Chrome helper ("Fill Marketplace for me"), a phone QR code and
+"send the steps to the person who posts your ads". New 57 s take on the
+Lakeview test account with the helper loaded; the Realtor.ca brokerage card
+is hidden for the recording only. Poster card now says "4 of 8".
+
+- public/videos/howto-4.mp4 and howto-4.jpg
+- lib/how-to-videos.ts: line and length (41 s to 57 s)
+- demo-videos/record-ad.mjs is outside the repo (the h4 beat and helper load)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGpXTbHTZVcAgG7wnBE
