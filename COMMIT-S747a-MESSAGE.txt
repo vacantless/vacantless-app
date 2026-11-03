@@ -1,0 +1,15 @@
+S747a: ci green again (webhook test knows the referral module)
+
+ci run 13 (9789244) failed and cancelled run 12 (b2dd93c). Only
+test-stripe-webhook.ts was red: its sandboxed loader stubs each module the
+webhook route imports, and S746b added @/lib/referral-credit-server
+without a stub, so loading the route threw "Unexpected require".
+
+The product code is unchanged. The stub returns no_referral; the credit
+logic keeps its own suite (test-referral-credit).
+
+Checked in a clean copy: npm ci, tsc --noEmit, run-all-tests.mjs
+337 passed then 1 failed; after this change stripe-webhook 16 passed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGpXTbHTZVcAgG7wnBE

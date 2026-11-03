@@ -234,6 +234,13 @@ function loadRoute(event: FakeEvent, admin: unknown, subscriptions: Record<strin
       if (id === "@/lib/billing") {
         return billing;
       }
+      if (id === "@/lib/referral-credit-server") {
+        // S747: the route grants referral credit on a paid invoice (S746b).
+        // Its own suite (test-referral-credit) covers it; here it is a no-op.
+        return {
+          grantReferralCredit: async () => ({ granted: false, reason: "no_referral" }),
+        };
+      }
       if (id === "@/lib/stripe-connect") {
         return {
           isRentReconcileEvent,
