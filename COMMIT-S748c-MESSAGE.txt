@@ -1,0 +1,20 @@
+S748c: the Stripe webhook takes each event once
+
+From the S742 review, engineering item 9: the webhook verified signatures
+but had no event-id check and relied on every write being idempotent.
+Stripe delivers at least once, retries on any error or timeout, and the
+platform and Connect destinations can both deliver.
+
+- lib/stripe-event-claim.ts: claimStripeEvent inserts the event id into
+  stripe_webhook_events (migration 0270, applied). new = process,
+  duplicate = acknowledge with 200 and skip, unknown (table unreachable)
+  = process anyway. releaseStripeEvent deletes the claim when a run fails
+  so Stripe's retry is processed. Claims older than 60 days are pruned.
+- The route claims right after the signature check, before the rent and
+  billing paths, and releases on a 500.
+
+Tests: scripts/test-s748-stripe-event-claim.ts (16); test-stripe-webhook
+stubs the new module.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGquEPSJsBQzPNLSDD8

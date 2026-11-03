@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 import { getStripe, postingAddonPriceId, priceMap } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { grantReferralCredit } from "@/lib/referral-credit-server";
+import { claimStripeEvent, releaseStripeEvent } from "@/lib/stripe-event-claim";
 import {
   planForPriceId,
   planForSubscriptionEvent,
@@ -457,6 +458,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // S748c: take each event once. A repeat delivery is acknowledged and skipped.
+  const claim = await claimStripeEvent(admin, event.id, event.type);
+  if (claim === "duplicate") {
+    return NextResponse.json({ ok: true, type: event.type, duplicate: true }, { status: 200 });
+  }
+
   try {
     // CONNECTED-account (rent rail) events carry event.account (the acct_... id).
     // They are a different surface from the PLATFORM billing events below (org
@@ -560,6 +567,8 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "handler_error";
+    // S748c: let Stripe's retry run this event again.
+    if (claim === "new") await releaseStripeEvent(admin, event.id);
     return NextResponse.json({ ok: false, reason: message }, { status: 500 });
   }
 

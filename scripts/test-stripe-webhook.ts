@@ -241,6 +241,14 @@ function loadRoute(event: FakeEvent, admin: unknown, subscriptions: Record<strin
           grantReferralCredit: async () => ({ granted: false, reason: "no_referral" }),
         };
       }
+      if (id === "@/lib/stripe-event-claim") {
+        // S748c: the once-per-event claim has its own suite
+        // (test-s748-stripe-event-claim); here every event is new.
+        return {
+          claimStripeEvent: async () => "new",
+          releaseStripeEvent: async () => undefined,
+        };
+      }
       if (id === "@/lib/stripe-connect") {
         return {
           isRentReconcileEvent,
