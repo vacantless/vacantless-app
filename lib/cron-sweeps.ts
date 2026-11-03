@@ -60,16 +60,31 @@ export type SweepResult = {
   /** S728: what the sweep answered ("disabled" when its flag is off). */
   reason?: string | null;
   sent?: number | null;
+  /** S748: the sweep's own "ok" answer. false means it hit an error even though it answered 200. */
+  bodyOk?: boolean | null;
 };
 
+/** S748: a sweep slower than this is close to the 60 s platform limit. */
+export const SLOW_SWEEP_MS = 40_000;
+
+/** S748: did this sweep fail? A 200 that says ok:false is a failure too. Pure. */
+export function sweepFailed(r: SweepResult): boolean {
+  return r.status == null || r.status >= 400 || r.bodyOk === false;
+}
+
 /** S728: the per-path answers worth keeping on the sweep_runs row. Pure. */
-export function sweepDetails(results: SweepResult[]): Record<string, { status: number | null; reason?: string; sent?: number }> {
-  const out: Record<string, { status: number | null; reason?: string; sent?: number }> = {};
+export type SweepDetail = { status: number | null; reason?: string; sent?: number; ms?: number; ok?: false };
+export function sweepDetails(results: SweepResult[]): Record<string, SweepDetail> {
+  const out: Record<string, SweepDetail> = {};
   for (const r of results) {
     const key = r.path.replace("/api/cron/", "");
-    const d: { status: number | null; reason?: string; sent?: number } = { status: r.status };
-    if (typeof r.reason === "string" && r.reason) d.reason = r.reason.slice(0, 80);
+    const d: SweepDetail = { status: r.status };
+    if (typeof r.reason === "string" && r.reason) d.reason = r.reason.slice(0, 160);
+    else if (r.error) d.reason = r.error.slice(0, 160);
     if (typeof r.sent === "number") d.sent = r.sent;
+    // S748: keep the time, so a sweep creeping toward the limit is visible.
+    if (typeof r.ms === "number") d.ms = r.ms;
+    if (sweepFailed(r)) d.ok = false;
     out[key] = d;
   }
   return out;
@@ -89,9 +104,29 @@ export function summarizeSweeps(results: SweepResult[]): {
   ran: number;
   succeeded: number;
   failed: string[];
+  slow: string[];
 } {
+  // S748: a sweep that answered 200 with ok:false used to count as a success,
+  // so a query error inside it never reached the health email.
   const failed = results
-    .filter((r) => r.status == null || r.status >= 400)
-    .map((r) => `${r.path}:${r.status ?? r.error ?? "error"}`);
-  return { ran: results.length, succeeded: results.length - failed.length, failed };
+    .filter(sweepFailed)
+    .map((r) => `${r.path}:${r.status == null ? r.error ?? "error" : r.status >= 400 ? r.status : "not_ok"}`);
+  const slow = results.filter((r) => r.ms >= SLOW_SWEEP_MS).map((r) => r.path);
+  return { ran: results.length, succeeded: results.length - failed.length, failed, slow };
+}
+
+/** The path part of a "failed" entry ("/api/cron/x:500" -> "/api/cron/x"). Pure. */
+export function failedPath(entry: string): string {
+  const i = entry.indexOf(":");
+  return i === -1 ? entry : entry.slice(0, i);
+}
+
+/**
+ * S748: sweeps that failed in this run AND the run before. One failure can be
+ * a blip (a timeout, a deploy); two in a row (30 minutes) is worth an email
+ * now rather than in tomorrow's 8 AM digest. Pure.
+ */
+export function repeatFailures(current: string[], previous: string[] | null | undefined): string[] {
+  const prev = new Set((previous ?? []).map(failedPath));
+  return [...new Set(current.map(failedPath))].filter((p) => prev.has(p)).sort();
 }

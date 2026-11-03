@@ -4,6 +4,9 @@ import { isMessageChannel } from "@/lib/tenant-comms";
 import { dispatchTenantMessage } from "@/lib/tenant-comms-dispatch";
 import { tenantCommsOutboxEnabled } from "@/lib/tenant-comms-schedule";
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const runtime = "nodejs";

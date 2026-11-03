@@ -22,6 +22,9 @@ import { duePageReposts } from "@/lib/page-weekly-posts";
 // with Facebook's own Page API. Nobody's Facebook login is used.
 // ?dry=1 lists what would be posted without posting. ?org=<id> limits a run.
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

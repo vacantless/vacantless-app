@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
   }
   const orgName = (id: string | null) => (id && orgs.get(id)?.name) || "Unknown account";
 
-  const [sweepsRes, lastSweepRes, portalRes, notesRes, robotRes, sessionRes, emails] =
+  const [sweepsRes, lastSweepRes, portalRes, notesRes, robotRes, sessionRes, emails, appErrRes] =
     await Promise.all([
       admin.from("sweep_runs").select("ran_at, ok, ran, failed, details").gte("ran_at", since),
       admin.from("sweep_runs").select("ran_at").order("ran_at", { ascending: false }).limit(1).maybeSingle(),
@@ -128,7 +128,18 @@ export async function GET(req: NextRequest) {
         .select("organization_id, channel, alive, last_check_code")
         .eq("alive", false),
       brevoProblems(),
+      // S748: page crashes (app_errors, migration 0269). A read error leaves it "not checked".
+      admin.from("app_errors").select("path").gte("at", since).limit(500),
     ]);
+  // S748: keep the crash log to 30 days.
+  await admin
+    .from("app_errors")
+    .delete()
+    .lt("at", new Date(Date.now() - 30 * 86_400_000).toISOString())
+    .then(
+      () => undefined,
+      () => undefined,
+    );
 
   const portalCounts = new Map<string, { org: string; outcome: string; count: number }>();
   for (const e of (portalRes.data ?? []) as { organization_id: string | null; outcome: string }[]) {
@@ -143,6 +154,7 @@ export async function GET(req: NextRequest) {
     now,
     sweeps: (sweepsRes.data ?? []) as HealthInput["sweeps"],
     lastSweepAt: (lastSweepRes.data as { ran_at: string } | null)?.ran_at ?? null,
+    appErrors: appErrRes.error ? null : ((appErrRes.data ?? []) as { path: string | null }[]),
     emails,
     portal: [...portalCounts.values()],
     parserNotes: ((notesRes.data ?? []) as { organization_id: string; name: string | null; notes: string }[]).map(

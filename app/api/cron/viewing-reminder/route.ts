@@ -30,6 +30,9 @@ import {
 // recipients. Difference: it only emails when the coming week has no bookable
 // viewing times; covered calendars are stamped and stay quiet.
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

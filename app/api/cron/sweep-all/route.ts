@@ -1,6 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { SWEEP_PATHS, summarizeSweeps, sweepDetails, type SweepResult } from "@/lib/cron-sweeps";
+import {
+  SWEEP_PATHS,
+  failedPath,
+  repeatFailures,
+  summarizeSweeps,
+  sweepDetails,
+  type SweepResult,
+} from "@/lib/cron-sweeps";
+import { sendNotificationEmail } from "@/lib/email";
+import { adminEmails } from "@/lib/provisioning-server";
+import { torontoDateHour } from "@/lib/health-digest";
 
 // S713e: the database's 15-minute timer (pg_cron, migration 0245) calls this
 // one address, and it runs every background sweep. Two ways in:
@@ -53,14 +63,18 @@ export async function GET(req: NextRequest) {
         const text = await res.text().catch(() => "");
         let reason: string | null = null;
         let sent: number | null = null;
+        let bodyOk: boolean | null = null;
         try {
-          const body = JSON.parse(text) as { reason?: unknown; sent?: unknown };
+          const body = JSON.parse(text) as { reason?: unknown; sent?: unknown; ok?: unknown; error?: unknown };
           if (typeof body.reason === "string") reason = body.reason;
+          // S748: many sweeps answer 200 { ok: false, error } on a query error.
+          else if (typeof body.error === "string") reason = body.error;
           if (typeof body.sent === "number") sent = body.sent;
+          if (typeof body.ok === "boolean") bodyOk = body.ok;
         } catch {
           // not JSON
         }
-        return { path, status: res.status, ms: Date.now() - started, reason, sent };
+        return { path, status: res.status, ms: Date.now() - started, reason, sent, bodyOk };
       } catch (err) {
         return {
           path,
@@ -78,13 +92,25 @@ export async function GET(req: NextRequest) {
   try {
     const admin = createAdminClient();
     if (admin) {
+      // S748: the run before this one, to spot a sweep failing twice in a row.
+      const { data: prevRun } = await admin
+        .from("sweep_runs")
+        .select("failed")
+        .order("ran_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
       await admin.from("sweep_runs").insert({
         ok: summary.failed.length === 0,
         ran: summary.ran,
         failed: summary.failed,
         // S736: the server Node rides along so a daily check can see the security fix land.
-        details: { ...sweepDetails(results), "server-node": { status: null, reason: process.version } },
+        details: {
+          ...sweepDetails(results),
+          "server-node": { status: null, reason: process.version },
+          ...(summary.slow.length ? { "slow-sweeps": { status: null, reason: summary.slow.join(",").slice(0, 160) } } : {}),
+        },
       });
+      await alertRepeatFailures(admin, summary.failed, (prevRun as { failed: string[] | null } | null)?.failed ?? null, results);
       await admin
         .from("sweep_runs")
         .delete()
@@ -94,4 +120,50 @@ export async function GET(req: NextRequest) {
     // never fail the sweep over its own log
   }
   return NextResponse.json({ ok: summary.failed.length === 0, ...summary, results }, { status: 200 });
+}
+
+/**
+ * S748: email the admins at once when a sweep fails two runs in a row, at most
+ * once per sweep per Toronto day (platform_digest_runs is the claim). The 8 AM
+ * health email still lists everything; this is for "a renter reminder did not
+ * go out half an hour ago", not tomorrow morning. Best-effort.
+ */
+async function alertRepeatFailures(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  failed: string[],
+  previous: string[] | null,
+  results: SweepResult[],
+): Promise<void> {
+  const paths = repeatFailures(failed, previous);
+  if (paths.length === 0) return;
+  const today = torontoDateHour(new Date()).date;
+  const recipients = adminEmails();
+  const to = recipients.length > 0 ? recipients : ["hello@vacantless.com"];
+  for (const path of paths) {
+    const name = path.replace("/api/cron/", "");
+    const { error: claimErr } = await admin
+      .from("platform_digest_runs")
+      .insert({ digest: `sweep-alert:${name}`, sent_on: today });
+    if (claimErr) continue; // already emailed about this sweep today
+    const r = results.find((x) => x.path === path);
+    const what =
+      r?.status == null
+        ? `It did not answer (${r?.error ?? "no response"}).`
+        : `It answered ${r.status}${r.reason ? ` with "${r.reason.slice(0, 160)}"` : ""}.`;
+    const entry = failed.find((f) => failedPath(f) === path) ?? path;
+    for (const addr of to) {
+      await sendNotificationEmail({
+        to_email: addr,
+        subject: `Vacantless: the ${name} sweep failed twice in a row`,
+        body: [
+          `The ${name} background sweep failed in the last two runs (about 30 minutes). ${what}`,
+          `Run entry: ${entry}. This email goes out once a day per sweep; the 8 AM health email lists every failure.`,
+        ].join("\n\n"),
+        org_name: "Vacantless",
+        brand_color: null,
+        logo_url: null,
+        reply_to_email: null,
+      }).catch(() => undefined);
+    }
+  }
 }

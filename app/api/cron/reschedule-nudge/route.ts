@@ -8,6 +8,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // organizations.reschedule_nudge_enabled and each proposal self-gates with
 // showing_reschedule_proposals.reminded_at.
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

@@ -1,0 +1,29 @@
+S748a: background failures stop looking like successes; page crashes are recorded
+
+From the S742 review, engineering item 2: a sweep that hit a database
+error answered 200 { ok: false }, sweep-all counted it as a success, and
+the morning health email said all clear. 33 of 36 cron routes declared no
+time limit, and page crashes lived only in Vercel's logs.
+
+- lib/cron-sweeps.ts: sweepFailed() counts 200 + ok:false as a failure
+  (label "path:not_ok"); summaries list sweeps that took 40 s or more;
+  details keep each sweep's time and error text; repeatFailures() finds
+  a sweep that failed in two runs in a row.
+- sweep-all reads each sweep's ok and error, logs slow sweeps, and emails
+  the admins at once when a sweep fails twice in a row (once per sweep
+  per Toronto day, claimed in platform_digest_runs).
+- Every cron route now exports maxDuration = 60.
+- Page crashes: app/error.tsx and app/global-error.tsx show a plain
+  "Something went wrong" page with Try again, and post the crash to
+  /api/report-error (capped per connection, query strings dropped) which
+  writes app_errors (migration 0269, service role only). The health email
+  gets a "Page crashes" section and prunes the log at 30 days.
+
+Checked before the change: no sweep answered ok:false in the last 24
+hours, so this adds no new alarms on day one.
+
+Tests: scripts/test-s748-honest-sweeps.ts (40 checks); test-health-digest
+and test-sweep-timer unchanged and passing.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGquEPSJsBQzPNLSDD8

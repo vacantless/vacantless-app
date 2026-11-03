@@ -33,6 +33,9 @@ import { localDateString } from "@/lib/leasing-snapshot";
 // first drop to thin/zero, escalation thin -> zero, then at most once per local
 // day while unresolved. Dry mode renders and reports without sending or writing.
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

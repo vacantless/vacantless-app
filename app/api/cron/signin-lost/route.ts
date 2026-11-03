@@ -16,6 +16,9 @@ import { claimNull } from "@/lib/claim-stamp";
 // out (lib/signin-lost). Runs in the 15-minute sweep. Only accounts with the
 // Posting add-on (the robot posts for them) and not closed. ?dry=1 reports.
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

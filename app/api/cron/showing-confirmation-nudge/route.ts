@@ -47,6 +47,9 @@ import { claimNull, releaseClaim } from "@/lib/claim-stamp";
 // Reads showings across all orgs via the service-role client (RLS hides them from
 // anon/user sessions); see lib/supabase/admin.ts.
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

@@ -16,6 +16,9 @@ import {
 // than the 90 days, and never lengthens it. Runs from the reminders workflow
 // (every 15 minutes, cheap: only trialing accounts). ?dry=1 changes nothing.
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

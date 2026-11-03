@@ -6,6 +6,9 @@ import { autoNumbersOn, sweepTextingNumbers } from "@/lib/texting-numbers-server
 // 15-minute sweep: retries a number purchase that failed, and releases a
 // number the app bought 7 days after its account left texting or closed.
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

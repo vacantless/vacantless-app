@@ -11,6 +11,9 @@ import { claimNull } from "@/lib/claim-stamp";
 // rental turn, two hours after the first ad went live (lib/posted-results-email).
 // Runs in the 15-minute sweep. ?dry=1 reports without sending or stamping.
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

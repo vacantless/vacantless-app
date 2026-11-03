@@ -36,6 +36,9 @@ import {
 // opt them out — a service-role read that gates on mutable state (here:
 // deleted_at / retention_until) must also set fetchCache = "force-no-store" so
 // each tick reads the live row, never a stale cached one.
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const runtime = "nodejs";

@@ -22,6 +22,9 @@ import {
 import { sendViewingTimesOpenedEmail } from "@/lib/email";
 import { textViewingTimesOpened } from "@/lib/availability-reopen-sms";
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

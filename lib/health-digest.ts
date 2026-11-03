@@ -12,6 +12,7 @@ export const DIGEST_LOCAL_HOUR = 8; // 8 AM Toronto
 export const DIGEST_TIMEZONE = "America/Toronto";
 
 import { disabledSweeps } from "@/lib/cron-sweeps";
+import { appErrorLines } from "@/lib/app-errors";
 
 export type SweepRunRow = {
   ran_at: string;
@@ -38,6 +39,8 @@ export type HealthInput = {
   signIns: SignInProblem[];
   /** S736: the server's Node (process.version), so the email says when the security fix lands. */
   serverNode?: { version: string; fixed: boolean } | null;
+  /** S748: page crashes recorded by the error pages (app_errors), last 24 hours. Null = not read. */
+  appErrors?: { path: string | null }[] | null;
 };
 
 const PORTAL_OK = new Set(["lead_created", "duplicate"]);
@@ -97,7 +100,16 @@ export function healthSections(input: HealthInput): HealthSection[] {
   const newest = [...input.sweeps].sort((a, b) => Date.parse(b.ran_at) - Date.parse(a.ran_at))[0];
   const off = disabledSweeps(newest?.details ?? null);
   if (off.length) sweepLines.push(`Switched off by a flag (not running): ${off.join(", ")}.`);
+  // S748: sweeps that took 40 s or more in the newest run are close to the
+  // 60 s limit, where the platform stops them halfway with no error.
+  const slow = newest?.details?.["slow-sweeps"]?.reason;
+  if (slow) sweepLines.push(`Close to the time limit (40 s or more): ${slow.replace(/\/api\/cron\//g, "").split(",").join(", ")}.`);
   if (sweepLines.length) out.push({ title: "Background sweeps", lines: sweepLines });
+
+  // S748: pages that crashed for a landlord or a renter.
+  if (input.appErrors && input.appErrors.length) {
+    out.push({ title: "Page crashes", lines: appErrorLines(input.appErrors) });
+  }
 
   // 2. Emails that did not arrive.
   const emailLines: string[] = [];
@@ -159,7 +171,7 @@ export function buildHealthDigest(input: HealthInput): { subject: string; body: 
     parts.push(`${s.title.toUpperCase()}\n${s.lines.map((l) => `- ${l}`).join("\n")}`);
   }
   parts.push(
-    `Checked: ${okRuns} of ${runs} background sweeps clean, email delivery${input.emails.checked ? "" : " (not checked)"}, renter emails from sites, robot posts and site sign-ins. Not checked here: app errors in Vercel's logs.`,
+    `Checked: ${okRuns} of ${runs} background sweeps clean, email delivery${input.emails.checked ? "" : " (not checked)"}, renter emails from sites, robot posts and site sign-ins${input.appErrors ? ", page crashes" : ""}. Not checked here: ${input.appErrors ? "errors inside API calls that no page showed" : "app errors in Vercel's logs"}.`,
   );
   // S736: the Node2Shell watch (lib/image-url-import nodeHasBrotliFix). Information, not a problem.
   if (input.serverNode) {

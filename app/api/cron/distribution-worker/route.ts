@@ -50,6 +50,9 @@ import {
   type StuckCandidate,
 } from "@/lib/distribution-stuck-sweep";
 
+// S748: every sweep gets the full 60 s; sweep-all waits up to 50 s for each.
+export const maxDuration = 60;
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
