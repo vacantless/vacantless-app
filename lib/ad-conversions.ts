@@ -57,7 +57,9 @@ const MARKETING_EXACT = new Set(["/", "/about", "/realtors", "/signup", "/terms"
 export function isMarketingPath(path: string | null | undefined): boolean {
   const p = (path ?? "").split("?")[0].replace(/\/+$/, "") || "/";
   if (MARKETING_EXACT.has(p)) return true;
-  return p === "/compare" || p.startsWith("/compare/");
+  if (p === "/compare" || p.startsWith("/compare/")) return true;
+  // S746: the free tool pages are the ad landing pages.
+  return p === "/tools" || p.startsWith("/tools/");
 }
 
 export function sentMap(v: unknown): Partial<Record<ConversionEvent, string>> {

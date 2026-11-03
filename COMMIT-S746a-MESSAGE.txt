@@ -1,0 +1,28 @@
+S746a: free Ontario rent-increase calculator with the Form N1 filled in
+
+Engine 1 of the subscriber plan (approved 2026-11-03). Every Ontario
+landlord with a tenant serves a rent-increase notice once a year and
+searches for the guideline and Form N1 the month they do it. Until now
+that engine sat behind sign-in. This puts it on www.vacantless.com as a
+free tool, no account, with "Start free" as the only capture.
+
+- /tools/rent-increase: rent and move-in date in, the guideline for the
+  effective year, the new rent, the first legal day and the notice
+  deadline out. A wanted start day is honoured when the 12-month and
+  90-day rules allow it, otherwise the legal day is used and said so.
+  Exempt (post 2018-11-15) units take the landlord's chosen rent.
+- /tools/rent-increase/n1 and /n1/official: a printable review copy and
+  the official LTB Form N1 (v.01/04/2022) filled from the same inputs,
+  recomputed on the server from the query so the form always matches
+  the engine. Nothing is stored. noindex.
+- lib/rent-increase-tool.ts: pure parse, compute, snapshot and sentence
+  (inputs cleaned and capped before any PDF).
+- Footer link, sitemap entry (priority 0.9), ad tags fire on /tools/*
+  so the pages can be the Google Ads landing pages.
+- Guideline table on the page reads rent_guidelines over the shipped
+  constant; 2027 = 1.9% verified against ontario.ca 2026-11-03.
+
+Test: scripts/test-rent-increase-tool.ts (59 checks).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGoWx4KJbvmhfRQHjzE
