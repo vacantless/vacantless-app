@@ -37,6 +37,10 @@ import {
   reconcileDebitAsExpense,
 } from "./actions";
 
+// S748d: how many bank transactions Reconcile reads (newest first), and the id chunk size for linked rows.
+const TXN_LIMIT = 1000;
+const ID_CHUNK = 150;
+
 export const dynamic = "force-dynamic";
 
 type BankTxnRow = {
@@ -256,29 +260,59 @@ export default async function ReconcilePage({
   }
 
   const supabase = createClient();
+  // S748d: the newest TXN_LIMIT transactions, shown oldest first as before.
+  // The old oldest-first read with no limit lost the NEWEST transactions once
+  // an account passed the database's 1,000-row cap. Expenses and rent
+  // payments are read for those transactions only (linked to one, or unlinked
+  // and close enough in date to be a match candidate), in id chunks.
+  const { data: txnDesc } = await supabase
+    .from("bank_transactions")
+    .select(
+      "id, account_external_id, account_name, posted_on, amount_cents, direction, merchant, description, currency, triage_status, expense_id, merchant_entity_id, stream_id",
+    )
+    .eq("organization_id", org.id)
+    .order("posted_on", { ascending: false })
+    .limit(TXN_LIMIT);
+  const txnData = [...((txnDesc ?? []) as BankTxnRow[])].reverse();
+  const txnIds = txnData.map((t) => t.id);
+  const oldestPosted = txnData[0]?.posted_on ?? null;
+  const unlinkedFrom = oldestPosted
+    ? new Date(Date.parse(String(oldestPosted).slice(0, 10)) - 15 * 86_400_000).toISOString().slice(0, 10)
+    : null;
+  const chunks: string[][] = [];
+  for (let i = 0; i < txnIds.length; i += ID_CHUNK) chunks.push(txnIds.slice(i, i + ID_CHUNK));
+  const EXPENSE_COLUMNS = "id, bank_transaction_id, category, amount_cents, incurred_on, merchant, property_id, building_key";
   const [
-    { data: txnData },
-    { data: expenseData },
-    { data: rentData },
+    linkedExpenseParts,
+    unlinkedExpenseRes,
+    rentParts,
     { data: tenancyData },
     { data: ruleData },
     { data: propData },
   ] = await Promise.all([
-    supabase
-      .from("bank_transactions")
-      .select(
-        "id, account_external_id, account_name, posted_on, amount_cents, direction, merchant, description, currency, triage_status, expense_id, merchant_entity_id, stream_id",
-      )
-      .eq("organization_id", org.id)
-      .order("posted_on", { ascending: true }),
-    supabase
-      .from("expenses")
-      .select("id, bank_transaction_id, category, amount_cents, incurred_on, merchant, property_id, building_key")
-      .eq("organization_id", org.id),
-    supabase
-      .from("rent_payments")
-      .select("id, bank_transaction_id, tenancy_id, amount_cents, period_month")
-      .eq("organization_id", org.id),
+    Promise.all(
+      chunks.map((ids) =>
+        supabase.from("expenses").select(EXPENSE_COLUMNS).eq("organization_id", org.id).in("bank_transaction_id", ids),
+      ),
+    ),
+    unlinkedFrom
+      ? supabase
+          .from("expenses")
+          .select(EXPENSE_COLUMNS)
+          .eq("organization_id", org.id)
+          .is("bank_transaction_id", null)
+          .gte("incurred_on", unlinkedFrom)
+          .limit(1000)
+      : Promise.resolve({ data: [] as unknown[] }),
+    Promise.all(
+      chunks.map((ids) =>
+        supabase
+          .from("rent_payments")
+          .select("id, bank_transaction_id, tenancy_id, amount_cents, period_month")
+          .eq("organization_id", org.id)
+          .in("bank_transaction_id", ids),
+      ),
+    ),
     supabase
       .from("tenancies")
       .select("id, rent_cents, property_id, status, properties(address)")
@@ -296,7 +330,12 @@ export default async function ReconcilePage({
       .eq("organization_id", org.id),
   ]);
 
-  const rows = (txnData ?? []) as BankTxnRow[];
+  const rows = txnData;
+  const expenseData = [
+    ...linkedExpenseParts.flatMap((r) => (r.data ?? []) as unknown[]),
+    ...((unlinkedExpenseRes.data ?? []) as unknown[]),
+  ];
+  const rentData = rentParts.flatMap((r) => (r.data ?? []) as unknown[]);
   const properties = (propData ?? []) as PropertyRef[];
   const buildingLabels = new Map<string, string>();
   for (const property of properties) {

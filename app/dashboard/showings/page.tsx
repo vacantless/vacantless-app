@@ -43,6 +43,10 @@ import {
 import { CalendarFeedLink } from "@/components/calendar-feed-link";
 import { calendarFeedUrl } from "@/lib/calendar-feed-server";
 
+// S748d: how far back the Viewings page reads in full, and how many older viewings it lists.
+const RECENT_WINDOW_DAYS = 8; // covers the whole org-local week used for agent load
+const PAST_LIMIT = 200;
+
 export const dynamic = "force-dynamic";
 
 type ShowingRow = {
@@ -137,15 +141,32 @@ export default async function ShowingsPage({
   const canManageAgents = roleCan(role, "manage_settings");
   const canAssign = roleCan(role, "manage_leads");
   const canSuggestTimes = role != null && roleCan(role, "manage_showings");
-  const { data } = await supabase
-    .from("showings")
-    .select(
-      "id, created_at, scheduled_at, outcome, assigned_agent_id, confirmed_at, lead:leads(id, name, email), property:properties(id, address, status), feedback(rating, comments)",
-    )
-    .eq("organization_id", org.id)
-    .order("scheduled_at", { ascending: true });
+  // S748d: two bounded reads instead of one unbounded one. The database
+  // answers at most 1,000 rows, and the old oldest-first read lost the
+  // NEWEST viewings (the upcoming ones) once an account passed that. Now:
+  // everything from a week ago on, in full (upcoming plus this week's agent
+  // load), and the newest PAST_LIMIT older ones for the Past list.
+  const SHOWING_COLUMNS =
+    "id, created_at, scheduled_at, outcome, assigned_agent_id, confirmed_at, lead:leads(id, name, email), property:properties(id, address, status), feedback(rating, comments)";
+  const recentFrom = new Date(Date.now() - RECENT_WINDOW_DAYS * 86_400_000).toISOString();
+  const [{ data: recentData }, { data: olderData }] = await Promise.all([
+    supabase
+      .from("showings")
+      .select(SHOWING_COLUMNS)
+      .eq("organization_id", org.id)
+      .gte("scheduled_at", recentFrom)
+      .order("scheduled_at", { ascending: true })
+      .limit(1000),
+    supabase
+      .from("showings")
+      .select(SHOWING_COLUMNS)
+      .eq("organization_id", org.id)
+      .or(`scheduled_at.lt.${recentFrom},scheduled_at.is.null`)
+      .order("scheduled_at", { ascending: false, nullsFirst: false })
+      .limit(PAST_LIMIT),
+  ]);
 
-  const all = (data ?? []) as unknown as ShowingRow[];
+  const all = [...((olderData ?? []) as unknown as ShowingRow[]).reverse(), ...((recentData ?? []) as unknown as ShowingRow[])];
 
   // Showing-agent roster (S436). Active agents populate the assignment picker;
   // the full map labels a row whose assigned agent has since been archived.

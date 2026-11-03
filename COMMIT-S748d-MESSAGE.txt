@@ -1,0 +1,31 @@
+S748d: rentals, viewings and reconcile stay right past 1,000 rows
+
+From the S742 review, engineering item 5. The database answers at most
+1,000 rows per request, so pages that read a whole table were not only
+slow for a 300-unit account, they were silently wrong:
+- Rentals counted inquiries and photos by downloading every lead and
+  photo row (300 units x 10 photos = 3,000 rows), so counts and the
+  photos-ready check fell short.
+- Viewings read every viewing oldest first, so past 1,000 the NEWEST
+  (upcoming) viewings were the ones dropped.
+- Reconcile read every bank transaction oldest first: same problem.
+
+- Migration 0271 (applied): property_rollups(p_org), a grouped count run
+  as the signed-in user (row security still applies), plus indexes for
+  the reads below. Checked on Agile as a member: 286 inquiries and 130
+  photos, identical to the old count.
+- Rentals list uses the rollup.
+- Viewings: everything from 8 days ago on, in full (upcoming plus the
+  agent-load week), and the newest 200 older viewings for Past.
+- Reconcile: the newest 1,000 transactions (shown oldest first as
+  before), the expenses and rent payments linked to them (150 ids per
+  read), and unlinked expenses dated from 15 days before the oldest one.
+
+Work orders already read newest first, so the cap only drops very old
+ones; the remaining small tables (rentals, tenancies, rules) stay well
+under it.
+
+Tests: scripts/test-s748-bounded-lists.ts (15).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGquEPSJsBQzPNLSDD8

@@ -243,9 +243,7 @@ export default async function PropertiesPage({
 
   const [
     { data: properties },
-    { data: leadRefs },
-    { data: photoRefs },
-    { data: tenancyRefs },
+    { data: rollupRows },
     { data: postRefs },
     { count: availabilityCount },
   ] = await Promise.all([
@@ -254,12 +252,10 @@ export default async function PropertiesPage({
       .select("id, address, rent_cents, beds, baths, status, description, archived_at")
       .eq("organization_id", org.id)
       .order("created_at", { ascending: false }),
-    supabase.from("leads").select("property_id").eq("organization_id", org.id),
-    supabase
-      .from("property_photos")
-      .select("property_id")
-      .eq("organization_id", org.id),
-    supabase.from("tenancies").select("property_id").eq("organization_id", org.id),
+    // S748d: counted in the database (property_rollups, migration 0271).
+    // Downloading every lead and photo row stopped at the 1,000-row cap and
+    // undercounted for large accounts.
+    supabase.rpc("property_rollups", { p_org: org.id }),
     supabase
       .from("listing_posts")
       .select("id, property_id, status, url")
@@ -292,22 +288,21 @@ export default async function PropertiesPage({
   );
   const wizardEnabled = distributionWizardEnabled();
 
-  // Per-property inquiry counts for the selected org.
+  // Per-property inquiry, photo and tenancy counts for the selected org
+  // (S748d: one grouped count from the database).
   const leadCounts = new Map<string, number>();
-  for (const r of (leadRefs ?? []) as { property_id: string | null }[]) {
-    if (r.property_id) {
-      leadCounts.set(r.property_id, (leadCounts.get(r.property_id) ?? 0) + 1);
-    }
-  }
-
   const tenancyCounts = new Map<string, number>();
-  for (const r of (tenancyRefs ?? []) as { property_id: string | null }[]) {
-    if (r.property_id) {
-      tenancyCounts.set(
-        r.property_id,
-        (tenancyCounts.get(r.property_id) ?? 0) + 1,
-      );
-    }
+  const photoCounts = new Map<string, number>();
+  for (const r of (rollupRows ?? []) as {
+    property_id: string;
+    leads: number | string | null;
+    photos: number | string | null;
+    tenancies: number | string | null;
+  }[]) {
+    const n = (v: number | string | null) => Number(v ?? 0) || 0;
+    if (n(r.leads)) leadCounts.set(r.property_id, n(r.leads));
+    if (n(r.photos)) photoCounts.set(r.property_id, n(r.photos));
+    if (n(r.tenancies)) tenancyCounts.set(r.property_id, n(r.tenancies));
   }
 
   // S681: postCounts gates the Delete control via hardDeletable, so it must
@@ -349,12 +344,6 @@ export default async function PropertiesPage({
   // Per-property photo counts — so a shareable-but-photo-poor rental can be
   // labelled at the list level (Codex QA: don't offer a bare "Copy link" with no
   // signal that the listing has no photos).
-  const photoCounts = new Map<string, number>();
-  for (const r of (photoRefs ?? []) as { property_id: string | null }[]) {
-    if (r.property_id) {
-      photoCounts.set(r.property_id, (photoCounts.get(r.property_id) ?? 0) + 1);
-    }
-  }
 
   const h = headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
