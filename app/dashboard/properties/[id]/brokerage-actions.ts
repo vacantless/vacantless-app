@@ -7,7 +7,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { sendNotificationEmail } from "@/lib/email";
 import { adminEmails } from "@/lib/provisioning-server";
-import { brokerageRouteFor, validateBrokerageRequest } from "@/lib/brokerage-request";
+import { brokerageCardEnabled, brokerageRouteFor, validateBrokerageRequest } from "@/lib/brokerage-request";
 import { brokerageRequestEmail } from "@/lib/brokerage-request-email";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
@@ -20,6 +20,7 @@ export async function requestBrokerageListing(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const propertyId = String(formData.get("property_id") ?? "");
   if (!propertyId) return;
+  if (!brokerageCardEnabled()) return; // S747: the card is hidden; refuse a stale form post too
   const back = (q: string) => `/dashboard/properties/${propertyId}?tab=distribute&brk=${q}#realtor-ca-request`;
 
   const org = await getCurrentOrg();

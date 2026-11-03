@@ -278,7 +278,7 @@ import {
 } from "@/lib/marketplace-kit";
 import { phoneKitSecret, signPhoneKitToken } from "@/lib/marketplace-phone-link";
 import { buildMarketplaceHelperKit } from "@/lib/marketplace-helper";
-import { brokerageRouteFor } from "@/lib/brokerage-request";
+import { brokerageCardEnabled, brokerageRouteFor } from "@/lib/brokerage-request";
 import type { BrokerageRequestCardData } from "./brokerage-request-card";
 import type { MarketplaceKitData } from "./marketplace-row";
 import type { AddressDisplayMode } from "@/lib/address-privacy";
@@ -1651,8 +1651,10 @@ export default async function PropertyDetailPage({
     };
   }
   // --- S735: Realtor.ca through a partner agent (request, never a tile) ----
+  // S747: hidden unless BROKERAGE_CARD_ENABLED=1 (Noam, 2026-11-03: keep the
+  // brokerage out of view for now; no request was ever made).
   let brokerage: BrokerageRequestCardData | null = null;
-  if (org && normalizedStatus !== "leased") {
+  if (org && normalizedStatus !== "leased" && brokerageCardEnabled()) {
     const { data: brkRows } = await supabase
       .from("brokerage_requests")
       .select("created_at, contact_phone, contact_email, status")

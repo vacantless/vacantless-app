@@ -1,0 +1,17 @@
+S747d: the Realtor.ca brokerage card is off unless switched on
+
+Noam (2026-11-03): keep the brokerage out of view for now. The card put
+"Royal LePage" on every landlord's posting page; brokerage_requests has
+zero rows since it shipped (S735, 2026-10-23).
+
+- lib/brokerage-request.ts: brokerageCardEnabled(), true only when
+  BROKERAGE_CARD_ENABLED is "1" (unset in Vercel, so off).
+- properties/[id]/page.tsx: no card data unless enabled.
+- brokerage-actions.ts: a stale form post is refused while it is off.
+- scripts/test-brokerage-request.ts: four switch checks.
+
+Turn it back on: BROKERAGE_CARD_ENABLED=1 in Vercel, then redeploy.
+Checked in a clean copy: tsc clean, run-all-tests 339 passed, 0 failed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGpXTbHTZVcAgG7wnBE

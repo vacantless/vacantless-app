@@ -2,6 +2,7 @@
 // Run: npx tsx scripts/test-brokerage-request.ts
 import assert from "node:assert/strict";
 import {
+  brokerageCardEnabled,
   brokerageRouteFor,
   provinceFromAddress,
   validateBrokerageRequest,
@@ -68,5 +69,11 @@ assert.match(mail.body, /\$1,275 a month/);
 assert.match(mail.body, /Phone: 519-555-0123/);
 assert.match(mail.body, /app\.vacantless\.com\/dashboard\/properties\/prop-1/);
 assert.match(mail.body, /never by Vacantless/);
+
+// S747: the card is off unless the switch is exactly "1".
+assert.equal(brokerageCardEnabled({}), false);
+assert.equal(brokerageCardEnabled({ BROKERAGE_CARD_ENABLED: "0" }), false);
+assert.equal(brokerageCardEnabled({ BROKERAGE_CARD_ENABLED: "true" }), false);
+assert.equal(brokerageCardEnabled({ BROKERAGE_CARD_ENABLED: "1" }), true);
 
 console.log("test-brokerage-request: all passed");

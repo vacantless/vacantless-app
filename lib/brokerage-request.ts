@@ -82,6 +82,11 @@ export function provinceFromAddress(address: string | null | undefined): string 
   return null;
 }
 
+/** S747: the Realtor.ca / local-agent card shows only when BROKERAGE_CARD_ENABLED is "1". */
+export function brokerageCardEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return env.BROKERAGE_CARD_ENABLED === "1";
+}
+
 /** Which route a rental gets. Unknown province reads as Ontario: the app is Ontario first and the follow-up call sorts it. */
 export function brokerageRouteFor(address: string | null | undefined): BrokerageRoute {
   const province = provinceFromAddress(address);
