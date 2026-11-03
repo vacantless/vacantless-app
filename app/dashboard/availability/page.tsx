@@ -15,7 +15,7 @@ import {
 } from "./actions";
 import { PageHeader } from "@/components/ui";
 import { Icons } from "@/components/icons";
-import { timezoneLabel } from "@/lib/timezone-label";
+import { BOOKING_TIMEZONES, timezoneLabel } from "@/lib/timezone-label";
 
 export const dynamic = "force-dynamic";
 
@@ -48,18 +48,7 @@ type OrgBooking = {
   viewing_reminder_hour: number;
 };
 
-const TIMEZONES = [
-  "America/Toronto",
-  "America/Vancouver",
-  "America/Edmonton",
-  "America/Winnipeg",
-  "America/Halifax",
-  "America/St_Johns",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-];
+const TIMEZONES = BOOKING_TIMEZONES;
 
 const SAVED_MESSAGES: Record<string, string> = {
   settings: "Booking settings saved.",

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { BOOKING_TIMEZONES } from "@/lib/timezone-label";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
@@ -8,18 +9,7 @@ import { requireCapability } from "@/lib/membership";
 import { parseBuildingWeekdays, timeStrToMinutes } from "@/lib/booking";
 import { isViewingPresetKey, presetWindowsToAdd, type PresetWindow } from "@/lib/viewing-presets";
 
-const COMMON_TZ = new Set([
-  "America/Toronto",
-  "America/Vancouver",
-  "America/Edmonton",
-  "America/Winnipeg",
-  "America/Halifax",
-  "America/St_Johns",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-]);
+const COMMON_TZ = new Set(BOOKING_TIMEZONES);
 
 async function stampAvailabilityReopened(
   supabase: ReturnType<typeof createClient>,

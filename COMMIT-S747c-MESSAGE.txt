@@ -1,0 +1,22 @@
+S747c: an account's viewing time zone follows its first rental
+
+Every account started on Toronto time. A landlord in Vancouver or Calgary
+who never opened Viewing times showed renters Toronto hours.
+
+- Migration 0268: when an account adds its first rental and its zone is
+  still the Toronto default, set booking_timezone from the postal code's
+  first letter (V BC, T AB, S SK, R MB, E B C Atlantic, A NL, Y YT) or a
+  province code or name. Ontario, Quebec, the X territories and unknown
+  addresses keep Toronto. One trigger covers every way a rental is created.
+- lib/timezone-label.ts: one list of viewing zones (BOOKING_TIMEZONES) used
+  by the Viewing times page and its save action; adds Saskatchewan
+  (America/Regina, no daylight saving) and Yukon (America/Whitehorse) with
+  plain labels.
+- scripts/test-booking-timezones.ts (35 checks).
+
+Checked in a clean copy: tsc clean, run-all-tests 339 passed, 0 failed.
+The address rule was run against 12 sample addresses in a rolled-back
+transaction on prod.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGpXTbHTZVcAgG7wnBE
