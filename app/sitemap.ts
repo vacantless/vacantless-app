@@ -19,6 +19,7 @@ const MARKETING_PAGES: MetadataRoute.Sitemap = [
   { url: `${WWW}/compare/showinghero`, changeFrequency: "monthly", priority: 0.8 },
   { url: `${WWW}/how-to`, changeFrequency: "monthly", priority: 0.7 },
   { url: `${WWW}/tools/rent-increase`, changeFrequency: "monthly", priority: 0.9 },
+  { url: `${WWW}/tools/standard-lease`, changeFrequency: "monthly", priority: 0.9 },
   { url: `${WWW}/about`, changeFrequency: "monthly", priority: 0.5 },
   { url: `${WWW}/privacy`, changeFrequency: "yearly", priority: 0.2 },
   { url: `${WWW}/terms`, changeFrequency: "yearly", priority: 0.2 },

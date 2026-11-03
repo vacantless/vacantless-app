@@ -138,6 +138,9 @@ export function MarketingFooter() {
           <Link href="/tools/rent-increase" className="hover:text-[#15211d]">
             Rent increase calculator
           </Link>
+          <Link href="/tools/standard-lease" className="hover:text-[#15211d]">
+            Standard Lease filler
+          </Link>
           <Link href="/about" className="hover:text-[#15211d]">
             About
           </Link>

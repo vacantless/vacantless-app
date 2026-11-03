@@ -1,0 +1,23 @@
+S746c: free Ontario Standard Lease (2229E) filler
+
+Engine 1 of the subscriber plan, tool 2. Every private residential
+tenancy in Ontario signed since April 30, 2018 uses the government's
+Standard Form of Lease, and landlords search for it on every new
+tenancy. The signed-in product already fills the real form; this puts
+the same fill on www.vacantless.com with no sign-in and nothing stored.
+
+- /tools/standard-lease: one plain form (no JavaScript) with the same
+  field names as the signed-in details form, plus the tenancy basics
+  and Section 15 additional terms. POST to ./pdf returns the official
+  2229E filled; the form's own limits (NSF over $20, deposit over one
+  month, fixed term without an end) refuse with a plain page that says
+  what to fix. Blank answers print blank.
+- lib/standard-lease-tool.ts: pure read of the form, cleaned and
+  capped, reusing detailsFromForm, standardLeaseMissing and
+  standardLeaseProblems.
+- Footer link and sitemap entry; the two tools link each other.
+
+Test: scripts/test-standard-lease-tool.ts (36 checks).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGoWx4KJbvmhfRQHjzE
