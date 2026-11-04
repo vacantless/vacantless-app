@@ -146,6 +146,10 @@ import {
 import { TenancyN12Section, type N12NoticeView } from "./n12-section";
 import { TenancyL1Section } from "./l1-section";
 import { TenancyN5Section, type N5NoticeView } from "./n5-section";
+import { TenancyL2Section, type L2NoticeView } from "./l2-section";
+import { TenancyN8Section, type N8NoticeView } from "./n8-section";
+import { findLatePeriods } from "@/lib/n8";
+import { earliestL2FilingDate, type L2NoticeSnap } from "@/lib/l2";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
 import {
   TenancyInsuranceSection,
@@ -402,6 +406,8 @@ export default async function TenancyDetailPage({
     n12?: string;
     l1?: string;
     n5?: string;
+    l2?: string;
+    n8?: string;
     s?: string;
     k?: string;
     f?: string;
@@ -666,6 +672,42 @@ export default async function TenancyDetailPage({
     .eq("type", "N5")
     .order("created_at", { ascending: false });
   const n5Notices: N5NoticeView[] = (n5Rows ?? []).map((r) => r as N5NoticeView);
+  // S749: Form N8 notices for this tenancy, and the late payments the ledger shows.
+  const { data: n8Rows } = await supabase
+    .from("notices")
+    .select("id, status, termination_date, created_at")
+    .eq("tenancy_id", params.id)
+    .eq("type", "N8")
+    .order("created_at", { ascending: false });
+  const n8Notices: N8NoticeView[] = (n8Rows ?? []).map((r) => r as N8NoticeView);
+  const n8LatePeriods = t.rent_cents
+    ? findLatePeriods({
+        rentCents: t.rent_cents,
+        payments: payments.map((p) => ({ amount_cents: p.amount_cents, period_month: p.period_month ?? null, paid_on: p.paid_on ?? null })),
+        asOfISO: todayOntario,
+      })
+    : [];
+  // S749: served N5, N8 and N12 notices an L2 can be filed from. Newest first.
+  const { data: l2Rows } = await supabase
+    .from("notices")
+    .select("id, type, status, termination_date, snapshot")
+    .eq("tenancy_id", params.id)
+    .in("type", ["N5", "N8", "N12"])
+    .in("status", ["served", "filed"])
+    .order("created_at", { ascending: false })
+    .limit(10);
+  const l2Notices: L2NoticeView[] = (l2Rows ?? []).map((r) => {
+    const n = r as unknown as { id: string; type: "N5" | "N8" | "N12"; status: string; termination_date: string | null; snapshot: L2NoticeSnap | null };
+    return {
+      id: n.id,
+      type: n.type,
+      status: n.status,
+      termination_date: n.termination_date,
+      earliest_filing: earliestL2FilingDate(n.type, n.snapshot),
+      compensation_required: n.snapshot?.compensationRequired !== false,
+      reason: n.snapshot?.reason === 2 ? 2 : 1,
+    };
+  });
   const n4TenantNames = tenants
     .map((x) => (x.name ?? "").trim())
     .filter((nm) => nm.length > 0);
@@ -1831,6 +1873,26 @@ export default async function TenancyDetailPage({
           notices={n5Notices}
           today={todayOntario}
           msg={searchParams.n5}
+        />
+        <TenancyN8Section
+          tenancyId={t.id}
+          active={t.status === "active"}
+          rentCents={t.rent_cents}
+          endDate={t.end_date ?? null}
+          landlordName={org?.name ?? ""}
+          latePeriods={n8LatePeriods}
+          notices={n8Notices}
+          today={todayOntario}
+          msg={searchParams.n8}
+        />
+        <TenancyL2Section
+          tenancyId={t.id}
+          servedNotices={l2Notices}
+          landlordName={org?.name ?? ""}
+          landlordPhone={org?.public_contact_phone ?? null}
+          depositCents={t.deposit_cents ?? null}
+          today={todayOntario}
+          msg={searchParams.l2}
         />
       </CollapsibleSection>
 

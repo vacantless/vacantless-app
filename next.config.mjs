@@ -42,6 +42,8 @@ const nextConfig = {
       "/dashboard/tenancies/[id]/n12/official": ["./lib/forms/ltb-n12-2026-10.pdf"],
       "/dashboard/tenancies/[id]/l1/official": ["./lib/forms/ltb-l1-2026.pdf"],
       "/dashboard/tenancies/[id]/n5/official": ["./lib/forms/ltb-n5-2026.pdf"],
+      "/dashboard/tenancies/[id]/l2/official": ["./lib/forms/ltb-l2-2026.pdf"],
+      "/dashboard/tenancies/[id]/n8/official": ["./lib/forms/ltb-n8-2026.pdf"],
       // The N4 "file to vault" server action runs in the tenancy page itself.
       "/dashboard/tenancies/[id]": ["./lib/forms/ltb-n4-2026-09.pdf", "./lib/forms/ltb-n12-2026-10.pdf"],
       // S743: Ontario Standard Form of Lease (2229E) flat copy.
