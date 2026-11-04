@@ -7,6 +7,7 @@ import {
   helperVersionOk,
   isHelperMessage,
   marketplaceItemIdFrom,
+  replyUnitPhrase,
   shortRentalName,
   versionAtLeast,
   MARKETPLACE_HELPER_AD_LIST_MIN_VERSION,
@@ -38,6 +39,12 @@ ok("no times: no pick promise", !noTimes.includes("pick a viewing time"));
 ok("no times: names the button", noTimes.includes('tap "Request a viewing"') && noTimes.includes(link));
 const rented = fillHelperReply(helperReplyTemplate({ available: false, bookingUrl: link }), "Sandra");
 ok("rented says so, no link", rented === "Hi Sandra, thanks for asking. This one is rented now.", rented);
+// S750: the reply names the unit when the rental is known.
+const named = fillHelperReply(helperReplyTemplate({ available: true, bookingUrl: link, rentalName: "833 Pillette Rd, Unit 3" }), "Tess");
+ok("S750 names the unit", named.startsWith("Hi Tess, yes, Unit 3 at 833 Pillette Rd is still available. You can pick"), named);
+ok("S750 plain street", replyUnitPhrase("88 Lakeview Ave") === "88 Lakeview Ave");
+ok("S750 no name, no phrase", replyUnitPhrase("Your rental") === null && replyUnitPhrase(null) === null);
+ok("S750 rented names the unit", fillHelperReply(helperReplyTemplate({ available: false, bookingUrl: link, rentalName: "833 Pillette Rd, Unit 33" }), "Sam") === "Hi Sam, thanks for asking. Unit 33 at 833 Pillette Rd is rented now.");
 ok("no em dash anywhere", ![t, rented].some((s) => s.includes("—")));
 
 const uuid = "15a8a7de-271f-4348-9fee-b5a664a4e439";

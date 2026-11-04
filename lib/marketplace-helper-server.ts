@@ -81,6 +81,7 @@ export async function loadHelperAdList(admin: SupabaseClient, orgIds: string[]):
         bookingUrl: buildTrackedLink(`${APP_URL}/r/${prop.id}`, r.id),
         phone: phoneByOrg.get(r.organization_id) ?? null,
         hasViewingTimes: timesByProp.get(prop.id) ?? true,
+        rentalName: shortRentalName(prop.address),
       }),
     });
   }

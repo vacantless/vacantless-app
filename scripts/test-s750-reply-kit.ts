@@ -38,11 +38,11 @@ eq(c3.bedsLabel, "1 bed · 1 bath", "beds label");
 
 eq(
   replyKitText({ card: c3, site: c3.sites[0], phone: "519-915-8865 ext 103", renterName: "Khushpreet" }),
-  `Hi Khushpreet, yes it is still available. You can pick a viewing time here: ${APP}/r/p3?p=fb3 The next open times are Thursday, November 5 at 7:30, 7:45, 8:00 or 8:15 PM. If you would rather not fill out the form, you can also call 519-915-8865 ext 103.`,
+  `Hi Khushpreet, yes, Unit 3 at 833 Pillette Rd is still available. You can pick a viewing time here: ${APP}/r/p3?p=fb3 The next open times are Thursday, November 5 at 7:30, 7:45, 8:00 or 8:15 PM. If you would rather not fill out the form, you can also call 519-915-8865 ext 103.`,
   "the same reply sent to Khushpreet by hand, from the kit",
 );
 eq(
-  replyKitText({ card: c3, site: c3.sites[1], phone: null, renterName: "" }).startsWith("Hi, yes it is still available."),
+  replyKitText({ card: c3, site: c3.sites[1], phone: null, renterName: "" }).startsWith("Hi, yes, Unit 3 at 833 Pillette Rd is still available."),
   true,
   "no name gives a plain Hi",
 );
@@ -53,7 +53,7 @@ eq(
   "no times known: no times line",
 );
 const c303 = cards.find((c) => c.propertyId === "p303")!;
-eq(replyKitText({ card: c303, site: c303.sites[0], phone: "x", renterName: "Sam" }), "Hi Sam, thanks for asking. This one is rented now.", "rented reply");
+eq(replyKitText({ card: c303, site: c303.sites[0], phone: "x", renterName: "Sam" }), "Hi Sam, thanks for asking. Bruce 303 is rented now.", "rented reply names it");
 
 const longDay = (k: string) => ({ "2026-11-05": "Thursday, November 5", "2026-11-06": "Friday, November 6" } as Record<string, string>)[k] ?? k;
 eq(

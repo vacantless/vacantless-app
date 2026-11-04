@@ -174,6 +174,7 @@ export function replyKitText(input: {
     bookingUrl: input.site.bookingUrl,
     phone: input.phone,
     hasViewingTimes: input.card.hasViewingTimes,
+    rentalName: input.card.rental,
   });
   let text = fillHelperReply(base, input.renterName ?? null);
   if (input.card.available && input.card.hasViewingTimes && input.card.nextTimes) {

@@ -303,18 +303,37 @@ export function helperReplyTemplate(input: {
   phone?: string | null;
   /** S743: false when the renter page has no times to pick. Default true. */
   hasViewingTimes?: boolean;
+  /**
+   * S750: the rental's short name ("833 Pillette Rd, Unit 3"). When given the
+   * reply names the unit, so a renter can catch a wrong pick and the chat
+   * records which unit was answered.
+   */
+  rentalName?: string | null;
 }): string {
+  const unit = replyUnitPhrase(input.rentalName);
   if (!input.available) {
-    return `Hi ${HELPER_REPLY_NAME}, thanks for asking. This one is rented now.`;
+    return unit
+      ? `Hi ${HELPER_REPLY_NAME}, thanks for asking. ${unit} is rented now.`
+      : `Hi ${HELPER_REPLY_NAME}, thanks for asking. This one is rented now.`;
   }
+  const yes = unit ? `yes, ${unit} is still available.` : "yes it is still available.";
   const lines = [
     input.hasViewingTimes === false
-      ? `Hi ${HELPER_REPLY_NAME}, yes it is still available. Open the link and tap "Request a viewing". Leave your name, email and phone. We will contact you to set a time. Link: ${input.bookingUrl}`
-      : `Hi ${HELPER_REPLY_NAME}, yes it is still available. You can pick a viewing time here: ${input.bookingUrl}`,
+      ? `Hi ${HELPER_REPLY_NAME}, ${yes} Open the link and tap "Request a viewing". Leave your name, email and phone. We will contact you to set a time. Link: ${input.bookingUrl}`
+      : `Hi ${HELPER_REPLY_NAME}, ${yes} You can pick a viewing time here: ${input.bookingUrl}`,
   ];
   const p = input.phone?.trim();
   if (p) lines.push(`If you would rather not fill out the form, you can also call ${p}.`);
   return lines.join(" ");
+}
+
+/** S750: "833 Pillette Rd, Unit 3" -> "Unit 3 at 833 Pillette Rd"; a plain street stays as is. */
+export function replyUnitPhrase(rentalName: string | null | undefined): string | null {
+  const name = String(rentalName ?? "").trim();
+  if (!name || name === "Your rental") return null;
+  const parts = name.split(",").map((x) => x.trim()).filter(Boolean);
+  if (parts.length === 2 && /^(unit|apt|suite|#)/i.test(parts[1])) return `${parts[1]} at ${parts[0]}`;
+  return parts[0];
 }
 
 /** The template with the renter's first name, or a plain "Hi," when there is none. */
