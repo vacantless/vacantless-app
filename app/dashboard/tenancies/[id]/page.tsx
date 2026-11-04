@@ -145,6 +145,7 @@ import {
 } from "./n4-section";
 import { TenancyN12Section, type N12NoticeView } from "./n12-section";
 import { TenancyL1Section } from "./l1-section";
+import { TenancyN5Section, type N5NoticeView } from "./n5-section";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
 import {
   TenancyInsuranceSection,
@@ -400,6 +401,7 @@ export default async function TenancyDetailPage({
     msg?: string;
     n12?: string;
     l1?: string;
+    n5?: string;
     s?: string;
     k?: string;
     f?: string;
@@ -656,6 +658,14 @@ export default async function TenancyDetailPage({
       created_at: n.created_at,
     };
   });
+  // S748g: Form N5 notices for this tenancy. Newest first.
+  const { data: n5Rows } = await supabase
+    .from("notices")
+    .select("id, status, termination_date, created_at")
+    .eq("tenancy_id", params.id)
+    .eq("type", "N5")
+    .order("created_at", { ascending: false });
+  const n5Notices: N5NoticeView[] = (n5Rows ?? []).map((r) => r as N5NoticeView);
   const n4TenantNames = tenants
     .map((x) => (x.name ?? "").trim())
     .filter((nm) => nm.length > 0);
@@ -1813,6 +1823,14 @@ export default async function TenancyDetailPage({
           depositCents={t.deposit_cents ?? null}
           today={todayOntario}
           msg={searchParams.l1}
+        />
+        <TenancyN5Section
+          tenancyId={t.id}
+          active={t.status === "active"}
+          landlordName={org?.name ?? ""}
+          notices={n5Notices}
+          today={todayOntario}
+          msg={searchParams.n5}
         />
       </CollapsibleSection>
 
