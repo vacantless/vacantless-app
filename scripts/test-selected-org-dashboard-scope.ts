@@ -67,7 +67,9 @@ const selectedOrgChecks: FileScopeCheck[] = [
   {
     file: "app/dashboard/properties/page.tsx",
     // S710 moved the viewing-times count into lib/viewing-times-count.
-    tables: ["properties", "leads", "property_photos"],
+    // S748d: lead, photo and tenancy counts come from property_rollups
+    // (checked below), not from per-table reads.
+    tables: ["properties"],
   },
 
   { file: "app/dashboard/leads/page.tsx", tables: ["leads"] },
@@ -213,6 +215,7 @@ assertEveryChainContains("app/dashboard/availability/page.tsx", "organizations",
 assertEveryChainContains("lib/viewing-times-count.ts", "availability_rules", `.eq("organization_id", orgId)`);
 assertEveryChainContains("lib/viewing-times-count.ts", "availability_overrides", `.eq("organization_id", orgId)`);
 ok("properties page counts viewing times for the selected org", read("app/dashboard/properties/page.tsx").includes("countViewingTimes(supabase, org.id"));
+ok("properties page counts leads and photos for the selected org", read("app/dashboard/properties/page.tsx").includes('rpc("property_rollups", { p_org: org.id })'));
 
 const nav = read("app/dashboard/dashboard-nav.tsx");
 const agent = read("app/agent/page.tsx");

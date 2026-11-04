@@ -1,0 +1,11 @@
+S748e: ci green again (scope test knows the rentals rollup)
+
+ci run 21 (fbb31a4) failed. test-selected-org-dashboard-scope expected
+app/dashboard/properties/page.tsx to read leads and property_photos
+directly, filtered by org; S748d replaced both reads with one
+property_rollups(p_org) call. The test now checks the rentals page reads
+properties for the selected org and calls property_rollups with
+p_org: org.id. 249 checks pass. The product code is unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGquEPSJsBQzPNLSDD8
