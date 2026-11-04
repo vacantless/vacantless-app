@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/membership";
-import { earliestN8TerminationDate, findLatePeriods, n8Problems, type N8LatePeriod, type N8ServiceMethod } from "@/lib/n8";
+import { countableLatePeriods, earliestN8TerminationDate, findLatePeriods, n8Problems, type N8LatePeriod, type N8ServiceMethod } from "@/lib/n8";
 import { N8_TEMPLATE_VERSION, type N8FillSnapshot } from "@/lib/n8-official-pdf";
 import { parseDateOrNull } from "@/lib/payments";
 
@@ -87,7 +87,7 @@ export async function prepareN8(formData: FormData) {
   const details = String(formData.get("details") ?? "").replace(/\r\n/g, "\n").trim();
   const rentalUnitAddress = t.property?.address?.trim() || null;
 
-  const problems = n8Problems({ ...dateInput, terminationDateISO, lateCount: late.length, details, tenantNames, rentalUnitAddress });
+  const problems = n8Problems({ ...dateInput, terminationDateISO, lateCount: countableLatePeriods(late).length, details, tenantNames, rentalUnitAddress });
   if (problems.length > 0) redirect(anchor(tenancyId, problems[0]));
 
   const snapshot: N8Snapshot = {

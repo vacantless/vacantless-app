@@ -5,7 +5,7 @@ import path from "node:path";
 import { PDFDocument } from "pdf-lib";
 import { computeL2, earliestL2FilingDate, latestL2FilingDate, l2FeeCents, l2LandlordPrefill, n12IntendedText } from "@/lib/l2";
 import { fillOfficialL2 } from "@/lib/l2-official-pdf";
-import { findLatePeriods, n8DetailsText, n8Problems, earliestN8TerminationDate, n8DueDate } from "@/lib/n8";
+import { countableLatePeriods, findLatePeriods, n8DetailsText, n8Problems, earliestN8TerminationDate, n8DueDate } from "@/lib/n8";
 import { fillOfficialN8 } from "@/lib/n8-official-pdf";
 
 let pass = 0;
@@ -101,7 +101,11 @@ async function main() {
   const late = findLatePeriods({ rentCents: rent, payments: pays, asOfISO: "2026-11-04" });
   eq(late.map((l) => [l.periodISO, l.daysLate]), [["2026-06-01", 11], ["2026-08-01", 19], ["2026-10-01", 14]], "late periods");
   const details = n8DetailsText(rent, 1, late);
-  eq(details.split("\n").length, 5, "details: rent line, count line, 3 periods");
+  // S750: only rent due on or after 2026-09-21 counts toward the 3; earlier late ones are history.
+  eq(countableLatePeriods(late).map((l) => l.periodISO), ["2026-10-01"], "S750: only October counts (due after Sept 21)");
+  eq(details.split("\n").length, 6, "details: rent line, count line, 1 counted, earlier line, 2 earlier");
+  eq(details.split("\n")[1].endsWith("was due once:"), true, "S750: the count line counts only rent due after the rule");
+  eq(details.includes("Earlier, the rent was also paid more than 7 days late 2 times:"), true, "S750: earlier late payments listed as history");
   eq(details.includes("—"), false, "no em dash in details");
   eq(details.startsWith("The rent is $1,450.00 a month, due on the 1st"), true, "details opening");
   const n8in = {

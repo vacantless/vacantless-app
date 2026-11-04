@@ -22,6 +22,19 @@ export const N8_LATE_AFTER_DAYS = 7;
 export const N8_MIN_LATE_COUNT = 3;
 export const N8_WINDOW_MONTHS = 6;
 export const N8_MAX_DETAIL_CHARS = 1800;
+/**
+ * S750: the day the "3 times in 6 months, more than 7 days late" test began.
+ * Only rent that came due on or after it counts toward the 3, so an N8 can't
+ * rest on payments from before the rule (tenant-protective, like the N4).
+ * Earlier late payments still go in the details as history. Noam's call S750;
+ * worth a paralegal's check, and a one-line change if older ones count.
+ */
+export const N8_RULE_FROM = "2026-09-21";
+
+/** S750: late periods that count toward the 3 (rent due on or after the rule date). */
+export function countableLatePeriods(late: N8LatePeriod[]): N8LatePeriod[] {
+  return late.filter((l) => l.dueISO >= N8_RULE_FROM);
+}
 
 export type N8Payment = { amount_cents: number; period_month: string | null; paid_on: string | null };
 export type N8LatePeriod = { periodISO: string; dueISO: string; paidInFullISO: string; daysLate: number; amountCents: number };
@@ -93,16 +106,26 @@ function ordinal(n: number): string {
   return `${n}th`;
 }
 
+function times(n: number): string {
+  return n === 1 ? "once" : `${n} times`;
+}
+
 /** Plain-language details for the form, from the ledger. The landlord can edit before preparing. */
 export function n8DetailsText(rentCents: number, dueDay: number, late: N8LatePeriod[]): string {
+  const line = (l: N8LatePeriod) => {
+    const label = `${MONTHS[Number(l.periodISO.slice(5, 7)) - 1]} ${l.periodISO.slice(0, 4)}`;
+    return `- ${label} rent (${money(l.amountCents)}), due ${longDate(l.dueISO)}: paid in full on ${longDate(l.paidInFullISO)}, ${l.daysLate} days late.`;
+  };
+  const counted = countableLatePeriods(late);
+  const earlier = late.filter((l) => l.dueISO < N8_RULE_FROM);
   const lines = [
     `The rent is ${money(rentCents)} a month, due on the ${ordinal(dueDay)} of each month.`,
-    `In the past 6 months the rent was paid in full more than 7 days after it was due ${late.length} times:`,
-    ...late.map((l) => {
-      const label = `${MONTHS[Number(l.periodISO.slice(5, 7)) - 1]} ${l.periodISO.slice(0, 4)}`;
-      return `- ${label} rent (${money(l.amountCents)}), due ${longDate(l.dueISO)}: paid in full on ${longDate(l.paidInFullISO)}, ${l.daysLate} days late.`;
-    }),
+    `In the past 6 months the rent was paid in full more than 7 days after it was due ${times(counted.length)}:`,
+    ...counted.map(line),
   ];
+  if (earlier.length > 0) {
+    lines.push(`Earlier, the rent was also paid more than 7 days late ${times(earlier.length)}:`, ...earlier.map(line));
+  }
   return lines.join("\n");
 }
 
@@ -157,7 +180,7 @@ export const N8_PROBLEM_TEXT: Record<N8Problem, string> = {
   not_period_end: "The termination date must be the last day of a rental period (for rent due on the 1st, the last day of a month).",
   before_term_end: "The lease is in a fixed term: the termination date can't be before the last day of the term.",
   too_few_late:
-    "The rent ledger shows fewer than 3 payments made more than 7 days late in the past 6 months. Record the payment dates under Rent first.",
+    "The rent ledger shows fewer than 3 payments made more than 7 days late in the past 6 months, counting rent due on or after September 21, 2026. Record the payment dates under Rent first.",
   no_details: "Describe the late payments: when rent is due, the dates paid, the amounts and the periods.",
   details_too_long: "The details are too long for the form. Shorten them, or put the full list on a separate page you give the tenant.",
   no_tenant: "Add the tenant's name to this tenancy first.",

@@ -1,5 +1,5 @@
 import { prepareN8, recordN8Service, voidN8 } from "../n8-actions";
-import { earliestN8TerminationDate, N8_MAX_DETAIL_CHARS, N8_MIN_LATE_COUNT, N8_PROBLEM_TEXT, n8DetailsText, type N8LatePeriod, type N8Problem } from "@/lib/n8";
+import { countableLatePeriods, earliestN8TerminationDate, N8_MAX_DETAIL_CHARS, N8_MIN_LATE_COUNT, N8_PROBLEM_TEXT, n8DetailsText, type N8LatePeriod, type N8Problem } from "@/lib/n8";
 import { formatLongDate } from "@/lib/n1-render";
 
 // S749: "Prepare N8" (persistent late rent) on the tenancy page. Vacantless reads
@@ -55,7 +55,8 @@ export function TenancyN8Section({
   const earliest = earliestN8TerminationDate({ serviceDateISO: today, method: "hand", dueDay: 1, fixedTermEndISO });
   const banner = msg ? MSG[msg] ?? (N8_PROBLEM_TEXT[msg as N8Problem] ? { ok: false, text: N8_PROBLEM_TEXT[msg as N8Problem] } : null) : null;
   const open = notices.filter((n) => n.status !== "void");
-  const enough = latePeriods.length >= N8_MIN_LATE_COUNT;
+  const counted = countableLatePeriods(latePeriods).length;
+  const enough = counted >= N8_MIN_LATE_COUNT;
 
   return (
     <div className="space-y-4 border-t border-gray-200 pt-5">
@@ -81,8 +82,9 @@ export function TenancyN8Section({
         </div>
       ) : !enough ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-600">
-          The rent ledger shows {latePeriods.length} payment{latePeriods.length === 1 ? "" : "s"} made more than 7 days
-          late in the past 6 months (an N8 needs at least 3). Record each payment with the date it arrived under Rent.
+          The rent ledger shows {counted} payment{counted === 1 ? "" : "s"} made more than 7 days late in the past 6
+          months, counting rent due on or after September 21, 2026, when this rule started (an N8 needs at least 3).
+          Record each payment with the date it arrived under Rent.
         </div>
       ) : (
         <div className="rounded-xl border border-gray-200 p-4">
