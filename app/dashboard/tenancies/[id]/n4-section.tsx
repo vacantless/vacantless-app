@@ -144,9 +144,8 @@ export function TenancyN4Section({
 
       <p className="text-xs text-gray-500">
         Since September 21, 2026 the pay-by date can be as soon as 7 days after you serve the
-        notice (it was 14 for monthly rent). The LTB replaced several of its forms in 2026 and
-        the form on file here is the 2022 N4, so check the current form at tribunalsontario.ca
-        before you serve one.
+        notice (it was 14 for monthly rent). Vacantless fills the LTB&apos;s current N4 (2026/09);
+        the LTB stops accepting the older N4 after November 30, 2026.
       </p>
 
       <p className="text-xs text-gray-500">

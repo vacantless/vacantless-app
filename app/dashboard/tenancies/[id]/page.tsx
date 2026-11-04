@@ -143,6 +143,7 @@ import {
   TenancyN4Section,
   type N4NoticeView,
 } from "./n4-section";
+import { TenancyN12Section, type N12NoticeView } from "./n12-section";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
 import {
   TenancyInsuranceSection,
@@ -396,6 +397,7 @@ export default async function TenancyDetailPage({
     reason?: string;
     paid?: string;
     msg?: string;
+    n12?: string;
     s?: string;
     k?: string;
     f?: string;
@@ -625,6 +627,31 @@ export default async function TenancyDetailPage({
       termination_date: n.termination_date,
       created_at: n.created_at,
       filed_document_id: n.filed_document_id,
+    };
+  });
+  // S748g: Form N12 notices for this tenancy. Newest first.
+  const { data: n12Rows } = await supabase
+    .from("notices")
+    .select("id, status, termination_date, total_owing_cents, created_at, compensationRequired:snapshot->compensationRequired")
+    .eq("tenancy_id", params.id)
+    .eq("type", "N12")
+    .order("created_at", { ascending: false });
+  const n12Notices: N12NoticeView[] = (n12Rows ?? []).map((r) => {
+    const n = r as unknown as {
+      id: string;
+      status: string;
+      termination_date: string | null;
+      total_owing_cents: number | null;
+      created_at: string;
+      compensationRequired: boolean | null;
+    };
+    return {
+      id: n.id,
+      status: n.status,
+      termination_date: n.termination_date,
+      total_owing_cents: n.total_owing_cents,
+      compensation_required: n.compensationRequired === true,
+      created_at: n.created_at,
     };
   });
   const n4TenantNames = tenants
@@ -1758,6 +1785,16 @@ export default async function TenancyDetailPage({
           appUrl={n4AppUrl}
           today={todayOntario}
           msg={searchParams.n4}
+        />
+        <TenancyN12Section
+          tenancyId={t.id}
+          active={t.status === "active"}
+          rentCents={t.rent_cents}
+          endDate={t.end_date ?? null}
+          landlordName={org?.name ?? ""}
+          notices={n12Notices}
+          today={todayOntario}
+          msg={searchParams.n12}
         />
       </CollapsibleSection>
 
