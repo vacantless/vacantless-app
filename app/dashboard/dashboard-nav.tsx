@@ -69,6 +69,8 @@ const PRIMARY: NavItem[] = [
 // Org / account menu (behind the org pill on desktop; inline on mobile). These
 // are NOT daily work - they configure or step outside the operating surface.
 const ACCOUNT: NavItem[] = [
+  // S750: the phone reply kit, first so it is one tap from the menu on a phone.
+  { href: "/dashboard/replies", label: "Quick replies" },
   { href: "/dashboard/settings", label: "Company settings" },
   { href: "/dashboard/automations", label: "Messages & reminders" },
   {
