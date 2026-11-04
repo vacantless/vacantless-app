@@ -106,7 +106,7 @@ export function buildN4Snapshot(input: BuildN4Input): N4Snapshot {
     input.overrideOwingCents,
   );
   // Reconcile the itemized rows to the operator total. A down-override credits
-  // the reduction against the most-recent rows (charged-paid=owing preserved,
+  // the reduction against the oldest rows (S750; charged-paid=owing preserved,
   // rows sum EXACTLY to the total). An override ABOVE the ledger leaves the rows
   // unchanged so n4SnapshotBlocker can reject it as overstated (a void N4).
   const reconciledRows = creditN4RowsToTotal(packed.formRows, totalOwingCents);

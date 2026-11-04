@@ -2,7 +2,7 @@
 // Run: npx tsx scripts/test-s748-l1.ts   (L1_SAMPLE_OUT=path writes a sample PDF)
 import fs from "node:fs";
 import { PDFDocument } from "pdf-lib";
-import { computeL1, earliestL1FilingDate, l1FeeCents } from "@/lib/l1";
+import { computeL1, earliestL1FilingDate, l1FeeCents, n4ConcessionCents } from "@/lib/l1";
 import { fillOfficialL1 } from "@/lib/l1-official-pdf";
 
 let pass = 0;
@@ -132,6 +132,24 @@ async function main() {
   }
   eq(threw, true, "rows that don't add up refuse to fill");
 
+  // S750: an N4 lowered by $725 keeps the same $725 off the L1.
+  eq(n4ConcessionCents({ conservativeOwingCents: 217500, totalOwingCents: 145000 }), 72500, "concession = ledger - N4 total");
+  eq(n4ConcessionCents({ conservativeOwingCents: 145000, totalOwingCents: 145000 }), 0, "no override, no concession");
+  eq(n4ConcessionCents(null), 0, "no snapshot, no concession");
+  const lowered = computeL1({ ...base, n4ConcessionCents: 72500 });
+  eq(lowered.rentOwingCents, 145000, "L1 keeps the N4's reduction");
+  eq(lowered.problems, [], "a lowered L1 is still valid");
+  eq(lowered.rows.reduce((s, r) => s + r.owingCents, 0), 145000, "L1 rows add up to the lowered total");
+  // S750: a mid-month start is prorated on the L1 too (June 28, $2,200).
+  const mid = computeL1({
+    ...base,
+    rentCents: 220000,
+    startDateISO: "2026-06-28",
+    n4TerminationISO: "2026-11-11",
+    filingDateISO: "2026-11-12",
+    payments: ["2026-07-01", "2026-08-01", "2026-09-01", "2026-10-01"].map((m) => ({ amount_cents: 220000, period_month: m })),
+  });
+  eq(mid.rentOwingCents, 242000, "June 28 start: $220 June + $2,200 November");
   console.log(`\ns748 l1: ${pass} passed, ${fail} failed`);
   if (fail) process.exit(1);
 }

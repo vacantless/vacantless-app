@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { PDFDocument } from "pdf-lib";
-import { computeL2, earliestL2FilingDate, latestL2FilingDate, l2FeeCents, n12IntendedText } from "@/lib/l2";
+import { computeL2, earliestL2FilingDate, latestL2FilingDate, l2FeeCents, l2LandlordPrefill, n12IntendedText } from "@/lib/l2";
 import { fillOfficialL2 } from "@/lib/l2-official-pdf";
 import { findLatePeriods, n8DetailsText, n8Problems, earliestN8TerminationDate, n8DueDate } from "@/lib/n8";
 import { fillOfficialN8 } from "@/lib/n8-official-pdf";
@@ -274,6 +274,19 @@ async function main() {
   eq(n8.get("sfrmForm.Signature.Signature"), "", "N8 signature blank");
   if (out) fs.writeFileSync(path.join(out, "sample-N8.pdf"), n8Bytes);
 
+  // S750: the L2 names the same landlord as the notice.
+  eq(
+    l2LandlordPrefill({ landlordName: "Noam QA Tester", landlordIsIndividual: true, signer: { firstName: "Noam", lastName: "Tester" } }, "North Star Rentals QA"),
+    { company: "", first: "Noam QA", last: "Tester" },
+    "N12 person landlord: split the notice name, no company",
+  );
+  eq(
+    l2LandlordPrefill({ landlordName: "Jane Smith", landlordIsIndividual: true, signer: { firstName: "Jane", lastName: "Smith" } }, "Acme"),
+    { company: "", first: "Jane", last: "Smith" },
+    "N12 person landlord matching the signer uses the signer's names",
+  );
+  eq(l2LandlordPrefill({ landlordName: "North Star Rentals QA" }, "Org"), { company: "North Star Rentals QA", first: "", last: "" }, "N5/N8 company landlord stays the company");
+  eq(l2LandlordPrefill(null, "Org Inc"), { company: "Org Inc", first: "", last: "" }, "no snapshot falls back to the account name");
   console.log(`${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }

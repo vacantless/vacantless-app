@@ -10,6 +10,7 @@ import {
   packN4ArrearsRows,
   resolveN4OwingCents,
   creditN4RowsToTotal,
+  firstMonthProration,
   type N4FormRow,
   type N4PeriodRow,
   type RentPeriodUnit,
@@ -303,14 +304,50 @@ ok(
   eq(down.reduce((s, r) => s + r.owingCents, 0), 500000, "credit reconciles rows sum to target");
   ok(down.every((r) => r.chargedCents - r.paidCents === r.owingCents), "credited rows keep charged-paid=owing");
   ok(down.every((r) => r.owingCents >= 0), "no negative owing after credit");
-  eq(down[2].owingCents, 60000, "reduction hits the newest row first (220000-160000)");
-  eq(down[0].owingCents, 220000, "oldest row untouched when reduction fits in newest");
+  eq(down[0].owingCents, 60000, "S750: reduction hits the oldest row first (220000-160000)");
+  eq(down[2].owingCents, 220000, "S750: newest row untouched when reduction fits in the oldest");
   const at = creditN4RowsToTotal(rows, 660000);
   eq(at.reduce((s, r) => s + r.owingCents, 0), 660000, "target == sum leaves rows unchanged");
   const above = creditN4RowsToTotal(rows, 900000);
   eq(above.reduce((s, r) => s + r.owingCents, 0), 660000, "target above sum leaves rows unchanged (overstate handled by blocker)");
   const zero = creditN4RowsToTotal(rows, 0);
   eq(zero.reduce((s, r) => s + r.owingCents, 0), 0, "credit to zero fully clears owing");
+}
+
+
+// --- S750: first-month proration for a mid-month start ----------------------
+{
+  // June 28 start, $2,200: 3 of 30 days = $220.00 exactly.
+  const p = firstMonthProration(220000, "2026-06-28");
+  eq(p?.chargedCents, 22000, "June 28 start charges 3/30 of the rent");
+  eq(p?.fromISO, "2026-06-28", "first row starts on the tenancy start date");
+  eq(firstMonthProration(220000, "2026-06-01"), null, "a start on the 1st is a full month");
+  eq(firstMonthProration(220000, "2026-06-28", "2026-07-01"), null, "an explicit first period wins");
+  // Rounds DOWN (never overstates): July 15 start, $1,000 => 17/31 = 548.387... => 548.38
+  eq(firstMonthProration(100000, "2026-07-15")?.chargedCents, 54838, "proration rounds down to the cent");
+
+  const a = deriveN4Arrears({
+    rentCents: 220000,
+    startDateISO: "2026-06-28",
+    asOfISO: "2026-11-04",
+    payments: [
+      { amount_cents: 220000, period_month: "2026-07-01" },
+      { amount_cents: 220000, period_month: "2026-08-01" },
+      { amount_cents: 220000, period_month: "2026-09-01" },
+      { amount_cents: 220000, period_month: "2026-10-01" },
+    ] as PaymentRow[],
+  });
+  eq(a.rows[0].fromISO, "2026-06-28", "S750 live case: first row from the start date");
+  eq(a.rows[0].chargedCents, 22000, "S750 live case: June charged $220, not $2,200");
+  eq(a.conservativeOwingCents, 242000, "S750 live case: owing $220 June + $2,200 November");
+  // A full first month paid at signing shows as a credit, never extra owing.
+  const b = deriveN4Arrears({
+    rentCents: 220000,
+    startDateISO: "2026-06-28",
+    asOfISO: "2026-07-10",
+    payments: [{ amount_cents: 22000, period_month: "2026-06-01" }] as PaymentRow[],
+  });
+  eq(b.conservativeOwingCents, 220000, "prorated June paid => only July owing");
 }
 
 console.log(`test-n4: ${pass}/${fail}`);

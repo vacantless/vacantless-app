@@ -140,6 +140,34 @@ export function monthlyPeriodKeys(firstISO: string, lastISO: string): string[] {
 }
 
 /**
+ * S750: the first-month charge when the tenancy starts after the 1st and no
+ * explicit first rent period was set. Returns null when the full month applies.
+ * Calendar method: rent x days from the start date to month end / days in that
+ * month, rounded down to the cent (tenant-protective). Pure.
+ */
+export function firstMonthProration(
+  rentCents: number,
+  startDateISO: string,
+  firstPeriodISO?: string | null,
+): { period: string; fromISO: string; chargedCents: number } | null {
+  if (firstPeriodISO) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec((startDateISO ?? "").trim());
+  if (!m) return null;
+  const day = Number(m[3]);
+  if (day <= 1) return null;
+  const monthEnd = endOfMonthISO(startDateISO);
+  const daysInMonth = Number(monthEnd.slice(8, 10));
+  if (day > daysInMonth) return null;
+  const days = daysInMonth - day + 1;
+  const rent = Math.max(0, Math.round(rentCents || 0));
+  return {
+    period: `${m[1]}-${m[2]}-01`,
+    fromISO: `${m[1]}-${m[2]}-${m[3]}`,
+    chargedCents: Math.floor((rent * days) / daysInMonth),
+  };
+}
+
+/**
  * Derive an N4 arrears ledger from the tenancy rent + the payment records. Builds
  * one row per monthly period from the anchor (firstPeriodISO ?? tenancy start)
  * through the period containing `asOfISO` (the notice date), charging `rentCents`
@@ -185,16 +213,24 @@ export function deriveN4Arrears(input: {
     paidByPeriod.set(key, (paidByPeriod.get(key) ?? 0) + amt);
   }
 
-  const rows: N4PeriodRow[] = windowKeys.map((period) => {
+  // S750: a tenancy that starts mid-month (no explicit firstPeriodISO) owes only
+  // the days it existed in that first month, not a full month from the 1st.
+  // Calendar-day proration rounded DOWN, so the first row can never overstate
+  // (an N4 that overstates the arrears is void). Live walk S750: a June 28
+  // start was charged June 1-30 in full, $2,200 instead of about $220.
+  const firstPartial = firstMonthProration(rent, input.startDateISO, input.firstPeriodISO);
+  const rows: N4PeriodRow[] = windowKeys.map((period, i) => {
     const paid = paidByPeriod.get(period) ?? 0;
+    const partial = i === 0 && firstPartial && firstPartial.period === period ? firstPartial : null;
+    const charged = partial ? partial.chargedCents : rent;
     return {
       period,
       label: formatPeriodMonth(period),
-      fromISO: period,
+      fromISO: partial ? partial.fromISO : period,
       toISO: endOfMonthISO(period),
-      chargedCents: rent,
+      chargedCents: charged,
       paidCents: paid,
-      owingCents: rent - paid,
+      owingCents: charged - paid,
     };
   });
 
@@ -291,7 +327,7 @@ export function packN4ArrearsRows(rows: N4PeriodRow[]): {
 /**
  * Reconcile the packed form rows to a LOWER operator total. An override may
  * only settle arrears DOWN (a disputed period): the reduction (current summed
- * owing - target) is credited against the most-recent rows first, increasing
+ * owing - target) is credited against the OLDEST rows first (S750), increasing
  * paid and decreasing owing (clamped >= 0), so every row keeps charged - paid =
  * owing and the rows sum EXACTLY to the target. If target >= the current summed
  * owing the rows are returned UNCHANGED - an override ABOVE the ledger is never
@@ -306,7 +342,10 @@ export function creditN4RowsToTotal(
   const out = rows.map((r) => ({ ...r }));
   if (target >= current) return out;
   let reduction = current - target;
-  for (let i = out.length - 1; i >= 0 && reduction > 0; i--) {
+  // S750: oldest rows first, the way a payment is applied to the oldest debt.
+  // Crediting the newest row first told the tenant the current month was paid
+  // when it wasn't, and the LTB wants the last row to show the last period as is.
+  for (let i = 0; i < out.length && reduction > 0; i++) {
     const owe = Math.round(out[i].owingCents || 0);
     if (owe <= 0) continue;
     const credit = Math.min(reduction, owe);

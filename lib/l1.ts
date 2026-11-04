@@ -60,6 +60,8 @@ export function computeL1(input: {
   startDateISO: string;
   payments: PaymentRow[];
   nsfCents?: number;
+  /** S750: what the landlord took off the N4 total (override). The L1 keeps it. */
+  n4ConcessionCents?: number;
 }): L1Calc {
   const problems: L1Problem[] = [];
   if (input.n4Status !== "served" && input.n4Status !== "filed") problems.push("n4_not_served");
@@ -67,7 +69,7 @@ export function computeL1(input: {
   if (!input.tenantInPossession) problems.push("not_in_possession");
 
   // Same derive + pack + tenant-protective total as the N4, counted to the filing date.
-  const snap = buildN4Snapshot({
+  const base = {
     landlordName: "",
     tenantNames: [],
     rentCents: input.rentCents,
@@ -76,7 +78,17 @@ export function computeL1(input: {
     payments: input.payments,
     formVersion: "",
     capturedAtIso: "",
-  });
+  };
+  let snap = buildN4Snapshot(base);
+  // S750: if the landlord lowered the N4 total, the L1 must not claim that
+  // amount back (live walk: N4 $2,200, L1 $4,400 for the same months).
+  const concession = Math.max(0, Math.round(input.n4ConcessionCents ?? 0));
+  if (concession > 0 && snap.conservativeOwingCents > 0) {
+    snap = buildN4Snapshot({
+      ...base,
+      overrideOwingCents: Math.max(0, snap.conservativeOwingCents - concession),
+    });
+  }
   const blocker = n4SnapshotBlocker(snap);
   if (blocker === "no_arrears") problems.push("no_arrears");
   else if (blocker === "unresolved_credits") problems.push("unresolved_credits");
@@ -109,3 +121,16 @@ export const L1_PROBLEM_TEXT: Record<L1Problem, string> = {
   not_reconciling: "The rent table doesn't add up. Check the rent ledger first.",
   over_limit: "The LTB can't order more than $50,000. Talk to a lawyer about going to court.",
 };
+
+/**
+ * S750: how much the landlord took off the N4's ledger total with an override,
+ * read from the served N4's frozen snapshot. 0 when there was no override. Pure.
+ */
+export function n4ConcessionCents(
+  snap: { conservativeOwingCents?: number | null; totalOwingCents?: number | null } | null | undefined,
+): number {
+  if (!snap) return 0;
+  const floor = Math.round(snap.conservativeOwingCents ?? 0);
+  const total = Math.round(snap.totalOwingCents ?? 0);
+  return Math.max(0, floor - total);
+}

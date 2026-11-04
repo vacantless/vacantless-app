@@ -44,7 +44,31 @@ export type L2NoticeSnap = {
   personName?: string;
   relationship?: string;
   compensationRequired?: boolean;
+  landlordName?: string;
+  landlordIsIndividual?: boolean;
+  signer?: { firstName?: string | null; lastName?: string | null } | null;
 };
+
+/**
+ * S750: who the L2 names as landlord, taken from the notice it is based on (the
+ * LTB expects the same landlord on both). A person (an N12 Reason 1 landlord is
+ * always one) goes in the first/last name boxes with no company; otherwise the
+ * notice's landlord name is the company. Falls back to the account name. Pure.
+ */
+export function l2LandlordPrefill(
+  snap: L2NoticeSnap | null | undefined,
+  fallbackName: string,
+): { company: string; first: string; last: string } {
+  const name = (snap?.landlordName ?? "").trim() || fallbackName.trim();
+  const isPerson = snap?.landlordIsIndividual === true;
+  if (!isPerson) return { company: name, first: "", last: "" };
+  const sf = (snap?.signer?.firstName ?? "").trim();
+  const sl = (snap?.signer?.lastName ?? "").trim();
+  if (sf && sl && `${sf} ${sl}`.toLowerCase() === name.toLowerCase()) return { company: "", first: sf, last: sl };
+  const cut = name.lastIndexOf(" ");
+  if (cut <= 0) return { company: "", first: name, last: "" };
+  return { company: "", first: name.slice(0, cut).trim(), last: name.slice(cut + 1).trim() };
+}
 
 /**
  * First filing day from the notice's own rules. The N5 stores it (8th day for a

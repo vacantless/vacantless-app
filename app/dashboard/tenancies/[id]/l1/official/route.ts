@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { currentUserCan } from "@/lib/membership";
 import { postLeaseRouteWalled } from "@/lib/post-lease-surface";
-import { computeL1, type L1FilingMethod } from "@/lib/l1";
+import { computeL1, n4ConcessionCents, type L1FilingMethod } from "@/lib/l1";
 import { fillOfficialL1 } from "@/lib/l1-official-pdf";
 import { parseAmountToCents, parseDateOrNull, type PaymentRow } from "@/lib/payments";
 
@@ -31,11 +31,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const supabase = createClient();
   const { data: n } = await supabase
     .from("notices")
-    .select("id, type, status, termination_date")
+    .select("id, type, status, termination_date, snapshot")
     .eq("id", noticeId)
     .eq("tenancy_id", params.id)
     .maybeSingle();
-  const notice = n as { type: string; status: string; termination_date: string | null } | null;
+  const notice = n as {
+    type: string;
+    status: string;
+    termination_date: string | null;
+    snapshot: { conservativeOwingCents?: number | null; totalOwingCents?: number | null } | null;
+  } | null;
   if (!notice || notice.type !== "N4" || !notice.termination_date) return back("n4_not_served");
 
   const { data: tRow } = await supabase
@@ -77,6 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     rentCents: t.rent_cents,
     startDateISO: t.start_date,
     payments,
+    n4ConcessionCents: n4ConcessionCents(notice.snapshot),
   });
   if (calc.problems.length > 0) return back(calc.problems[0]);
 

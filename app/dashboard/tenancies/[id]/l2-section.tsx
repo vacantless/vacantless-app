@@ -20,6 +20,8 @@ export type L2NoticeView = {
   earliest_filing: string | null;
   compensation_required?: boolean;
   reason?: 1 | 2;
+  /** S750: the landlord as named on the notice (person or company). */
+  landlord?: { company: string; first: string; last: string };
 };
 
 const NOTICE_LABEL: Record<L2NoticeView["type"], string> = {
@@ -116,7 +118,7 @@ export function TenancyL2Section({
                 <>
                   <div className="sm:col-span-2">
                     <label className={LABEL_CLS}>The one month&apos;s compensation (Schedule B)</label>
-                    <select name="compensation" defaultValue="" required className={INPUT_CLS}>
+                    <select name="compensation" defaultValue={n.reason !== 2 && !n.compensation_required ? "not_required" : ""} required className={INPUT_CLS}>
                       <option value="" disabled>
                         Choose one
                       </option>
@@ -142,15 +144,15 @@ export function TenancyL2Section({
 
               <div>
                 <label className={LABEL_CLS}>Company name (if the landlord is a company)</label>
-                <input name="landlord_company" defaultValue={landlordName} className={INPUT_CLS} />
+                <input name="landlord_company" defaultValue={n.landlord ? n.landlord.company : landlordName} className={INPUT_CLS} />
               </div>
               <div>
                 <label className={LABEL_CLS}>Landlord first name</label>
-                <input name="landlord_first" className={INPUT_CLS} />
+                <input name="landlord_first" defaultValue={n.landlord?.first ?? ""} className={INPUT_CLS} />
               </div>
               <div>
                 <label className={LABEL_CLS}>Landlord last name</label>
-                <input name="landlord_last" className={INPUT_CLS} />
+                <input name="landlord_last" defaultValue={n.landlord?.last ?? ""} className={INPUT_CLS} />
               </div>
               <div>
                 <label className={LABEL_CLS}>Email</label>

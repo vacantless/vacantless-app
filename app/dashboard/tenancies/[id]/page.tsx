@@ -149,7 +149,7 @@ import { TenancyN5Section, type N5NoticeView } from "./n5-section";
 import { TenancyL2Section, type L2NoticeView } from "./l2-section";
 import { TenancyN8Section, type N8NoticeView } from "./n8-section";
 import { findLatePeriods } from "@/lib/n8";
-import { earliestL2FilingDate, type L2NoticeSnap } from "@/lib/l2";
+import { earliestL2FilingDate, l2LandlordPrefill, type L2NoticeSnap } from "@/lib/l2";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
 import {
   TenancyInsuranceSection,
@@ -706,6 +706,7 @@ export default async function TenancyDetailPage({
       earliest_filing: earliestL2FilingDate(n.type, n.snapshot),
       compensation_required: n.snapshot?.compensationRequired !== false,
       reason: n.snapshot?.reason === 2 ? 2 : 1,
+      landlord: l2LandlordPrefill(n.snapshot, org?.name ?? ""),
     };
   });
   const n4TenantNames = tenants
@@ -1824,7 +1825,11 @@ export default async function TenancyDetailPage({
       </CollapsibleSection>
 
       {/* LTB notices — Form N4 (arrears), N-form library Slice C -------- */}
-      <CollapsibleSection id="notices" title="LTB notices">
+      <CollapsibleSection
+        id="notices"
+        title="LTB notices"
+        defaultOpen={(["n4", "n12", "n5", "n8", "l1", "l2"] as const).some((k) => !!(searchParams as Record<string, string | undefined>)[k])}
+      >
         <TenancyN4Section
           tenancyId={t.id}
           active={t.status === "active"}
