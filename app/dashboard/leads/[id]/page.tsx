@@ -1,4 +1,5 @@
 import { blockReasonWords, blockedFromEvents, normEmail, type DeliveryRow } from "@/lib/renter-email-block";
+import { bookViewingForRenter } from "./book-actions";
 import Link from "next/link";
 import { listingUrl, scrubEmDashes } from "@/lib/email";
 import { notFound } from "next/navigation";
@@ -119,12 +120,23 @@ type Showing = {
   outcome: string;
 };
 
+// S750: results of "Book a viewing for this renter".
+const BOOK_MESSAGES: Record<string, string> = {
+  booked: "Viewing booked. It goes to an agent the same way a renter booking does.",
+  no_time: "Pick a date and time.",
+  past: "That time has passed. Pick a time later today or after.",
+  taken: "Another viewing is already at that time. Pick another time.",
+  no_rental: "This renter is not linked to a rental yet.",
+  forbidden: "You don't have permission to book viewings.",
+  error: "Something went wrong. Please try again.",
+};
+
 export default async function LeadDetailPage({
   params,
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { apply?: string; qa?: string; text?: string };
+  searchParams: { apply?: string; qa?: string; text?: string; book?: string };
 }) {
   const supabase = createClient();
   const { data: lead } = await supabase
@@ -621,9 +633,44 @@ export default async function LeadDetailPage({
 
       {/* S528: always render the Viewings section — hiding it entirely when
           empty left the pipeline's next step invisible from the lead. */}
-      <div className="mt-8">
+      <div className="mt-8" id="viewings">
         <SectionHeading>Viewings</SectionHeading>
       </div>
+      {searchParams.book && BOOK_MESSAGES[searchParams.book] && (
+        <div
+          className={`mb-3 rounded-xl border px-4 py-2 text-sm ${
+            searchParams.book === "booked"
+              ? "border-green-200 bg-green-50 text-green-800"
+              : "border-amber-200 bg-amber-50 text-amber-800"
+          }`}
+        >
+          {BOOK_MESSAGES[searchParams.book]}
+        </div>
+      )}
+      {l.property?.id && (
+        <details className="mb-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+          <summary className="cursor-pointer text-sm font-medium text-gray-900">Book a viewing for this renter</summary>
+          <form action={bookViewingForRenter} className="mt-3 space-y-3">
+            <input type="hidden" name="lead_id" value={l.id} />
+            <p className="text-xs text-gray-600">
+              Any time works here, even inside your notice. Use it when you set the time with the renter yourself.
+            </p>
+            <input
+              type="datetime-local"
+              name="scheduled_at"
+              required
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="tell_renter" value="yes" defaultChecked />
+              Send the renter the confirmation email and text
+            </label>
+            <button type="submit" className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white">
+              Book this time
+            </button>
+          </form>
+        </details>
+      )}
       {showings.length === 0 ? (
         <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
           No viewings booked yet. Renters book from your listing page. If

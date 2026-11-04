@@ -60,10 +60,17 @@ ok(
   successBlock.indexOf("await autoAssignBookedShowing(b.showing_id);") <
     successBlock.indexOf("await notifyOperatorsOfViewingBooked(b.showing_id);"),
 );
+// S750: the alert and auto-assign moved to lib/showing-booked-server.ts so the
+// staff booking on the renter's page reuses them.
+const bookedSource = readFileSync(new URL("../lib/showing-booked-server.ts", import.meta.url), "utf8");
 ok(
   "source sends viewing_booked event",
-  actionsSource.includes('eventKey: "leasing.viewing_booked"'),
+  bookedSource.includes('eventKey: "leasing.viewing_booked"'),
 );
+ok("S750 staff booking reuses auto-assign and the alert", (() => {
+  const staff = readFileSync(new URL("../app/dashboard/leads/[id]/book-actions.ts", import.meta.url), "utf8");
+  return staff.includes("await autoAssignBookedShowing(showing.id);") && staff.includes("await notifyOperatorsOfViewingBooked(showing.id);") && !staff.includes("lead_hours");
+})());
 ok(
   "source threads booking_requires_confirmation from extras",
   actionsSource.includes("booking_requires_confirmation?: boolean | null") &&

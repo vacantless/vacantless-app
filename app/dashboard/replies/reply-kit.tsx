@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { replyKitText, type ReplyKitCard } from "@/lib/reply-kit";
 
 // S750: the phone reply kit. One name box for all cards, a site button per
@@ -9,6 +9,24 @@ import { replyKitText, type ReplyKitCard } from "@/lib/reply-kit";
 
 export function ReplyKit({ cards, phone }: { cards: ReplyKitCard[]; phone: string | null }) {
   const [name, setName] = useState("");
+  // S750: on a phone, until it is opened from the home screen, say how to save it.
+  const [showSave, setShowSave] = useState(false);
+  useEffect(() => {
+    try {
+      const nav = navigator as Navigator & { standalone?: boolean };
+      const installed = nav.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+      const phone = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      setShowSave(phone && !installed);
+    } catch {
+      setShowSave(false);
+    }
+  }, []);
+  const saveBanner = showSave ? (
+    <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+      <p className="font-semibold">Save this to your home screen</p>
+      <p className="mt-1">Tap Share, then &quot;Add to Home Screen&quot;. It opens like an app next time.</p>
+    </div>
+  ) : null;
   if (cards.length === 0) {
     return (
       <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
@@ -18,6 +36,7 @@ export function ReplyKit({ cards, phone }: { cards: ReplyKitCard[]; phone: strin
   }
   return (
     <div className="mt-4 space-y-4">
+      {saveBanner}
       <label className="block">
         <span className="text-xs font-medium text-gray-600">Renter&apos;s first name, if you know it</span>
         <input
