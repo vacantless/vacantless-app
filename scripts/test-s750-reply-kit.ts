@@ -1,5 +1,5 @@
 // S750: Quick replies (the phone reply kit). Run: npx tsx scripts/test-s750-reply-kit.ts
-import { buildReplyKitCards, longDayLabel, nextTimesLabel, replyKitText } from "../lib/reply-kit";
+import { buildReplyKitCards, facebookChatTitle, longDayLabel, nextTimesLabel, replyKitText } from "../lib/reply-kit";
 
 let pass = 0;
 let fail = 0;
@@ -71,5 +71,13 @@ eq(nextTimesLabel([{ dayKey: "2026-11-05", dayLabel: "", slots: [{ iso: "", labe
 eq(nextTimesLabel([], longDay), null, "no times");
 
 eq(longDayLabel("2026-11-05"), "Thursday, November 5", "long day label");
+eq(c3.facebookTitle, "CA$1,250 · 1 Bed 1 Bath Apartment", "Facebook chat title");
+eq(facebookChatTitle({ rent_cents: 145000, beds: 2, baths: 1, unit_type: "house" }), "CA$1,450 · 2 Bed 1 Bath House", "house title");
+const withPhotos = buildReplyKitCards({ appUrl: APP, properties: props, posts, timesByProperty: times, photosByProperty: new Map([["p3", ["a", "b", "c", "d"]]]) });
+eq(withPhotos.find((c) => c.propertyId === "p3")!.photos, ["a", "b", "c"], "up to 3 photos, cover first");
+eq(withPhotos.find((c) => c.propertyId === "p9")!.photos, [], "no photos is fine");
+eq(cards.some((c) => c.priceShared), false, "different prices: no clash");
+const twin = buildReplyKitCards({ appUrl: APP, properties: [...props, { id: "p3b", address: "833 Pillette Rd, Unit 34", rent_cents: 125000, beds: 1, baths: 1, status: "available", archived_at: null }], posts, timesByProperty: times });
+eq(twin.filter((c) => c.priceShared).map((c) => c.propertyId).sort(), ["p3", "p3b"], "same rent flags both");
 console.log(`\ns750 reply kit: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

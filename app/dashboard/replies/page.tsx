@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg } from "@/lib/org";
 import { generateSlots, type Availability } from "@/lib/booking";
+import { sortPhotos } from "@/lib/photos";
 import { buildReplyKitCards, longDayLabel, nextTimesLabel, type ReplyKitPost, type ReplyKitProperty } from "@/lib/reply-kit";
 import { ReplyKit } from "./reply-kit";
 
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Quick replies",
   robots: { index: false, follow: false },
-  appleWebApp: { capable: true, title: "Replies", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Vacantless Replies", statusBarStyle: "default" },
 };
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/+$/, "");
@@ -27,7 +28,7 @@ export default async function QuickRepliesPage() {
 
   const { data: propRows } = await supabase
     .from("properties")
-    .select("id, address, rent_cents, beds, baths, status, archived_at")
+    .select("id, address, rent_cents, beds, baths, status, archived_at, unit_type")
     .eq("organization_id", org.id)
     .is("archived_at", null)
     .limit(200);
@@ -61,13 +62,33 @@ export default async function QuickRepliesPage() {
       }),
   );
 
-  const cards = buildReplyKitCards({ appUrl: APP_URL, properties, posts, timesByProperty });
+  // S750: the chat shows the ad's first photo, so each card shows the cover.
+  const propIds = properties.map((p) => p.id);
+  const { data: photoRows } = propIds.length
+    ? await supabase
+        .from("property_photos")
+        .select("id, property_id, url, sort_order, is_cover")
+        .in("property_id", propIds)
+        .limit(2000)
+    : { data: [] };
+  const photosByProperty = new Map<string, string[]>();
+  const grouped = new Map<string, { id: string; url: string; sort_order: number; is_cover: boolean }[]>();
+  for (const r of (photoRows ?? []) as { id: string; property_id: string; url: string; sort_order: number; is_cover: boolean }[]) {
+    const list = grouped.get(r.property_id) ?? [];
+    list.push(r);
+    grouped.set(r.property_id, list);
+  }
+  for (const [id, list] of Array.from(grouped.entries())) {
+    photosByProperty.set(id, sortPhotos(list).map((ph) => ph.url).filter(Boolean).slice(0, 3));
+  }
+
+  const cards = buildReplyKitCards({ appUrl: APP_URL, properties, posts, timesByProperty, photosByProperty });
 
   return (
     <div className="mx-auto max-w-xl px-1 py-4">
       <h1 className="text-xl font-semibold text-gray-900">Quick replies</h1>
       <p className="mt-1 text-sm text-gray-600">
-        Find the price from the chat. Pick the site, copy, and paste it in the chat. Each site has its own link,
+        Match the photo and price from the chat. Pick the site, copy, and paste it in the chat. Each site has its own link,
         so you see where bookings come from.
       </p>
       <ReplyKit cards={cards} phone={org.public_contact_phone ?? null} />

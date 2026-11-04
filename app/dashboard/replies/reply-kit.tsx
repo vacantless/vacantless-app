@@ -66,14 +66,35 @@ function ReplyCard({ card, phone, name }: { card: ReplyKitCard; phone: string | 
 
   return (
     <section className={`rounded-2xl border bg-white p-4 shadow-sm ${card.available ? "border-gray-200" : "border-amber-200"}`}>
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="text-2xl font-bold text-gray-900">{card.rentLabel ?? "No rent set"}</div>
-        {!card.available && (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Rented</span>
+      <div className="flex gap-3">
+        {card.photos[0] ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={card.photos[0]} alt="" className="h-24 w-24 shrink-0 rounded-xl object-cover" />
+        ) : (
+          <div className="h-24 w-24 shrink-0 rounded-xl bg-gray-100" />
         )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <div className="text-2xl font-bold text-gray-900">{card.rentLabel ?? "No rent set"}</div>
+            {!card.available && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Rented</span>
+            )}
+          </div>
+          <div className="text-sm font-medium text-gray-800">{card.rental}</div>
+          {card.facebookTitle && <div className="text-xs text-gray-500">On Facebook: {card.facebookTitle}</div>}
+          {card.priceShared && (
+            <div className="mt-1 text-xs font-medium text-amber-700">Another rental has this price. Match the photo.</div>
+          )}
+        </div>
       </div>
-      <div className="mt-0.5 text-sm font-medium text-gray-800">{card.rental}</div>
-      <div className="text-xs text-gray-500">{card.bedsLabel}</div>
+      {card.photos.length > 1 && (
+        <div className="mt-2 flex gap-2">
+          {card.photos.slice(1).map((u) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={u} src={u} alt="" className="h-14 w-14 rounded-lg object-cover" />
+          ))}
+        </div>
+      )}
       {card.available && (
         <div className="mt-1 text-xs text-gray-600">
           {card.hasViewingTimes

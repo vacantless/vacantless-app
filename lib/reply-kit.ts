@@ -8,7 +8,7 @@
 //
 // Pure: no I/O. The page loads the rows and the times.
 
-import { helperReplyTemplate, fillHelperReply, shortRentalName } from "./marketplace-helper";
+import { helperReplyTemplate, fillHelperReply, marketplacePropertyType, shortRentalName } from "./marketplace-helper";
 import { buildTrackedLink, portalLabel } from "./listing-distribution";
 import { formatRent } from "./listing-copy";
 import type { DaySlots } from "./booking";
@@ -21,6 +21,7 @@ export type ReplyKitProperty = {
   baths: number | null;
   status: string | null;
   archived_at: string | null;
+  unit_type?: string | null;
 };
 
 export type ReplyKitPost = { id: string; property_id: string | null; portal: string; status: string };
@@ -36,7 +37,24 @@ export type ReplyKitCard = {
   sites: ReplyKitSite[];
   nextTimes: string | null;
   hasViewingTimes: boolean;
+  /** S750: the line Facebook shows on the chat, e.g. "CA$1,250 · 1 Bed 1 Bath Apartment". */
+  facebookTitle: string | null;
+  /** S750: up to 3 photos, cover first (the chat shows the ad's first photo). */
+  photos: string[];
+  /** S750: another available rental has the same rent, so the price alone can't tell them apart. */
+  priceShared: boolean;
 };
+
+/** Facebook's own rental title as the chat shows it: "CA$1,250 · 1 Bed 1 Bath Apartment". */
+export function facebookChatTitle(p: { rent_cents: number | null; beds: number | null; baths: number | null; unit_type?: string | null }): string | null {
+  if (p.rent_cents == null || p.rent_cents <= 0) return null;
+  const price = `CA$${Math.round(p.rent_cents / 100).toLocaleString("en-CA")}`;
+  const type = marketplacePropertyType(p.unit_type ?? null);
+  const word = type.charAt(0).toUpperCase() + type.slice(1);
+  const beds = p.beds == null ? null : p.beds === 0 ? "Studio" : `${p.beds} Bed`;
+  const baths = p.baths == null ? null : `${p.baths} Bath`;
+  return `${price} · ${[beds, baths, word].filter(Boolean).join(" ")}`;
+}
 
 /** Sites in the order a landlord answers them most. */
 const SITE_ORDER = ["facebook", "kijiji", "zumper", "rentals_ca", "facebook_feed", "instagram", "viewit", "rentfaster"];
@@ -82,6 +100,8 @@ export function buildReplyKitCards(input: {
   properties: ReplyKitProperty[];
   posts: ReplyKitPost[];
   timesByProperty: Map<string, { hasViewingTimes: boolean; nextTimes: string | null }>;
+  /** Photo URLs per rental, already in the rental's order (cover first). */
+  photosByProperty?: Map<string, string[]>;
 }): ReplyKitCard[] {
   const liveByProp = new Map<string, ReplyKitPost[]>();
   for (const p of input.posts) {
@@ -122,8 +142,16 @@ export function buildReplyKitCards(input: {
       sites,
       nextTimes: t.nextTimes,
       hasViewingTimes: t.hasViewingTimes,
+      facebookTitle: facebookChatTitle(prop),
+      photos: (input.photosByProperty?.get(prop.id) ?? []).slice(0, 3),
+      priceShared: false,
     });
   }
+  // S750: the chat header shows the price, so it is the fastest way to find the
+  // unit. Flag available rentals that share a rent; then the photo decides.
+  const rentCount = new Map<string, number>();
+  for (const c of cards) if (c.available && c.rentLabel) rentCount.set(c.rentLabel, (rentCount.get(c.rentLabel) ?? 0) + 1);
+  for (const c of cards) c.priceShared = !!c.available && !!c.rentLabel && (rentCount.get(c.rentLabel) ?? 0) > 1;
   // Available first, then by rent.
   return cards.sort(
     (a, b) => Number(b.available) - Number(a.available) || (rentNum(a.rentLabel) - rentNum(b.rentLabel)),
