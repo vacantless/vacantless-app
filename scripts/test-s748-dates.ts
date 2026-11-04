@@ -23,11 +23,11 @@ ok("empty falls back", displayTimeZone(null) === DEFAULT_TIME_ZONE && displayTim
 
 // Dates built from plain parts (new Date(y, m, d), Date.UTC, `${iso}T00:00:00`)
 // are created and formatted in the same zone, so they show the right day.
+// Those are recognised by their text below, so an edit above them that moves
+// the line does not break the check (S748f: a line-number list went red when
+// S748d added four lines to the reconcile page).
+const PLAIN_PARTS = /new Date\((?:[^()]*,[^()]*|`\$\{[^`]*\}T00:00:00`)\)\s*$/;
 const ALLOWED = new Set([
-  "app/dashboard/expenses/page.tsx:193",
-  "app/dashboard/money/import-history/page.tsx:111",
-  "app/dashboard/money/reconcile/page.tsx:97",
-  "app/dashboard/money/spend/page.tsx:181",
   "app/r/[propertyId]/page.tsx:402",
   "app/dashboard/automations/page.tsx:121",
 ]);
@@ -60,6 +60,7 @@ for (const f of [...walk("app"), ...walk("lib"), ...walk("components")]) {
     if (/timeZone/.test(args)) continue;
     const before = s.slice(Math.max(0, m.index - 60), m.index);
     if (m[1] === "toLocaleString" && !/(Date|\bd|date|when|at)\)?\s*$/.test(before)) continue; // a number
+    if (PLAIN_PARTS.test(before)) continue;
     if (/(cents|dollars|amount|safe)\s*(\/\s*100\s*\))?\s*$/.test(before)) continue;
     const line = s.slice(0, m.index).split("\n").length;
     const key = `${f}:${line}`;
