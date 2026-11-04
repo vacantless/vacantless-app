@@ -4,6 +4,7 @@ import { verifyTwilioSignature } from "@/lib/sms";
 import { applyInboundSms } from "@/lib/sms-inbound";
 import { orgForTextingNumber } from "@/lib/org-sms-numbers";
 import { notifyOperatorsOfTextReply } from "@/lib/sms-reply-notify-server";
+import { confirmShowingFromText, isConfirmReply } from "@/lib/sms-confirm-reply";
 
 // Twilio inbound-SMS webhook. Honors opt-out: a renter who texts STOP (or
 // UNSUBSCRIBE/CANCEL/etc.) is suppressed from all future Vacantless SMS by
@@ -77,12 +78,27 @@ export async function POST(req: NextRequest) {
     body: params.Body ?? "",
     ownerOrgId,
   });
-  // S717: a renter's text reply is emailed to the landlord.
+  // S750: a "yes", "ok" or thumbs-up confirms the renter's next viewing.
+  const body = (params.Body ?? "").trim();
+  const confirmedLeads = new Set<string>();
+  if (isConfirmReply(body)) {
+    for (const l of summary.repliedLeads ?? []) {
+      try {
+        const r = await confirmShowingFromText(admin, { orgId: l.orgId, leadId: l.leadId });
+        if (r.confirmed) confirmedLeads.add(l.leadId);
+      } catch (e) {
+        console.error("[sms/inbound] confirm from text failed", e);
+      }
+    }
+  }
+  // S717: a renter's text reply is emailed to the landlord (S750: and to the
+  // agent showing their next viewing).
   for (const l of summary.repliedLeads ?? []) {
     await notifyOperatorsOfTextReply(admin, {
       orgId: l.orgId,
       leadId: l.leadId,
-      replyText: (params.Body ?? "").trim().slice(0, 1000),
+      replyText: body.slice(0, 1000),
+      confirmedViewing: confirmedLeads.has(l.leadId),
     });
   }
 

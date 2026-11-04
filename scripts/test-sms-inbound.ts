@@ -240,6 +240,24 @@ async function main() {
     );
   }
 
+  // S750: "Yes" (an opt-in keyword) answering a viewing text is logged and alerted like a reply.
+  {
+    const { admin, state } = fakeAdmin({
+      leads: [{ id: "lead-y", organization_id: "org-y", phone_e164: "+15195557777", sms_opt_out: false }],
+    });
+    const result = await applyInboundSms(admin, { from: "+15195557777", body: "Yes see you then", ownerOrgId: "org-y" });
+    eq("S750 yes keeps the start action", result.action, "start");
+    deepEq("S750 yes names the lead to alert and confirm", result.repliedLeads, [{ leadId: "lead-y", orgId: "org-y" }]);
+    eq("S750 yes is logged on the timeline", state.messages.filter((m: any) => m.body === "Yes see you then").length, 1);
+  }
+  {
+    const { admin } = fakeAdmin({
+      leads: [{ id: "lead-s", organization_id: "org-y", phone_e164: "+15195557778", sms_opt_out: true }],
+    });
+    const result = await applyInboundSms(admin, { from: "+15195557778", body: "START", ownerOrgId: "org-y" });
+    eq("S750 a real START is not treated as a reply", result.repliedLeads, undefined);
+  }
+
   {
     const { admin, state } = fakeAdmin({});
     const result = await applyInboundSms(admin, { from: "+15195559999", body: "Hello?" });

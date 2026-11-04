@@ -186,12 +186,41 @@ export async function applyInboundSms(
       .in("id", tenantIds);
   }
 
+  // S750: "YES" is also an opt-in keyword, but a renter who answers a viewing
+  // text with "Yes" is replying, not opting in. Before this the reply was
+  // swallowed: not logged, no alert, and the viewing never got confirmed. Log it
+  // like any reply and name the renters so the route can alert and confirm.
+  let repliedLeads: { leadId: string; orgId: string }[] | undefined;
+  if (action === "start" && isYesReply(body)) {
+    const rows = leads
+      .filter((l) => l.organization_id)
+      .map((l) => ({
+        organization_id: l.organization_id,
+        lead_id: l.id,
+        channel: "sms",
+        direction: "inbound",
+        body,
+      }));
+    if (rows.length > 0) {
+      await admin.from("messages").insert(rows);
+      base.messagesInserted += rows.length;
+    }
+    repliedLeads = rows.map((r) => ({ leadId: r.lead_id, orgId: r.organization_id as string }));
+  }
+
   return {
     ...base,
     action,
     matchedTenants: tenants.length,
     updatedTenants: tenantIds.length,
+    ...(repliedLeads ? { repliedLeads } : {}),
   };
+}
+
+/** S750: the opt-in keyword was the word YES (a reply), not START, UNSTOP or OPTIN. */
+function isYesReply(body: string): boolean {
+  const first = body.trim().toUpperCase().split(/\s+/)[0]?.replace(/[^A-Z]/g, "");
+  return first === "YES";
 }
 
 /**

@@ -15,7 +15,7 @@ const MAX_RECIPIENTS = 10;
 
 export async function notifyOperatorsOfTextReply(
   admin: SupabaseClient,
-  opts: { orgId: string; leadId: string; replyText: string },
+  opts: { orgId: string; leadId: string; replyText: string; confirmedViewing?: boolean },
 ): Promise<void> {
   try {
     const { data: org } = await admin
@@ -42,10 +42,26 @@ export async function notifyOperatorsOfTextReply(
       const { data: u } = await getUserByIdCached(admin, m.user_id);
       members.push({ role: m.role, email: u?.user?.email ?? null });
     }
-    const operatorFallback = resolveLeadNotifyEmailsPreferMemberFallback(members, [
-      o.reply_to_email,
-      o.public_contact_email,
-    ]).slice(0, MAX_RECIPIENTS);
+    // S750: with nobody set for "Renter texted back", use the account's
+    // new-inquiry recipients (the leasing team), not just the owner login.
+    const { data: newLeadSetting } = await admin
+      .from("notification_settings")
+      .select("recipients")
+      .eq("organization_id", opts.orgId)
+      .eq("event_key", "leasing.new_lead")
+      .maybeSingle();
+    const newLeadRecipients = (((newLeadSetting as { recipients: string[] | null } | null)?.recipients) ?? [])
+      .map((e) => e.trim())
+      .filter(Boolean);
+    const operatorFallback = (
+      newLeadRecipients.length > 0
+        ? newLeadRecipients
+        : resolveLeadNotifyEmailsPreferMemberFallback(members, [o.reply_to_email, o.public_contact_email])
+    ).slice(0, MAX_RECIPIENTS);
+
+    // S750 (Noam: "the showing agent needs the update more than i do"): the
+    // agent assigned to this renter's next viewing always gets the reply.
+    const agentEmail = await nextViewingAgentEmail(admin, opts.orgId, opts.leadId);
 
     const { data: leadData } = await admin
       .from("leads")
@@ -75,13 +91,44 @@ export async function notifyOperatorsOfTextReply(
         property_address: prop?.address?.trim() || "their rental",
         lead_name: lead?.name?.trim() || "A renter",
         lead_phone: lead?.phone?.trim() || "no phone on file",
-        reply_text: opts.replyText,
+        reply_text: opts.confirmedViewing
+          ? `${opts.replyText}\n\n(Their viewing is now marked confirmed.)`
+          : opts.replyText,
         dashboard_url: dashboardUrl,
       },
       operatorFallback,
+      audienceEmail: agentEmail,
       action: { label: "Open the renter", url: dashboardUrl },
     });
   } catch {
     // Alerts are best-effort; the reply is already on the renter's record.
   }
+}
+
+/**
+ * S750: the email of the showing agent assigned to this renter's next viewing
+ * (still scheduled, from 2 hours ago on), or null. Archived agents are skipped.
+ */
+async function nextViewingAgentEmail(
+  admin: SupabaseClient,
+  orgId: string,
+  leadId: string,
+): Promise<string | null> {
+  const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { data } = await admin
+    .from("showings")
+    .select("scheduled_at, assigned_agent:showing_agents(email, archived)")
+    .eq("organization_id", orgId)
+    .eq("lead_id", leadId)
+    .eq("outcome", "scheduled")
+    .not("assigned_agent_id", "is", null)
+    .gte("scheduled_at", since)
+    .order("scheduled_at", { ascending: true })
+    .limit(1);
+  const row = ((data ?? []) as unknown as {
+    assigned_agent: { email: string | null; archived: boolean | null } | { email: string | null; archived: boolean | null }[] | null;
+  }[])[0];
+  const agent = Array.isArray(row?.assigned_agent) ? row?.assigned_agent[0] : row?.assigned_agent;
+  if (!agent || agent.archived) return null;
+  return agent.email?.trim() || null;
 }
