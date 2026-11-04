@@ -144,6 +144,7 @@ import {
   type N4NoticeView,
 } from "./n4-section";
 import { TenancyN12Section, type N12NoticeView } from "./n12-section";
+import { TenancyL1Section } from "./l1-section";
 import { createDocumentDownloadUrls } from "@/lib/documents-server";
 import {
   TenancyInsuranceSection,
@@ -398,6 +399,7 @@ export default async function TenancyDetailPage({
     paid?: string;
     msg?: string;
     n12?: string;
+    l1?: string;
     s?: string;
     k?: string;
     f?: string;
@@ -1795,6 +1797,22 @@ export default async function TenancyDetailPage({
           notices={n12Notices}
           today={todayOntario}
           msg={searchParams.n12}
+        />
+        <TenancyL1Section
+          tenancyId={t.id}
+          servedN4s={n4Notices
+            .filter((n) => n.status === "served" || n.status === "filed")
+            .map((n) => ({
+              id: n.id,
+              status: n.status,
+              termination_date: n.termination_date,
+              total_owing_cents: n.total_owing_cents,
+            }))}
+          landlordName={org?.name ?? ""}
+          landlordPhone={org?.public_contact_phone ?? null}
+          depositCents={t.deposit_cents ?? null}
+          today={todayOntario}
+          msg={searchParams.l1}
         />
       </CollapsibleSection>
 
