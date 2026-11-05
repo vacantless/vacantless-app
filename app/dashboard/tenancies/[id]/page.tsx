@@ -1849,7 +1849,7 @@ export default async function TenancyDetailPage({
       <CollapsibleSection
         id="notices"
         title="LTB notices"
-        defaultOpen={(["n4", "n12", "n5", "n8", "l1", "l2"] as const).some((k) => !!(searchParams as Record<string, string | undefined>)[k])}
+        defaultOpen={(["n4", "n12", "n5", "n8", "l1", "l9", "l2"] as const).some((k) => !!(searchParams as Record<string, string | undefined>)[k])}
       >
         <TenancyN4Section
           tenancyId={t.id}

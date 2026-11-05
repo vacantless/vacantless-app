@@ -9,6 +9,7 @@
 // Pure, so the wording and the timing are unit tested.
 import type { Stage } from "./new-account-watch";
 import { HOW_TO_COUNT_WORD } from "./how-to-videos";
+import { MARKETPLACE_HELPER_INSTALL_URL } from "./marketplace-helper";
 
 export type OnboardingEmail = {
   step: 1 | 2;
@@ -86,6 +87,8 @@ export function decideOnboardingEmail(args: {
         "After that, every renter gets an answer right away. They book a viewing on their own, and you get an email.",
         // S726: one link to the how-to videos (count from lib/how-to-videos).
         `Prefer to watch? ${HOW_TO_COUNT_WORD} short videos, about a minute each: https://www.vacantless.com/how-to`,
+        // S751: the Chrome helper was only findable on a rental's Marketplace row.
+        `Posting on Facebook Marketplace from a computer? Add the free Vacantless helper to Chrome. It fills in the ad for you, photos included: ${MARKETPLACE_HELPER_INSTALL_URL}`,
         nextLine,
         "Reply to this email if you get stuck. I read every one.",
         "Noam, founder of Vacantless",

@@ -50,5 +50,14 @@ ok("route claims the step before sending", route.includes('claimStep(admin, "org
 ok("route releases the claim on a failed send", route.includes("releaseClaim(admin, \"organizations\""));
 ok("route passes the add-page flag", route.includes("addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED)"));
 
+// S751: the welcome email and the getting-started page point to the Chrome helper.
+ok("welcome links the Chrome helper", (w?.body ?? "").includes("chromewebstore.google.com/detail/vacantless-helper/"));
+ok("nudge stays short (no helper line)", !(n?.body ?? "").includes("chromewebstore"));
+const gs = readFileSync("app/dashboard/(wizard)/getting-started/page.tsx", "utf8");
+ok("getting-started shows the helper tip", gs.includes("<HelperInstallTip />"));
+const tip = readFileSync("components/helper-install-tip.tsx", "utf8");
+ok("tip says installed only when the helper answers", tip.includes("isHelperPong(event.data)"));
+ok("tip has no em dash", !tip.includes("\u2014") && !tip.includes("—"));
+
 console.log(`\nonboarding-emails: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HelperInstallTip } from "@/components/helper-install-tip";
 import { notFound } from "next/navigation";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { createClient } from "@/lib/supabase/server";
@@ -239,6 +240,7 @@ export default async function GettingStartedPage({
           />
         ))}
       </ol>
+      <HelperInstallTip />
     </div>
   );
 }

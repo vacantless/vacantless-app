@@ -1,0 +1,15 @@
+S751b: new landlords hear about the Chrome helper; L9 opens its section
+
+- Welcome email: one line with the Chrome Web Store link for the free
+  Vacantless helper (Facebook Marketplace, from a computer). The day-1
+  nudge stays one step.
+- Getting started page: an optional helper tile, not a counted step. It
+  pings the helper and says "installed" only when the helper answers in
+  this browser; otherwise it links the store page and says the other
+  rental sites don't need it.
+- Tenancy page: an ?l9= message now opens the LTB notices section, like
+  the other forms.
+- Tests: test-onboarding-emails 44 pass.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrLaJDbp4RGWCy52RF
