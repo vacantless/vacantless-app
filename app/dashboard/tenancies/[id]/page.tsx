@@ -145,8 +145,10 @@ import {
 } from "./n4-section";
 import { TenancyN12Section, type N12NoticeView } from "./n12-section";
 import { TenancyN13Section, type N13NoticeView } from "./n13-section";
+import { TenancyN6Section, type N6NoticeView } from "./n6-section";
 import { TenancyL1Section } from "./l1-section";
 import { TenancyL9Section } from "./l9-section";
+import { TenancyL10Section } from "./l10-section";
 import { computeL9 } from "@/lib/l9";
 import { TenancyN5Section, type N5NoticeView } from "./n5-section";
 import { TenancyL2Section, type L2NoticeView } from "./l2-section";
@@ -409,7 +411,9 @@ export default async function TenancyDetailPage({
     n12?: string;
     l1?: string;
     l9?: string;
+    l10?: string;
     n13?: string;
+    n6?: string;
     n5?: string;
     l2?: string;
     n8?: string;
@@ -704,6 +708,14 @@ export default async function TenancyDetailPage({
     .eq("type", "N5")
     .order("created_at", { ascending: false });
   const n5Notices: N5NoticeView[] = (n5Rows ?? []).map((r) => r as N5NoticeView);
+  // S751: Form N6 notices for this tenancy. Newest first.
+  const { data: n6Rows } = await supabase
+    .from("notices")
+    .select("id, status, termination_date, created_at")
+    .eq("tenancy_id", params.id)
+    .eq("type", "N6")
+    .order("created_at", { ascending: false });
+  const n6Notices: N6NoticeView[] = (n6Rows ?? []).map((r) => r as N6NoticeView);
   // S749: Form N8 notices for this tenancy, and the late payments the ledger shows.
   const { data: n8Rows } = await supabase
     .from("notices")
@@ -719,17 +731,17 @@ export default async function TenancyDetailPage({
         asOfISO: todayOntario,
       })
     : [];
-  // S749: served N5, N8, N12 and (S751) N13 notices an L2 can be filed from. Newest first.
+  // S749: served N5, N8, N12 and (S751) N6, N13 notices an L2 can be filed from. Newest first.
   const { data: l2Rows } = await supabase
     .from("notices")
     .select("id, type, status, termination_date, snapshot")
     .eq("tenancy_id", params.id)
-    .in("type", ["N5", "N8", "N12", "N13"])
+    .in("type", ["N5", "N6", "N8", "N12", "N13"])
     .in("status", ["served", "filed"])
     .order("created_at", { ascending: false })
     .limit(10);
   const l2Notices: L2NoticeView[] = (l2Rows ?? []).map((r) => {
-    const n = r as unknown as { id: string; type: "N5" | "N8" | "N12" | "N13"; status: string; termination_date: string | null; snapshot: L2NoticeSnap | null };
+    const n = r as unknown as { id: string; type: "N5" | "N6" | "N8" | "N12" | "N13"; status: string; termination_date: string | null; snapshot: L2NoticeSnap | null };
     return {
       id: n.id,
       type: n.type,
@@ -1880,7 +1892,7 @@ export default async function TenancyDetailPage({
       <CollapsibleSection
         id="notices"
         title="LTB notices"
-        defaultOpen={(["n4", "n12", "n13", "n5", "n8", "l1", "l9", "l2"] as const).some((k) => !!(searchParams as Record<string, string | undefined>)[k])}
+        defaultOpen={(["n4", "n12", "n13", "n5", "n6", "n8", "l1", "l9", "l10", "l2"] as const).some((k) => !!(searchParams as Record<string, string | undefined>)[k])}
       >
         <TenancyN4Section
           tenancyId={t.id}
@@ -1943,6 +1955,15 @@ export default async function TenancyDetailPage({
           today={todayOntario}
           msg={searchParams.l9}
         />
+        <TenancyL10Section
+          tenancyId={t.id}
+          endDate={t.end_date ?? null}
+          landlordName={org?.name ?? ""}
+          landlordPhone={org?.public_contact_phone ?? null}
+          depositCents={t.deposit_cents ?? null}
+          today={todayOntario}
+          msg={searchParams.l10}
+        />
         <TenancyN5Section
           tenancyId={t.id}
           active={t.status === "active"}
@@ -1950,6 +1971,14 @@ export default async function TenancyDetailPage({
           notices={n5Notices}
           today={todayOntario}
           msg={searchParams.n5}
+        />
+        <TenancyN6Section
+          tenancyId={t.id}
+          active={t.status === "active"}
+          landlordName={org?.name ?? ""}
+          notices={n6Notices}
+          today={todayOntario}
+          msg={searchParams.n6}
         />
         <TenancyN8Section
           tenancyId={t.id}

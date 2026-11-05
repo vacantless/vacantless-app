@@ -96,7 +96,7 @@ async function main() {
   const route = fs.readFileSync("app/dashboard/tenancies/[id]/l2/official/route.ts", "utf8");
   eq(route.includes('notice.type === "N13"'), true, "route handles N13");
   const page = fs.readFileSync("app/dashboard/tenancies/[id]/page.tsx", "utf8");
-  eq(page.includes('.in("type", ["N5", "N8", "N12", "N13"])'), true, "page lists served N13s for the L2");
+  eq(/\.in\("type", \[[^\]]*"N13"[^\]]*\]\)/.test(page), true, "page lists served N13s for the L2");
 
   console.log(`${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

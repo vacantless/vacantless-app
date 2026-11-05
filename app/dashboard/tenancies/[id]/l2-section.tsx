@@ -14,7 +14,7 @@ const BTN_PRIMARY = "inline-flex items-center rounded-lg bg-brand px-3 py-2 text
 
 export type L2NoticeView = {
   id: string;
-  type: "N5" | "N8" | "N12" | "N13";
+  type: "N5" | "N6" | "N8" | "N12" | "N13";
   status: string;
   termination_date: string | null;
   earliest_filing: string | null;
@@ -30,6 +30,7 @@ export type L2NoticeView = {
 const NOTICE_LABEL: Record<L2NoticeView["type"], string> = {
   N5: "N5 (interference, damage or overcrowding)",
   N8: "N8 (end of term, for example persistent late rent)",
+  N6: "N6 (illegal act, or false income in rent-geared-to-income housing)",
   N12: "N12 (landlord, purchaser or family moving in)",
   N13: "N13 (demolish, renovate or convert)",
 };
@@ -56,7 +57,7 @@ export function TenancyL2Section({
 
   return (
     <div className="space-y-4 border-t border-gray-200 pt-5">
-      <h4 className="text-sm font-semibold text-gray-900">Form L2: apply to end the tenancy after an N5, N8, N12 or N13</h4>
+      <h4 className="text-sm font-semibold text-gray-900">Form L2: apply to end the tenancy after a notice you served</h4>
       {problem && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{problem}</div>
       )}
@@ -72,7 +73,7 @@ export function TenancyL2Section({
 
       {usable.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-600">
-          Available after you prepare an N5, N8 or N12 and record that you served it.
+          Available after you prepare an N5, N6, N8, N12 or N13 and record that you served it.
         </div>
       ) : (
         usable.map((n) => {

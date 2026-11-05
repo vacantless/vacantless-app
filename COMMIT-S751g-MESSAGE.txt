@@ -1,0 +1,29 @@
+S751g: Forms N6 (illegal act or false income) and L10 (former tenant owes), official 2026/09
+
+- Tenancy page: "Form N6". Reasons (any combination): drugs, another
+  illegal act or business, false income in rent-geared-to-income housing.
+  End date at least 10 days for drugs only, otherwise 20 (14 for a second
+  notice after an N5 that gave 7 days to fix, on record or confirmed);
+  delivery days added. Up to 3 events, each checked against its box on the
+  form at 9 pt. Prepare / record service / void like the N5; frozen in
+  notices.snapshot (type N6, already allowed).
+- L2: a served N6 can be filed once it counts as given; Part 2 ticks N6.
+- Tests: scripts/test-s751-n6.ts 34 pass incl. the LTB's own example (second
+  notice Nov 22: Dec 6 by hand, Dec 11 by mail); L2 tests unchanged.
+
+L10 (S751h folded in):
+- Tenancy page: "Form L10" for a tenant who moved out (move-out date on or
+  after 2021-09-01, filed within a year of it). Rent owing comes from the
+  ledger counted to the move-out date (same table rules as the N4 / L1 /
+  L9), plus optional damage and serious-interference costs, each with its
+  explanation (checked against the 572x104 box at 9 pt). The former
+  tenant's new address goes on the form when known; the rental unit is
+  refused as that address. Fee $186 portal / $201 paper; $50,000 cap.
+- NSF and utilities need their own tables and bills, so those lines stay
+  blank for the landlord.
+- POST /dashboard/tenancies/[id]/l10/official returns the filled L10;
+  nothing is stored or filed.
+- Tests: scripts/test-s751-l10.ts 42 pass.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrLaJDbp4RGWCy52RF

@@ -25,7 +25,7 @@ import { L1_FEE_PAPER_CENTS, L1_FEE_PORTAL_CENTS, type L1FilingMethod } from "./
 
 export const L2_LATEST_DAYS_AFTER_TERMINATION = 30;
 export const L2_PRIOR_NOTICE_ROWS = 3;
-export const L2_NOTICE_TYPES = ["N5", "N8", "N12", "N13"] as const;
+export const L2_NOTICE_TYPES = ["N5", "N6", "N8", "N12", "N13"] as const;
 export type L2NoticeType = (typeof L2_NOTICE_TYPES)[number];
 
 export function l2FeeCents(method: L1FilingMethod): number {
@@ -85,7 +85,8 @@ export function l2LandlordPrefill(
 export function earliestL2FilingDate(type: string, snap: L2NoticeSnap | null | undefined): string | null {
   if (!snap) return null;
   if (type === "N5") return snap.earliestL2ISO ?? null;
-  if (type !== "N8" && type !== "N12" && type !== "N13") return null;
+  // S751: an N6 can be filed once it counts as given, like the N8, N12 and N13.
+  if (type !== "N6" && type !== "N8" && type !== "N12" && type !== "N13") return null;
   if (!snap.serviceDateISO || !snap.method) return null;
   return n12DeemedServiceDate(snap.serviceDateISO, snap.method);
 }
@@ -204,7 +205,7 @@ export function computeL2(input: L2Input): L2Calc {
 
 export const L2_PROBLEM_TEXT: Record<L2Problem, string> = {
   notice_not_served: "Record that you served the notice first.",
-  unsupported_notice: "Vacantless fills the L2 for an N5, N8, N12 or N13 you prepared here.",
+  unsupported_notice: "Vacantless fills the L2 for an N5, N6, N8, N12 or N13 you prepared here.",
   too_early: "It's too early to file. After a first N5 the tenant has 7 days to fix the problem; you can file from the 8th day.",
   too_late: "The L2 must be filed no later than 30 days after the notice's termination date. You would need to give a new notice.",
   not_in_possession: "You can't file an L2 once the tenant has moved out. Use an L10 to collect money a former tenant owes.",

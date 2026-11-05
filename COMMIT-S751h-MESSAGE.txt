@@ -1,0 +1,17 @@
+S751h: Form L10, collect money a former tenant owes (official 2026/09)
+
+- Tenancy page: "Form L10" for a tenant who moved out (move-out date on or
+  after 2021-09-01, filed within a year of it). Rent owing comes from the
+  ledger counted to the move-out date (same table rules as the N4 / L1 /
+  L9), plus optional damage and serious-interference costs, each with its
+  explanation (checked against the 572x104 box at 9 pt). The former
+  tenant's new address goes on the form when known; the rental unit is
+  refused as that address. Fee $186 portal / $201 paper; $50,000 cap.
+- NSF and utilities need their own tables and bills, so those lines stay
+  blank for the landlord.
+- POST /dashboard/tenancies/[id]/l10/official returns the filled L10;
+  nothing is stored or filed.
+- Tests: scripts/test-s751-l10.ts 42 pass.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrLaJDbp4RGWCy52RF
