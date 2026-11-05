@@ -719,17 +719,17 @@ export default async function TenancyDetailPage({
         asOfISO: todayOntario,
       })
     : [];
-  // S749: served N5, N8 and N12 notices an L2 can be filed from. Newest first.
+  // S749: served N5, N8, N12 and (S751) N13 notices an L2 can be filed from. Newest first.
   const { data: l2Rows } = await supabase
     .from("notices")
     .select("id, type, status, termination_date, snapshot")
     .eq("tenancy_id", params.id)
-    .in("type", ["N5", "N8", "N12"])
+    .in("type", ["N5", "N8", "N12", "N13"])
     .in("status", ["served", "filed"])
     .order("created_at", { ascending: false })
     .limit(10);
   const l2Notices: L2NoticeView[] = (l2Rows ?? []).map((r) => {
-    const n = r as unknown as { id: string; type: "N5" | "N8" | "N12"; status: string; termination_date: string | null; snapshot: L2NoticeSnap | null };
+    const n = r as unknown as { id: string; type: "N5" | "N8" | "N12" | "N13"; status: string; termination_date: string | null; snapshot: L2NoticeSnap | null };
     return {
       id: n.id,
       type: n.type,
@@ -737,7 +737,9 @@ export default async function TenancyDetailPage({
       termination_date: n.termination_date,
       earliest_filing: earliestL2FilingDate(n.type, n.snapshot),
       compensation_required: n.snapshot?.compensationRequired !== false,
-      reason: n.snapshot?.reason === 2 ? 2 : 1,
+      reason: n.snapshot?.reason === 2 ? 2 : n.snapshot?.reason === 3 ? 3 : 1,
+      permits: n.snapshot?.permits ?? null,
+      ordered: n.snapshot?.orderedUnderAct === true,
       landlord: l2LandlordPrefill(n.snapshot, org?.name ?? ""),
     };
   });

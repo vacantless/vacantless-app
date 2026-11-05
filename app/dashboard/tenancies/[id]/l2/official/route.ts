@@ -5,9 +5,11 @@ import { postLeaseRouteWalled } from "@/lib/post-lease-surface";
 import {
   computeL2,
   earliestL2FilingDate,
-  n12IntendedText,
+  priorNoticeIntended,
   L2_N12_COMPENSATION,
+  L2_N13_COMPENSATION,
   type L2N12Compensation,
+  type L2N13Compensation,
   type L2NoticeSnap,
   type L2NoticeType,
   type L2PriorNotice,
@@ -21,7 +23,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const runtime = "nodejs";
 
-// S749: build the official Form L2 (2026/09) from a served N5, N8 or N12. POST
+// S749: build the official Form L2 (2026/09) from a served N5, N8, N12 or N13 (S751). POST
 // (the landlord's contact details stay out of the URL). Returns the PDF for the
 // landlord to sign and file; nothing is filed for them. manage_tenancies only;
 // RLS scopes every read to the caller's org.
@@ -74,28 +76,32 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .filter((x) => (x.name ?? "").trim())
     .map((x) => ({ name: (x.name as string).trim(), email: x.email, phone: x.phone }));
 
-  // N12: Schedule B. Earlier N12s on record in the 2 years before filing (any of the org's units).
-  let n12: { reason: 1 | 2; compensationRequired: boolean; compensation: L2N12Compensation; priorNotices: L2PriorNotice[]; priorOutside: boolean } | null = null;
-  if (notice.type === "N12") {
+  // N12 (Schedule B) and N13 (Schedule A): earlier N12 / N13 notices on record in
+  // the 2 years before filing (any of the org's units; RLS scopes to the org).
+  let priorNotices: L2PriorNotice[] = [];
+  if (notice.type === "N12" || notice.type === "N13") {
     const twoYearsBack = addDaysISO(filingDateISO, -730);
     const { data: prior } = await supabase
       .from("notices")
-      .select("id, snapshot, served_at")
+      .select("id, type, snapshot, served_at")
       .in("type", ["N12", "N13"])
       .in("status", ["served", "filed"])
       .neq("id", notice.id)
       .gte("served_at", `${twoYearsBack}T00:00:00Z`)
       .order("served_at", { ascending: true })
       .limit(10);
-    const priorNotices: L2PriorNotice[] = (prior ?? []).map((p) => {
-      const r = p as { snapshot: NoticeSnap | null; served_at: string };
+    priorNotices = (prior ?? []).map((p) => {
+      const r = p as { type: string; snapshot: NoticeSnap | null; served_at: string };
       const ps = r.snapshot ?? {};
       return {
         dateISO: ps.serviceDateISO ?? r.served_at.slice(0, 10),
         address: (ps.rentalUnitAddress ?? "").trim(),
-        intended: n12IntendedText(ps.personName ?? "", ps.relationship ?? "", ps.reason === 2 ? 2 : 1),
+        intended: priorNoticeIntended(r.type, ps),
       };
     });
+  }
+  let n12: { reason: 1 | 2; compensationRequired: boolean; compensation: L2N12Compensation; priorNotices: L2PriorNotice[]; priorOutside: boolean } | null = null;
+  if (notice.type === "N12") {
     const choice = s("compensation") as L2N12Compensation;
     n12 = {
       reason: snap.reason === 2 ? 2 : 1,
@@ -103,6 +109,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       compensation: (L2_N12_COMPENSATION as readonly string[]).includes(choice) ? choice : ("" as L2N12Compensation),
       priorNotices,
       priorOutside: s("prior_outside") === "yes",
+    };
+  }
+  let n13: { compensation: L2N13Compensation; orderedUnderAct: boolean; priorNotices: L2PriorNotice[]; priorOutside: boolean; permitsObtained: boolean | null } | null = null;
+  if (notice.type === "N13") {
+    const choice = s("compensation") as L2N13Compensation;
+    const permits = s("permits_obtained");
+    n13 = {
+      compensation: (L2_N13_COMPENSATION as readonly string[]).includes(choice) ? choice : ("" as L2N13Compensation),
+      orderedUnderAct: snap.orderedUnderAct === true,
+      priorNotices,
+      priorOutside: s("prior_outside") === "yes",
+      permitsObtained: permits === "yes" ? true : permits === "no" ? false : null,
     };
   }
 
@@ -116,6 +134,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     tenantInPossession: s("in_possession") === "yes",
     tenantCount: tenants.length,
     n12,
+    n13,
   });
   if (calc.problems.length > 0) return back(calc.problems[0]);
   if (tenants.length === 0) return back("notice_not_served");
@@ -148,6 +167,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         : null,
     feeCents: calc.feeCents,
     totalCents: calc.totalCents,
+    n13: n13 ? { permitsObtained: n13.permitsObtained, compensation: n13.compensation, priorNotices: n13.priorNotices, priorOutside: n13.priorOutside } : null,
     n12: n12 ? { reason: n12.reason, compensation: n12.compensation, priorNotices: n12.priorNotices, priorOutside: n12.priorOutside } : null,
   });
 

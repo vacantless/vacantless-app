@@ -15,6 +15,9 @@
 //   * N12 needs Schedule B: how the one month's compensation was handled, every
 //     other N12 or N13 the landlord gave in the past 2 years (any unit), and a
 //     signed declaration from the person moving in, filed with the L2.
+//   * S751: N13 needs Schedule A: permits (obtained yes/no), how compensation was
+//     handled (gave, offered, will give, or the work was ordered under a law),
+//     and the same Part C list of other N12 / N13 notices in the past 2 years.
 //   * Fee: $186 through the Tribunals Ontario Portal, $201 on paper (same as L1).
 
 import { addDaysISO, n12DeemedServiceDate, type N12ServiceMethod } from "./n12";
@@ -22,7 +25,7 @@ import { L1_FEE_PAPER_CENTS, L1_FEE_PORTAL_CENTS, type L1FilingMethod } from "./
 
 export const L2_LATEST_DAYS_AFTER_TERMINATION = 30;
 export const L2_PRIOR_NOTICE_ROWS = 3;
-export const L2_NOTICE_TYPES = ["N5", "N8", "N12"] as const;
+export const L2_NOTICE_TYPES = ["N5", "N8", "N12", "N13"] as const;
 export type L2NoticeType = (typeof L2_NOTICE_TYPES)[number];
 
 export function l2FeeCents(method: L1FilingMethod): number {
@@ -40,8 +43,12 @@ export type L2NoticeSnap = {
   method?: N12ServiceMethod;
   earliestL2ISO?: string;
   rentalUnitAddress?: string | null;
-  reason?: 1 | 2;
+  reason?: 1 | 2 | 3;
   personName?: string;
+  /** N13 only. */
+  workPlanned?: string;
+  permits?: string;
+  orderedUnderAct?: boolean;
   relationship?: string;
   compensationRequired?: boolean;
   landlordName?: string;
@@ -78,7 +85,7 @@ export function l2LandlordPrefill(
 export function earliestL2FilingDate(type: string, snap: L2NoticeSnap | null | undefined): string | null {
   if (!snap) return null;
   if (type === "N5") return snap.earliestL2ISO ?? null;
-  if (type !== "N8" && type !== "N12") return null;
+  if (type !== "N8" && type !== "N12" && type !== "N13") return null;
   if (!snap.serviceDateISO || !snap.method) return null;
   return n12DeemedServiceDate(snap.serviceDateISO, snap.method);
 }
@@ -93,6 +100,15 @@ export type L2N12Compensation = (typeof L2_N12_COMPENSATION)[number];
 
 export type L2PriorNotice = { dateISO: string; address: string; intended: string };
 
+/**
+ * S751: Schedule A, Part B (N13). Option order matches the form:
+ *   gave = paid on or before the termination date; offered = another unit, accepted;
+ *   will_give = will pay by the termination date; ordered = the work was ordered
+ *   under a by-law or another authority (no compensation owed).
+ */
+export const L2_N13_COMPENSATION = ["gave", "offered", "will_give", "ordered"] as const;
+export type L2N13Compensation = (typeof L2_N13_COMPENSATION)[number];
+
 export type L2Problem =
   | "notice_not_served"
   | "unsupported_notice"
@@ -102,6 +118,7 @@ export type L2Problem =
   | "compensation_needed"
   | "bad_compensation_choice"
   | "too_many_prior_notices"
+  | "not_ordered"
   | "over_limit";
 
 export type L2Input = {
@@ -121,6 +138,14 @@ export type L2Input = {
     compensation: L2N12Compensation;
     priorNotices: L2PriorNotice[];
     /** The landlord gave other N12 or N13 notices outside Vacantless in the past 2 years. */
+    priorOutside: boolean;
+  } | null;
+  /** N13 only (S751). */
+  n13?: {
+    compensation: L2N13Compensation;
+    /** The N13 said the work was ordered under a law. */
+    orderedUnderAct: boolean;
+    priorNotices: L2PriorNotice[];
     priorOutside: boolean;
   } | null;
 };
@@ -156,6 +181,16 @@ export function computeL2(input: L2Input): L2Calc {
     }
   }
 
+  if (input.noticeType === "N13") {
+    const n = input.n13;
+    if (!n || !(L2_N13_COMPENSATION as readonly string[]).includes(n.compensation)) {
+      problems.push("bad_compensation_choice");
+    } else {
+      if (n.compensation === "ordered" && !n.orderedUnderAct) problems.push("not_ordered");
+      if (n.priorNotices.length > L2_PRIOR_NOTICE_ROWS) problems.push("too_many_prior_notices");
+    }
+  }
+
   const feeCents = l2FeeCents(input.method);
   return {
     filingDateISO: input.filingDateISO,
@@ -169,13 +204,15 @@ export function computeL2(input: L2Input): L2Calc {
 
 export const L2_PROBLEM_TEXT: Record<L2Problem, string> = {
   notice_not_served: "Record that you served the notice first.",
-  unsupported_notice: "Vacantless fills the L2 for an N5, N8 or N12 you prepared here.",
+  unsupported_notice: "Vacantless fills the L2 for an N5, N8, N12 or N13 you prepared here.",
   too_early: "It's too early to file. After a first N5 the tenant has 7 days to fix the problem; you can file from the 8th day.",
   too_late: "The L2 must be filed no later than 30 days after the notice's termination date. You would need to give a new notice.",
   not_in_possession: "You can't file an L2 once the tenant has moved out. Use an L10 to collect money a former tenant owes.",
   compensation_needed:
     "This N12 owes the tenant one month's rent (or another unit they accept). \"Not required\" only applies to Reason 1 with at least 120 days' notice given on or after September 21, 2026.",
-  bad_compensation_choice: "Choose how you handled the one month's compensation.",
+  bad_compensation_choice: "Choose how you handled the compensation.",
+  not_ordered:
+    "Your N13 didn't say the work was ordered under a by-law or by another authority, so compensation is owed. Choose how you handled it.",
   too_many_prior_notices: "The form lists 3 earlier N12 or N13 notices. Add the rest on a separate page you file with the L2.",
   over_limit: "The LTB can't order more than $50,000. Talk to a lawyer about going to court.",
 };
@@ -193,4 +230,17 @@ export function n12IntendedText(personName: string, relationship: string, reason
   };
   const r = rel[relationship];
   return r ? `${personName.trim()} (${r})` : personName.trim();
+}
+
+/** S751: Part C "intended activity" for an earlier N13. */
+export function n13ActivityText(reason: number | undefined, workPlanned: string | undefined): string {
+  const head = reason === 2 ? "Repairs or renovations" : reason === 3 ? "Convert to non-residential use" : "Demolish";
+  const w = (workPlanned ?? "").trim().replace(/\s+/g, " ");
+  return w ? `${head}: ${w.length > 120 ? w.slice(0, 117) + "..." : w}` : head;
+}
+
+/** Part C text for an earlier N12 or N13 on record. */
+export function priorNoticeIntended(type: string, snap: L2NoticeSnap): string {
+  if (type === "N13") return n13ActivityText(snap.reason, snap.workPlanned);
+  return n12IntendedText(snap.personName ?? "", snap.relationship ?? "", snap.reason === 2 ? 2 : 1);
 }

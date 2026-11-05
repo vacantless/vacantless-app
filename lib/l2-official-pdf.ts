@@ -17,10 +17,22 @@
 //   sfrmScheduleB.PartA.Reason{1,2}selected.Compensation (gave, offered, will give[, not required])
 //   sfrmScheduleB.PartC.Table1.Row{1..3}.{NoticeDate,RentalAddress,Intended,FileNumber}{n};
 //   sfrmScheduleB.PartC.Previous_N12_N13_B (none in the past 2 years)
+//   S751 Schedule A (N13): sfrmScheduleA.PartA.PermitStatus ("1" yes, "2" no);
+//   PartB.Compensation is three same-named radio fields: Compensation[0] "1" gave /
+//   "2" offered, Compensation[1] "3" will give, Compensation[2] "4" ordered; so it
+//   is set by full name. PartC.Table1 rows + Previous_N12_N13_A like Schedule B.
 
 import { ltbDate, ltbMoney, ltbAddress, loadLtbTemplate, stripLtbScripts, ltbFields } from "@/lib/forms/ltb-2026";
 import { splitName } from "@/lib/standard-lease";
-import { L2_N12_COMPENSATION, L2_PRIOR_NOTICE_ROWS, type L2N12Compensation, type L2NoticeType, type L2PriorNotice } from "@/lib/l2";
+import {
+  L2_N12_COMPENSATION,
+  L2_N13_COMPENSATION,
+  L2_PRIOR_NOTICE_ROWS,
+  type L2N12Compensation,
+  type L2N13Compensation,
+  type L2NoticeType,
+  type L2PriorNotice,
+} from "@/lib/l2";
 
 const TEMPLATE_REL = "lib/forms/ltb-l2-2026.pdf";
 export const L2_TEMPLATE_VERSION = "2026/09";
@@ -62,6 +74,13 @@ export type L2FillInput = {
     /** Others were given outside Vacantless: leave the table for the landlord, never tick "none". */
     priorOutside: boolean;
   } | null;
+  /** S751: Schedule A answers for an N13. permitsObtained null = leave Part A for the landlord. */
+  n13?: {
+    permitsObtained: boolean | null;
+    compensation: L2N13Compensation;
+    priorNotices: L2PriorNotice[];
+    priorOutside: boolean;
+  } | null;
   french?: boolean;
 };
 
@@ -76,6 +95,12 @@ export async function fillOfficialL2(d: L2FillInput): Promise<Uint8Array> {
     if (d.n12.reason === 2 && d.n12.compensation === "not_required") {
       throw new Error("fillOfficialL2: purchaser's own use always owes compensation");
     }
+  }
+
+  if (d.noticeType === "N13") {
+    if (!d.n13) throw new Error("fillOfficialL2: N13 needs Schedule A answers");
+    if (d.n13.priorNotices.length > L2_PRIOR_NOTICE_ROWS) throw new Error("fillOfficialL2: more than 3 prior notices");
+    if (!L2_N13_COMPENSATION.includes(d.n13.compensation)) throw new Error("fillOfficialL2: bad N13 compensation answer");
   }
 
   const pdf = await loadLtbTemplate(TEMPLATE_REL);
@@ -154,6 +179,27 @@ export async function fillOfficialL2(d: L2FillInput): Promise<Uint8Array> {
       f.text(`${c}Row${n}.Intended${n}`, p.intended);
     });
     if (d.n12.priorNotices.length === 0 && !d.n12.priorOutside) f.check("sfrmScheduleB.PartC.Previous_N12_N13_B");
+  }
+
+  if (d.noticeType === "N13" && d.n13) {
+    const a = "sfrmScheduleA.";
+    if (d.n13.permitsObtained !== null) f.radio(a + "PartA.PermitStatus", d.n13.permitsObtained ? "1" : "2");
+    const opt = String(L2_N13_COMPENSATION.indexOf(d.n13.compensation) + 1);
+    const slot = opt === "1" || opt === "2" ? 0 : opt === "3" ? 1 : 2;
+    const full = `form1[0].sfrmScheduleA[0].PartB[0].Compensation[${slot}]`;
+    const radio = pdf.getForm().getFields().find((x) => x.getName() === full) as unknown as
+      | { select: (o: string) => void; getOptions: () => string[] }
+      | undefined;
+    if (!radio || !radio.getOptions().includes(opt)) throw new Error(`fillOfficialL2: Schedule A compensation option ${opt} not found`);
+    radio.select(opt);
+    const c = a + "PartC.Table1.";
+    d.n13.priorNotices.forEach((p, i) => {
+      const n = i + 1;
+      f.text(`${c}Row${n}.NoticeDate${n}`, ltbDate(p.dateISO));
+      f.text(`${c}Row${n}.RentalAddress${n}`, p.address);
+      f.text(`${c}Row${n}.Intended${n}`, p.intended);
+    });
+    if (d.n13.priorNotices.length === 0 && !d.n13.priorOutside) f.check(a + "PartC.Previous_N12_N13_A");
   }
 
   stripLtbScripts(pdf);

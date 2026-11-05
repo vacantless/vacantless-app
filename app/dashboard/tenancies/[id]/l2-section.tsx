@@ -3,7 +3,7 @@ import { latestL2FilingDate, L2_PROBLEM_TEXT, type L2Problem } from "@/lib/l2";
 import { formatMoneyCents } from "@/lib/payments";
 import { formatLongDate } from "@/lib/n1-render";
 
-// S749: "Prepare L2" for a served N5, N8 or N12. Each form posts to
+// S749: "Prepare L2" for a served N5, N8, N12 or N13 (S751). Each form posts to
 // /dashboard/tenancies/[id]/l2/official, which checks the filing window and
 // returns the official 2026/09 L2 for the landlord to sign and file.
 
@@ -14,12 +14,15 @@ const BTN_PRIMARY = "inline-flex items-center rounded-lg bg-brand px-3 py-2 text
 
 export type L2NoticeView = {
   id: string;
-  type: "N5" | "N8" | "N12";
+  type: "N5" | "N8" | "N12" | "N13";
   status: string;
   termination_date: string | null;
   earliest_filing: string | null;
   compensation_required?: boolean;
-  reason?: 1 | 2;
+  reason?: 1 | 2 | 3;
+  /** N13: permits answer on the notice, and whether the work was ordered under a law. */
+  permits?: string | null;
+  ordered?: boolean;
   /** S750: the landlord as named on the notice (person or company). */
   landlord?: { company: string; first: string; last: string };
 };
@@ -28,6 +31,7 @@ const NOTICE_LABEL: Record<L2NoticeView["type"], string> = {
   N5: "N5 (interference, damage or overcrowding)",
   N8: "N8 (end of term, for example persistent late rent)",
   N12: "N12 (landlord, purchaser or family moving in)",
+  N13: "N13 (demolish, renovate or convert)",
 };
 
 export function TenancyL2Section({
@@ -52,7 +56,7 @@ export function TenancyL2Section({
 
   return (
     <div className="space-y-4 border-t border-gray-200 pt-5">
-      <h4 className="text-sm font-semibold text-gray-900">Form L2: apply to end the tenancy after an N5, N8 or N12</h4>
+      <h4 className="text-sm font-semibold text-gray-900">Form L2: apply to end the tenancy after an N5, N8, N12 or N13</h4>
       {problem && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{problem}</div>
       )}
@@ -137,6 +141,44 @@ export function TenancyL2Section({
                     <select name="prior_outside" defaultValue="no" className={INPUT_CLS}>
                       <option value="no">No</option>
                       <option value="yes">Yes, I&apos;ll add them to Schedule B myself</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {n.type === "N13" && (
+                <>
+                  <div className="sm:col-span-2">
+                    <label className={LABEL_CLS}>Have you got the building permits? (Schedule A)</label>
+                    <select
+                      name="permits_obtained"
+                      defaultValue={n.permits === "obtained" ? "yes" : n.permits === "none_needed" ? "" : "no"}
+                      className={INPUT_CLS}
+                    >
+                      <option value="yes">Yes (give copies to the tenant and the LTB before the hearing)</option>
+                      <option value="no">Not yet (get them, or show every reasonable step, by the hearing)</option>
+                      <option value="">No permits needed: leave it for me to answer</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={LABEL_CLS}>The compensation (Schedule A)</label>
+                    <select name="compensation" defaultValue={n.ordered ? "ordered" : ""} required className={INPUT_CLS}>
+                      <option value="" disabled>
+                        Choose one
+                      </option>
+                      <option value="gave">I paid it on or before the termination date</option>
+                      <option value="offered">I offered another unit and the tenant accepted it</option>
+                      <option value="will_give">I will pay it by the termination date</option>
+                      {n.ordered && <option value="ordered">Not owed: the work was ordered under a by-law or another authority</option>}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className={LABEL_CLS}>
+                      Did you give any other N12 or N13 in the past 2 years outside Vacantless (any unit)?
+                    </label>
+                    <select name="prior_outside" defaultValue="no" className={INPUT_CLS}>
+                      <option value="no">No</option>
+                      <option value="yes">Yes, I&apos;ll add them to Schedule A myself</option>
                     </select>
                   </div>
                 </>

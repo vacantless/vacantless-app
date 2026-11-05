@@ -1,0 +1,16 @@
+S751d: L2 from a served N13 (Schedule A)
+
+- The L2 section now offers a served N13. It asks the Schedule A answers:
+  permits obtained (yes / not yet / leave for me when none are needed),
+  how compensation was handled (gave, offered, will give; "ordered under a
+  law" only when the N13 said so), and other N12 / N13 notices given
+  outside Vacantless in the past 2 years.
+- Schedule A's compensation is three radio fields with one name; the
+  filler sets them by full field name. Part C lists earlier N12 and N13
+  notices on record, and an N13 row now shows the activity ("Repairs or
+  renovations: ...") instead of an N12 occupant line.
+- N13 can be filed right after it counts as given; same 30-day limit.
+- Tests: scripts/test-s751-l2-n13.ts 26 pass; L2/N8 tests 81 pass.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrLaJDbp4RGWCy52RF
