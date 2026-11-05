@@ -1,0 +1,11 @@
+S751i: health email skips Noam's test accounts
+
+The 2026-11-05 health email's only "problem" was Lakeview Rentals'
+Zumper sign-in, a test account (S712). Lakeview, Stranger Five Rentals and
+S731 Founding Test (Noam's +aliases are the only members) join the quiet
+orgs, and the health email's robot and sign-in lines skip quiet orgs. They
+stay out of NON_PRODUCTION_ORGANIZATION_IDS so channel proof they gathered
+still counts.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrLaJDbp4RGWCy52RF

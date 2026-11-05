@@ -144,5 +144,13 @@ ok("toronto: 03:00Z is the previous local day", torontoDateHour(new Date("2026-1
   ok("node: the 15-minute log keeps it", readFileSync("app/api/cron/sweep-all/route.ts", "utf8").includes('"server-node": { status: null, reason: process.version }'));
 }
 
+// S751: Noam's test accounts (quiet orgs) never show in the robot or sign-in lines.
+{
+  const src = readFileSync("app/api/cron/health-digest/route.ts", "utf8");
+  ok("quiet test orgs skipped in robot and sign-in lines", (src.match(/isQuietNotificationOrg\(/g) ?? []).length >= 2);
+  ok("Lakeview Rentals is a quiet test org", readFileSync("lib/quiet-orgs.ts", "utf8").includes("b6fdceb7-e7f6-4f54-bbab-107ae5d3254a"));
+}
+
 console.log(`\nhealth-digest: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
+
