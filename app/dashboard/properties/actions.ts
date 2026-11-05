@@ -194,6 +194,7 @@ import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 import { notifyWaitingRentersRented } from "@/lib/rented-notice-server";
 import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
 import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
+import { queueRobotTakedowns } from "@/lib/robot-takedown";
 import { isUnavailableStatus } from "@/lib/ads-still-up";
 import {
   listChannelTileStatuses as listChannelTileStatusesFromAccounts,
@@ -1204,6 +1205,8 @@ export async function updateProperty(formData: FormData) {
       propertyId: id,
     });
     facebookPostsTakenDown = fb.removed.length;
+    // S754: the robot takes down Kijiji, Rentals.ca and Zumper ads it can reach.
+    await queueRobotTakedowns({ supabase, organizationId: orgAfterSave.id, propertyId: id });
     await notifyAdsStillUp({ supabase, org: orgAfterSave, propertyId: id });
   }
 
@@ -1840,6 +1843,7 @@ export async function archiveProperty(formData: FormData) {
   // still up (skipped when it was already off the market, so no repeat email).
   if (!isUnavailableStatus(p.status)) {
     await takeDownFacebookPagePosts({ supabase, organizationId: org.id, propertyId: id });
+    await queueRobotTakedowns({ supabase, organizationId: org.id, propertyId: id });
     await notifyAdsStillUp({ supabase, org, propertyId: id });
   }
 

@@ -3,6 +3,7 @@ import { canUseWaitlist } from "@/lib/billing";
 import { channelByKey } from "@/lib/distribution-channels";
 import { TAKEDOWN_TRANSPORT } from "@/lib/distribution-worker";
 import { decideLeaseupAdLifecycle } from "@/lib/leaseup-decision";
+import { robotTakedownPending } from "@/lib/robot-takedown";
 import { resolveLeadNotifyEmailsPreferMemberFallback } from "@/lib/leads-notify";
 import { sendOrgNotification } from "@/lib/notifications-server";
 import type { Org } from "@/lib/org";
@@ -302,8 +303,13 @@ export async function handleLeaseupAdLifecycle(args: {
   );
   const waitlistEnabled = canUseWaitlist(org.plan);
 
+  // S754: a site the robot is already taking down (lib/robot-takedown) is
+  // not a task for the landlord; its queued item must not be overwritten.
+  const robotPending = new Set(await robotTakedownPending({ supabase, organizationId: org.id, propertyId }));
+
   let runId: string | null = null;
   for (const post of posts) {
+    if (robotPending.has(post.portal)) continue;
     const account = accounts.get(post.portal) ?? null;
     const automationAuthorized = account?.automation_authorized === true;
     const decision = decideLeaseupAdLifecycle({

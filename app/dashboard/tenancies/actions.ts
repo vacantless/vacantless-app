@@ -36,6 +36,7 @@ import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 import { notifyWaitingRentersRented } from "@/lib/rented-notice-server";
 import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
+import { queueRobotTakedowns } from "@/lib/robot-takedown";
 import {
   resolveRentReconciliation,
   type RentAdjustmentSource,
@@ -327,6 +328,8 @@ export async function createTenancy(formData: FormData) {
       // S734: delete our own Facebook Page post before the lease-up ladder
       // decides what is left for the landlord to take down.
       await takeDownFacebookPagePosts({ supabase, organizationId: org.id, propertyId });
+      // S754: the robot takes down Kijiji, Rentals.ca and Zumper ads it can reach.
+      await queueRobotTakedowns({ supabase, organizationId: org.id, propertyId });
       await handleLeaseupAdLifecycle({ supabase, org, propertyId });
       // S742e: the renters still waiting on this rental are told and shown the others.
       await notifyWaitingRentersRented({ client: supabase, org, propertyId });

@@ -8,6 +8,7 @@ export function AdsStillUpCard({
   posts,
   justMarked,
   facebookTakenDown,
+  robotPending,
 }: {
   propertyId: string;
   statusPhrase: string;
@@ -15,7 +16,12 @@ export function AdsStillUpCard({
   justMarked: boolean;
   /** S734: we just deleted the Facebook Page post ourselves. */
   facebookTakenDown?: boolean;
+  /** S754: sites where the robot is taking the ad down (a queued takedown item). */
+  robotPending?: string[];
 }) {
+  const pending = new Set(robotPending ?? []);
+  const robotPosts = posts.filter((p) => pending.has(p.portal));
+  const handPosts = posts.filter((p) => !pending.has(p.portal));
   if (posts.length === 0) {
     return justMarked || facebookTakenDown ? (
       <p
@@ -39,12 +45,19 @@ export function AdsStillUpCard({
       {facebookTakenDown && (
         <p className="mt-1 text-green-800">We took your Facebook Page post down.</p>
       )}
-      <p className="mt-1 text-amber-800">
-        These ads are on your own site accounts, so only you can delete them. Open each one and delete
-        it on that site. Then press &quot;I took it down&quot;.
-      </p>
+      {robotPosts.length > 0 && (
+        <p className="mt-1 text-green-800">
+          We are taking it down on {robotPosts.map((p) => siteName(p.portal)).join(", ")}. This takes a few hours; the ad is marked removed once the site shows it gone.
+        </p>
+      )}
+      {handPosts.length > 0 && (
+        <p className="mt-1 text-amber-800">
+          {handPosts.length === 1 ? "This ad is" : "These ads are"} on your own site account, so only you can delete {handPosts.length === 1 ? "it" : "them"}. Open each one and delete
+          it on that site. Then press &quot;I took it down&quot;.
+        </p>
+      )}
       <ul className="mt-3 space-y-2">
-        {posts.map((post) => (
+        {handPosts.map((post) => (
           <li key={post.id} className="flex flex-wrap items-center gap-3">
             <span className="font-medium">{siteName(post.portal)}</span>
             <a

@@ -4,6 +4,7 @@ import { sendOrgNotification } from "@/lib/notifications-server";
 import { resolveLeadNotifyEmailsPreferMemberFallback } from "@/lib/leads-notify";
 import type { Org } from "@/lib/org";
 import { adsStillUp, isUnavailableStatus, stillUpNoticeVars, type StillUpPost } from "@/lib/ads-still-up";
+import { robotTakedownPending } from "@/lib/robot-takedown";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/+$/, "");
 
@@ -33,7 +34,9 @@ export async function notifyAdsStillUp(args: {
       .select("id, portal, url, status, label")
       .eq("organization_id", args.org.id)
       .eq("property_id", p.id);
-    const still = adsStillUp((posts ?? []) as StillUpPost[]);
+    // S754: ads the robot is taking down are not the landlord's to delete.
+    const pending = new Set(await robotTakedownPending({ supabase: args.supabase, organizationId: args.org.id, propertyId: p.id }));
+    const still = adsStillUp((posts ?? []) as StillUpPost[]).filter((x) => !pending.has(x.portal));
     if (still.length === 0) return;
     const dashboardUrl = stillUpDashboardUrl(p.id);
     await sendOrgNotification({

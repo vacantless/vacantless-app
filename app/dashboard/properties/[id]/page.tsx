@@ -2914,6 +2914,9 @@ export default async function PropertyDetailPage({
           posts={adsStillUp(postRows)}
           justMarked={searchParams.ad === "down"}
           facebookTakenDown={searchParams.fbdown === "1"}
+          robotPending={runItemRows
+            .filter((r) => r.transport === "takedown" && (r.publish_status === "queued" || r.publish_status === "submitting"))
+            .map((r) => r.channel)}
         />
       )}
 
