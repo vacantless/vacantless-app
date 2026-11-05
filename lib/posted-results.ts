@@ -84,7 +84,7 @@ export function postedResultsNextSteps(args: {
     out.push({
       key: "posting",
       title: "Kijiji, Rentals.ca and Zumper, posted for you",
-      body: "Sign in to each site once, about three minutes. We post every ad for you. You approve each one. Renters from those sites land in the same list.",
+      body: "Sign in to each site once, about three minutes. We post every ad for you as soon as it is ready. Renters from those sites land in the same list.",
       href: "/dashboard/billing#posting-addon",
       action: "See the Posting add-on",
     });

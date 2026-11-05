@@ -615,3 +615,19 @@ export async function removePostingAddon() {
   }
   redirect("/dashboard/billing?addon=removed#posting-addon");
 }
+
+// S754 (review item 3): the "Post without asking each time" switch for the
+// free robot sites. Writes organizations.posting_autopilot (migration 0273).
+// The worker reads it when it parks a prepared ad; money never passes it.
+export async function setPostingAutopilot(formData: FormData) {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_billing", "/dashboard/billing?forbidden=1");
+  const on = String(formData.get("on") ?? "") === "1";
+  const { error } = await createClient()
+    .from("organizations")
+    .update({ posting_autopilot: on })
+    .eq("id", org.id);
+  if (error) redirect("/dashboard/billing?error=autopilot#posting-addon");
+  redirect(`/dashboard/billing?autopilot=${on ? "on" : "off"}#posting-addon`);
+}

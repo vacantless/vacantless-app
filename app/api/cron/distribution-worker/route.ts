@@ -37,7 +37,9 @@ import {
 } from "@/lib/distribution-worker";
 import { composePostWithAgent } from "@/lib/distribution-worker-ai";
 import { isRobotPostedChannel, robotNextStep } from "@/lib/posting-lanes";
-import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { readRobotPostingAccess, type RobotPostingAccess } from "@/lib/robot-posting-access";
+import { standingApprovalApplies, standingApprovalAudit, STANDING_APPROVAL_SOURCE } from "@/lib/posting-autopilot";
+import { triggerPostNow } from "@/lib/post-now";
 import { checkPeriodSpend, spendCapBlockMessage } from "@/lib/spend-cap";
 import {
   daysParked,
@@ -86,6 +88,9 @@ type Summary = {
   prepared: number;
   gate: WorkerGate | null;
   notified: boolean;
+  /** S754: the standing posting setting approved the prepared ad, and whether the robot was woken. */
+  autoApproved?: number;
+  postNow?: boolean;
   /** S681: how many stuck-backlog alerts this invocation actually delivered. */
   sweptAlerts: number;
   /**
@@ -385,16 +390,18 @@ export async function GET(req: NextRequest) {
     let account: ChannelAccountRow | null = null;
     // S713: a robot-posted site (Kijiji, Rentals.ca, Zumper) is only eligible
     // for an org with the Posting add-on. One read per org per run.
-    const robotAccessByOrg = new Map<string, boolean>();
+    // S754: the whole access row is kept so the standing posting setting
+    // (posting_autopilot) can approve the prepared ad below.
+    const robotAccessByOrg = new Map<string, RobotPostingAccess>();
     let skippedForAddon = 0;
     for (const c of candidates) {
       if (isRobotPostedChannel(c.channel)) {
-        let allowed = robotAccessByOrg.get(c.organization_id);
-        if (allowed === undefined) {
-          allowed = (await readRobotPostingAccess(admin, c.organization_id)).allowed;
-          robotAccessByOrg.set(c.organization_id, allowed);
+        let access = robotAccessByOrg.get(c.organization_id);
+        if (access === undefined) {
+          access = await readRobotPostingAccess(admin, c.organization_id);
+          robotAccessByOrg.set(c.organization_id, access);
         }
-        if (!allowed) {
+        if (!access.allowed) {
           skippedForAddon += 1;
           continue;
         }
@@ -624,6 +631,74 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ...summary, skippedReason: "gate_write_lost" }, { status: 200 });
     }
     summary.prepared = 1;
+
+    // S754 (review item 3): the standing posting setting approves a free robot
+    // ad on the spot and wakes the browser robot, so the landlord never comes
+    // back to press "Approve and post". Guarded on the gate we just wrote and
+    // on no approval yet; a paid ad parks at needs_payment and never passes.
+    const robotAccess = isRobotPostedChannel(job.channel)
+      ? robotAccessByOrg.get(job.organization_id) ?? null
+      : null;
+    if (
+      standingApprovalApplies({
+        gate,
+        channel: job.channel,
+        autopilot: robotAccess?.autopilot,
+        addonAllowed: robotAccess?.allowed === true,
+      })
+    ) {
+      const approveISO = new Date().toISOString();
+      const { data: autoApproved } = await admin
+        .from("distribution_run_items")
+        .update({
+          operator_submit_approved_at: approveISO,
+          operator_submit_approved_by: null,
+          audit_message: standingApprovalAudit(channelLabel),
+          updated_at: approveISO,
+        })
+        .eq("id", job.id)
+        .eq("mode", "concierge")
+        .eq("publish_status", "needs_operator")
+        .is("operator_submit_approved_at", null)
+        .is("external_url", null)
+        .select("id");
+      if (autoApproved && autoApproved.length > 0) {
+        const approval = buildAttemptRecord({
+          organizationId: job.organization_id,
+          runId: job.run_id,
+          runItemId: job.id,
+          channel: job.channel,
+          transport: "concierge",
+          currentAttemptCount: attempt.attempt_no,
+          actorType: "agent",
+          actorUserId: null,
+          statusBefore: "needs_operator",
+          statusAfter: "needs_operator",
+          proofId: null,
+          metadata: { source: STANDING_APPROVAL_SOURCE },
+        });
+        await admin.from("distribution_publish_attempts").insert({
+          organization_id: approval.organization_id,
+          run_id: approval.run_id,
+          run_item_id: approval.run_item_id,
+          channel: approval.channel,
+          transport: approval.transport,
+          attempt_no: approval.attempt_no,
+          actor_type: approval.actor_type,
+          actor_user_id: approval.actor_user_id,
+          status_before: approval.status_before,
+          status_after: approval.status_after,
+          error_code: null,
+          error_message: null,
+          proof_id: null,
+          metadata: approval.metadata,
+        });
+        summary.autoApproved = 1;
+        summary.postNow = await triggerPostNow();
+        // The "needs you" note is not sent: nothing is waiting on the landlord.
+        return NextResponse.json(summary, { status: 200 });
+      }
+    }
 
     // Notify the operator that a prepared post needs a human at the gate.
     const { data: org } = await admin

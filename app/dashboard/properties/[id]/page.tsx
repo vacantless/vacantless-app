@@ -859,7 +859,7 @@ function SyndicationFirstCard({
           {!packetBlocked ? (
             <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-400">
               {robotPostingAllowed
-                ? "We post your ad on each site. You approve each post. A site counts as Live once the link to your ad is saved."
+                ? "We post your ad on each site as soon as it is ready. A site counts as Live once the link to your ad is saved."
                 : "Your Facebook Page posts from here, free. The Marketplace kit gives you the ad to paste. With the Posting add-on we post Kijiji, Rentals.ca and Zumper for you. A site counts as Live once the link to your ad is saved."}
             </p>
           ) : null}
@@ -2364,7 +2364,11 @@ export default async function PropertyDetailPage({
           })
         : null,
       steps: buildRunSteps(r.channel),
-      canConcierge: conciergeEnabled && canRequestConcierge(publishStatus, mode),
+      // S754: a robot site is sold by the Posting add-on on any plan (S734),
+      // so a Free account with Posting sees "Post it for me" too.
+      canConcierge:
+        (conciergeEnabled || (isRobotPostedChannel(r.channel) && robotPostingAccess.allowed)) &&
+        canRequestConcierge(publishStatus, mode),
       canAutopilot:
         r.transport !== "takedown" &&
         autopilotChannels.has(r.channel) &&

@@ -530,13 +530,14 @@ function Pricing() {
 }
 
 /* S722: the Posting add-on gets its own card. Every line is live: sign in once
-   (S705-S717), the robot posts only after "Approve and post" (rule 240), Kijiji
+   (S705-S717), free ads post as soon as the robot has them ready (S754 standing
+   setting; "approve each one" stays as a Billing switch), Kijiji
    bills its own fee per ad on the landlord's account (S713). Add-on needs a
    paid plan (lib/billing.ts canUseRobotPosting). */
 const POSTING_ADDON_INCLUDES: string[] = [
   "We post your rental to Kijiji, Rentals.ca and Zumper for you",
   "On your own accounts. You sign in to each site once",
-  "Nothing goes up until you click Approve and post",
+  "Ads go up as soon as they are ready, on your own accounts",
   "Every renter from those sites lands in the same list",
 ];
 

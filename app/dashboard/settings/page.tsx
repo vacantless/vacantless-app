@@ -1164,12 +1164,12 @@ export default async function SettingsPage({
           {/* S702u: landlords see a plain page. The per-site control room
               below is for our team only. */}
           {!isPlatformAdmin && (
-            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div id="site-accounts" className="rounded-2xl border border-gray-200 bg-white p-5">
               <h3 className="text-base font-semibold text-gray-900">Your rental site accounts</h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-600">
                 {robotPostingAccess.allowed
-                  ? "Sign in to each site once. After that we post your ads for you. You approve each post. We never see your password."
-                  : "With the Posting add-on you sign in to Kijiji, Rentals.ca and Zumper once. Then we post your ads there for you. You approve each post. We never see your password."}
+                  ? "Sign in to each site once. After that we post your ads for you as soon as they are ready. We never see your password."
+                  : "With the Posting add-on you sign in to Kijiji, Rentals.ca and Zumper once. Then we post your ads there for you. We never see your password."}
               </p>
               <Link
                 href={robotPostingAccess.allowed ? "/dashboard/link-portals" : POSTING_ADDON_HREF}
@@ -1247,7 +1247,7 @@ export default async function SettingsPage({
                     {cap.requiresPayment && (
                       <div className="mt-4 border-t border-gray-100 pt-4">
                         <p className="max-w-2xl text-sm text-gray-600">
-                          {meta.label} charges for some ads. We stay inside the limit you set here. You still approve each post.
+                          {meta.label} charges for some ads. We stay inside the limit you set here. A paid ad still waits for you at checkout.
                         </p>
                         <label className="mt-3 flex items-start gap-3">
                           <input

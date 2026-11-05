@@ -1,7 +1,7 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-11-04",
+  "generated": "2026-11-05",
   "checksum": "fd178e8f2a9705623c1f8fd5f4646386b8071999ce3bae915e6717bf191e36f9",
   "surfaces": [
     "app/agent/[token]/marketplace/[propertyId]/page.tsx",
@@ -31,6 +31,7 @@
     "app/dashboard/properties/[id]/posted-results-card.tsx",
     "app/dashboard/properties/[id]/publish-everywhere.tsx",
     "app/dashboard/properties/[id]/renter-sources-card.tsx",
+    "app/dashboard/properties/coverage-card.tsx",
     "app/dashboard/properties/new/add-property-form.tsx",
     "app/dashboard/properties/new/page.tsx",
     "app/dashboard/properties/page.tsx",
@@ -183,6 +184,7 @@
     "app/dashboard/properties/[id]/posted-results-card.tsx": 8,
     "app/dashboard/properties/[id]/publish-everywhere.tsx": 118,
     "app/dashboard/properties/[id]/renter-sources-card.tsx": 3,
+    "app/dashboard/properties/coverage-card.tsx": 9,
     "app/dashboard/properties/new/add-property-form.tsx": 112,
     "app/dashboard/properties/new/page.tsx": 5,
     "app/dashboard/properties/page.tsx": 87,
@@ -190,7 +192,7 @@
     "app/dashboard/properties/renew-list-card.tsx": 11,
     "app/dashboard/properties/standard-policy/page.tsx": 65,
     "app/dashboard/replies/page.tsx": 10,
-    "app/dashboard/replies/reply-kit.tsx": 13,
+    "app/dashboard/replies/reply-kit.tsx": 17,
     "app/dashboard/send-live/page.tsx": 4,
     "app/dashboard/settings/facebook-page-card.tsx": 10,
     "app/dashboard/settings/page.tsx": 315,

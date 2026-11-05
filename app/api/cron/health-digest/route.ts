@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { adminEmails } from "@/lib/provisioning-server";
 import { canUseRobotPosting } from "@/lib/billing";
+import { loadPostingCoverage } from "@/lib/posting-coverage-load";
+import { coverageHealthLines } from "@/lib/posting-coverage";
 import { nodeHasBrotliFix } from "@/lib/image-url-import";
 import {
   DIGEST_LOCAL_HOUR,
@@ -98,14 +100,14 @@ export async function GET(req: NextRequest) {
   const { data: orgRows } = await admin
     .from("organizations")
     .select("id, name, plan, posting_addon_active");
-  const orgs = new Map<string, { name: string; robot: boolean }>();
+  const orgs = new Map<string, { id: string; name: string; robot: boolean }>();
   for (const o of (orgRows ?? []) as {
     id: string;
     name: string | null;
     plan: string | null;
     posting_addon_active: boolean | null;
   }[]) {
-    orgs.set(o.id, { name: o.name ?? "Unnamed account", robot: canUseRobotPosting(o) });
+    orgs.set(o.id, { id: o.id, name: o.name ?? "Unnamed account", robot: canUseRobotPosting(o) });
   }
   const orgName = (id: string | null) => (id && orgs.get(id)?.name) || "Unknown account";
 
@@ -195,6 +197,20 @@ export async function GET(req: NextRequest) {
       .filter((s) => orgs.get(s.organization_id)?.robot && !isQuietNotificationOrg(s.organization_id))
       .map((s) => ({ org: orgName(s.organization_id), channel: s.channel, code: s.last_check_code })),
   };
+
+  // S754: available rentals missing from a site the account can post to.
+  // Paying accounts only (Posting, or Agile), never Noam's quiet test accounts.
+  const coverageGaps: string[] = [];
+  for (const o of orgs.values()) {
+    if (!o.robot || isQuietNotificationOrg(o.id)) continue;
+    try {
+      const cov = await loadPostingCoverage(admin, o.id, true);
+      coverageGaps.push(...coverageHealthLines(o.name, cov));
+    } catch {
+      // a read error leaves the section out; the sweep line above still reports
+    }
+  }
+  input.coverageGaps = coverageGaps;
 
   const email = buildHealthDigest({ ...input, serverNode: { version: process.version, fixed: nodeHasBrotliFix(process.version) } });
   if (dry) return NextResponse.json({ ok: true, dry: true, ...email });

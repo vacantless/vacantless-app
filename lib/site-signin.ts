@@ -182,7 +182,7 @@ export function siteSigninView(
       return {
         tone: "ok",
         title: `${name} is ready`,
-        body: `We post your approved ads to ${name} from now on. You still approve each post.`,
+        body: `From now on we post each ad to ${name} when it is ready. A paid ad waits for you at checkout.`,
       };
     case "expired":
       return {

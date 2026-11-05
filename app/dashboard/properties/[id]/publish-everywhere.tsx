@@ -661,7 +661,7 @@ export function PublishEverywhere({
                   Post everywhere
                 </span>
                 <small className="text-[12.5px] font-semibold opacity-80">
-                  Then approve each site&apos;s post
+                  Free sites post as soon as they are ready
                 </small>
               </button>
             ) : postingBlocker ? (
@@ -707,7 +707,7 @@ export function PublishEverywhere({
               </div>
             )}
             <p className="mt-3 text-[12.5px] text-emerald-200">
-              You approve every post. You pay a site only if it asks.
+              Free sites post as soon as the ad is ready. You pay a site only if it asks.
             </p>
           </section>
         )}
@@ -825,7 +825,7 @@ function ForYouHandoff({
           : allSetSummary
           ? "The link to each ad is saved here. Reopen a site only when you change the listing."
           : robotPostingAllowed
-          ? "We post it for you. You approve each post and pay a site only if it charges."
+          ? "We post it for you as soon as it is ready. You pay a site only if it charges."
           : "Facebook Page and Instagram post from here, free. The Marketplace kit gives you the ad to paste. Kijiji, Rentals.ca and Zumper are posted for you with the Posting add-on."}
       </p>
       {postingBlocker && (
@@ -1178,8 +1178,8 @@ function ForYouRow({
         </div>
       ) : preparing ? (
         <p className="mt-2 text-[12px] text-amber-800">
-          We&apos;re filling in the ad. You approve it here before anything is
-          posted. Reload this page in a few minutes.
+          We&apos;re filling in the ad. Free sites post when it is ready. A
+          paid site waits for you here. Reload this page in a few minutes.
         </p>
       ) : working ? (
         <div className="mt-2">
@@ -1339,8 +1339,8 @@ function ApprovalModal({
           </button>
         </form>
         <p className="mt-3 text-center text-[11px] text-gray-400">
-          You approve every post. We save the link to your ad before it shows
-          as Live.
+          We save the link to your ad before it shows as Live. Paid sites wait
+          for you at checkout.
         </p>
       </div>
     </div>
@@ -1406,7 +1406,7 @@ function ConfirmModal({
           {liveNowText} · {signInText} · {feeText}.
         </p>
         <p className="mt-1 text-xs text-gray-400">
-          You approve every post. You pay a site only if it asks.
+          Free sites post as soon as the ad is ready. You pay a site only if it asks.
         </p>
 
         <div className="my-3.5 rounded-xl border border-gray-200 px-3">

@@ -28,6 +28,9 @@ import { ReadinessChips } from "./readiness-chips";
 import { DeleteOrArchiveControl } from "./row-actions";
 import { RenewListCard } from "./renew-list-card";
 import { loadRenewItems } from "@/lib/renew-list-load";
+import { CoverageCard } from "./coverage-card";
+import { loadPostingCoverage } from "@/lib/posting-coverage-load";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +67,7 @@ type RentalLaunchState = {
  * operator's behalf. Exact wording is Noam's.
  */
 const POSTING_SAFETY_PROMISE =
-  "You approve every post before it goes out. You also approve the site's fee and the link to your ad.";
+  "We post on your own accounts and save the link to every ad. A site's fee always waits for you.";
 
 const LAUNCH_STATE_CLASS: Record<RentalLaunchState["tone"], string> = {
   ready: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -235,6 +238,7 @@ export default async function PropertiesPage({
     restored?: string;
     delete_blocked?: string;
     renewed?: string;
+    posted?: string;
   };
 }) {
   const supabase = createClient();
@@ -269,7 +273,11 @@ export default async function PropertiesPage({
   ]);
 
   // S737: old ads across every rental, for the Renew box (lib/renew-list-load).
-  const renewItems = await loadRenewItems(supabase, org.id, org.booking_timezone || "America/Toronto");
+  // S754: which sites each available rental is on (lib/posting-coverage-load).
+  const [renewItems, coverage] = await Promise.all([
+    loadRenewItems(supabase, org.id, org.booking_timezone || "America/Toronto"),
+    readRobotPostingAccess(supabase, org.id).then((a) => loadPostingCoverage(supabase, org.id, a.allowed)),
+  ]);
 
   const allRows = (properties ?? []) as PropertyRow[];
   const activeRows = allRows.filter((row) => !row.archived_at);
@@ -406,6 +414,7 @@ export default async function PropertiesPage({
         }
       />
 
+      <CoverageCard coverage={coverage} posted={searchParams.posted ?? null} />
       <RenewListCard items={renewItems} renewed={!!searchParams.renewed} />
 
       {searchParams.added && (

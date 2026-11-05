@@ -155,7 +155,7 @@ export const DISTRIBUTION_CHANNELS: readonly DistributionChannel[] = [
     connectKind: "account_login",
     mode: "assisted_manual",
     blurb:
-      "We post your ad on Kijiji from your account and save the link. You approve the post and any fee first.",
+      "We post your ad on Kijiji from your account and save the link. Any fee waits for you first.",
     copyKey: "kijiji",
     hasFillSheet: true,
     hasGuardrails: true,

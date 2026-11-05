@@ -36,10 +36,11 @@ const frButtonLogin: string = fr.stage1.buttons.login;
 
 // --- the promise must be qualified -----------------------------------------
 ok(
-  // S702u: we post on the landlord's own account after each approval; the
-  // promise that survives is that we never see the password.
-  "en kindLogin says we never see your password and posts need approval",
-  /we never see your password/i.test(enKindLogin) && /approve/i.test(enKindLogin),
+  // S702u: we post on the landlord's own account; the promise that survives
+  // is that we never see the password. S754: free ads post as soon as they
+  // are ready (standing setting); paid ads still wait for approval.
+  "en kindLogin says we never see your password and paid ads need approval",
+  /we never see your password/i.test(enKindLogin) && /paid ads wait for your approval/i.test(enKindLogin),
 );
 ok(
   "fr kindLogin carries the same disclaimer",

@@ -21,7 +21,7 @@
     "groupReady": "Prêt à vous connecter",
     "groupComing": "Pas encore",
     "groupAgent": "Demandez à votre agent",
-    "kindLogin": "C'est votre propre compte. Nous y publions vos annonces après votre accord pour chacune. Nous ne voyons jamais votre mot de passe.",
+    "kindLogin": "C'est votre propre compte. Nous y publions vos annonces dès qu'elles sont prêtes. Les annonces payantes attendent votre accord. Nous ne voyons jamais votre mot de passe.",
     "kindOauth": "Un bouton sécurisé",
     "kindNone": "Non relié à Vacantless",
     "kindPostedForYou": "Publiées sur votre propre compte, de notre côté.",

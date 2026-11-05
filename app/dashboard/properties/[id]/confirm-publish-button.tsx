@@ -110,7 +110,7 @@ export function ConfirmPublishButton({
             <p className="mt-2 text-sm leading-relaxed text-gray-600">
               {showingInstantCommitment
                 ? "These accounts get a public post as soon as you approve."
-                : "Renters can see your page and book a viewing. Posting to rental sites comes next, and you approve each one."}
+                : "Renters can see your page and book a viewing. Posting to rental sites comes next."}
             </p>
 
             {/* S732 walk-through: a first-time landlord with nothing connected

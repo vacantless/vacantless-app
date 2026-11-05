@@ -25,6 +25,7 @@ import {
   readNextBill,
 } from "@/lib/stripe";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { POSTING_AUTOPILOT_COPY } from "@/lib/posting-autopilot";
 import { adminEmails } from "@/lib/provisioning-server";
 import { isAdminEmail } from "@/lib/provisioning";
 import {
@@ -35,6 +36,7 @@ import {
   startDepositCheckout,
   addPostingAddon,
   removePostingAddon,
+  setPostingAutopilot,
   startPostingOnlyCheckout,
 } from "./actions";
 import { BrandBanner } from "@/components/ui";
@@ -742,6 +744,32 @@ export default async function BillingPage({
             The Facebook Marketplace kit and your Facebook Page and Instagram
             stay free with every account.
           </p>
+          {addonAccess.allowed ? (
+            // S754 (review item 3): standing consent for the free robot sites.
+            <div
+              id="posting-autopilot"
+              className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {POSTING_AUTOPILOT_COPY.title}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-600">
+                    {addonAccess.autopilot ? POSTING_AUTOPILOT_COPY.on : POSTING_AUTOPILOT_COPY.off}
+                  </p>
+                </div>
+                {canManageBilling ? (
+                  <form action={setPostingAutopilot}>
+                    <input type="hidden" name="on" value={addonAccess.autopilot ? "0" : "1"} />
+                    <button className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      {addonAccess.autopilot ? POSTING_AUTOPILOT_COPY.turnOff : POSTING_AUTOPILOT_COPY.turnOn}
+                    </button>
+                  </form>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <div className="mt-5">
             {addonPending ? (
               <div className="flex flex-wrap items-center gap-3">

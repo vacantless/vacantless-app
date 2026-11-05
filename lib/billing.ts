@@ -606,7 +606,7 @@ export const POSTING_ADDON = {
   features: [
     "We post to Kijiji, Rentals.ca and Zumper",
     "Set up with you, on your own Kijiji, Rentals.ca and Zumper accounts",
-    "You approve every ad first",
+    "Ads go up as soon as they are ready",
     "Kijiji ad fees extra, at cost, inside your limits",
   ],
 };
@@ -637,7 +637,7 @@ export const POSTING_ADDON_HREF = "/dashboard/billing#posting-addon";
 export const POSTING_OFFER = {
   title: "Add 3 more sites, posted for you",
   body:
-    "We post this ad on Kijiji, Rentals.ca and Zumper + PadMapper for you. You sign in to each site once, about three minutes. We never see your password. You approve every ad before it goes up.",
+    "We post this ad on Kijiji, Rentals.ca and Zumper + PadMapper for you. You sign in to each site once, about three minutes. We never see your password. Ads go up as soon as they are ready; you can switch to approving each one first.",
   price: "$49 a month, on Free or Growth.",
   fees: "Site fees: Kijiji gives one free ad per account, then $33.84 each. Rentals.ca and Zumper are free.",
   action: "Post on 3 more sites",

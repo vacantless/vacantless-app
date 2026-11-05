@@ -41,6 +41,8 @@ export type HealthInput = {
   serverNode?: { version: string; fixed: boolean } | null;
   /** S748: page crashes recorded by the error pages (app_errors), last 24 hours. Null = not read. */
   appErrors?: { path: string | null }[] | null;
+  /** S754: available rentals missing from a site the account can post to (lib/posting-coverage coverageHealthLines). */
+  coverageGaps?: string[] | null;
 };
 
 const PORTAL_OK = new Set(["lead_created", "duplicate"]);
@@ -150,6 +152,12 @@ export function healthSections(input: HealthInput): HealthSection[] {
   }
   if (robotLines.length) out.push({ title: "Posting to sites", lines: robotLines });
 
+  // 5. S754: rentals that could be on more sites today. Not a failure, a gap
+  // that costs renters every day it stays open.
+  if (input.coverageGaps && input.coverageGaps.length) {
+    out.push({ title: "Rentals missing from sites", lines: input.coverageGaps });
+  }
+
   return out;
 }
 
@@ -171,7 +179,7 @@ export function buildHealthDigest(input: HealthInput): { subject: string; body: 
     parts.push(`${s.title.toUpperCase()}\n${s.lines.map((l) => `- ${l}`).join("\n")}`);
   }
   parts.push(
-    `Checked: ${okRuns} of ${runs} background sweeps clean, email delivery${input.emails.checked ? "" : " (not checked)"}, renter emails from sites, robot posts and site sign-ins${input.appErrors ? ", page crashes" : ""}. Not checked here: ${input.appErrors ? "errors inside API calls that no page showed" : "app errors in Vercel's logs"}.`,
+    `Checked: ${okRuns} of ${runs} background sweeps clean, email delivery${input.emails.checked ? "" : " (not checked)"}, renter emails from sites, robot posts and site sign-ins${input.appErrors ? ", page crashes" : ""}${input.coverageGaps ? ", which sites each rental is on" : ""}. Not checked here: ${input.appErrors ? "errors inside API calls that no page showed" : "app errors in Vercel's logs"}.`,
   );
   // S736: the Node2Shell watch (lib/image-url-import nodeHasBrotliFix). Information, not a problem.
   if (input.serverNode) {

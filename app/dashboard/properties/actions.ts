@@ -3,6 +3,7 @@
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/posting-lanes";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -71,6 +72,7 @@ import {
   normalizePublishChannel,
   normalizePublishStatus,
   normalizePublishMode,
+  isPublishChannelKey,
   canRequestConcierge,
   conciergeRequestAuditForChannel,
   preparePublishChannel,
@@ -5566,7 +5568,11 @@ export async function requestConciergePublish(formData: FormData) {
       );
     }
   }
-  if (!hasEntitlement(runOrgPlan, "listing_marketing")) {
+  // S754: a robot site is sold by the Posting add-on on any plan (S734, Free
+  // included), so the Growth-only listing_marketing gate applies to the
+  // person-posted desk sites only. Before this a Free account that bought
+  // Posting was turned back here with "upgrade".
+  if (!isRobotPostedChannel(item.channel) && !hasEntitlement(runOrgPlan, "listing_marketing")) {
     redirect(
       `/dashboard/properties/${propertyId}?run=conciergeupgrade#distribute-header`,
     );
@@ -5698,6 +5704,91 @@ export async function requestConciergePublish(formData: FormData) {
 
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?run=concierge#distribute-header`);
+}
+
+/**
+ * S754 (review item 1): "Post to the missing sites" on the rentals list. For
+ * one available rental, every robot site the account is signed in to with no
+ * live ad gets a run item (staged the same way as the launcher) and is queued
+ * for the posting worker, the same write "Post it for me" makes. Marketplace
+ * is person-posted and is not queued here. Returns to the list with the count.
+ */
+export async function postToMissingSites(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) redirect("/dashboard/properties?forbidden=1");
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const access = await readRobotPostingAccess(supabase, org.id);
+  if (!access.allowed) redirect("/dashboard/billing#posting-addon");
+
+  const coverage = await loadPostingCoverage(supabase, org.id, access.allowed);
+  const row = coverage.rows.find((r) => r.propertyId === propertyId);
+  const channels = (row?.missingRobot ?? []).filter(
+    (c): c is PublishChannelKey => isPublishChannelKey(c) && !isHiddenForOrg(c, org.id),
+  );
+  if (channels.length === 0) redirect("/dashboard/properties?posted=0#site-coverage");
+
+  try {
+    await stageDistributionRunForProperty({ supabase, org, propertyId, channels });
+  } catch (err) {
+    console.error("postToMissingSites: staging failed", {
+      propertyId,
+      channels,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    redirect(`/dashboard/properties/${propertyId}?runerr=claimfailed#distribute-header`);
+  }
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("id")
+    .eq("property_id", propertyId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  const runId = (run?.id as string | undefined) ?? null;
+  if (!runId) redirect(`/dashboard/properties/${propertyId}?runerr=notfound#distribute-header`);
+  const { data: items } = await supabase
+    .from("distribution_run_items")
+    .select("id, channel, publish_status, mode")
+    .eq("run_id", runId)
+    .in("channel", channels);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const now = new Date().toISOString();
+  let queued = 0;
+  for (const it of (items ?? []) as { id: string; channel: string; publish_status: string | null; mode: string | null }[]) {
+    if (!canRequestConcierge(normalizePublishStatus(it.publish_status), normalizePublishMode(it.mode))) continue;
+    const { error } = await supabase
+      .from("distribution_run_items")
+      .update({
+        mode: "concierge",
+        publish_status: "queued",
+        status: "in_progress",
+        concierge_requested_at: now,
+        concierge_requested_by: user?.id ?? null,
+        concierge_claimed_by: null,
+        concierge_claimed_at: null,
+        audit_message: conciergeRequestAuditForChannel(it.channel),
+        error_code: null,
+        error_message: null,
+        updated_at: now,
+      })
+      .eq("id", it.id);
+    if (!error) queued += 1;
+  }
+  if (queued > 0) {
+    await supabase
+      .from("distribution_runs")
+      .update({ status: "active", completed_at: null })
+      .eq("id", runId)
+      .eq("status", "completed");
+  }
+  revalidatePath("/dashboard/properties");
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties?posted=${queued}#site-coverage`);
 }
 
 // ============================================================================
