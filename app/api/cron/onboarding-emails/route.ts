@@ -28,7 +28,7 @@ function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
   if (req.headers.get("authorization") === `Bearer ${secret}`) return true;
-  return req.nextUrl.searchParams.get("secret") === secret;
+  return false; // S751: header only (a secret in the URL lands in request logs)
 }
 
 export async function GET(req: NextRequest) {

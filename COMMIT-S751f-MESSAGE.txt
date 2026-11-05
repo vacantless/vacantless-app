@@ -1,0 +1,18 @@
+S751f: security leftovers from the Fable review (cron secret, headers, link key)
+
+- Cron routes take CRON_SECRET only as a bearer header; the ?secret= query
+  fallback is gone from all 31 routes (a secret in the URL lands in request
+  logs). Every caller already sends the header; no ?secret= request in the
+  last 7 days of production logs. Tests updated; new
+  scripts/test-s751-cron-header-only.ts.
+- Security headers on every response: X-Frame-Options SAMEORIGIN, CSP
+  frame-ancestors 'self', nosniff, strict-origin-when-cross-origin referrer,
+  camera/microphone/geolocation off. No page is framed by another site.
+- Public signed links (Add to calendar, renter unsubscribe, calendar feed,
+  Marketplace phone kit) sign with LINK_SIGNING_SECRET once it is set in
+  Vercel, instead of the service-role key; links already sent still verify
+  against the old key (lib/link-signing.ts). Until the variable is set,
+  nothing changes. New scripts/test-s751-link-signing.ts.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrLaJDbp4RGWCy52RF

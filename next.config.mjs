@@ -13,6 +13,24 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // S751 (Fable review, lower list): basic security headers on every response.
+  // No page is meant to be framed by another site (the app frames only its own
+  // pages and signed document links), so framing is same-origin only. No full
+  // script CSP yet: it would need a nonce pass over every inline script first.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+        ],
+      },
+    ];
+  },
   // S728: the nav says Plans -> /#pricing, but people type /pricing and ads
   // link it. Both short paths were 404s.
   async redirects() {
@@ -43,7 +61,9 @@ const nextConfig = {
       "/dashboard/tenancies/[id]/n13/official": ["./lib/forms/ltb-n13-2026.pdf"],
       "/dashboard/tenancies/[id]/l1/official": ["./lib/forms/ltb-l1-2026.pdf"],
       "/dashboard/tenancies/[id]/l9/official": ["./lib/forms/ltb-l9-2026.pdf"],
+      "/dashboard/tenancies/[id]/l10/official": ["./lib/forms/ltb-l10-2026.pdf"],
       "/dashboard/tenancies/[id]/n5/official": ["./lib/forms/ltb-n5-2026.pdf"],
+      "/dashboard/tenancies/[id]/n6/official": ["./lib/forms/ltb-n6-2026.pdf"],
       "/dashboard/tenancies/[id]/l2/official": ["./lib/forms/ltb-l2-2026.pdf"],
       "/dashboard/tenancies/[id]/n8/official": ["./lib/forms/ltb-n8-2026.pdf"],
       // The N4 "file to vault" server action runs in the tenancy page itself.

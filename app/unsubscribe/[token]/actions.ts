@@ -2,15 +2,14 @@
 
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyRenterUnsubscribeToken } from "@/lib/renter-unsubscribe";
-import { renterUnsubscribeSecret } from "@/lib/renter-unsubscribe-server";
+import { verifyRenterUnsubscribeLink } from "@/lib/renter-unsubscribe-server";
 import { markRenterEmailOptOut } from "@/lib/renter-email-block";
 
 // S728: the POST half of the renter unsubscribe link. Records the opt-out on
 // every lead carrying the address, writes one note, and never throws.
 export async function unsubscribeRenter(formData: FormData): Promise<void> {
   const token = String(formData.get("token") ?? "");
-  const v = verifyRenterUnsubscribeToken(token, renterUnsubscribeSecret());
+  const v = verifyRenterUnsubscribeLink(token);
   if (!v) redirect(`/unsubscribe/${encodeURIComponent(token)}?status=invalid`);
   const admin = createAdminClient();
   if (!admin) redirect(`/unsubscribe/${encodeURIComponent(token)}?status=error`);

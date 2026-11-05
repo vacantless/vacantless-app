@@ -6,6 +6,7 @@
 // rental page already shows, plus a box to save the link to the ad.
 
 import { createHmac, timingSafeEqual } from "crypto";
+import { linkSigningSecret, linkVerifySecrets } from "./link-signing";
 import { MARKETPLACE_PHONE_LINK_DAYS } from "@/lib/marketplace-kit";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -51,5 +52,16 @@ export function verifyPhoneKitToken(token: string | null | undefined, secret: st
 
 /** Server secret for the phone link (the same source as the calendar feed). */
 export function phoneKitSecret(env: Record<string, string | undefined> = process.env): string {
-  return env.SUPABASE_SERVICE_ROLE_KEY || env.CRON_SECRET || "";
+  return linkSigningSecret(env);
+}
+
+/** S751: checks a phone link against the new key and the keys older links were signed with. */
+export function verifyPhoneKitLink(token: string | null | undefined, nowMs: number, env: Record<string, string | undefined> = process.env): PhoneKitCheck {
+  let last: PhoneKitCheck = { ok: false, reason: "bad" };
+  for (const s of linkVerifySecrets(env)) {
+    const c = verifyPhoneKitToken(token, s, nowMs);
+    if (c.ok) return c;
+    if (c.reason === "too_old") last = c;
+  }
+  return last;
 }

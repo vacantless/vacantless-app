@@ -104,8 +104,7 @@ function authorized(req: NextRequest): boolean {
   if (!secret) return false;
   const auth = req.headers.get("authorization");
   if (auth === `Bearer ${secret}`) return true;
-  const qp = req.nextUrl.searchParams.get("secret");
-  return qp === secret;
+  return false; // S751: header only (a secret in the URL lands in request logs)
 }
 
 type AdminClient = NonNullable<ReturnType<typeof createAdminClient>>;

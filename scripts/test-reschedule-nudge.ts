@@ -125,9 +125,9 @@ ok("route candidate evaluator checks org opt-in, scheduled outcome, and future s
   routeSource.includes("org_enabled: org?.reschedule_nudge_enabled === true") &&
     routeSource.includes('row.showing_outcome !== "scheduled"') &&
     routeSource.includes("showingMs <= nowMs"));
-ok("route supports CRON_SECRET bearer/query auth",
+ok("route takes CRON_SECRET as a bearer header only (S751)",
   routeSource.includes("Bearer ${secret}") &&
-    routeSource.includes('searchParams.get("secret")'));
+    !routeSource.includes('searchParams.get("secret")'));
 ok("route supports dry org and force modes",
   routeSource.includes('params.get("dry") === "1"') &&
     routeSource.includes('params.get("org")') &&

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isQuietNotificationOrg } from "@/lib/quiet-orgs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { adminEmails } from "@/lib/provisioning-server";
@@ -30,7 +31,7 @@ function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
   if (req.headers.get("authorization") === `Bearer ${secret}`) return true;
-  return req.nextUrl.searchParams.get("secret") === secret;
+  return false; // S751: header only (a secret in the URL lands in request logs)
 }
 
 async function brevoProblems(): Promise<HealthInput["emails"]> {
@@ -178,6 +179,8 @@ export async function GET(req: NextRequest) {
       // at needs_login; a Set Live on 2026-10-27 touched updated_at and put
       // them in the 2026-10-28 digest as two "problems" nobody can fix.
       .filter((r) => orgs.get(r.organization_id)?.robot)
+      // S751: Noam's own test accounts are not problems anyone has to fix.
+      .filter((r) => !isQuietNotificationOrg(r.organization_id))
       .map((r) => ({
       org: orgName(r.organization_id),
       channel: r.channel,
@@ -189,7 +192,7 @@ export async function GET(req: NextRequest) {
     signIns: (
       (sessionRes.data ?? []) as { organization_id: string; channel: string; last_check_code: string | null }[]
     )
-      .filter((s) => orgs.get(s.organization_id)?.robot)
+      .filter((s) => orgs.get(s.organization_id)?.robot && !isQuietNotificationOrg(s.organization_id))
       .map((s) => ({ org: orgName(s.organization_id), channel: s.channel, code: s.last_check_code })),
   };
 

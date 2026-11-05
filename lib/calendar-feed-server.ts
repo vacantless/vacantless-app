@@ -2,10 +2,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signCalendarFeedToken, verifyCalendarFeedToken, type FeedSubject, type FeedViewing } from "@/lib/calendar-feed";
 
+import { linkSigningSecret, verifyWithAnyKey } from "@/lib/link-signing";
+
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/+$/, "");
 
 function secret(): string {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CRON_SECRET || "";
+  return linkSigningSecret();
 }
 
 /** The subscribe URL, or "" when the server has no key. */
@@ -19,7 +21,7 @@ const LOOKBACK_DAYS = 14;
 const LOOKAHEAD_DAYS = 120;
 
 export async function loadCalendarFeed(token: string): Promise<{ name: string; viewings: FeedViewing[] } | null> {
-  const subject = verifyCalendarFeedToken(token, secret());
+  const subject = verifyWithAnyKey((s) => verifyCalendarFeedToken(token, s));
   if (!subject) return null;
   const admin = createAdminClient();
   if (!admin) return null;

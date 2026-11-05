@@ -1,7 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
-import { verifyRenterUnsubscribeToken } from "@/lib/renter-unsubscribe";
-import { renterUnsubscribeSecret } from "@/lib/renter-unsubscribe-server";
+import { verifyRenterUnsubscribeLink } from "@/lib/renter-unsubscribe-server";
 import { unsubscribeRenter } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +29,7 @@ export default async function UnsubscribePage({
   params: { token: string };
   searchParams: { status?: string };
 }) {
-  const v = verifyRenterUnsubscribeToken(params.token, renterUnsubscribeSecret());
+  const v = verifyRenterUnsubscribeLink(params.token);
   const admin = v ? createAdminClient() : null;
   let row: Row | null = null;
   if (admin && v) {

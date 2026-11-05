@@ -830,7 +830,7 @@ async function runDryPreviewTest() {
   const rentConfirmCalls: Array<Record<string, unknown>> = [];
   const notificationCalls: Array<Record<string, unknown>> = [];
   const response = await runLandlordCampaign(
-    new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&dry=1"),
+    new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?dry=1", { headers: { authorization: "Bearer test" } }),
     campaignDeps({ db: fakeDb, rentConfirmCalls, notificationCalls }),
   );
   const body = (await response.json()) as {
@@ -876,7 +876,7 @@ async function runTestSendRouteTests() {
     const fakeDb = new FakeCampaignDb();
     const rentConfirmCalls: Array<Record<string, unknown>> = [];
     const response = await runLandlordCampaign(
-      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=Noam%40Example.com&test_org=david"),
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?test_to=Noam%40Example.com&test_org=david", { headers: { authorization: "Bearer test" } }),
       campaignDeps({ db: fakeDb, rentConfirmCalls }),
     );
     const body = (await response.json()) as Record<string, unknown>;
@@ -897,7 +897,7 @@ async function runTestSendRouteTests() {
     const fakeDb = new FakeCampaignDb();
     const rentConfirmCalls: Array<Record<string, unknown>> = [];
     const response = await runLandlordCampaign(
-      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=noam@example.com,other@example.com&test_org=david"),
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?test_to=noam@example.com,other@example.com&test_org=david", { headers: { authorization: "Bearer test" } }),
       campaignDeps({ db: fakeDb, rentConfirmCalls }),
     );
     const body = (await response.json()) as Record<string, unknown>;
@@ -908,7 +908,7 @@ async function runTestSendRouteTests() {
     const fakeDb = new FakeCampaignDb();
     const rentConfirmCalls: Array<Record<string, unknown>> = [];
     const response = await runLandlordCampaign(
-      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=noam@example.com%20other@example.com&test_org=david"),
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?test_to=noam@example.com%20other@example.com&test_org=david", { headers: { authorization: "Bearer test" } }),
       campaignDeps({ db: fakeDb, rentConfirmCalls }),
     );
     const body = (await response.json()) as Record<string, unknown>;
@@ -919,7 +919,7 @@ async function runTestSendRouteTests() {
     const fakeDb = new FakeCampaignDb();
     const rentConfirmCalls: Array<Record<string, unknown>> = [];
     const response = await runLandlordCampaign(
-      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=noam@example.com"),
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?test_to=noam@example.com", { headers: { authorization: "Bearer test" } }),
       campaignDeps({ db: fakeDb, rentConfirmCalls }),
     );
     const body = (await response.json()) as Record<string, unknown>;
@@ -930,7 +930,7 @@ async function runTestSendRouteTests() {
     const fakeDb = new FakeCampaignDb();
     const rentConfirmCalls: Array<Record<string, unknown>> = [];
     const response = await runLandlordCampaign(
-      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=noam@example.com&test_org=missing"),
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?test_to=noam@example.com&test_org=missing", { headers: { authorization: "Bearer test" } }),
       campaignDeps({ db: fakeDb, rentConfirmCalls }),
     );
     const body = (await response.json()) as Record<string, unknown>;
@@ -941,7 +941,7 @@ async function runTestSendRouteTests() {
     const fakeDb = new FakeCampaignDb();
     const rentConfirmCalls: Array<Record<string, unknown>> = [];
     const response = await runLandlordCampaign(
-      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test&test_to=noam@example.com&test_org=paul"),
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?test_to=noam@example.com&test_org=paul", { headers: { authorization: "Bearer test" } }),
       campaignDeps({ db: fakeDb, rentConfirmCalls }),
     );
     const body = (await response.json()) as Record<string, unknown>;
@@ -953,7 +953,7 @@ async function runTestSendRouteTests() {
     const fakeDb = new FakeCampaignDb();
     const rentConfirmCalls: Array<Record<string, unknown>> = [];
     const response = await runLandlordCampaign(
-      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign?secret=test"),
+      new NextRequest("https://app.vacantless.com/api/cron/landlord-campaign", { headers: { authorization: "Bearer test" } }),
       campaignDeps({ db: fakeDb, rentConfirmCalls }),
     );
     const body = (await response.json()) as Record<string, unknown>;

@@ -6,10 +6,12 @@ import {
   type CalendarViewing,
 } from "@/lib/viewing-calendar";
 
+import { linkSigningSecret, verifyWithAnyKey } from "@/lib/link-signing";
+
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/+$/, "");
 
 function secret(): string {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.CRON_SECRET || "";
+  return linkSigningSecret();
 }
 
 /** The "Add to calendar" page for a viewing, or "" when the server has no key. */
@@ -32,7 +34,7 @@ export type LoadedCalendarViewing = CalendarViewing & {
 };
 
 export async function loadCalendarViewing(token: string): Promise<LoadedCalendarViewing | null> {
-  const id = verifyViewingCalendarToken(token, secret());
+  const id = verifyWithAnyKey((s) => verifyViewingCalendarToken(token, s));
   if (!id) return null;
   const admin = createAdminClient();
   if (!admin) return null;

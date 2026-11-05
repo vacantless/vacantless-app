@@ -3,7 +3,7 @@ import { validateListingPost } from "@/lib/listing-distribution";
 import { recordVerificationAndAttempt } from "@/lib/distribution-verification-write";
 import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
 import { isFacebookShareLink, marketplaceItemUrlFrom } from "@/lib/marketplace-kit";
-import { phoneKitSecret, verifyPhoneKitToken } from "@/lib/marketplace-phone-link";
+import { verifyPhoneKitLink } from "@/lib/marketplace-phone-link";
 
 // S712: a showing agent pasted the link to the Marketplace ad they posted from
 // the no-login kit page. Record it the same way a landlord's "Save the link to
@@ -227,7 +227,7 @@ export async function loadPhoneMarketplaceContext(
   token: string,
   nowMs: number,
 ): Promise<{ ok: true; ctx: PhoneMarketplaceContext } | { ok: false; reason: "bad" | "too_old" }> {
-  const check = verifyPhoneKitToken(token, phoneKitSecret(), nowMs);
+  const check = verifyPhoneKitLink(token, nowMs);
   if (!check.ok) return check;
   const { orgId, propertyId } = check.subject;
   const { data: orgRow } = await admin
