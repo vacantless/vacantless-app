@@ -1,0 +1,8 @@
+S751e: homepage names the Chrome helper for Marketplace
+
+The pricing note said the Marketplace kit is "ready to paste in". Since
+S735 the free Vacantless helper fills the Marketplace form on a computer
+(how-to video 4 already shows it); the homepage now says so.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrLaJDbp4RGWCy52RF
