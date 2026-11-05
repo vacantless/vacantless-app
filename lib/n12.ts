@@ -98,8 +98,8 @@ export type N12DateInput = {
   fixedTermEndISO?: string | null;
 };
 
-/** Earliest valid termination date at least `minDays` after the notice counts as given. */
-function earliestEndAfter(input: N12DateInput, minDays: number): string {
+/** Earliest valid termination date at least `minDays` after the notice counts as given. S751: shared with the N13. */
+export function earliestEndAfter(input: N12DateInput, minDays: number): string {
   const deemed = n12DeemedServiceDate(input.serviceDateISO, input.method);
   const min = addDaysISO(deemed, minDays);
   const term = input.fixedTermEndISO && ISO.test(input.fixedTermEndISO) ? input.fixedTermEndISO : null;

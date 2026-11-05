@@ -144,6 +144,7 @@ import {
   type N4NoticeView,
 } from "./n4-section";
 import { TenancyN12Section, type N12NoticeView } from "./n12-section";
+import { TenancyN13Section, type N13NoticeView } from "./n13-section";
 import { TenancyL1Section } from "./l1-section";
 import { TenancyL9Section } from "./l9-section";
 import { computeL9 } from "@/lib/l9";
@@ -408,6 +409,7 @@ export default async function TenancyDetailPage({
     n12?: string;
     l1?: string;
     l9?: string;
+    n13?: string;
     n5?: string;
     l2?: string;
     n8?: string;
@@ -664,6 +666,33 @@ export default async function TenancyDetailPage({
       termination_date: n.termination_date,
       total_owing_cents: n.total_owing_cents,
       compensation_required: n.compensationRequired === true,
+      created_at: n.created_at,
+    };
+  });
+  // S751: Form N13 notices for this tenancy. Newest first.
+  const { data: n13Rows } = await supabase
+    .from("notices")
+    .select("id, status, termination_date, total_owing_cents, created_at, compensationRequired:snapshot->compensationRequired, reason:snapshot->reason")
+    .eq("tenancy_id", params.id)
+    .eq("type", "N13")
+    .order("created_at", { ascending: false });
+  const n13Notices: N13NoticeView[] = (n13Rows ?? []).map((r) => {
+    const n = r as unknown as {
+      id: string;
+      status: string;
+      termination_date: string | null;
+      total_owing_cents: number | null;
+      created_at: string;
+      compensationRequired: boolean | null;
+      reason: number | null;
+    };
+    return {
+      id: n.id,
+      status: n.status,
+      termination_date: n.termination_date,
+      total_owing_cents: n.total_owing_cents,
+      compensation_required: n.compensationRequired !== false,
+      reason: Number(n.reason ?? 1),
       created_at: n.created_at,
     };
   });
@@ -1849,7 +1878,7 @@ export default async function TenancyDetailPage({
       <CollapsibleSection
         id="notices"
         title="LTB notices"
-        defaultOpen={(["n4", "n12", "n5", "n8", "l1", "l9", "l2"] as const).some((k) => !!(searchParams as Record<string, string | undefined>)[k])}
+        defaultOpen={(["n4", "n12", "n13", "n5", "n8", "l1", "l9", "l2"] as const).some((k) => !!(searchParams as Record<string, string | undefined>)[k])}
       >
         <TenancyN4Section
           tenancyId={t.id}
@@ -1875,6 +1904,16 @@ export default async function TenancyDetailPage({
           notices={n12Notices}
           today={todayOntario}
           msg={searchParams.n12}
+        />
+        <TenancyN13Section
+          tenancyId={t.id}
+          active={t.status === "active"}
+          rentCents={t.rent_cents}
+          endDate={t.end_date ?? null}
+          landlordName={org?.name ?? ""}
+          notices={n13Notices}
+          today={todayOntario}
+          msg={searchParams.n13}
         />
         <TenancyL1Section
           tenancyId={t.id}

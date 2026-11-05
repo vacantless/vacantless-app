@@ -1,0 +1,20 @@
+S751c: Form N13, demolish, renovate or convert (official 2026/09)
+
+- Tenancy page: "Form N13: demolish, renovate or convert the unit". The
+  landlord picks the reason, describes the work and the permits; Vacantless
+  checks the end date (120 days, 1 year for an owned mobile home; delivery
+  days; end of a rental period; not before a fixed term ends), refuses
+  "no permits" for repairs, and works out compensation: 3 months' rent with
+  5+ units, 1 month with fewer, mobile home the lesser of a year or $3,000,
+  none when the work was ordered under a law.
+- Prepare / record service / void, like the N12; the answers freeze in
+  notices.snapshot (type N13, already allowed). Download fills the official
+  N13 from the snapshot; the work boxes are filled at 10 pt and text that
+  won't fit is refused (attach a page).
+- lib/n12.ts exports earliestEndAfter for the shared date rule.
+- Tests: scripts/test-s751-n13.ts 43 pass, incl. the LTB's own example
+  (Aug 31 end: hand by May 3, mail by Apr 28); N12 tests 58 pass.
+- L2 from a served N13 is the next build (not in this commit).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrLaJDbp4RGWCy52RF
