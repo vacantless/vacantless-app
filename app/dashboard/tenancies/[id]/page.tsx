@@ -145,6 +145,8 @@ import {
 } from "./n4-section";
 import { TenancyN12Section, type N12NoticeView } from "./n12-section";
 import { TenancyL1Section } from "./l1-section";
+import { TenancyL9Section } from "./l9-section";
+import { computeL9 } from "@/lib/l9";
 import { TenancyN5Section, type N5NoticeView } from "./n5-section";
 import { TenancyL2Section, type L2NoticeView } from "./l2-section";
 import { TenancyN8Section, type N8NoticeView } from "./n8-section";
@@ -405,6 +407,7 @@ export default async function TenancyDetailPage({
     msg?: string;
     n12?: string;
     l1?: string;
+    l9?: string;
     n5?: string;
     l2?: string;
     n8?: string;
@@ -716,6 +719,24 @@ export default async function TenancyDetailPage({
     amount_cents: p.amount_cents,
     period_month: p.period_month,
   }));
+  // S751: the L9 preview (rent owing up to today; same counting as the route).
+  const l9Today =
+    t.rent_cents != null && t.start_date
+      ? computeL9({
+          filingDateISO: todayOntario,
+          todayISO: todayOntario,
+          method: "portal",
+          tenantInPossession: true,
+          tenantCount: 1,
+          rentCents: t.rent_cents,
+          startDateISO: t.start_date,
+          payments: n4Payments,
+        })
+      : null;
+  const l9LedgerProblem =
+    !l9Today
+      ? ("not_reconciling" as const)
+      : (l9Today.problems.find((p) => p !== "over_limit") ?? null);
   const n4AppUrl =
     process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
   const guidelineLookup = await loadGuidelineLookup(supabase);
@@ -1870,6 +1891,16 @@ export default async function TenancyDetailPage({
           depositCents={t.deposit_cents ?? null}
           today={todayOntario}
           msg={searchParams.l1}
+        />
+        <TenancyL9Section
+          tenancyId={t.id}
+          active={t.status === "active"}
+          owingTodayCents={l9Today ? l9Today.rentOwingCents : null}
+          ledgerProblem={l9LedgerProblem}
+          landlordName={org?.name ?? ""}
+          landlordPhone={org?.public_contact_phone ?? null}
+          today={todayOntario}
+          msg={searchParams.l9}
         />
         <TenancyN5Section
           tenancyId={t.id}

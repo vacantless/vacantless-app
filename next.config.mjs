@@ -41,6 +41,7 @@ const nextConfig = {
       "/dashboard/tenancies/[id]/n4/official": ["./lib/forms/ltb-n4-2026-09.pdf"],
       "/dashboard/tenancies/[id]/n12/official": ["./lib/forms/ltb-n12-2026-10.pdf"],
       "/dashboard/tenancies/[id]/l1/official": ["./lib/forms/ltb-l1-2026.pdf"],
+      "/dashboard/tenancies/[id]/l9/official": ["./lib/forms/ltb-l9-2026.pdf"],
       "/dashboard/tenancies/[id]/n5/official": ["./lib/forms/ltb-n5-2026.pdf"],
       "/dashboard/tenancies/[id]/l2/official": ["./lib/forms/ltb-l2-2026.pdf"],
       "/dashboard/tenancies/[id]/n8/official": ["./lib/forms/ltb-n8-2026.pdf"],

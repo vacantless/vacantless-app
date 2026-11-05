@@ -87,7 +87,7 @@ ok(
 ok(
   "action: adds operator note when renter could not find a time",
   actions.includes("no_suitable_time_note") &&
-    actions.includes("couldn't find a workable viewing time"),
+    actions.includes("could not find a workable viewing time"),
 );
 
 // --- operator notification --------------------------------------------------
@@ -138,11 +138,11 @@ ok(
 );
 ok(
   "nurture cron: selects no_suitable_time",
-  nurtureCron.includes('"no_suitable_time, nurture_step_sent, nurture_last_sent_at, "'),
+  nurtureCron.includes('"no_suitable_time, reopen_notified_at, nurture_step_sent, nurture_last_sent_at, "'),
 );
 ok(
   "nurture cron: sends no_suitable_time to email composer",
-  nurtureCron.includes("no_suitable_time: row.no_suitable_time === true"),
+  nurtureCron.includes("no_suitable_time: nurtureUsesNoTimeCopy(row.no_suitable_time, row.reopen_notified_at)"),
 );
 
 console.log(`\nlead-no-suitable-time: ${passed} passed, ${failed} failed`);

@@ -1,0 +1,20 @@
+S751: Form L9, collect rent the tenant owes (official 2026/09)
+
+- Tenancy page: "Form L9: collect rent the tenant owes" for a current
+  tenancy. No notice first; rent owing is counted from the ledger up to the
+  filing date (same table rules as the N4 and L1), fee $186 portal / $201
+  paper, tenant must still live there (else L10), no future filing date,
+  $50,000 cap. Shows the rent owing today before download.
+- POST /dashboard/tenancies/[id]/l9/official returns the filled official
+  L9 for the landlord to sign and file; nothing is stored or filed.
+- The L1 and L9 share one filler (fillLtbRentClaim); the L9 has no rent
+  deposit boxes. L1 tests unchanged (44 pass).
+- Template lib/forms/ltb-l9-2026.pdf cleaned by WORKFLOW 324 step 3.
+- Tests: scripts/test-s751-l9.ts (LTB worked example $1,626, rules,
+  fill-and-read-back of every mapped field, wiring).
+- test-lead-no-suitable-time: three checks still expected the old note
+  wording and the pre-reopen nurture columns; updated to the current code
+  (22 pass).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrLaJDbp4RGWCy52RF

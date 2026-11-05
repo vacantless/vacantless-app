@@ -44,19 +44,36 @@ export type L1FillInput = {
 };
 
 export async function fillOfficialL1(d: L1FillInput): Promise<Uint8Array> {
+  return fillLtbRentClaim(TEMPLATE_REL, "fillOfficialL1", d, { hasDeposit: true });
+}
+
+/**
+ * S751: the L1 and the L9 (2026/09) share one layout for Parts 1 to 7; the L9
+ * just has no rent deposit boxes in Part 4. One filler for both, so a fix to
+ * one form's mapping can't miss the other.
+ */
+export async function fillLtbRentClaim(
+  templateRel: string,
+  who: string,
+  d: L1FillInput,
+  opts: { hasDeposit: boolean },
+): Promise<Uint8Array> {
   const asOf = ltbDate(d.filingDateISO);
-  if (!asOf) throw new Error("fillOfficialL1: no valid filing date");
-  if (d.rows.length > 3) throw new Error("fillOfficialL1: more than 3 rent rows (pack them first)");
+  if (!asOf) throw new Error(`${who}: no valid filing date`);
+  if (d.rows.length > 3) throw new Error(`${who}: more than 3 rent rows (pack them first)`);
   const rowsOwe = d.rows.reduce((s, r) => s + Math.round(r.owingCents), 0);
   if (rowsOwe !== Math.round(d.rentOwingCents)) {
-    throw new Error(`fillOfficialL1: rows owe ${rowsOwe}c but rent owing is ${d.rentOwingCents}c`);
+    throw new Error(`${who}: rows owe ${rowsOwe}c but rent owing is ${d.rentOwingCents}c`);
   }
   if (Math.round(d.rentOwingCents + d.nsfCents + d.feeCents) !== Math.round(d.totalCents)) {
-    throw new Error("fillOfficialL1: total does not add up");
+    throw new Error(`${who}: total does not add up`);
   }
-  if (d.tenants.length === 0) throw new Error("fillOfficialL1: no tenant");
+  if (d.tenants.length === 0) throw new Error(`${who}: no tenant`);
+  if (!opts.hasDeposit && d.deposit && d.deposit.cents > 0) {
+    throw new Error(`${who}: this form has no rent deposit boxes`);
+  }
 
-  const pdf = await loadLtbTemplate(TEMPLATE_REL);
+  const pdf = await loadLtbTemplate(templateRel);
   const f = ltbFields(pdf);
 
   f.radio("sfrmForm.LanguagePreference.sfrmLanguagePreference.Language", d.french ? "1" : "2");
@@ -105,7 +122,7 @@ export async function fillOfficialL1(d: L1FillInput): Promise<Uint8Array> {
   if (d.nsfCents > 0) f.check(p4 + "chkReason2");
   f.radio(p4 + "Possession", "1");
   f.radio(p4 + "sfrmPeriod_1.Period", "1");
-  if (d.deposit && d.deposit.cents > 0) {
+  if (opts.hasDeposit && d.deposit && d.deposit.cents > 0) {
     f.text(p4 + "DepositAmount", ltbMoney(d.deposit.cents));
     f.text(p4 + "DepositDate", ltbDate(d.deposit.collectedISO));
     f.text(p4 + "DepositDateFrom", ltbDate(d.deposit.interestFromISO));
