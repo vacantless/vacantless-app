@@ -173,7 +173,20 @@ export type SmsCopyInput = {
   cancel_url?: string | null;
   /** S728: false when the renter has not confirmed yet (null or undefined: unknown). */
   confirmed?: boolean | null;
+  /**
+   * S754c: the number to call on arrival (lib/showing-contact resolveArrivalPhone:
+   * the rental's, else the account's arrival phone, else its public phone).
+   * Before this the texts never carried it: a renter on site (Rehab, Pillette
+   * 36, 2026-11-05) replied "We are here" to the reminder and no one saw it.
+   */
+  arrival_phone?: string | null;
 };
+
+/** S754c: "When you arrive, call 226-778-0014." or "" when no number is set. */
+export function arrivalLine(phone: string | null | undefined): string {
+  const s = (phone ?? "").trim();
+  return s ? `When you arrive, call ${s}. ` : "";
+}
 
 /** Booking-confirmation text. The renter just self-booked; first SMS touch. */
 export function bookingConfirmationSms(p: SmsCopyInput): string {
@@ -183,12 +196,12 @@ export function bookingConfirmationSms(p: SmsCopyInput): string {
     return noEmDash(
       `${org}: your viewing request at ${addr} for ${p.when_label} is in. ` +
         `Someone from our team will reach out to confirm before your viewing. ` +
-        `Reply here if you need to reschedule. ${OPT_OUT_LINE}`,
+        `${arrivalLine(p.arrival_phone)}Reply here if you need to reschedule. ${OPT_OUT_LINE}`,
     );
   }
   return noEmDash(
     `${org}: your viewing at ${addr} is confirmed for ${p.when_label}. ` +
-      `Reply here if you need to reschedule. ${OPT_OUT_LINE}`,
+      `${arrivalLine(p.arrival_phone)}Reply here if you need to reschedule. ${OPT_OUT_LINE}`,
   );
 }
 
@@ -218,8 +231,10 @@ export function showingReminderSms(p: SmsCopyInput, kind: "24h" | "sameday" | "2
   // links only cost two extra segments per text (434 chars) against the
   // account's monthly allowance.
   const actionLine = confirm ? `Confirm, change or cancel: ${confirm}` : "Reply here to reschedule.";
+  // S754c: the day-of texts say who to call on arrival.
+  const arrive = kind === "24h" ? "" : arrivalLine(p.arrival_phone);
   return noEmDash(
-    `${org}: ${lead} at ${addr} for ${p.when_label}. ${actionLine} ${OPT_OUT_LINE}`,
+    `${org}: ${lead} at ${addr} for ${p.when_label}. ${arrive}${actionLine} ${OPT_OUT_LINE}`,
   );
 }
 

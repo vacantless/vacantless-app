@@ -10,6 +10,7 @@ import {
   isWithinQuietHours,
   bookingConfirmationSms,
   showingReminderSms,
+  arrivalLine,
   waitlistVacancySms,
   smsSegments,
   smsLive,
@@ -18,6 +19,22 @@ import {
   verifyTwilioSignature,
 } from "../lib/sms";
 import { channelPlan } from "../lib/reminders";
+
+// S754c: the arrival number reaches the confirmation and the day-of texts.
+{
+  const base = { org_name: "Agile Real Estate Group", property_address: "833 Pillette Rd, Unit 36", when_label: "Thu, Nov 5, 7:00 PM", arrival_phone: "226-778-0014", confirm_url: "https://app.vacantless.com/c/x", confirmed: true };
+  const checks: Array<[string, boolean]> = [
+    ["S754c confirmation carries the arrival number", bookingConfirmationSms(base).includes("When you arrive, call 226-778-0014.")],
+    ["S754c same-day carries it", showingReminderSms(base, "sameday").includes("When you arrive, call 226-778-0014.")],
+    ["S754c 2h carries it", showingReminderSms(base, "2h").includes("When you arrive, call 226-778-0014.")],
+    ["S754c day-before stays short", !showingReminderSms(base, "24h").includes("When you arrive")],
+    ["S754c no number, no line", arrivalLine(null) === "" && !bookingConfirmationSms({ ...base, arrival_phone: null }).includes("When you arrive")],
+    ["S754c no em dash", !showingReminderSms(base, "sameday").includes("\u2014")],
+  ];
+  for (const [name, ok] of checks) {
+    if (!ok) { console.error(`FAIL ${name}`); process.exitCode = 1; } else console.log(`ok ${name}`);
+  }
+}
 
 let pass = 0;
 let fail = 0;

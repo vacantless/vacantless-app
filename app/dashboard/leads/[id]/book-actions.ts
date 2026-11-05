@@ -122,6 +122,7 @@ export async function bookViewingForRenter(formData: FormData) {
             property_address: lead!.property?.address ?? null,
             when_label: label,
             booking_requires_confirmation: false,
+            arrival_phone: org.showing_arrival_phone ?? org.public_contact_phone ?? null,
           }),
         });
       } catch {

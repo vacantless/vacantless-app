@@ -513,6 +513,7 @@ export async function GET(req: NextRequest) {
             reschedule_url: rescheduleUrl,
             cancel_url: cancelUrl,
             confirmed: row.confirmed_at != null,
+            arrival_phone: leasingPhone,
           },
           kind,
         ),

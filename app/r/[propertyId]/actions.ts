@@ -205,6 +205,7 @@ async function attemptBooking(
               property_address: b.property_address,
               when_label: whenLabel,
               booking_requires_confirmation: bookingRequiresConfirmation,
+              arrival_phone: leasingPhone,
             }),
           });
           if (sms.sent) {
