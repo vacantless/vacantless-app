@@ -76,7 +76,7 @@ const SECTIONS: Section[] = [
   {
     href: "/dashboard/rent/statement",
     title: "Owner statement",
-    desc: "Your owner statement and rent roll - money in, money out, and net across the portfolio, ready to share or export.",
+    desc: "Money in, money out, and net across your rentals, ready to share or export.",
     icon: "chart",
   },
 ];

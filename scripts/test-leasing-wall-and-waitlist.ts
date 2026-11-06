@@ -113,7 +113,11 @@ for (const section of TENANCY_SECTIONS) {
 }
 const nav = read("app/dashboard/dashboard-nav.tsx");
 const hrefs = /const POST_LEASE_HREFS = new Set\(\[([\s\S]*?)\]\)/.exec(nav)?.[1] ?? "";
-ok("nav: Tenants & leases shown to every account", !hrefs.includes("/dashboard/tenants") && hrefs.includes("/dashboard/money") && hrefs.includes("/dashboard/maintenance"));
+// S759: every account still reaches Tenants & leases: under More before the
+// first tenancy, in the bar (and out of More) after it.
+const accountBlock = /const ACCOUNT: NavItem\[\] = \[([\s\S]*?)\n\];/.exec(nav)?.[1] ?? "";
+ok("nav: Tenants & leases shown to every account", accountBlock.includes('"/dashboard/tenants"') && nav.includes(': ACCOUNT),') && hrefs.includes("/dashboard/money") && hrefs.includes("/dashboard/maintenance"));
+ok("nav: Tenants in the bar once there is a tenancy", hrefs.includes("/dashboard/tenants") && /ACCOUNT\.filter\(\(item\) => item\.href !== "\/dashboard\/tenants"\)/.test(nav));
 const surface = read("lib/post-lease-surface.ts");
 ok("unlock: a first tenancy opens the rest", /POST_LEASE_TABLES = \[\s*"tenancies"/.test(surface));
 ok("guard: redirects walled orgs to Today", surface.includes('if (!show) redirect("/dashboard");'));

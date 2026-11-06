@@ -51,7 +51,7 @@ const SECTIONS: Section[] = [
   {
     // S305 work-order module Slice 2: maintenance lives with occupied-unit work.
     href: "/dashboard/maintenance",
-    title: "Maintenance",
+    title: "Repairs",
     desc: "Log repair issues, assign them to your own trades, and track each job to done. Costs you record feed your year-end statements.",
     icon: "bolt",
   },

@@ -57,6 +57,13 @@ const PRIMARY: NavItem[] = [
     // (availability) and showing agents.
     match: ["/dashboard/availability", "/dashboard/showing-agents"],
   },
+  // S759: once the account has a tenancy, Tenants is daily work, so it sits in
+  // the bar (and leaves the More menu). Before that it stays under More.
+  {
+    href: "/dashboard/tenants",
+    label: "Tenants",
+    match: ["/dashboard/tenancies", "/dashboard/people", "/dashboard/messages"],
+  },
   { href: "/dashboard/maintenance", label: "Repairs" },
   {
     href: "/dashboard/money",
@@ -84,8 +91,10 @@ const ACCOUNT: NavItem[] = [
 
 // S700: the post-lease surfaces a leasing-only customer does not see.
 // S758: Tenants & leases is open to every account (forms and the lease live
-// there); Repairs and Money appear once the account has a tenancy.
+// there): under More until the first tenancy, then in the bar (S759) with
+// Repairs and Money.
 const POST_LEASE_HREFS = new Set([
+  "/dashboard/tenants",
   "/dashboard/maintenance",
   "/dashboard/money",
 ]);
@@ -179,10 +188,11 @@ export function DashboardNav({
   const primary = postLeaseEnabled
     ? PRIMARY
     : PRIMARY.filter((item) => !POST_LEASE_HREFS.has(item.href));
+  // Tenants & leases lives in the bar once there is a tenancy, under More before.
   const account = [
     ...(postLeaseEnabled
-      ? ACCOUNT
-      : ACCOUNT.filter((item) => !POST_LEASE_HREFS.has(item.href))),
+      ? ACCOUNT.filter((item) => item.href !== "/dashboard/tenants")
+      : ACCOUNT),
     ...(distributionWizardEnabled ? [DISTRIBUTION_WIZARD] : []),
     ...(showAgentBook ? [AGENT_BOOK] : []),
     ...(referralsEnabled ? [REFERRALS] : []),
