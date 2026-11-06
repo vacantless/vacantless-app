@@ -1143,7 +1143,7 @@ export default async function MaintenancePage({
       <PageHeader
         eyebrow="Repairs"
         title="Repairs and work orders"
-        subtitle="Log a repair issue, assign it to one of your own trades, and track it to done. Costs you record here feed your year-end statements. Vacantless tracks the work; it never dispatches a trade or moves money."
+        subtitle="Log a repair issue, assign it to one of your own trades, and track it to done. Send a job to your trade to accept, quote and book from a link. Costs you record here feed your year-end statements. You pay your trades directly; Vacantless never moves money."
         icon={<Icons.bolt className="h-6 w-6" />}
         action={
           <>
@@ -2331,8 +2331,8 @@ export default async function MaintenancePage({
         <SectionHeading>Find a trade</SectionHeading>
         <p className="mb-3 text-sm text-gray-600">
           Trades other Vacantless landlords near you already use. Add one to your trades
-          and you contact, schedule, and pay them directly. Vacantless never dispatches a
-          trade or handles the money. Listings show where each one came from; we only label
+          and send them jobs from here; you pay them directly and Vacantless never
+          handles the money. Listings show where each one came from; we only label
           a trade &ldquo;verified&rdquo; when we have actually vetted them.
         </p>
 

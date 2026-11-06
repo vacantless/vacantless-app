@@ -1153,11 +1153,30 @@ export async function completeDispatch(formData: FormData) {
     .update({ dispatch_status: "completed", completed_at: now, updated_at: now })
     .eq("id", id)
     .eq("dispatch_status", "scheduled")
-    .select("id, work_order_id");
+    .select("id, work_order_id, quote_cents");
 
   // Slice 6: tell the tenant the work is done (best-effort, customizable).
-  const d = updated && updated.length > 0 ? (updated[0] as { work_order_id: string }) : null;
+  const d = updated && updated.length > 0 ? (updated[0] as { work_order_id: string; quote_cents: number | null }) : null;
   if (d) {
+    // S759: the trade finished, so the job is done too. Close it today and,
+    // when the landlord has not entered a cost, use the trade's quote so the
+    // repair reaches the owner statement without retyping it.
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date());
+    const { data: woRow } = await supabase
+      .from("work_orders").select("cost_cents, status").eq("id", d.work_order_id).maybeSingle();
+    const wo = woRow as { cost_cents: number | null; status: string } | null;
+    if (wo && wo.status !== "cancelled") {
+      await supabase
+        .from("work_orders")
+        .update({
+          status: "completed",
+          completed_on: today,
+          ...(wo.cost_cents == null && d.quote_cents != null ? { cost_cents: d.quote_cents } : {}),
+        })
+        .eq("id", d.work_order_id);
+    }
     const ctx = await dispatchPartyContext(supabase, d.work_order_id);
     if (ctx.tenantEmail) {
       await sendOrgNotification({
