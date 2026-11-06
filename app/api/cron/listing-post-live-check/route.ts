@@ -11,6 +11,7 @@ import {
   type LiveCheckFacts,
   type LiveCheckOutcome,
 } from "@/lib/listing-post-live-check";
+import { queueExpiryReposts, type ExpiryRepostSummary } from "@/lib/expiry-repost-run";
 
 // Listing-post live check (S693). Fetches the public page behind every `live`
 // listing_posts row on a checkable portal (Kijiji, Zumper, Rentals.ca),
@@ -93,6 +94,8 @@ type Summary = {
   proved: number;
   errors: number;
   details: Detail[];
+  /** S756: ads a live check removed while the rental is still available, re-queued. */
+  reposts?: ExpiryRepostSummary;
 };
 
 function authorized(req: NextRequest): boolean {
@@ -385,6 +388,15 @@ export async function GET(req: NextRequest) {
       `[listing-post-live-check] post=${row.id} portal=${row.portal} verdict=${outcome.verdict} reason=${outcome.reason} http=${facts.httpStatus ?? "none"} end=${facts.endUrl ?? "none"} mode=${mode} wrote=${detail.wrote ? "1" : "0"}`,
     );
     summary.details.push(detail);
+  }
+
+  // S756 (review item 7): an ad the site dropped while the rental is still
+  // available goes back up under the standing Posting setting
+  // (lib/expiry-repost). Same write gate as the removal above; a dry run
+  // reports what it would queue. Covers this run's removals and the home
+  // Rentals.ca check's. Skipped when the row loop used the time budget.
+  if (Date.now() - started < TIME_BUDGET_MS) {
+    summary.reposts = await queueExpiryReposts(admin, { write });
   }
 
   return NextResponse.json(summary);

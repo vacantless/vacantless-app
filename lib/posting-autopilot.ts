@@ -34,7 +34,7 @@ export function standingApprovalAudit(siteLabel: string): string {
 /** Copy for the Billing switch. */
 export const POSTING_AUTOPILOT_COPY = {
   title: "Post without asking each time",
-  on: "On. Each ad goes up on your Kijiji, Rentals.ca and Zumper accounts as soon as it is ready. Paid Kijiji ads still wait for you at checkout.",
+  on: "On. Each ad goes up on your Kijiji, Rentals.ca and Zumper accounts as soon as it is ready, and goes up again if the site ends it while the rental is still available. Paid Kijiji ads still wait for you at checkout.",
   off: "Off. We build each ad and wait for you to press Approve and post on the rental.",
   turnOn: "Turn on",
   turnOff: "Turn off",

@@ -74,4 +74,10 @@ jobs:
               print(f"  {x.get('portal')} {x.get('post')} verdict={x.get('verdict')} "
                     f"reason={x.get('reason')} wrote={x.get('wrote')} proved={x.get('proved')}"
                     + (f" error={x['error']}" if x.get("error") else ""))
+          r = d.get("reposts") or {}
+          print(f"--- expiry re-posts: scanned={r.get('scanned')} queued={r.get('queued')}"
+                + (f" error={r['error']}" if r.get("error") else ""))
+          for x in r.get("details", []):
+              if x.get("reason") != "removal_too_old":
+                  print(f"  {x.get('portal')} {x.get('post')} reason={x.get('reason')} item={x.get('item')} wrote={x.get('wrote')}")
           PY
