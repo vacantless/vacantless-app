@@ -50,8 +50,8 @@ ok(
   isFeatureEnabledForOrg("incident_intake", org("free"), { env: envOn }) === false,
 );
 ok(
-  "plan default: incident dispatch is off for Growth",
-  isFeatureEnabledForOrg("incident_dispatch", org("growth"), { env: envOn }) === false,
+  "plan default: incident dispatch is on for Growth (S759)",
+  isFeatureEnabledForOrg("incident_dispatch", org("growth"), { env: envOn }) === true,
 );
 ok(
   "plan default: incident dispatch is on for Premium",

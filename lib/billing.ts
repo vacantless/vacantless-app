@@ -79,6 +79,8 @@ export function isAnyPaidPlan(plan: string | null | undefined): boolean {
 //                   (plan doc §7 / locked decision 4): intake is broad value,
 //                   the trade-coordination depth is reserved for Premium.
 //   incident_dispatch in-app trade dispatch / quote / two-way scheduling
+//                   (Growth+ since S759: it is the "repairs without the
+//                   back and forth" promise Growth is sold on)
 //                   (Option B Slices 5-7, the guardrail amendment). Premium+ —
 //                   the marketplace-coordination depth, gated above intake.
 export type PlanFeature =
@@ -216,7 +218,7 @@ export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   plus: { serve_notice: false, applications: false, sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false, market_rent: false },
   // Live ladder.
   free: { ...noEntitlements(), rent_collection: true }, // funnel tier: email only; rent collection included
-  growth: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: false, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
+  growth: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
   premium: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
   managed: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Premium feature set plus the larger concierge allowance.
 };

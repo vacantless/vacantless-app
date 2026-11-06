@@ -708,11 +708,11 @@ ok("canUseIncidentIntake: free false", canUseIncidentIntake("free") === false);
 ok("incident_dispatch: premium true", hasEntitlement("premium", "incident_dispatch") === true);
 ok("incident_dispatch: managed true", hasEntitlement("managed", "incident_dispatch") === true);
 ok("incident_dispatch: pilot true", hasEntitlement("pilot", "incident_dispatch") === true);
-ok("incident_dispatch: growth false (intake yes, dispatch no)", hasEntitlement("growth", "incident_dispatch") === false);
+ok("incident_dispatch: growth true (S759)", hasEntitlement("growth", "incident_dispatch") === true);
 ok("incident_dispatch: free false", hasEntitlement("free", "incident_dispatch") === false);
 ok("canUseIncidentDispatch: premium true", canUseIncidentDispatch("premium") === true);
 ok("canUseIncidentDispatch: managed true", canUseIncidentDispatch("managed") === true);
-ok("canUseIncidentDispatch: growth false", canUseIncidentDispatch("growth") === false);
+ok("canUseIncidentDispatch: growth true (S759)", canUseIncidentDispatch("growth") === true);
 
 // --- Live tier ladder shape (Free $0 < Growth $99 < Premium $249 < Managed $399) -----------
 ok("TIER_KEYS order", JSON.stringify(TIER_KEYS) === '["free","growth","premium","managed"]');
