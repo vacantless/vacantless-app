@@ -117,7 +117,10 @@ function hostIs(u: URL, host: string): boolean {
 }
 
 const KIJIJI_AD_ID_RE = /\/(\d{6,})\/?$/;
-const ZUMPER_ID_RE = /\/(?:listings|manage\/properties\/listing)\/(\d{5,})(?:[/?#]|$)/;
+// S756: owner-posted Zumper ads have a letter suffix on the public id
+// (zumper.com/listings/65446440b, Agile's Assumption 9); without it the row
+// read url_shape_not_checkable and its expiry could never be seen.
+const ZUMPER_ID_RE = /\/(?:listings|manage\/properties\/listing)\/(\d{5,}[a-z]?)(?:[/?#]|$)/;
 const RENTALS_CA_ID_RE = /-id(\d{5,})\/?$/;
 
 /**

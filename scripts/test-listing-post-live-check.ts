@@ -411,6 +411,9 @@ eq("mobile host m.kijiji.ca targets", listingPostLiveCheckTarget("kijiji", "http
 eq("uppercase scheme + host targets", listingPostLiveCheckTarget("kijiji", "HTTPS://WWW.KIJIJI.CA/v-apartments-condos/windsor-area-on/x/1742946283")?.externalId, "1742946283");
 eq("kijiji trailing slash keeps the id", listingPostLiveCheckTarget("kijiji", `${KIJIJI_U33}/`)?.externalId, "1742946283");
 eq("www.rentals.ca targets", listingPostLiveCheckTarget("rentals_ca", "https://www.rentals.ca/windsor-on/833-pillette-road-id1540338")?.externalId, "1540338");
+eq("S756: lettered Zumper id targets", listingPostLiveCheckTarget("zumper", "https://www.zumper.com/listings/65446440b")?.url, "https://www.zumper.com/listings/65446440b");
+eq("S756: lettered Zumper id keeps its letter", listingPostLiveCheckTarget("zumper", "https://www.zumper.com/listings/65446440b/1-bedroom-windsor-on")?.externalId, "65446440b");
+eq("S756: a word after the id is still not an id", listingPostLiveCheckTarget("zumper", "https://www.zumper.com/listings/65446440bed") ?? null, null);
 eq("bare zumper.com host targets", listingPostLiveCheckTarget("zumper", "https://zumper.com/listings/65274796")?.url, ZUMPER_PUBLIC);
 eq("lookalike host kijiji.ca.evil.com is refused", listingPostLiveCheckTarget("kijiji", "https://kijiji.ca.evil.com/v-apartments-condos/x/y/1742946283"), null);
 
