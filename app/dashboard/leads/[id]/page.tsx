@@ -5,7 +5,6 @@ import { listingUrl, scrubEmDashes } from "@/lib/email";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { statusLabel, type LeadStatus } from "@/lib/pipeline";
 import { incomeRequirementMagnitude } from "@/lib/screening";
 import {
@@ -233,8 +232,8 @@ export default async function LeadDetailPage({
   const timeZone = org?.booking_timezone ?? "America/Toronto";
   const orgName = org?.name ?? "Vacantless";
   const canApplications = canUseRentalApplications(org?.plan);
-  // S710: a leasing-only org never sees tenancy links (same wall as the nav).
-  const showPostLease = org ? await orgShowsPostLease(supabase, org.id) : true;
+  // S758: every account sees the tenancy links (S710 hid them from leasing-only
+  // orgs, which left the forms and the online lease unreachable).
   const aiReplyFeatureFlags = org
     ? await loadOrganizationFeatureFlags(supabase, org.id, ["ai_reply"])
     : [];
@@ -506,7 +505,7 @@ export default async function LeadDetailPage({
             View tenancy →
           </Link>
         </div>
-      ) : !showPostLease ? null : l.status === "leased" ? (
+      ) : l.status === "leased" ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-4 py-3">
           <p className="text-sm text-gray-700">
             Lease signed? Create the tenancy record to manage rent and tenant

@@ -83,10 +83,11 @@ const ACCOUNT: NavItem[] = [
 ];
 
 // S700: the post-lease surfaces a leasing-only customer does not see.
+// S758: Tenants & leases is open to every account (forms and the lease live
+// there); Repairs and Money appear once the account has a tenancy.
 const POST_LEASE_HREFS = new Set([
   "/dashboard/maintenance",
   "/dashboard/money",
-  "/dashboard/tenants",
 ]);
 
 // Referral surface (Slice 2). Ships dark: the /dashboard/referrals page is

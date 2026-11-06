@@ -11,7 +11,7 @@ import {
   LANDLORD_CAMPAIGN_START_MS,
   type LandlordRevealInput,
 } from "../lib/landlord-campaign";
-import { leasingOnlyNavEnabled, POST_LEASE_SECTIONS } from "../lib/post-lease-surface";
+import { leasingOnlyNavEnabled, POST_LEASE_SECTIONS, TENANCY_SECTIONS } from "../lib/post-lease-surface";
 import { addRentalPath, decideOnboardingEmail } from "../lib/onboarding-emails";
 
 let pass = 0;
@@ -92,10 +92,11 @@ ok("cron: passes postLeaseWalled to the live path and the dry path",
 ok("wall flag: env param", leasingOnlyNavEnabled({ LEASING_ONLY_NAV: "1" }) && !leasingOnlyNavEnabled({}));
 
 // ---- 1a. Lead page tenancy links -------------------------------------------
+// S758: every account sees Create / Convert to tenancy (forms and the online
+// lease live under a tenancy, and the homepage sells both).
 const lead = read("app/dashboard/leads/[id]/page.tsx");
-ok("lead: imports orgShowsPostLease", lead.includes('import { orgShowsPostLease } from "@/lib/post-lease-surface"'));
-ok("lead: computes showPostLease", lead.includes("const showPostLease = org ? await orgShowsPostLease(supabase, org.id) : true;"));
-ok("lead: gates create/convert links", lead.includes(') : !showPostLease ? null : l.status === "leased" ? ('));
+ok("lead: no wall on the tenancy links", !lead.includes("showPostLease") && !lead.includes("orgShowsPostLease"));
+ok("lead: convert link kept", lead.includes(') : l.status === "leased" ? (') && lead.includes("/dashboard/tenancies/new?from="));
 
 // ---- 1b. Section guards -----------------------------------------------------
 for (const section of POST_LEASE_SECTIONS) {
@@ -103,7 +104,18 @@ for (const section of POST_LEASE_SECTIONS) {
   ok(`guard: ${section} has a layout`, existsSync(p));
   if (existsSync(p)) ok(`guard: ${section} layout calls the guard`, read(p).includes("await requirePostLeaseSurface();"));
 }
+// S758: tenancies and tenants are open to every account.
+ok("open: tenancies and tenants", TENANCY_SECTIONS.join(",") === "tenancies,tenants");
+ok("walled: money, rent, expenses, maintenance only", POST_LEASE_SECTIONS.join(",") === "money,rent,expenses,maintenance");
+for (const section of TENANCY_SECTIONS) {
+  const p = `app/dashboard/${section}/layout.tsx`;
+  ok(`open: ${section} layout has no guard`, existsSync(p) && !read(p).includes("requirePostLeaseSurface"));
+}
+const nav = read("app/dashboard/dashboard-nav.tsx");
+const hrefs = /const POST_LEASE_HREFS = new Set\(\[([\s\S]*?)\]\)/.exec(nav)?.[1] ?? "";
+ok("nav: Tenants & leases shown to every account", !hrefs.includes("/dashboard/tenants") && hrefs.includes("/dashboard/money") && hrefs.includes("/dashboard/maintenance"));
 const surface = read("lib/post-lease-surface.ts");
+ok("unlock: a first tenancy opens the rest", /POST_LEASE_TABLES = \[\s*"tenancies"/.test(surface));
 ok("guard: redirects walled orgs to Today", surface.includes('if (!show) redirect("/dashboard");'));
 ok("guard: no-op when the flag is off", surface.includes("if (!leasingOnlyNavEnabled()) return;"));
 

@@ -48,9 +48,17 @@ export async function orgShowsPostLease(
 // layout.tsx that calls this guard, so a typed URL goes back to Today.
 // Route handlers (CSV/PDF exports) are not wrapped by layouts; they stay
 // reachable, but a walled org has no post-lease rows for them to export.
+//
+// S758: tenancies and tenants are OPEN to every account. The homepage sells
+// the LTB forms filled from the tenancy and the Standard Lease signed online
+// (S754d), and both live under a tenancy, so a walled new account could not
+// reach either: the wall hid the "Create tenancy" button and the section, and
+// a first tenancy was the only way through. Now any account can start one.
+// The existing "has post-lease data" rule then opens Money, Rent, Expenses
+// and Repairs once the first tenancy exists, so rent tools appear when there
+// is a tenant to collect from, not before.
+export const TENANCY_SECTIONS = ["tenancies", "tenants"] as const;
 export const POST_LEASE_SECTIONS = [
-  "tenancies",
-  "tenants",
   "money",
   "rent",
   "expenses",
