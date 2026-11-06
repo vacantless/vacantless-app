@@ -1007,12 +1007,14 @@ function ForYouRow({
   // S760: a robot site with no sign-in yet. Before, "Add this site" queued a
   // post that could only park at needs-login (seen on the Lakeview walk,
   // 2026-11-06). Now the row says what it needs and opens the sites setup.
+  // Also covers an old item that is parked, skipped or rejected: with no
+  // sign-in, "Post it for me" or "Turn that on" would only park it again.
   const signinFirst =
     !isLive &&
     !locked &&
-    item == null &&
     isRobotPostedChannel(row.key) &&
-    row.alreadySignedIn !== true;
+    row.alreadySignedIn !== true &&
+    !(working || payAtCheckout || needsApproval || needsConnect);
 
   // S760 (REVIEW-S760 section 4): one vocabulary on every site row. The chip
   // is one of four words; the line under it says what is happening or what

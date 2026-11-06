@@ -102,7 +102,7 @@ ok("chips use the four words", pe.includes('label: "On", cls: SITE_WORD_CLASS.On
 for (const old of ['"Live"', '"Getting it ready"', '"We\'re posting it"', '"Needs a repost"', '"Not posted yet"', '"Sign-in needed"', '"Ready. Approve it"', '"Ready. Pay the site"', "Add this site →"]) {
   ok(`old chip gone: ${old}`, !pe.includes(old));
 }
-ok("sign-in-first branch exists", pe.includes("const signinFirst =") && pe.includes("row.alreadySignedIn !== true"));
+ok("sign-in-first branch exists", pe.includes("const signinFirst =") && pe.includes("row.alreadySignedIn !== true") && pe.includes("!(working || payAtCheckout || needsApproval || needsConnect)"));
 ok("sign-in-first opens the sites setup", pe.includes("`${SITES_SETUP_HREF}?property=${encodeURIComponent(propertyId)}`"));
 const actions = read("app/dashboard/properties/actions.ts");
 const sp = actions.split("export async function startSitePost(")[1]?.split("\nexport async function ")[0] ?? "";
@@ -114,7 +114,7 @@ ok("Today passes the input", read("app/dashboard/page.tsx").includes("hasConnect
 ok("Marketplace row introduces Quick replies", read("app/dashboard/properties/[id]/marketplace-row.tsx").includes('href="/dashboard/replies"'));
 const home = read("app/page.tsx");
 ok("homepage step 3 is Set Live, not paste", home.includes('title: "Press Set Live"') && !home.includes("Paste it into Facebook Marketplace, Kijiji or any ad"));
-ok("homepage hero names the arc", home.includes("Posted everywhere. Every renter answered. Every viewing booked."));
+ok("homepage hero names the arc", home.includes("Posted everywhere. Then rent, repairs, notices and taxes run on their own."));
 ok("homepage names the T776 and the accountant zip", home.includes("T776 rental tax summary") && home.includes("One zip for your accountant"));
 ok("homepage names rent collection in the automations", home.includes("Rent in on the first"));
 ok("SITES_SETUP_HREF", SITES_SETUP_HREF === "/dashboard/sites");

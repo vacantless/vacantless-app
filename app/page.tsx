@@ -138,7 +138,7 @@ function Hero() {
             <span className="block">Every viewing booked.</span>
           </h1>
           <p className="mb-[18px] max-w-[34rem] text-[clamp(1.1rem,1.8vw,1.32rem)] font-semibold leading-[1.4] text-[#203029]">
-            Posted everywhere. Every renter answered. Every viewing booked. Then rent, repairs, notices and taxes run on their own.
+            Posted everywhere. Then rent, repairs, notices and taxes run on their own.
           </p>
           <p className="mb-[26px] max-w-[34rem] text-[clamp(1.02rem,1.6vw,1.16rem)] leading-[1.55] text-[#384a42]">
             Press Set Live and your ad goes up on the rental sites. Renters get a
