@@ -2,7 +2,8 @@
 
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/posting-lanes";
-import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { readRobotPostingAccess, type RobotPostingAccess } from "@/lib/robot-posting-access";
+import { queueOnFirstClick } from "@/lib/posting-autopilot";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -3327,9 +3328,10 @@ export async function startSitePost(formData: FormData) {
   const supabase = createClient();
   // S713: Kijiji, Rentals.ca and Zumper are posted by our robot, which is the
   // paid Posting add-on. Marketplace (the kit) stays open to every org.
+  let robotAccess: RobotPostingAccess | null = null;
   if (isRobotPostedChannel(channel)) {
-    const access = await readRobotPostingAccess(supabase, org.id);
-    if (!access.allowed) {
+    robotAccess = await readRobotPostingAccess(supabase, org.id);
+    if (!robotAccess.allowed) {
       redirect(`/dashboard/properties/${propertyId}?run=postingaddon#distribute-header`);
     }
   }
@@ -3381,6 +3383,22 @@ export async function startSitePost(formData: FormData) {
   }
   if (!itemId) {
     redirect(`/dashboard/properties/${propertyId}?runerr=notfound#distribute-header`);
+  }
+  // S757: with "post without asking each time" on, this click is the request:
+  // queue the robot now instead of waiting for a second "Post it for me".
+  if (
+    runId &&
+    queueOnFirstClick({
+      channel,
+      autopilot: robotAccess?.autopilot,
+      addonAllowed: robotAccess?.allowed === true,
+    })
+  ) {
+    const queued = await queueRobotRunItems(supabase, runId, [channel]);
+    if (queued > 0) {
+      revalidatePath(`/dashboard/properties/${propertyId}`);
+      redirect(`/dashboard/properties/${propertyId}?run=concierge#distribute-header`);
+    }
   }
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?run=saved#distribute-header`);
@@ -5711,6 +5729,58 @@ export async function requestConciergePublish(formData: FormData) {
 }
 
 /**
+ * S754/S757: queue a run's items on these channels for the posting worker, the
+ * same write "Post it for me" makes. Items that cannot take a request (already
+ * live, already queued) are skipped. Reopens a completed run when one queued.
+ * Used by "Post to the missing sites" and, with the standing setting on, by the
+ * first click on a site row (startSitePost).
+ */
+async function queueRobotRunItems(
+  supabase: ReturnType<typeof createClient>,
+  runId: string,
+  channels: string[],
+): Promise<number> {
+  const { data: items } = await supabase
+    .from("distribution_run_items")
+    .select("id, channel, publish_status, mode")
+    .eq("run_id", runId)
+    .in("channel", channels);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const now = new Date().toISOString();
+  let queued = 0;
+  for (const it of (items ?? []) as { id: string; channel: string; publish_status: string | null; mode: string | null }[]) {
+    if (!canRequestConcierge(normalizePublishStatus(it.publish_status), normalizePublishMode(it.mode))) continue;
+    const { error } = await supabase
+      .from("distribution_run_items")
+      .update({
+        mode: "concierge",
+        publish_status: "queued",
+        status: "in_progress",
+        concierge_requested_at: now,
+        concierge_requested_by: user?.id ?? null,
+        concierge_claimed_by: null,
+        concierge_claimed_at: null,
+        audit_message: conciergeRequestAuditForChannel(it.channel),
+        error_code: null,
+        error_message: null,
+        updated_at: now,
+      })
+      .eq("id", it.id);
+    if (!error) queued += 1;
+  }
+  if (queued > 0) {
+    await supabase
+      .from("distribution_runs")
+      .update({ status: "active", completed_at: null })
+      .eq("id", runId)
+      .eq("status", "completed");
+  }
+  return queued;
+}
+
+/**
  * S754 (review item 1): "Post to the missing sites" on the rentals list. For
  * one available rental, every robot site the account is signed in to with no
  * live ad gets a run item (staged the same way as the launcher) and is queued
@@ -5753,43 +5823,7 @@ export async function postToMissingSites(formData: FormData) {
     .maybeSingle();
   const runId = (run?.id as string | undefined) ?? null;
   if (!runId) redirect(`/dashboard/properties/${propertyId}?runerr=notfound#distribute-header`);
-  const { data: items } = await supabase
-    .from("distribution_run_items")
-    .select("id, channel, publish_status, mode")
-    .eq("run_id", runId)
-    .in("channel", channels);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const now = new Date().toISOString();
-  let queued = 0;
-  for (const it of (items ?? []) as { id: string; channel: string; publish_status: string | null; mode: string | null }[]) {
-    if (!canRequestConcierge(normalizePublishStatus(it.publish_status), normalizePublishMode(it.mode))) continue;
-    const { error } = await supabase
-      .from("distribution_run_items")
-      .update({
-        mode: "concierge",
-        publish_status: "queued",
-        status: "in_progress",
-        concierge_requested_at: now,
-        concierge_requested_by: user?.id ?? null,
-        concierge_claimed_by: null,
-        concierge_claimed_at: null,
-        audit_message: conciergeRequestAuditForChannel(it.channel),
-        error_code: null,
-        error_message: null,
-        updated_at: now,
-      })
-      .eq("id", it.id);
-    if (!error) queued += 1;
-  }
-  if (queued > 0) {
-    await supabase
-      .from("distribution_runs")
-      .update({ status: "active", completed_at: null })
-      .eq("id", runId)
-      .eq("status", "completed");
-  }
+  const queued = await queueRobotRunItems(supabase, runId as string, channels);
   revalidatePath("/dashboard/properties");
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties?posted=${queued}#site-coverage`);

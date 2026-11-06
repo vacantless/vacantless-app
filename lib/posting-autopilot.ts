@@ -24,6 +24,23 @@ export function standingApprovalApplies(input: StandingApprovalInput): boolean {
   return input.addonAllowed === true;
 }
 
+/**
+ * S757: with the setting on, the first click on a rental's site row ("Post it
+ * again" / "Add this site") queues the robot at once. Before this it only
+ * staged the item and waited for a second press, "Post it for me", so the
+ * setting never reached a landlord who clicked once and left. Paid Kijiji ads
+ * still stop at needs_payment in the worker.
+ */
+export function queueOnFirstClick(input: {
+  channel: string | null | undefined;
+  autopilot: boolean | null | undefined;
+  addonAllowed: boolean;
+}): boolean {
+  if (!isRobotPostedChannel(input.channel)) return false;
+  if (input.autopilot !== true) return false;
+  return input.addonAllowed === true;
+}
+
 export const STANDING_APPROVAL_SOURCE = "standing_posting_setting";
 
 /** The audit line written on the item when the standing setting approves it. */
