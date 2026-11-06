@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { hasEntitlement } from "@/lib/billing";
 import {
   BrandBanner,
   Card,
@@ -173,9 +174,11 @@ export default async function StatementPage({
         icon={<Icons.chart className="h-6 w-6" />}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <Link href="/dashboard/rent/rent-roll" className={SECONDARY_ACTION_CLASS}>
-              Rent roll & cap rate
-            </Link>
+            {hasEntitlement(org.plan, "accounting") && (
+              <Link href="/dashboard/rent/rent-roll" className={SECONDARY_ACTION_CLASS}>
+                Rent roll & cap rate
+              </Link>
+            )}
             <a href={exportHref(preset, range)} className={SECONDARY_ACTION_CLASS}>
               Download CSV
             </a>

@@ -410,20 +410,6 @@ export default async function CapturesPage({
         )}
       </section>
 
-      {/* Text-in (Premium) teaser */}
-      {!textAllowed && (
-        <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <h2 className="text-sm font-semibold text-slate-700">Text-in capture</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Want to text a photo instead of emailing it? Text-in capture is a
-            Premium feature.{" "}
-            <Link href="/dashboard/billing" className="font-medium text-slate-700 underline">
-              See Premium
-            </Link>
-            .
-          </p>
-        </section>
-      )}
     </div>
   );
 }

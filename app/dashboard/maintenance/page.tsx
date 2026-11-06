@@ -1358,21 +1358,6 @@ export default async function MaintenancePage({
         )}
       </div>
 
-      {/* Premium dispatch upsell — shown once (show-locked, never hide). When
-          entitled, each work order carries its own dispatch controls instead. */}
-      {!canDispatch && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50/70 px-4 py-3 text-sm text-gray-600">
-          <span>
-            <span className="font-medium text-gray-800">Dispatch jobs to your trades in-app</span> — send a
-            work order to a trade who can accept, quote, and schedule it without an account. Available on
-            Premium.
-          </span>
-          <Link href="/dashboard/billing" className={`${SECONDARY_ACTION_CLASS} shrink-0`}>
-            See Premium →
-          </Link>
-        </div>
-      )}
-
       {/* Slice 0 Block C: one-time per-org acknowledgment before any job goes out
           to a trade. Shown only to an entitled org that hasn't accepted yet. */}
       {canDispatch && !dispatchTermsAccepted && (

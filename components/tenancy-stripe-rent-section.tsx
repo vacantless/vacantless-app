@@ -67,7 +67,7 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
       ) : !view.connectExists ? (
         <p className="text-sm text-gray-600">
           Set up Stripe rent collection in{" "}
-          <Link href="/dashboard/settings#stripe-rent" className="font-medium text-brand hover:underline">
+          <Link href="/dashboard/settings?tab=banking#stripe-rent" className="font-medium text-brand hover:underline">
             Settings
           </Link>{" "}
           to collect rent by bank debit (Canada PAD or US ACH) for this tenancy.
@@ -75,7 +75,7 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
       ) : !view.connectReady ? (
         <p className="text-sm text-gray-600">
           Finish your Stripe onboarding in{" "}
-          <Link href="/dashboard/settings#stripe-rent" className="font-medium text-brand hover:underline">
+          <Link href="/dashboard/settings?tab=banking#stripe-rent" className="font-medium text-brand hover:underline">
             Settings
           </Link>{" "}
           (it isn&apos;t able to collect payments yet), then come back to authorize the tenant.
