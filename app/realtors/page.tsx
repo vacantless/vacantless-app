@@ -93,7 +93,7 @@ export default function RealtorsPage() {
             </ul>
             <p className="mt-6 max-w-[64ch] leading-relaxed text-[#384a42]">
               Free for one rental. CA$99 a month for as many listings as you carry. Billed monthly,
-              cancel anytime.
+              plus applicable taxes, cancel anytime.
             </p>
           </div>
         </section>

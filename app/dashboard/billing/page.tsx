@@ -857,8 +857,8 @@ export default async function BillingPage({
 
       <div className="mt-6 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
         <p>
-          Billed monthly. Cancel anytime from the billing portal, with no
-          contract and no cancellation fee.
+          Billed monthly, plus applicable taxes. Cancel anytime from the
+          billing portal, with no contract and no cancellation fee.
         </p>
       </div>
 

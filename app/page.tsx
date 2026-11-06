@@ -464,9 +464,9 @@ const GET_GROUPS: { title: string; items: string[] }[] = [
 const AFTER_LEASE: { title: string; body: string; href?: string; link?: string }[] = [
   {
     title: "Official LTB notices, filled in",
-    body: "N4, N5, N12, N13, L1, L2 and more, filled from the tenancy. Print or serve.",
-    href: "/tools/n4",
-    link: "Fill a free N4",
+    body: "N4, N5, N8, N12, N13, L1, L2 and more, filled from the tenancy. Print or serve.",
+    href: "/tools",
+    link: "Free N4, N8 and N12 fillers",
   },
   {
     title: "Rent increases, done right",
@@ -576,7 +576,7 @@ function Pricing() {
           </SecondaryButton>
         </div>
         <p className="mt-3.5 text-[0.86rem] text-[#59655f]">
-          Prices in Canadian dollars. Cancel anytime.
+          Prices in Canadian dollars, plus applicable taxes. Cancel anytime.
         </p>
       </div>
     </section>

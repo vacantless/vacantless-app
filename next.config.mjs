@@ -58,6 +58,8 @@ const nextConfig = {
       "/notice/[token]/official": ["./lib/forms/ltb-n4-2026-09.pdf"],
       // S755: the free public N4 tool.
       "/tools/n4/official": ["./lib/forms/ltb-n4-2026-09.pdf"],
+      "/tools/n12/official": ["./lib/forms/ltb-n12-2026-10.pdf"],
+      "/tools/n8/official": ["./lib/forms/ltb-n8-2026.pdf"],
       "/dashboard/tenancies/[id]/n4/official": ["./lib/forms/ltb-n4-2026-09.pdf"],
       "/dashboard/tenancies/[id]/n12/official": ["./lib/forms/ltb-n12-2026-10.pdf"],
       "/dashboard/tenancies/[id]/n13/official": ["./lib/forms/ltb-n13-2026.pdf"],

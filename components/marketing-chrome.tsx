@@ -144,6 +144,15 @@ export function MarketingFooter() {
           <Link href="/tools/n4" className="hover:text-[#15211d]">
             N4 form filler
           </Link>
+          <Link href="/tools/n8" className="hover:text-[#15211d]">
+            N8 form filler
+          </Link>
+          <Link href="/tools/n12" className="hover:text-[#15211d]">
+            N12 form filler
+          </Link>
+          <Link href="/tools" className="hover:text-[#15211d]">
+            All free tools
+          </Link>
           <Link href="/about" className="hover:text-[#15211d]">
             About
           </Link>

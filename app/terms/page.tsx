@@ -11,7 +11,7 @@ export const metadata = {
 
 // Operator + address live in lib/operator-line (one source of truth, S729).
 const GOVERNING_LAW = "the Province of Ontario, Canada";
-const LAST_UPDATED = "October 21, 2026";
+const LAST_UPDATED = "November 6, 2026";
 const CONTACT_EMAIL = "hello@vacantless.com";
 
 export default function TermsPage() {
@@ -80,7 +80,7 @@ export default function TermsPage() {
         <List
           items={[
             "Vacantless offers a Free plan, a paid Growth plan and a paid Posting add-on. Paid subscription fees are separate from any fees a rental site or payment processor charges.",
-            "Paid plans are billed in advance on a recurring monthly basis until cancelled. Prices are in CAD unless stated otherwise.",
+            "Paid plans are billed in advance on a recurring monthly basis until cancelled. Prices are in CAD unless stated otherwise and do not include sales tax. Where we are required to charge GST/HST or another sales tax, it is added to the price and shown on your invoice.",
             "You can cancel at any time. Cancellation stops future billing; your paid access continues until the end of the current billing period.",
             "Except where required by law, subscription fees already paid are non-refundable, including for partial periods.",
             "We may change plan features or pricing with reasonable notice; changes take effect at your next billing period.",
