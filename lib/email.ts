@@ -1947,6 +1947,9 @@ export type TenantMessagePayload = {
   reply_to_email: string | null;
   subject: string; // already token-rendered
   body: string; // already token-rendered PLAIN TEXT (we escape + <br> it)
+  /** S759: optional button under the body (e.g. the tenant's pick-your-times link). */
+  cta_url?: string | null;
+  cta_label?: string | null;
 };
 
 // Render the operator's plain-text body safely into the branded card: escape
@@ -1979,6 +1982,9 @@ function tenantMessageHtml(p: TenantMessagePayload): string {
     <div style="padding:28px 28px 24px;">
       ${logo}
       ${tenantMessageBodyHtml(p.body)}
+      ${p.cta_url && p.cta_label
+        ? `<p style="margin:8px 0 16px;"><a href="${escapeHtml(p.cta_url)}" style="display:inline-block;background:${escapeHtml(brand)};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:8px;">${escapeHtml(p.cta_label)}</a></p>`
+        : ""}
       <p style="margin:24px 0 0;color:#52525b;">- <strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">

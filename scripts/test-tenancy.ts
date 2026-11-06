@@ -176,6 +176,9 @@ ok("error message unknown -> generic", tenancyErrorMessage("weird")!.length > 0)
 ok("error message undefined -> null", tenancyErrorMessage(undefined) === null);
 ok("formatRentCents", formatRentCents(125000) === "$1,250");
 ok("formatRentCents null -> dash", formatRentCents(null) === "—");
+ok("formatRentCents keeps two cent digits", formatRentCents(142660) === "$1,426.60");
+ok("formatRentCents small cents", formatRentCents(2660) === "$26.60");
+ok("formatRentCents odd cents", formatRentCents(142605) === "$1,426.05");
 
 function matchCode(v: { ok: boolean; code?: string }, code: string): boolean {
   return v.ok === false && v.code === code;

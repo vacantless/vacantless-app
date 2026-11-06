@@ -207,5 +207,8 @@ export function tenancyErrorMessage(code: string | undefined): string | null {
 /** Format integer cents as a "$1,250/mo" style string (or a dash when null). */
 export function formatRentCents(cents: number | null | undefined): string {
   if (cents == null) return "—";
-  return `$${(cents / 100).toLocaleString()}`;
+  // S759: whole dollars stay "$1,250"; anything with cents always shows two
+  // digits ("$1,426.60", never "$1,426.6"), which an N1 or lease must print.
+  const frac = Math.abs(cents) % 100 === 0 ? 0 : 2;
+  return `$${(cents / 100).toLocaleString("en-CA", { minimumFractionDigits: frac, maximumFractionDigits: 2 })}`;
 }

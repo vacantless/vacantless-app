@@ -33,7 +33,7 @@ import {
   ACTIVE_DISPATCH_STATUSES,
   dispatchBriefOk,
 } from "@/lib/work-order-dispatch";
-import { sendTradeDispatchInvite } from "@/lib/email";
+import { sendTradeDispatchInvite, sendTenantMessageEmail } from "@/lib/email";
 import { sendOrgNotification, type NotifyOrg } from "@/lib/notifications-server";
 import { firstWord } from "@/lib/notifications";
 import {
@@ -53,7 +53,7 @@ import {
   MAX_PHOTOS_PER_WORK_ORDER,
 } from "@/lib/work-order-media";
 import { randomUUID, randomBytes } from "crypto";
-import { timeStrToMinutes } from "@/lib/booking";
+import { timeStrToMinutes, minutesToLabel } from "@/lib/booking";
 import {
   validateDayWindow,
   normalizeWindows,
@@ -1496,6 +1496,65 @@ export async function rememberSupplierWindows(formData: FormData) {
 // Confirm one agreed appointment (a date + a minute window). Writes chosen_* +
 // status='confirmed', mirrors the date onto work_orders.scheduled_for, and (when
 // the job has an active dispatch) onto the dispatch's scheduled_for.
+
+// S759: the tenants of the job's own tenancy (Agile keeps no tenancies here, so
+// this never reaches a Buildium tenant). Best-effort; never blocks the save.
+type JobTenants = { title: string; address: string | null; tenants: { name: string | null; email: string }[] };
+async function tenantsForWorkOrder(
+  supabase: ReturnType<typeof createClient>,
+  workOrderId: string,
+): Promise<JobTenants | null> {
+  const { data } = await supabase
+    .from("work_orders")
+    .select("title, tenancy_id, property:properties(address), tenancy:tenancies(tenants(name, email))")
+    .eq("id", workOrderId)
+    .maybeSingle();
+  if (!data) return null;
+  const row = data as unknown as {
+    title: string | null;
+    tenancy_id: string | null;
+    property: { address: string | null } | null;
+    tenancy: { tenants: { name: string | null; email: string | null }[] | null } | null;
+  };
+  if (!row.tenancy_id) return null;
+  const tenants = (row.tenancy?.tenants ?? [])
+    .filter((t) => !!t.email && /@/.test(t.email as string))
+    .map((t) => ({ name: t.name, email: (t.email as string).trim() }));
+  return { title: row.title ?? "the repair", address: row.property?.address ?? null, tenants };
+}
+
+async function emailJobTenants(
+  org: NonNullable<Awaited<ReturnType<typeof getCurrentOrg>>>,
+  job: JobTenants,
+  subject: string,
+  body: (firstName: string) => string,
+  cta?: { url: string; label: string },
+): Promise<number> {
+  let sent = 0;
+  for (const t of job.tenants) {
+    const first = (t.name ?? "").trim().split(/\s+/)[0] || "there";
+    const r = await sendTenantMessageEmail({
+      tenant_email: t.email,
+      tenant_name: t.name,
+      org_name: org.name,
+      brand_color: org.brand_color,
+      logo_url: org.logo_url,
+      reply_to_email: org.reply_to_email,
+      subject,
+      body: body(first),
+      cta_url: cta?.url ?? null,
+      cta_label: cta?.label ?? null,
+    });
+    if (r.sent) sent++;
+  }
+  return sent;
+}
+
+function visitDateLabel(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return d.toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
+}
+
 export async function confirmAppointment(formData: FormData) {
   await requireCapability("manage_work_orders", `${BASE}?sched=forbidden`);
   const org = await getCurrentOrg();
@@ -1533,8 +1592,18 @@ export async function confirmAppointment(formData: FormData) {
     .eq("work_order_id", workOrderId)
     .in("dispatch_status", ["offered", "accepted", "quoted", "scheduled"]);
 
+  // S759: tell the tenant the booked time (the pick-your-times page promises it).
+  let told = 0;
+  const job = await tenantsForWorkOrder(supabase, workOrderId);
+  if (job && job.tenants.length > 0) {
+    const when = `${visitDateLabel(v.value.date)}, between ${minutesToLabel(v.value.start_minute)} and ${minutesToLabel(v.value.end_minute)}`;
+    told = await emailJobTenants(org, job, "Your repair visit is booked", (first) =>
+      `Hi ${first},\n\nThe visit for ${job.title}${job.address ? ` at ${job.address}` : ""} is booked for ${when}.\n\nIf that time no longer works, reply to this email.`,
+    );
+  }
+
   revalidatePath(BASE);
-  redirect(`${BASE}?sched=confirmed#sched-${workOrderId}`);
+  redirect(`${BASE}?sched=${told > 0 ? "confirmed_told" : "confirmed"}#sched-${workOrderId}`);
 }
 
 // Clear a confirmed appointment back to collecting (keeps both window sets).
@@ -1587,4 +1656,51 @@ export async function provisionTenantLink(formData: FormData) {
 
   revalidatePath(BASE);
   redirect(`${BASE}?sched=link_ready#sched-${workOrderId}`);
+}
+
+// S759: email the tenant their pick-your-times link (creating one if needed),
+// so the landlord never copies and pastes it.
+export async function emailTenantLink(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?sched=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect(`${BASE}?sched=forbidden`);
+  const supabase = createClient();
+
+  const workOrderId = s(formData, "work_order_id");
+  const appt = await loadOrCreateAppointment(supabase, org.id, workOrderId);
+  if (!appt) redirect(`${BASE}?sched=notfound`);
+
+  const { data: tok } = await supabase
+    .from("work_order_appointments")
+    .select("tenant_access_token, token_expires_at")
+    .eq("id", appt.id)
+    .maybeSingle();
+  let token = (tok as { tenant_access_token: string | null; token_expires_at: string | null } | null)?.tenant_access_token ?? null;
+  const exp = (tok as { token_expires_at: string | null } | null)?.token_expires_at ?? null;
+  if (!token || !exp || Date.parse(exp) < Date.now()) {
+    token = randomBytes(24).toString("base64url");
+    const { error } = await supabase
+      .from("work_order_appointments")
+      .update({
+        tenant_access_token: token,
+        token_expires_at: new Date(Date.now() + 14 * 86_400_000).toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", appt.id);
+    if (error) redirect(`${BASE}?sched=save_failed#sched-${workOrderId}`);
+  }
+
+  const job = await tenantsForWorkOrder(supabase, workOrderId);
+  if (!job || job.tenants.length === 0) redirect(`${BASE}?sched=no_tenant_email#sched-${workOrderId}`);
+  const sent = await emailJobTenants(
+    org,
+    job,
+    "When can you be home for the repair?",
+    (first) =>
+      `Hi ${first},\n\nWe're arranging ${job.title}${job.address ? ` at ${job.address}` : ""}. Pick the times you can be home and we'll match them with the technician, then confirm the visit by email.`,
+    { url: `${APP_URL}/repair/${token}`, label: "Pick my times" },
+  );
+
+  revalidatePath(BASE);
+  redirect(`${BASE}?sched=${sent > 0 ? "link_emailed" : "email_failed"}#sched-${workOrderId}`);
 }

@@ -107,6 +107,7 @@ import {
   confirmAppointment,
   clearAppointment,
   provisionTenantLink,
+  emailTenantLink,
 } from "./actions";
 import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 
@@ -316,7 +317,9 @@ const SCHED_SUCCESS: Record<string, string> = {
   remembered: "Saved these windows as this supplier's default.",
   confirmed: "Visit confirmed. The date is on the work order.",
   cleared: "Cleared the confirmed visit.",
-  link_ready: "Tenant scheduling link ready — copy it below and send it to the tenant.",
+  link_ready: "Tenant scheduling link ready. Email it to the tenant below, or copy it.",
+  link_emailed: "Emailed the tenant their link to pick times.",
+  confirmed_told: "Visit confirmed and the tenant was emailed the time.",
 };
 const SCHED_ERROR: Record<string, string> = {
   date: "Enter a valid date.",
@@ -328,6 +331,8 @@ const SCHED_ERROR: Record<string, string> = {
   no_dates: "Add the tenant's availability first, then fill the supplier's windows.",
   no_windows: "Add the supplier's offered windows first.",
   notfound: "That work order could not be found.",
+  no_tenant_email: "This job has no tenant with an email on file. Copy the link and send it yourself.",
+  email_failed: "The email didn't go through. Copy the link and send it yourself.",
   forbidden: "You don't have permission to manage work orders.",
   save_failed: "Couldn't save. Please try again.",
 };
@@ -504,6 +509,12 @@ function SchedulingBlock({
                     <a href={tenantLink} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand hover:underline">
                       Open
                     </a>
+                    <form action={emailTenantLink}>
+                      <input type="hidden" name="work_order_id" value={workOrderId} />
+                      <button type="submit" className="text-xs font-semibold text-brand hover:underline">
+                        Email it to the tenant
+                      </button>
+                    </form>
                     <form action={provisionTenantLink}>
                       <input type="hidden" name="work_order_id" value={workOrderId} />
                       <button type="submit" className="text-xs font-medium text-gray-500 hover:underline">

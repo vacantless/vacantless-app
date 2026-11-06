@@ -294,7 +294,7 @@ export default async function WatchLeasePage({
             <input
               name="address"
               required
-              placeholder="833 Pillette Rd, Unit 20"
+              placeholder="12 Main St, Unit 2"
               className={inputCls}
             />
           </div>
