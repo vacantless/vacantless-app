@@ -9,6 +9,7 @@ import { N13_PERMITS, type N13Permits, type N13Reason } from "@/lib/n13";
 import type { N12ServiceMethod } from "@/lib/n12";
 import { N13_TEMPLATE_VERSION } from "@/lib/n13-official-pdf";
 import { parseDateOrNull } from "@/lib/payments";
+import { fixedTermEndISO } from "@/lib/tenancy";
 
 // S751: Form N13 (demolish, repair or convert). PREPARE-FIRST, like the N12:
 // Vacantless freezes the landlord's reviewed answers into notices.snapshot (type
@@ -47,7 +48,7 @@ export async function prepareN13(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   const { data: tRow } = await supabase
     .from("tenancies")
-    .select("id, organization_id, status, rent_cents, end_date, property:properties(address), tenants(name, is_primary)")
+    .select("id, organization_id, status, rent_cents, start_date, end_date, term_months, property:properties(address), tenants(name, is_primary)")
     .eq("id", tenancyId)
     .maybeSingle();
   if (!tRow) redirect("/dashboard/tenancies");
@@ -56,14 +57,17 @@ export async function prepareN13(formData: FormData) {
     organization_id: string;
     status: string;
     rent_cents: number | null;
+    start_date: string | null;
     end_date: string | null;
+    term_months: number | null;
     property: { address: string | null } | null;
     tenants: { name: string | null; is_primary: boolean }[];
   };
   if (t.status !== "active") redirect(anchor(tenancyId, "notready"));
 
   const serviceDateISO = parseDateOrNull(s(formData, "service_date")) ?? todayOntario();
-  const fixedTermEndISO = t.end_date && t.end_date >= serviceDateISO ? t.end_date : null;
+  const termEnd = fixedTermEndISO(t);
+  const runningTermEnd = termEnd && termEnd >= serviceDateISO ? termEnd : null;
   const tenantNames = (t.tenants ?? [])
     .slice()
     .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
@@ -77,7 +81,7 @@ export async function prepareN13(formData: FormData) {
     serviceDateISO,
     method,
     dueDay,
-    fixedTermEndISO,
+    fixedTermEndISO: runningTermEnd,
     mobileHome: s(formData, "mobile_home") === "yes",
     terminationDateISO: parseDateOrNull(s(formData, "termination_date")),
     reason,

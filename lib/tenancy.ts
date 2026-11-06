@@ -72,6 +72,34 @@ export function parseDateOrNull(raw: string | null | undefined): string | null {
   return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
 }
 
+/**
+ * Last day of the lease's fixed term (S759). The "Lease end" date when it is set;
+ * otherwise start + term months - 1 day (12 months from 2026-11-01 ends
+ * 2027-10-31). Null for month-to-month (no end and no term) or a bad start.
+ * The notices (N8, N12, N13, L10) must not end a fixed term early (RTA s. 44,
+ * 48, 50), so they read the term from here, not from end_date alone.
+ */
+export function fixedTermEndISO(t: {
+  start_date?: string | null;
+  end_date?: string | null;
+  term_months?: number | null;
+}): string | null {
+  const end = parseDateOrNull(t.end_date ?? null);
+  if (end) return end;
+  const start = parseDateOrNull(t.start_date ?? null);
+  const term = t.term_months;
+  if (!start || !term || !Number.isInteger(term) || term <= 0) return null;
+  const [y, m, d] = start.split("-").map(Number);
+  // The day before the same day-of-month `term` months later; when that month is
+  // too short (a Jan 31 start), the term runs to the end of that month.
+  const targetMonth = m - 1 + term;
+  const ty = y + Math.floor(targetMonth / 12);
+  const tm = targetMonth % 12;
+  const lastDay = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate();
+  const anniversary = d > lastDay ? Date.UTC(ty, tm + 1, 1) : Date.UTC(ty, tm, d);
+  return new Date(anniversary - 86_400_000).toISOString().slice(0, 10);
+}
+
 // --- Tenant list construction ----------------------------------------------
 
 export type TenantInput = {

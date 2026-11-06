@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
+  fixedTermEndISO,
   TENANCY_STATUSES,
   tenancyStatusLabel,
   tenancyErrorMessage,
@@ -1913,7 +1914,7 @@ export default async function TenancyDetailPage({
           tenancyId={t.id}
           active={t.status === "active"}
           rentCents={t.rent_cents}
-          endDate={t.end_date ?? null}
+          endDate={fixedTermEndISO(t)}
           landlordName={org?.name ?? ""}
           notices={n12Notices}
           today={todayOntario}
@@ -1923,7 +1924,7 @@ export default async function TenancyDetailPage({
           tenancyId={t.id}
           active={t.status === "active"}
           rentCents={t.rent_cents}
-          endDate={t.end_date ?? null}
+          endDate={fixedTermEndISO(t)}
           landlordName={org?.name ?? ""}
           notices={n13Notices}
           today={todayOntario}
@@ -1957,7 +1958,7 @@ export default async function TenancyDetailPage({
         />
         <TenancyL10Section
           tenancyId={t.id}
-          endDate={t.end_date ?? null}
+          endDate={fixedTermEndISO(t)}
           landlordName={org?.name ?? ""}
           landlordPhone={org?.public_contact_phone ?? null}
           depositCents={t.deposit_cents ?? null}
@@ -1984,7 +1985,7 @@ export default async function TenancyDetailPage({
           tenancyId={t.id}
           active={t.status === "active"}
           rentCents={t.rent_cents}
-          endDate={t.end_date ?? null}
+          endDate={fixedTermEndISO(t)}
           landlordName={org?.name ?? ""}
           latePeriods={n8LatePeriods}
           notices={n8Notices}

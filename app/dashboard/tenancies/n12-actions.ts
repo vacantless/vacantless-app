@@ -8,6 +8,7 @@ import { buildN12Snapshot } from "@/lib/n12-snapshot";
 import { N12_RELATIONSHIPS, type N12Relationship, type N12ServiceMethod } from "@/lib/n12";
 import { N12_TEMPLATE_VERSION } from "@/lib/n12-official-pdf";
 import { parseDateOrNull } from "@/lib/payments";
+import { fixedTermEndISO } from "@/lib/tenancy";
 
 // S748g: Form N12 (landlord, purchaser or family member requires the unit).
 // PREPARE-FIRST, like the N4: Vacantless freezes the landlord's reviewed answers
@@ -43,7 +44,7 @@ export async function prepareN12(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   const { data: tRow } = await supabase
     .from("tenancies")
-    .select("id, organization_id, status, rent_cents, end_date, property:properties(address), tenants(name, is_primary)")
+    .select("id, organization_id, status, rent_cents, start_date, end_date, term_months, property:properties(address), tenants(name, is_primary)")
     .eq("id", tenancyId)
     .maybeSingle();
   if (!tRow) redirect("/dashboard/tenancies");
@@ -52,7 +53,9 @@ export async function prepareN12(formData: FormData) {
     organization_id: string;
     status: string;
     rent_cents: number | null;
+    start_date: string | null;
     end_date: string | null;
+    term_months: number | null;
     property: { address: string | null } | null;
     tenants: { name: string | null; is_primary: boolean }[];
   };
@@ -60,7 +63,8 @@ export async function prepareN12(formData: FormData) {
 
   const serviceDateISO = parseDateOrNull(s(formData, "service_date")) ?? todayOntario();
   // A fixed term only matters while it is still running on the service date.
-  const fixedTermEndISO = t.end_date && t.end_date >= serviceDateISO ? t.end_date : null;
+  const termEnd = fixedTermEndISO(t);
+  const runningTermEnd = termEnd && termEnd >= serviceDateISO ? termEnd : null;
   const tenantNames = (t.tenants ?? [])
     .slice()
     .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
@@ -75,7 +79,7 @@ export async function prepareN12(formData: FormData) {
     serviceDateISO,
     method,
     dueDay,
-    fixedTermEndISO,
+    fixedTermEndISO: runningTermEnd,
     terminationDateISO: parseDateOrNull(s(formData, "termination_date")),
     reason,
     personName: s(formData, "person_name"),

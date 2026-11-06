@@ -7,6 +7,7 @@ import { requireCapability } from "@/lib/membership";
 import { countableLatePeriods, earliestN8TerminationDate, findLatePeriods, n8Problems, type N8LatePeriod, type N8ServiceMethod } from "@/lib/n8";
 import { N8_TEMPLATE_VERSION, type N8FillSnapshot } from "@/lib/n8-official-pdf";
 import { parseDateOrNull } from "@/lib/payments";
+import { fixedTermEndISO } from "@/lib/tenancy";
 
 // S749: Form N8 (persistent late rent). PREPARE-FIRST, like the N12: Vacantless
 // counts the late payments from the rent ledger, freezes the landlord's reviewed
@@ -46,7 +47,7 @@ export async function prepareN8(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   const { data: tRow } = await supabase
     .from("tenancies")
-    .select("id, organization_id, status, rent_cents, end_date, property:properties(address), tenants(name, is_primary)")
+    .select("id, organization_id, status, rent_cents, start_date, end_date, term_months, property:properties(address), tenants(name, is_primary)")
     .eq("id", tenancyId)
     .maybeSingle();
   if (!tRow) redirect("/dashboard/tenancies");
@@ -55,7 +56,9 @@ export async function prepareN8(formData: FormData) {
     organization_id: string;
     status: string;
     rent_cents: number | null;
+    start_date: string | null;
     end_date: string | null;
+    term_months: number | null;
     property: { address: string | null } | null;
     tenants: { name: string | null; is_primary: boolean }[];
   };
@@ -75,8 +78,9 @@ export async function prepareN8(formData: FormData) {
     dueDay,
   });
 
-  const fixedTermEndISO = t.end_date && t.end_date >= serviceDateISO ? t.end_date : null;
-  const dateInput = { serviceDateISO, method, dueDay, fixedTermEndISO };
+  const termEnd = fixedTermEndISO(t);
+  const runningTermEnd = termEnd && termEnd >= serviceDateISO ? termEnd : null;
+  const dateInput = { serviceDateISO, method, dueDay, fixedTermEndISO: runningTermEnd };
   const earliest = earliestN8TerminationDate(dateInput);
   const terminationDateISO = parseDateOrNull(s(formData, "termination_date")) ?? earliest;
   const tenantNames = (t.tenants ?? [])
@@ -104,7 +108,7 @@ export async function prepareN8(formData: FormData) {
     serviceDateISO,
     method,
     dueDay,
-    fixedTermEndISO,
+    fixedTermEndISO: runningTermEnd,
     earliestTerminationISO: earliest,
     latePeriods: late,
     formVersion: N8_TEMPLATE_VERSION,
