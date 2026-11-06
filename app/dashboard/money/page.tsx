@@ -46,25 +46,25 @@ const SECTIONS: Section[] = [
   {
     href: "/dashboard/money/income-statement",
     title: "Income statement (P&L)",
-    desc: "Revenue minus operating expenses is your NOI; less interest is net income - the monthly profit picture. Premium.",
+    desc: "Revenue minus operating expenses is your NOI; less interest is net income - the monthly profit picture.",
     icon: "chart",
   },
   {
     href: "/dashboard/money/spend",
     title: "Spend",
-    desc: "Category share, monthly trend, and recurring charges from the expense ledger you already keep. Premium.",
+    desc: "Category share, monthly trend, and recurring charges from the expense ledger you already keep.",
     icon: "chart",
   },
   {
     href: "/dashboard/money/tax-package",
     title: "Tax package (T776)",
-    desc: "Your year of rent and expenses mapped to the T776 tax lines, ready for your accountant. Premium.",
+    desc: "Your year of rent and expenses mapped to the T776 tax lines, ready for your accountant.",
     icon: "chart",
   },
   {
     href: "/dashboard/money/accountant-package",
     title: "Accountant package",
-    desc: "The whole year - ledger, T776, statements, and QuickBooks/Xero import files - as one zip to hand to whoever does the taxes. Premium.",
+    desc: "The whole year - ledger, T776, statements, and QuickBooks/Xero import files - as one zip to hand to whoever does the taxes.",
     icon: "page",
   },
   {
@@ -80,6 +80,19 @@ const SECTIONS: Section[] = [
     icon: "chart",
   },
 ];
+
+// S759: Premium is not on sale (hidden on /dashboard/billing since S702j), so
+// its accounting cards were doors into a "See plans" page with no way to buy
+// it. Accounts without the accounting entitlement no longer see them; an org
+// already on Premium sees them as before.
+const ACCOUNTING_HREFS = new Set([
+  "/dashboard/money/reconcile",
+  "/dashboard/money/import-history",
+  "/dashboard/money/income-statement",
+  "/dashboard/money/spend",
+  "/dashboard/money/tax-package",
+  "/dashboard/money/accountant-package",
+]);
 
 export default async function MoneyHubPage() {
   const supabase = createClient();
@@ -144,19 +157,8 @@ export default async function MoneyHubPage() {
           </Card>
         </Link>
 
-        {SECTIONS.map((s) => {
+        {SECTIONS.filter((s) => accounting || !ACCOUNTING_HREFS.has(s.href)).map((s) => {
           const Icon = Icons[s.icon];
-          // Every accounting-gated child gets the Premium chip so no card is
-          // an unmarked door into a lock screen (S528: import-history was
-          // gated on the page but unmarked here — a dead-end for Free/Growth).
-          const locked =
-            (s.href === "/dashboard/money/reconcile" ||
-              s.href === "/dashboard/money/import-history" ||
-              s.href === "/dashboard/money/income-statement" ||
-              s.href === "/dashboard/money/spend" ||
-              s.href === "/dashboard/money/tax-package" ||
-              s.href === "/dashboard/money/accountant-package") &&
-            !accounting;
           return (
             <Link key={s.href} href={s.href} className="block">
               <Card hover className="h-full">
@@ -167,11 +169,6 @@ export default async function MoneyHubPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h2 className="font-semibold text-gray-900">{s.title}</h2>
-                      {locked && (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-100">
-                          Premium
-                        </span>
-                      )}
                     </div>
                     <p className="mt-1 text-sm leading-relaxed text-gray-600">
                       {s.desc}
