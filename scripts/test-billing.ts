@@ -553,7 +553,7 @@ ok(
 // --- Repair-appointment-reminder SMS gate (S387: Premium+, mirrors text-in) --
 // The email/in-app reminder legs are ungated; only the SMS leg needs this.
 ok("repair_sms: free false", canUseRepairSms("free") === false);
-ok("repair_sms: growth false (gated to Premium)", canUseRepairSms("growth") === false);
+ok("repair_sms: growth true (S759n)", canUseRepairSms("growth") === true);
 ok("repair_sms: premium true (upper tier)", canUseRepairSms("premium") === true);
 ok("repair_sms: managed true (upper tier)", canUseRepairSms("managed") === true);
 ok("repair_sms: pilot true (full access)", canUseRepairSms("pilot") === true);

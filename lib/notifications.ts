@@ -197,7 +197,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
   // Audience tenant; the tenant on the work order's tenancy is the recipient.
   // SHIP DARK: opt-in per org (the cron requires an explicit enabled override via
   // isDripEnqueueEnabled), so nothing fires until the operator turns it on. The
-  // EMAIL leg needs no entitlement; the SMS leg is Premium (repair_sms) and is
+  // EMAIL leg needs no entitlement; the SMS leg is Growth+ (repair_sms, S759n) and is
   // sent separately by the cron with its own opt-out + stamp. {{reminder_lead}}
   // renders "tomorrow" or "today"; {{appointment_window}} is the arrival window
   // (e.g. "Jul 1: 8:00 AM - 12:00 PM"). No alert accent (a friendly heads-up).
@@ -207,7 +207,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "tenant",
     label: "Repair visit reminder - notify the tenant",
     description:
-      "Once you confirm a repair appointment, the tenant gets a reminder the day before and again the same day so they're home for the arrival window. Goes to the tenant on the job's tenancy. The text-message version needs a Premium plan; email is always included. Off until you turn it on.",
+      "Once you confirm a repair appointment, the tenant gets a reminder the day before and again the same day so they're home for the arrival window. Goes to the tenant on the job's tenancy. Email is included on every plan. On Growth and up, a text also goes out from your own number when texting is on. On unless you turn it off.",
     tokens: [...COMMON_TOKENS, "tenant_first_name", "job_title", "appointment_window", "reminder_lead"],
     defaultSubject: "Reminder: your repair visit {{reminder_lead}}",
     defaultBody:
@@ -1471,6 +1471,15 @@ export function isDripEnqueueEnabled(setting: NotificationSettingRow | null): bo
  * isDripEnqueueEnabled.
  */
 export function isOutcomeNudgeEnabled(setting: NotificationSettingRow | null): boolean {
+  return isEventEnabled(setting);
+}
+
+/**
+ * Repair visit reminders are ON BY DEFAULT (S759n): once a landlord confirms a
+ * repair appointment the tenant should hear about it without anyone finding a
+ * toggle first. Absent row => on; an explicit enabled=false row turns it off.
+ */
+export function isRepairReminderEnabled(setting: NotificationSettingRow | null): boolean {
   return isEventEnabled(setting);
 }
 

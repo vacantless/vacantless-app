@@ -472,6 +472,8 @@ ok("detail: decline no reason", /no reason/i.test(tradeUpdateDetail("declined", 
       snapshot_date: "Thursday, June 25",
       new_count: "2",
       showings_today_count: "1",
+      viewings_today_label: "1 viewing today",
+      action_label: "Open your inquiries",
       snapshot: "NEW LEADS — LAST 24 HOURS (2)\n\n• Jane Doe — 22 King St W",
       dashboard_url: "https://x/dashboard/leads",
     });

@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendOrgNotification } from "@/lib/notifications-server";
 import {
   getNotificationEvent,
-  isDripEnqueueEnabled,
+  isRepairReminderEnabled,
   type NotificationSettingRow,
 } from "@/lib/notifications";
 import { sendSms, repairReminderSms, smsLive } from "@/lib/sms";
@@ -37,8 +37,8 @@ import { canUseRepairSms } from "@/lib/billing";
 // (appointmentReminderDue) is catch-up safe — a late/infrequent cron still fires
 // exactly one reminder, same-day taking priority over the day-before.
 //
-// SHIP DARK: opt-in per org (isDripEnqueueEnabled) — nothing fires until the org
-// turns the "Repair visit reminder" event on in Automations & Templates. Inert
+// S759n: ON BY DEFAULT (isRepairReminderEnabled). Was ship-dark opt-in; the org
+// can turn the "Repair visit reminder" event off in Automations & Templates. Inert
 // regardless until an operator confirms an appointment.
 //
 // Auth: CRON_SECRET (Bearer or ?secret=). Test affordances (CRON_SECRET-gated):
@@ -163,9 +163,8 @@ export async function GET(req: NextRequest) {
       const today = localDateString(nowMs, tz);
       const tomorrow = addDaysIso(today, 1);
 
-      // Opt-in gate (ship dark): only sweep orgs that have explicitly turned the
-      // event on. Absent row => isDripEnqueueEnabled false => skip — one cheap
-      // read before the appointment scan.
+      // Default-on gate (S759n): absent row => on; only an explicit
+      // enabled=false row skips the org. One cheap read before the scan.
       const { data: settingRow } = await admin
         .from("notification_settings")
         .select("event_key, enabled, subject_template, body_template, recipients, accent_color")
@@ -173,7 +172,7 @@ export async function GET(req: NextRequest) {
         .eq("event_key", EVENT_KEY)
         .maybeSingle();
       const setting = (settingRow as NotificationSettingRow | null) ?? null;
-      if (!isDripEnqueueEnabled(setting)) {
+      if (!isRepairReminderEnabled(setting)) {
         summary.skipped++;
         continue;
       }
