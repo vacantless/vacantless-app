@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
-import { formatRentCents } from "@/lib/tenancy";
+import { fixedTermEndISO, formatRentCents } from "@/lib/tenancy";
 import { loadStandardLease } from "@/lib/standard-lease-server";
 import {
   resolveCurrentClauses,
@@ -63,7 +63,7 @@ export async function generateLeaseFromSelection(formData: FormData) {
   const { data: tenancyRow } = await supabase
     .from("tenancies")
     .select(
-      "id, rent_cents, deposit_cents, start_date, end_date, property:properties(address), tenants(name, is_primary)",
+      "id, rent_cents, deposit_cents, start_date, end_date, term_months, property:properties(address), tenants(name, is_primary)",
     )
     .eq("id", tenancyId)
     .maybeSingle();
@@ -74,6 +74,7 @@ export async function generateLeaseFromSelection(formData: FormData) {
     deposit_cents: number | null;
     start_date: string | null;
     end_date: string | null;
+    term_months: number | null;
     property: { address: string } | null;
     tenants: { name: string | null; is_primary: boolean }[];
   };
@@ -114,7 +115,7 @@ export async function generateLeaseFromSelection(formData: FormData) {
     deposit:
       tenancy.deposit_cents != null ? formatRentCents(tenancy.deposit_cents) : null,
     startDate: tenancy.start_date,
-    endDate: tenancy.end_date,
+    endDate: fixedTermEndISO(tenancy),
   });
   const operatorVars = collectVarFields(
     [...formData.entries()].map(([k, v]) => [k, String(v)] as [string, string]),
@@ -239,7 +240,7 @@ export async function sendLeaseForSignature(formData: FormData) {
     deposit:
       tenancy.deposit_cents != null ? formatRentCents(tenancy.deposit_cents) : null,
     startDate: tenancy.start_date,
-    endDate: tenancy.end_date,
+    endDate: fixedTermEndISO(tenancy),
     termMonths: tenancy.term_months,
     clauseBody: lease.assembled_body ?? "",
   };

@@ -37,6 +37,8 @@ import {
   recordRentFromTransaction,
   linkRailRentPaymentToTransaction,
   applyRulesToQueue,
+  addManualExpense,
+  deleteManualExpense,
   confirmEtransferRent,
   confirmEtransferExpense,
   dismissEtransferCapture,
@@ -209,6 +211,8 @@ export default async function ExpensesPage({
     import?: string;
     rent?: string;
     etransfer?: string;
+    expadded?: string;
+    expdeleted?: string;
   };
 }) {
   const org = await getCurrentOrg();
@@ -289,6 +293,18 @@ export default async function ExpensesPage({
   const pending = (txnData ?? []) as TxnRow[];
   const pendingBeyondView = Math.max(0, (pendingTotal ?? 0) - pending.length);
   const properties = (propData ?? []) as PropertyRef[];
+  // S759: the last hand-typed expenses, so a typo can be removed.
+  const { data: manualData } = await supabase
+    .from("expenses")
+    .select("id, category, amount_cents, incurred_on, merchant, property_id, building_key")
+    .eq("organization_id", org.id)
+    .eq("source", "manual")
+    .order("incurred_on", { ascending: false })
+    .limit(10);
+  const manualExpenses = (manualData ?? []) as {
+    id: string; category: string; amount_cents: number; incurred_on: string;
+    merchant: string | null; property_id: string | null; building_key: string | null;
+  }[];
   const rules = ((ruleData ?? []) as RuleRow[]).map(ruleFromRow);
 
   const rentFromBank = isRentFromBankEnabled();
@@ -470,6 +486,8 @@ export default async function ExpensesPage({
     if (searchParams.bank === "forbidden") return { tone: "danger" as const, text: "You don't have permission to manage bank sync." };
     if (searchParams.bank === "locked") return { tone: "danger" as const, text: "Bank sync isn't available on your plan." };
     if (searchParams.bank) return { tone: "danger" as const, text: "That transaction or connection could not be found." };
+    if (searchParams.expadded) return { tone: "success" as const, text: "Expense added. It counts on your owner statement." };
+    if (searchParams.expdeleted) return { tone: "neutral" as const, text: "Expense removed." };
     if (searchParams.exp) return { tone: "danger" as const, text: "Could not log the expense — please check the fields." };
     return null;
   })();
@@ -497,6 +515,82 @@ export default async function ExpensesPage({
         <StatCard label="To review" value={pending.length} icon={<Icons.list />} />
         <StatCard label="Captured e-Transfers" value={emailCaptureAllowed ? etransferCaptures.length : 0} icon={<Icons.mail />} />
         <StatCard label="Logged from bank" value={assignedCount ?? 0} icon={<Icons.chart />} />
+      </div>
+
+      {/* --- S759: add one expense by hand ---------------------------------- */}
+      <div className="mt-8" id="add-expense">
+        <SectionHeading>Add an expense</SectionHeading>
+        <Card>
+          <p className="text-sm text-gray-600">
+            Paid for something by cash, cheque or a card you don&apos;t connect? Type it in. It counts on your owner statement.
+          </p>
+          <form action={addManualExpense} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">Amount ($)</span>
+              <input name="amount" required inputMode="decimal" placeholder="85.00" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">Date</span>
+              <input name="incurred_on" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">Category</span>
+              <select name="category" defaultValue="maintenance" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                {EXPENSE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{expenseCategoryLabel(c)}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">For</span>
+              <select name="scope" defaultValue={properties[0] ? `p:${properties[0].id}` : ""} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                {properties.map((p) => (
+                  <option key={p.id} value={`p:${p.id}`}>{p.address}</option>
+                ))}
+                {buildingOptions.map((b) => (
+                  <option key={`b:${b.key}`} value={`b:${b.key}`}>Whole building: {b.label}</option>
+                ))}
+                <option value="">All my rentals</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">Paid to (optional)</span>
+              <input name="merchant" placeholder="e.g. Home Depot" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">Note (optional)</span>
+              <input name="note" placeholder="e.g. New lock, Unit 2" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </label>
+            <div className="sm:col-span-2 lg:col-span-3">
+              <SubmitButton className={`${PRIMARY_ACTION_CLASS} bg-brand`} pendingLabel="Adding…">
+                Add expense
+              </SubmitButton>
+            </div>
+          </form>
+          {manualExpenses.length > 0 && (
+            <ul className="mt-5 divide-y divide-gray-100 border-t border-gray-100">
+              {manualExpenses.map((e) => {
+                const where = e.property_id
+                  ? properties.find((p) => p.id === e.property_id)?.address ?? "A rental"
+                  : e.building_key
+                    ? `Whole building: ${buildingLabels.get(e.building_key) ?? e.building_key}`
+                    : "All my rentals";
+                return (
+                  <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                    <span className="text-gray-700">
+                      {e.incurred_on} · {formatMoneyCents(e.amount_cents)} · {expenseCategoryLabel(e.category)}
+                      {e.merchant ? ` · ${e.merchant}` : ""} · <span className="text-gray-500">{where}</span>
+                    </span>
+                    <form action={deleteManualExpense}>
+                      <input type="hidden" name="expense_id" value={e.id} />
+                      <button className="text-xs font-medium text-gray-400 hover:text-red-600">Remove</button>
+                    </form>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
       </div>
 
       {/* --- Connections ------------------------------------------------------ */}

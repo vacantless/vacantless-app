@@ -925,3 +925,71 @@ export async function linkRailRentPaymentToTransaction(formData: FormData) {
   revalidatePath("/dashboard/rent/statement");
   redirect(`${BASE}?rent=linked`);
 }
+
+// S759: type in one cost by hand (a locksmith, a can of paint) without a bank
+// feed or a file. Scope is a unit ("p:<property id>"), a whole building
+// ("b:<building key>") or blank for portfolio-wide. source 'manual'.
+export async function addManualExpense(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?bank=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const scope = String(formData.get("scope") ?? "").trim();
+  const propertyId = scope.startsWith("p:") ? scope.slice(2) : null;
+  const buildingKey = scope.startsWith("b:") ? scope.slice(2) : null;
+  const check = validateExpenseInput({
+    category: String(formData.get("category") ?? "").trim(),
+    amountCents: parseAmountToCents(String(formData.get("amount") ?? "")),
+    incurredOn: String(formData.get("incurred_on") ?? "").trim(),
+    propertyId,
+    buildingKey,
+    merchant: String(formData.get("merchant") ?? "").trim() || null,
+    note: String(formData.get("note") ?? "").trim() || null,
+    source: "manual",
+  });
+  if (!check.ok) redirect(`${BASE}?exp=${check.code}#add-expense`);
+  if (check.value.amountCents === 0) redirect(`${BASE}?exp=amount#add-expense`);
+
+  const supabase = createClient();
+  // RLS scopes the read: the unit must belong to this org.
+  if (check.value.propertyId) {
+    const { data: prop } = await supabase.from("properties").select("id").eq("id", check.value.propertyId).maybeSingle();
+    if (!prop) redirect(`${BASE}?exp=notfound#add-expense`);
+  }
+  const { error } = await supabase.from("expenses").insert({
+    organization_id: org.id,
+    property_id: check.value.propertyId,
+    building_key: check.value.buildingKey,
+    category: check.value.category,
+    amount_cents: check.value.amountCents,
+    incurred_on: check.value.incurredOn,
+    merchant: check.value.merchant,
+    note: check.value.note,
+    source: "manual",
+  });
+  if (error) redirect(`${BASE}?exp=save#add-expense`);
+  revalidatePath(BASE);
+  revalidatePath("/dashboard/rent/statement");
+  redirect(`${BASE}?expadded=1#add-expense`);
+}
+
+// S759: remove a hand-typed expense (a typo). Bank, import and scan rows keep
+// their own flows; only source 'manual' rows are deletable here.
+export async function deleteManualExpense(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?bank=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const id = String(formData.get("expense_id") ?? "").trim();
+  if (!id) redirect(`${BASE}?exp=notfound#add-expense`);
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("expenses")
+    .delete()
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .eq("source", "manual");
+  if (error) redirect(`${BASE}?exp=save#add-expense`);
+  revalidatePath(BASE);
+  revalidatePath("/dashboard/rent/statement");
+  redirect(`${BASE}?expdeleted=1#add-expense`);
+}

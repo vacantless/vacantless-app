@@ -1164,7 +1164,7 @@ export default async function TenancyDetailPage({
     rent: t.rent_cents != null ? formatRentCents(t.rent_cents) : null,
     deposit: t.deposit_cents != null ? formatRentCents(t.deposit_cents) : null,
     startDate: t.start_date,
-    endDate: t.end_date,
+    endDate: fixedTermEndISO(t),
   });
   const recordSummary = [
     { label: "Property", value: t.property?.address ?? "" },
