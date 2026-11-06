@@ -41,6 +41,7 @@ export default async function Home() {
         <LeasingProof />
         <HowItWorks />
         <WhatYouGet />
+        <AfterTheLease />
         <Pricing />
         <FounderBand />
         <ClosingCta />
@@ -452,6 +453,56 @@ const GET_GROUPS: { title: string; items: string[] }[] = [
     ],
   },
 ];
+
+/* S754d: the Ontario paperwork that comes after the lease. Every line is
+   live: LTB forms N4, N5, N6, N8, N12, N13, L1, L2, L9, L10 filled from the
+   tenancy (S748-S751), the rent increase tool with a filled N1 and the
+   Ontario Standard Lease (public tools, S746-S743). Leasing stays the
+   headline; rent collection, expenses and repairs stay off this page until
+   an outside landlord has used them. */
+const AFTER_LEASE: { title: string; body: string; href?: string; link?: string }[] = [
+  {
+    title: "Official LTB notices, filled in",
+    body: "N4, N5, N12, N13, L1, L2 and more, filled from the tenancy. Print or serve.",
+  },
+  {
+    title: "Rent increases, done right",
+    body: "This year's guideline, the right dates and a filled Form N1.",
+    href: "/tools/rent-increase",
+    link: "Try the free calculator",
+  },
+  {
+    title: "The Ontario Standard Lease",
+    body: "Filled from your rental. In Vacantless, everyone signs it online.",
+    href: "/tools/standard-lease",
+    link: "Fill one free",
+  },
+];
+
+function AfterTheLease() {
+  return (
+    <section id="paperwork" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="After the lease, the paperwork.">
+          For Ontario rentals. The forms come straight from the tenancy you already have.
+        </SectionHead>
+        <div className="grid gap-4 md:grid-cols-3">
+          {AFTER_LEASE.map((c) => (
+            <article key={c.title} className="rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
+              <h3 className="mb-2 text-[1.08rem] font-bold">{c.title}</h3>
+              <p className="text-[0.9rem] leading-snug text-[#273832]">{c.body}</p>
+              {c.href && c.link ? (
+                <a href={c.href} className="mt-3 inline-block text-[0.9rem] font-semibold text-[var(--color-primary)] hover:underline">
+                  {c.link}
+                </a>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 /* --------------------------------------------------------------------- Pricing */
 
