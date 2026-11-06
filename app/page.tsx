@@ -449,6 +449,7 @@ const GET_GROUPS: { title: string; items: string[] }[] = [
       "Every renter in one list, with their answers and notes",
       "A follow-up list when a viewing is cancelled",
       "A quick question after each viewing, so your list stays true",
+      "Showing agents: hand viewings to the people who run them, each with a private phone page",
       "Your name and colours on every page and email renters see",
     ],
   },
@@ -464,6 +465,8 @@ const AFTER_LEASE: { title: string; body: string; href?: string; link?: string }
   {
     title: "Official LTB notices, filled in",
     body: "N4, N5, N12, N13, L1, L2 and more, filled from the tenancy. Print or serve.",
+    href: "/tools/n4",
+    link: "Fill a free N4",
   },
   {
     title: "Rent increases, done right",

@@ -56,6 +56,8 @@ const nextConfig = {
       "/n1/[token]/official": ["./lib/forms/ltb-n1-2022.pdf"],
       // S748g: the LTB's 2026 forms (the old ones are refused after 2026-11-30).
       "/notice/[token]/official": ["./lib/forms/ltb-n4-2026-09.pdf"],
+      // S755: the free public N4 tool.
+      "/tools/n4/official": ["./lib/forms/ltb-n4-2026-09.pdf"],
       "/dashboard/tenancies/[id]/n4/official": ["./lib/forms/ltb-n4-2026-09.pdf"],
       "/dashboard/tenancies/[id]/n12/official": ["./lib/forms/ltb-n12-2026-10.pdf"],
       "/dashboard/tenancies/[id]/n13/official": ["./lib/forms/ltb-n13-2026.pdf"],
