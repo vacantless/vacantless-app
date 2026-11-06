@@ -143,7 +143,14 @@ export default function RotessaSettingsCard({
         </div>
       ) : (
         <div className="mt-4">
-          <ConnectForm encConfigured={encConfigured} defaultEnv="sandbox" submitLabel="Connect Rotessa" />
+          <p className="text-sm text-gray-600">
+            No Rotessa account yet? Apply for one at{" "}
+            <a href="https://rotessa.com/" target="_blank" rel="noopener noreferrer" className="font-medium text-brand hover:underline">
+              rotessa.com
+            </a>
+            . Rotessa reviews each application, so approval can take some days. Then paste your API key here.
+          </p>
+          <ConnectForm encConfigured={encConfigured} defaultEnv="live" submitLabel="Connect Rotessa" />
         </div>
       )}
     </Card>
@@ -193,7 +200,7 @@ function ConnectForm({
           <option value="live">Live</option>
         </select>
         <span className="mt-1 block text-xs text-gray-400">
-          Use Sandbox while testing; switch to Live to collect real rent.
+          Live for your real Rotessa account. Choose Sandbox only if Rotessa gave you a test key.
         </span>
       </label>
 

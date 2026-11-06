@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { PageHeader, Card, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentOrg } from "@/lib/org";
 
 export const dynamic = "force-dynamic";
 
@@ -44,23 +42,12 @@ const SECTIONS: Section[] = [
   {
     href: "/dashboard/settings?tab=banking",
     title: "Banking & payouts",
-    desc: "Connect your Stripe account to collect rent by bank debit, and manage where payouts land.",
+    desc: "Connect Stripe or Rotessa to collect rent by bank debit, and manage where payouts land.",
     icon: "card",
   },
 ];
 
-export default async function MoneyHubPage() {
-  // S759: Rotessa is closed to new platform clients; its CSV export shows only
-  // for an org that already connected Rotessa.
-  const org = await getCurrentOrg();
-  const { data: rotessaRows } = org
-    ? await createClient()
-        .from("rotessa_accounts")
-        .select("organization_id")
-        .eq("organization_id", org.id)
-        .limit(1)
-    : { data: null };
-  const hasRotessa = (rotessaRows?.length ?? 0) > 0;
+export default function MoneyHubPage() {
   return (
     <div>
       <PageHeader
@@ -115,7 +102,6 @@ export default async function MoneyHubPage() {
               >
                 Owner statement CSV
               </a>
-              {hasRotessa && (
               <form action="/dashboard/rent/export" method="get" className="flex flex-wrap items-end gap-2">
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-gray-600">From</span>
@@ -132,7 +118,6 @@ export default async function MoneyHubPage() {
                   Rotessa rent CSV
                 </button>
               </form>
-              )}
               <form action="/dashboard/rent/stripe-export" method="get" className="flex flex-wrap items-end gap-2">
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-gray-600">From</span>

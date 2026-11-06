@@ -2424,9 +2424,6 @@ export default async function TenancyDetailPage({
       <TenancyStripeRentSection view={stripeRentView} />
 
       {/* Rotessa (pre-authorized debit — secondary rail) ------------------ */}
-      {/* S759: Rotessa is closed to new platform clients, so the card shows only
-          for an org that already connected Rotessa or a tenancy already on it. */}
-      {(rotessaConnected || t.rotessa_customer_id) && (
       <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         {t.rotessa_customer_id ? (
           <div className="space-y-3">
@@ -2561,7 +2558,6 @@ export default async function TenancyDetailPage({
           </div>
         )}
       </div>
-      )}
 
       {/* Chexy — tenant-initiated credit-card pay (a hand-off, NOT a pull
           rail). Opens Chexy's public site in a new tab; no money or bank data

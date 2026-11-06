@@ -2732,13 +2732,10 @@ export default async function SettingsPage({
             </div>
           )}
 
-          {/* S759: Rotessa is closed to new platform clients; keep it for orgs already connected. */}
-          {rotessaAccount && (
-            <RotessaSettingsCard
-              account={rotessaAccount}
-              encConfigured={rotessaEncConfigured}
-            />
-          )}
+          <RotessaSettingsCard
+            account={rotessaAccount}
+            encConfigured={rotessaEncConfigured}
+          />
           <StripeConnectSettingsCard
             account={stripeConnectAccount}
             stripeConfigured={stripeConfigured}
