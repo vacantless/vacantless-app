@@ -548,6 +548,7 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "Repairs: tenants report and pick times; your trade accepts, quotes and books from a link; the tenant gets a reminder by email and text",
       "Rent by pre-authorized debit through your own Stripe or Rotessa account",
       "Expenses from your bank or typed in, and an owner statement per building",
+      "Books & Tax: your T776 summary, bank matching, an income statement and one zip for your accountant",
       "Email help from us within one business day",
     ],
   },
@@ -558,12 +559,10 @@ export const TIERS: Record<TierKey, TierInfo> = {
     priceEnv: "STRIPE_PRICE_PREMIUM",
     maxActiveListings: null,
     blurb:
-      "Everything in Growth, plus full books, repair coordination, and higher-capacity operations.",
+      "Everything in Growth, plus text-in repair requests and help for bigger teams.",
     features: [
       "Everything in Growth",
-      "Full accounting module",
-      "Maintenance / repair dispatch",
-      "Text-in capture for maintenance",
+      "Tenants can text in repair requests",
       "Larger photo capacity",
       "Shares new inquiries evenly across your team",
       "Priority support",
@@ -768,6 +767,19 @@ export function postingAddonPending(
   if (params.checkout === "posting" && offer === "add_free") return "switching_on";
   if (params.addon === "removed" && offer === "on_bought") return "switching_off";
   return null;
+}
+
+// --- Books & Tax (Noam, 2026-11-06, S760: part of Growth) ------------------
+// The books part of Money: the T776 tax package, bank matching, the income
+// statement, the accountant package, spend analysis, the investment package
+// and the rent roll. Growth and every plan with the `accounting` entitlement
+// (Premium, Managed, pilot) get it. A plain plan check, so it does NOT touch
+// bank-feed provider routing: lib/bank-feed keys Flinks off `accounting`, and
+// Growth stays on Plaid.
+export type BooksOrg = { plan: string | null | undefined };
+export function canUseBooks(org: BooksOrg | null | undefined): boolean {
+  if (!org) return false;
+  return org.plan === "growth" || hasEntitlement(org.plan, "accounting");
 }
 
 // The published-listing allowance for a stored plan (the Free funnel cap; null =

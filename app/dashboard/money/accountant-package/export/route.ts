@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canUseBooks } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { currentUserCan } from "@/lib/membership";
-import { planEntitlements } from "@/lib/billing";
 import { expenseToCostRow, isOperatingCategory, type ExpenseRow } from "@/lib/expenses";
 import { parseMoneyToCents } from "@/lib/tenancy";
 import {
@@ -87,8 +87,8 @@ export async function GET(req: NextRequest) {
   const org = await getCurrentOrg();
   if (!org) return NextResponse.redirect(new URL("/login", req.url));
 
-  if (!planEntitlements(org.plan).accounting) {
-    return new NextResponse("Upgrade to Premium to export the accountant package.", { status: 403 });
+  if (!canUseBooks(org)) {
+    return new NextResponse("Part of Growth.", { status: 403 });
   }
   if (!(await currentUserCan("view_reports"))) {
     return new NextResponse("Forbidden", { status: 403 });

@@ -1,6 +1,6 @@
+import { canUseBooks } from "@/lib/billing";
 import { NextResponse } from "next/server";
 import { getCurrentOrg } from "@/lib/org";
-import { planEntitlements } from "@/lib/billing";
 import { investmentPackageToCsv } from "@/lib/investment-package";
 import { rangeForPreset, parseRangeBound, type DateRange } from "@/lib/statements";
 import { loadInvestmentPackage } from "../load";
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   if (await postLeaseRouteWalled()) return new Response("Not found", { status: 404 });
   const org = await getCurrentOrg();
   if (!org) return NextResponse.json({ error: "no_org" }, { status: 401 });
-  if (!planEntitlements(org.plan).accounting) {
+  if (!canUseBooks(org)) {
     return NextResponse.json({ error: "not_entitled" }, { status: 403 });
   }
 

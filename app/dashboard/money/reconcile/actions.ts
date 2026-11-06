@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { canUseBooks } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { hasEntitlement } from "@/lib/billing";
 import { requireCapability } from "@/lib/membership";
 import {
   bestRuleForTxn,
@@ -48,7 +48,7 @@ function dateDistanceDays(a: string | null | undefined, b: string | null | undef
 async function requireAccountingOrg() {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
-  if (!hasEntitlement(org.plan, "accounting")) redirect(`${BASE}?locked=1`);
+  if (!canUseBooks(org)) redirect(`${BASE}?locked=1`);
   return org;
 }
 

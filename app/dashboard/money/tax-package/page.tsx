@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { canUseBooks } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { planEntitlements } from "@/lib/billing";
 import {
   BrandBanner,
   Card,
@@ -172,7 +172,7 @@ export default async function TaxPackagePage({
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
-  if (!planEntitlements(org.plan).accounting) {
+  if (!canUseBooks(org)) {
     return (
       <div className="mx-auto max-w-3xl">
         <BrandBanner
@@ -183,9 +183,9 @@ export default async function TaxPackagePage({
         />
         <EmptyState
           icon={<Icons.chart className="h-5 w-5" />}
-          title="Tax package is a Premium feature"
-          description="Premium adds an accountant-ready T776 summary by property, with gross rents, deductible expense lines, principal memo lines, and CSV export."
-          cta={{ href: "/dashboard/billing", label: "See plans" }}
+          title="Part of Growth, $99 a month"
+          description="Growth adds a T776 summary by property for your accountant: gross rents, deductible expenses, principal paid and a CSV export."
+          cta={{ href: "/dashboard/billing", label: "See Growth" }}
         />
       </div>
     );

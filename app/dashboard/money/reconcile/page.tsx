@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { canUseBooks } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { hasEntitlement } from "@/lib/billing";
 import { txnDetailLine } from "@/lib/bank-feed";
 import { bestRuleForTxn, ruleAutoFiles, resolveRuleAssignment, type CategorizationRule, type MatchableTxn } from "@/lib/categorization-rules";
 import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/expenses";
@@ -239,7 +239,7 @@ export default async function ReconcilePage({
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
-  const accounting = hasEntitlement(org.plan, "accounting");
+  const accounting = canUseBooks(org);
   if (!accounting) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -250,10 +250,10 @@ export default async function ReconcilePage({
           icon={<Icons.card />}
         />
         <FeatureLockedNotice
-          title="Reconciliation is not part of your plan yet"
-          description="Upgrade to clear unmatched bank transactions, match rent deposits, and see the accounting queue across every connected account."
-          ctaLabel="Ask us about accounting"
-          ctaHref="mailto:hello@vacantless.com?subject=Accounting%20on%20Vacantless"
+          title="Part of Growth, $99 a month"
+          description="Growth matches your bank transactions to rent and expenses, so nothing is left unexplained at year end."
+          ctaLabel="See Growth"
+          ctaHref="/dashboard/billing"
         />
       </div>
     );

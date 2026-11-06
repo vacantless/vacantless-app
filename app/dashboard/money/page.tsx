@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { PageHeader, Card, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
+import { canUseBooks } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { redirect } from "next/navigation";
-import { hasEntitlement } from "@/lib/billing";
 import { isRentCollectionActive } from "@/lib/rent-status";
 
 export const dynamic = "force-dynamic";
@@ -81,10 +81,9 @@ const SECTIONS: Section[] = [
   },
 ];
 
-// S759: Premium is not on sale (hidden on /dashboard/billing since S702j), so
-// its accounting cards were doors into a "See plans" page with no way to buy
-// it. Accounts without the accounting entitlement no longer see them; an org
-// already on Premium sees them as before.
+// S759/S760: the books cards (Books & Tax) show for Growth and every plan with
+// accounting (lib/billing.ts canUseBooks). Free does not see them, so a card is
+// never a door into a page it cannot open.
 const ACCOUNTING_HREFS = new Set([
   "/dashboard/money/reconcile",
   "/dashboard/money/import-history",
@@ -98,7 +97,7 @@ export default async function MoneyHubPage() {
   const supabase = createClient();
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
-  const accounting = hasEntitlement(org.plan, "accounting");
+  const accounting = canUseBooks(org);
   // Select only the current org's status fields needed to decide whether a rent
   // rail is connected.
   const [{ data: stripeRows }, { data: rotessaRows }] = await Promise.all([

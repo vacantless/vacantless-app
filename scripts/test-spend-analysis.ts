@@ -173,9 +173,9 @@ ok("spend total reconciles to income-statement expense lines", last12.totalCents
 
 const spendPage = file("app/dashboard/money/spend/page.tsx");
 const moneyHub = file("app/dashboard/money/page.tsx");
-ok("spend route checks accounting entitlement", spendPage.includes('hasEntitlement(org.plan, "accounting")'));
+ok("spend route checks the books gate", spendPage.includes("canUseBooks(org)"));
 ok("spend loader rejects locked org", spendPage.includes('return { ok: false, reason: "locked" }'));
-ok("spend route renders locked upsell", spendPage.includes("Spend analysis is a Premium feature"));
+ok("spend route renders locked upsell", spendPage.includes("Part of Growth, $99 a month"));
 ok("money hub links spend card", moneyHub.includes("/dashboard/money/spend"));
 
 if (failed > 0) {

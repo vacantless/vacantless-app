@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { canUseBooks } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { planEntitlements } from "@/lib/billing";
 import {
   BrandBanner,
   Card,
@@ -105,20 +105,20 @@ export default async function RentRollPage({
   if (!org) redirect("/onboarding");
 
   // Premium-gated: the investor report is the accounting-depth differentiator.
-  if (!planEntitlements(org.plan).accounting) {
+  if (!canUseBooks(org)) {
     return (
       <div className="mx-auto max-w-3xl">
         <BrandBanner
           eyebrow="Money"
           title="Rent roll & cap rate"
-          subtitle="The investor-grade report you hand a buyer or lender: a per-building rent roll, net operating income, and cap rate — built from what you already track."
+          subtitle="The investor-grade report you hand a buyer or lender: a per-building rent roll, net operating income, and cap rate, built from what you already track."
           icon={<Icons.chart className="h-6 w-6" />}
         />
         <EmptyState
           icon={<Icons.chart className="h-5 w-5" />}
-          title="The rent roll is a Premium feature"
-          description="Premium adds the investor package: a per-building rent roll with occupancy, net operating income (financing excluded), cap rate and gross rent multiplier — exportable as CSV and print-ready PDF for a buyer, lender or your accountant."
-          cta={{ href: "/dashboard/billing", label: "See plans" }}
+          title="Part of Growth, $99 a month"
+          description="Growth adds a rent roll for each building with occupancy, net operating income before financing, cap rate and gross rent multiplier. Download it as a CSV or a PDF for a buyer, lender or your accountant."
+          cta={{ href: "/dashboard/billing", label: "See Growth" }}
         />
       </div>
     );

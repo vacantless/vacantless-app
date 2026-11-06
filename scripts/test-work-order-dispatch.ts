@@ -171,7 +171,7 @@ ok("url: no trailing slash", tradeJobUrl("https://x.com", "tok") === "https://x.
 
 // --- error messages ---------------------------------------------------------
 ok("err: undefined -> null", dispatchErrorMessage(undefined) === null);
-ok("err: locked premium", /Premium/i.test(dispatchErrorMessage("locked") ?? ""));
+ok("err: locked names Growth (S759k dispatch on Growth)", /Growth/.test(dispatchErrorMessage("locked") ?? ""));
 ok("err: no_email", /email/i.test(dispatchErrorMessage("no_email") ?? ""));
 ok("err: active_exists", /active dispatch/i.test(dispatchErrorMessage("active_exists") ?? ""));
 ok("err: dispatched success", /dispatched/i.test(dispatchErrorMessage("dispatched") ?? ""));

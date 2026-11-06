@@ -13,9 +13,9 @@ import {
 import { Icons } from "@/components/icons";
 import { FeatureLockedNotice } from "@/components/feature-locked-notice";
 import { SubmitButton } from "@/components/submit-button";
+import { canUseBooks } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { hasEntitlement } from "@/lib/billing";
 import { currentUserCan } from "@/lib/membership";
 import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/expenses";
 import { formatMoneyCents } from "@/lib/payments";
@@ -205,21 +205,21 @@ export default async function ImportHistoryPage({
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
-  const accounting = hasEntitlement(org.plan, "accounting");
+  const accounting = canUseBooks(org);
   if (!accounting) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-8">
         <PageHeader
           eyebrow="Money"
           title="Import history"
-          subtitle="Seed categorization from prior accounting once accounting is part of your plan."
+          subtitle="Bring in your old bookkeeping so new expenses sort themselves."
           icon={<Icons.page />}
         />
         <FeatureLockedNotice
-          title="Accounting history import is not part of your plan yet"
-          description="Upgrade to review imported accounting history, match it to bank transactions, and seed rules for future expenses."
-          ctaLabel="Ask us about accounting"
-          ctaHref="mailto:hello@vacantless.com?subject=Accounting%20on%20Vacantless"
+          title="Part of Growth, $99 a month"
+          description="Growth lets you bring in your old bookkeeping, match it to bank transactions and set rules for future expenses."
+          ctaLabel="See Growth"
+          ctaHref="/dashboard/billing"
         />
       </div>
     );

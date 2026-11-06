@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { hasEntitlement } from "@/lib/billing";
+import { canUseBooks } from "@/lib/billing";
 import {
   BrandBanner,
   Card,
@@ -89,6 +89,7 @@ export default async function StatementPage({
   const supabase = createClient();
   const org = await getCurrentOrg();
   if (!org) return null;
+  const books = canUseBooks(org);
 
   const presetRaw = searchParams.preset ?? "this_year";
   const preset = (STATEMENT_PRESETS as readonly string[]).includes(presetRaw)
@@ -174,7 +175,7 @@ export default async function StatementPage({
         icon={<Icons.chart className="h-6 w-6" />}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            {hasEntitlement(org.plan, "accounting") && (
+            {books && (
               <Link href="/dashboard/rent/rent-roll" className={SECONDARY_ACTION_CLASS}>
                 Rent roll & cap rate
               </Link>

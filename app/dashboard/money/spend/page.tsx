@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { canUseBooks } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { hasEntitlement } from "@/lib/billing";
 import {
   BrandBanner,
   Card,
@@ -133,7 +133,7 @@ async function loadSpendAnalysis(
   org: OrgForSpend,
   window: SpendWindow,
 ): Promise<SpendLoaderResult> {
-  if (!hasEntitlement(org.plan, "accounting")) {
+  if (!canUseBooks(org)) {
     return { ok: false, reason: "locked" };
   }
 
@@ -192,9 +192,9 @@ function LockedSpend() {
       />
       <EmptyState
         icon={<Icons.chart className="h-5 w-5" />}
-        title="Spend analysis is a Premium feature"
-        description="Premium adds accounting insights across your expense ledger: category share, monthly trend, and recurring charges from bank-stream rules."
-        cta={{ href: "/dashboard/billing", label: "See plans" }}
+        title="Part of Growth, $99 a month"
+        description="Growth shows where your money goes: spend by category, the monthly trend and charges that repeat."
+        cta={{ href: "/dashboard/billing", label: "See Growth" }}
       />
     </div>
   );
@@ -208,7 +208,7 @@ export default async function SpendAnalysisPage({
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
-  const accounting = hasEntitlement(org.plan, "accounting");
+  const accounting = canUseBooks(org);
   if (!accounting) return <LockedSpend />;
 
   const window = parseSpendWindow(searchParams.window);

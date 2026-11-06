@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { canUseBooks } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { planEntitlements } from "@/lib/billing";
 import {
   BrandBanner,
   Card,
@@ -251,7 +251,7 @@ export default async function IncomeStatementPage({
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
-  if (!planEntitlements(org.plan).accounting) {
+  if (!canUseBooks(org)) {
     return (
       <div className="mx-auto max-w-3xl">
         <BrandBanner
@@ -262,9 +262,9 @@ export default async function IncomeStatementPage({
         />
         <EmptyState
           icon={<Icons.chart className="h-5 w-5" />}
-          title="Income statement is a Premium feature"
-          description="Premium adds a property-by-property P&L with NOI, interest, net income, principal memo lines, and CSV export for your accountant."
-          cta={{ href: "/dashboard/billing", label: "See plans" }}
+          title="Part of Growth, $99 a month"
+          description="Growth adds a profit and loss for each property: net operating income, interest, net income, principal paid and a CSV export for your accountant."
+          cta={{ href: "/dashboard/billing", label: "See Growth" }}
         />
       </div>
     );

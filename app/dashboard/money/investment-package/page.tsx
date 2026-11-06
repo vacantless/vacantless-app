@@ -1,7 +1,7 @@
+import { canUseBooks } from "@/lib/billing";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentOrg } from "@/lib/org";
-import { planEntitlements } from "@/lib/billing";
 import { BrandBanner, Card, StatCard, EmptyState, SECONDARY_ACTION_CLASS } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import {
@@ -49,7 +49,7 @@ export default async function InvestmentPackagePage({
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
-  if (!planEntitlements(org.plan).accounting) {
+  if (!canUseBooks(org)) {
     return (
       <div className="mx-auto max-w-3xl">
         <BrandBanner
@@ -60,9 +60,9 @@ export default async function InvestmentPackagePage({
         />
         <div className="mt-6">
           <EmptyState
-            title="Investment package is a Premium feature"
+            title="Part of Growth, $99 a month"
             description="It turns what you already record into the document you hand to the market."
-            cta={{ href: "/dashboard/billing", label: "See plans" }}
+            cta={{ href: "/dashboard/billing", label: "See Growth" }}
           />
         </div>
       </div>

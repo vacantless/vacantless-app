@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { canUseBooks } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { planEntitlements } from "@/lib/billing";
 import {
   BrandBanner,
   Card,
@@ -86,7 +86,7 @@ export default async function AccountantPackagePage({
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
-  if (!planEntitlements(org.plan).accounting) {
+  if (!canUseBooks(org)) {
     return (
       <div className="mx-auto max-w-3xl">
         <BrandBanner
@@ -97,9 +97,9 @@ export default async function AccountantPackagePage({
         />
         <EmptyState
           icon={<Icons.page className="h-5 w-5" />}
-          title="Accountant package is a Premium feature"
-          description="Premium bundles the general ledger, T776 tax package, income statement, owner statement, rent roll, and QuickBooks/Xero import files into a single zip your accountant can work from directly."
-          cta={{ href: "/dashboard/billing", label: "See plans" }}
+          title="Part of Growth, $99 a month"
+          description="Growth puts the ledger, T776 summary, income statement, owner statement, rent roll and QuickBooks or Xero files into one zip your accountant can work from."
+          cta={{ href: "/dashboard/billing", label: "See Growth" }}
         />
       </div>
     );
