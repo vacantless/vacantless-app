@@ -200,7 +200,7 @@ function ProductPreview() {
           <div className="rounded-lg border border-[#d9e1dc] bg-[#f8faf8] p-3">
             <div className="flex items-center gap-2 text-[0.78rem] font-semibold text-[#31584d]">
               <span className="inline-block h-[15px] w-[15px] rounded bg-[#1f8a5b]" />
-              Reminders go out on their own before each viewing
+              Reminders go out on their own before each viewing, by email, and by text on Growth
             </div>
           </div>
         </div>
@@ -439,6 +439,7 @@ const GET_GROUPS: { title: string; items: string[] }[] = [
       "A reply by email within seconds, with a link to book",
       "Viewing times they pick themselves, whenever suits them",
       "An email confirmation and a reminder email the day before",
+      "On Growth, a text the day before from your own local number. They reply YES to confirm",
       "A cancel link, so you hear about it instead of a no show",
     ],
   },

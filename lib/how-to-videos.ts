@@ -10,7 +10,7 @@ export const HOW_TO_VIDEOS: { n: number; title: string; line: string; seconds: n
   { n: 6, title: "After the viewing", line: "Reminders, new times, follow-ups, feedback and the application link.", seconds: 63 },
   { n: 7, title: "Little things that save you time", line: "Texts from your own number, a daily email, and warnings before things slip.", seconds: 39 },
   { n: 8, title: "Your agent's phone", line: "The agent's one link: call the renter, confirm, hand a viewing back, mark how it went.", seconds: 43 },
-  { n: 9, title: "The paperwork", line: "The free Ontario tools: a rent increase with Form N1, an N4 for unpaid rent, and the Standard Lease.", seconds: 64 },
+  { n: 9, title: "The paperwork", line: "The free Ontario tools: an N4 for unpaid rent, an N8 for late rent, an N12 for your own use, a rent increase with Form N1, and the Standard Lease.", seconds: 88 },
 ];
 
 // S729: the count in words, so headings never go stale when a video is added.
