@@ -10,6 +10,7 @@ import { nodeHasBrotliFix } from "@/lib/image-url-import";
 import {
   DIGEST_LOCAL_HOUR,
   buildHealthDigest,
+  robotRowIsProblem,
   portalOutcomeIsProblem,
   torontoDateHour,
   type EmailProblem,
@@ -172,10 +173,11 @@ export async function GET(req: NextRequest) {
         error_message: string | null;
       }[]
     )
+      // S758: closed_stale and closed_test (lib/health-digest PARKED_ON_PURPOSE).
       // S729: closed_stale is the run-item closer (S728) tidying a dead job on
       // purpose, not a failure. Its first run closed 26 old items and filled
       // the 2026-10-21 digest with 26 false "problems".
-      .filter((r) => r.error_code !== "closed_stale")
+      .filter((r) => robotRowIsProblem(r.error_code))
       // S740: only accounts that can robot-post, same rule as signIns below.
       // Growth Test (no Posting add-on) kept two August facebook/kijiji items
       // at needs_login; a Set Live on 2026-10-27 touched updated_at and put
@@ -201,16 +203,19 @@ export async function GET(req: NextRequest) {
   // S754: available rentals missing from a site the account can post to.
   // Paying accounts only (Posting, or Agile), never Noam's quiet test accounts.
   const coverageGaps: string[] = [];
+  let coverageGapRentals = 0;
   for (const o of orgs.values()) {
     if (!o.robot || isQuietNotificationOrg(o.id)) continue;
     try {
       const cov = await loadPostingCoverage(admin, o.id, true);
       coverageGaps.push(...coverageHealthLines(o.name, cov));
+      coverageGapRentals += cov.gaps;
     } catch {
       // a read error leaves the section out; the sweep line above still reports
     }
   }
   input.coverageGaps = coverageGaps;
+  input.coverageGapRentals = coverageGapRentals;
 
   const email = buildHealthDigest({ ...input, serverNode: { version: process.version, fixed: nodeHasBrotliFix(process.version) } });
   if (dry) return NextResponse.json({ ok: true, dry: true, ...email });

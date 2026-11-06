@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 // S720: the daily health email's rules. Run: npx tsx scripts/test-health-digest.ts
-import { buildHealthDigest, healthSections, portalOutcomeIsProblem, torontoDateHour, type HealthInput } from "../lib/health-digest";
+import { buildHealthDigest, healthSections, portalOutcomeIsProblem, robotRowIsProblem, torontoDateHour, type HealthInput } from "../lib/health-digest";
 
 let passed = 0;
 let failed = 0;
@@ -149,6 +149,30 @@ ok("toronto: 03:00Z is the previous local day", torontoDateHour(new Date("2026-1
   const src = readFileSync("app/api/cron/health-digest/route.ts", "utf8");
   ok("quiet test orgs skipped in robot and sign-in lines", (src.match(/isQuietNotificationOrg\(/g) ?? []).length >= 2);
   ok("Lakeview Rentals is a quiet test org", readFileSync("lib/quiet-orgs.ts", "utf8").includes("b6fdceb7-e7f6-4f54-bbab-107ae5d3254a"));
+}
+
+// S758: parked test items and coverage gaps are not problems.
+{
+  ok("parked: closed_test is not a problem", !robotRowIsProblem("closed_test"));
+  ok("parked: closed_stale is not a problem", !robotRowIsProblem("closed_stale"));
+  ok("parked: a real error is a problem", robotRowIsProblem("login_wall") && robotRowIsProblem(null));
+  ok("parked: route filters with robotRowIsProblem", readFileSync("app/api/cron/health-digest/route.ts", "utf8").includes("robotRowIsProblem(r.error_code)"));
+  const gapsOnly = buildHealthDigest({ ...clean, coverageGaps: ["A: 1 Main St is on 2 of 4 sites. Missing: Kijiji."], coverageGapRentals: 1 });
+  ok("gaps only: zero problems", gapsOnly.problems === 0, gapsOnly.problems);
+  ok("gaps only: subject all clear with the gap count", gapsOnly.subject === "Vacantless health: all clear (1 rental could be on more sites)", gapsOnly.subject);
+  ok("gaps only: head says nothing failed", gapsOnly.body.startsWith("Nothing failed in the last 24 hours."));
+  ok("gaps only: still lists the gap", gapsOnly.body.includes("RENTALS THAT COULD BE ON MORE SITES (NOT FAILURES)\n- A: 1 Main St"), gapsOnly.body);
+  const mixed = buildHealthDigest({
+    ...clean,
+    emails: { checked: true, problems: [{ event: "hard_bounce", email: "x@y.com", subject: "Hi", reason: null }] },
+    coverageGaps: ["A: one", "A: two", "A: three", "A: four"],
+    coverageGapRentals: 4,
+  });
+  ok("mixed: only the bounce counts", mixed.problems === 1 && mixed.subject === "Vacantless health: 1 problem (4 rentals could be on more sites)", mixed.subject);
+  ok("mixed: gaps come after the failures", mixed.body.indexOf("EMAILS") < mixed.body.indexOf("RENTALS THAT COULD"), mixed.body);
+  ok("no gaps: subject unchanged", buildHealthDigest(clean).subject === "Vacantless health: all clear");
+  ok("route passes the gap count", readFileSync("app/api/cron/health-digest/route.ts", "utf8").includes("coverageGapRentals += cov.gaps"));
+  ok("no em dash in the new lines", !/\u2014/.test(gapsOnly.subject + gapsOnly.body + mixed.subject + mixed.body));
 }
 
 console.log(`\nhealth-digest: ${passed} passed, ${failed} failed`);

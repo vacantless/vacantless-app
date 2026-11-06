@@ -43,7 +43,18 @@ export type HealthInput = {
   appErrors?: { path: string | null }[] | null;
   /** S754: available rentals missing from a site the account can post to (lib/posting-coverage coverageHealthLines). */
   coverageGaps?: string[] | null;
+  /** S758: how many rentals have a gap (coverage.gaps summed), for the subject line. */
+  coverageGapRentals?: number | null;
 };
+
+// S758: run items closed on purpose, not failures. closed_stale is the
+// run-item closer (S728) tidying a dead job; closed_test is a dark test run
+// parked by hand so it can never run (the S754/S755 takedown tests put three
+// "skipped. closed_test" lines in the 2026-11-06 digest).
+export const PARKED_ON_PURPOSE = new Set(["closed_stale", "closed_test"]);
+export function robotRowIsProblem(errorCode: string | null | undefined): boolean {
+  return !PARKED_ON_PURPOSE.has(errorCode ?? "");
+}
 
 const PORTAL_OK = new Set(["lead_created", "duplicate"]);
 export function portalOutcomeIsProblem(outcome: string): boolean {
@@ -152,13 +163,18 @@ export function healthSections(input: HealthInput): HealthSection[] {
   }
   if (robotLines.length) out.push({ title: "Posting to sites", lines: robotLines });
 
-  // 5. S754: rentals that could be on more sites today. Not a failure, a gap
-  // that costs renters every day it stays open.
-  if (input.coverageGaps && input.coverageGaps.length) {
-    out.push({ title: "Rentals missing from sites", lines: input.coverageGaps });
-  }
-
   return out;
+}
+
+// S754: rentals that could be on more sites today. Not a failure, a gap that
+// costs renters every day it stays open. S758: listed after the failures and
+// NOT counted as problems. A gap the owner chose (a paid Kijiji ad not bought,
+// Rentals.ca's free slots full) repeats every day; counted as a problem it
+// turned the 2026-11-06 digest into "8 problems" with one real one, and a
+// daily false alarm teaches the reader to skip the email.
+export function coverageSection(input: HealthInput): HealthSection | null {
+  if (!input.coverageGaps || input.coverageGaps.length === 0) return null;
+  return { title: "Rentals that could be on more sites (not failures)", lines: input.coverageGaps };
 }
 
 export function buildHealthDigest(input: HealthInput): { subject: string; body: string; problems: number } {
@@ -174,8 +190,14 @@ export function buildHealthDigest(input: HealthInput): { subject: string; body: 
     problems === 0
       ? "Nothing failed in the last 24 hours."
       : "These failed or need a look from the last 24 hours.";
+  const gaps = coverageSection(input);
+  const gapRentals = input.coverageGapRentals ?? gaps?.lines.length ?? 0;
+  const subjectWithGaps =
+    gaps && gapRentals > 0
+      ? `${subject} (${gapRentals} ${gapRentals === 1 ? "rental" : "rentals"} could be on more sites)`
+      : subject;
   const parts = [head];
-  for (const s of sections) {
+  for (const s of gaps ? [...sections, gaps] : sections) {
     parts.push(`${s.title.toUpperCase()}\n${s.lines.map((l) => `- ${l}`).join("\n")}`);
   }
   parts.push(
@@ -189,7 +211,7 @@ export function buildHealthDigest(input: HealthInput): { subject: string; body: 
         : `Server Node: ${input.serverNode.version}. The security fix is not on the server yet.`,
     );
   }
-  return { subject, body: parts.join("\n\n"), problems };
+  return { subject: subjectWithGaps, body: parts.join("\n\n"), problems };
 }
 
 /** The Toronto calendar date and hour for `now`, for the once-a-day gate. */
