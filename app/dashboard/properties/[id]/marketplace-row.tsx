@@ -149,6 +149,17 @@ export function MarketplaceRow({
         >
           {helper === "ready" ? "Or do it step by step →" : "Post it on Marketplace →"}
         </button>
+      ) : null}
+      {/* S760 (REVIEW-S760 finding 5): Quick replies was a nav item nobody was
+          told about. Renters on Marketplace write in Messenger, so the reply
+          with the booking link lives here, next to the post. */}
+      {!open ? (
+        <p className="mt-2 text-[11.5px] leading-relaxed text-gray-500">
+          Renters message you on Facebook. Paste a reply with your booking link and next open times:{" "}
+          <a href="/dashboard/replies" className="font-semibold text-indigo-700 hover:underline">
+            Quick replies →
+          </a>
+        </p>
       ) : (
         <div className="mt-3 space-y-4">
           {kit.phoneUrl ? (

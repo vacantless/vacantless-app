@@ -18,7 +18,7 @@ ok("welcome first", w?.step === 1);
 ok("welcome points at the inline add form when the new page is off", w?.actionPath === "/dashboard/properties#add-rental");
 const wV2 = decideOnboardingEmail({ stage: "signed_up", daysSinceSignup: 0, stepSent: 0, addPropertyV2Enabled: true });
 ok("welcome points at the new add page when it is on", wV2?.actionPath === "/dashboard/properties/new");
-ok("welcome lists 3 steps", (w?.body ?? "").includes("3. Paste your rental link"));
+ok("welcome lists 4 steps", (w?.body ?? "").includes("4. Press Set Live") && (w?.body ?? "").includes("3. Connect your rental sites"));
 ok("S726: welcome links the how-to videos", (w?.body ?? "").includes("https://www.vacantless.com/how-to"));
 ok("no nudge on day 0", decideOnboardingEmail({ stage: "signed_up", daysSinceSignup: 0, stepSent: 1 }) === null);
 const n = decideOnboardingEmail({ stage: "live", daysSinceSignup: 1, stepSent: 1 });

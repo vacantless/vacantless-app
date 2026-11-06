@@ -294,7 +294,7 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       // S702t: we post the ad. S754: free ads post as soon as they are ready
       // (standing setting on Billing); paid ads wait at checkout.
       propertyDetailSource.includes("We post your ad on each site as soon as it is ready.") &&
-      propertyDetailSource.includes("counts as Live once the link to your ad is saved") &&
+      propertyDetailSource.includes("counts as On once the link to your ad is saved") &&
       !propertyDetailSource.includes("Sign-in and site fees wait inside Post"),
   );
   ok(

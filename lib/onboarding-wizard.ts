@@ -1,6 +1,7 @@
 export type OnboardingWizardStepKey =
   | "property"
   | "viewing_times"
+  | "connect_sites"
   | "get_online"
   | "tenancy"
   | "rent_rail";
@@ -59,6 +60,14 @@ export type OnboardingWizardInput = {
   hasViewingTimes?: boolean;
   /** ADD_PROPERTY_V2_ENABLED: "Add rental" opens the add page; the old #add-rental anchor is not rendered then (dress rehearsal F14). */
   addPropertyV2Enabled?: boolean;
+  /**
+   * S760: the org has connected at least one rental site (Facebook Page
+   * linked, or a robot site signed in; lib/sites-setup orgHasConnectedSite).
+   * When the caller passes it, a "Connect your rental sites" step sits before
+   * "Set it live", so a stranger connects once and every later rental posts on
+   * Set Live. Omitted = the step is not shown (back-compat).
+   */
+  hasConnectedSite?: boolean;
 };
 
 type StepDef = Omit<OnboardingWizardStep, "status">;
@@ -81,10 +90,18 @@ const STEP_DEFS: StepDef[] = [
     cta: "Set viewing times",
   },
   {
-    key: "get_online",
-    label: "Put it on the rental sites",
+    key: "connect_sites",
+    label: "Connect your rental sites",
     description:
-      "Press Set Live on your rental first. Then post it to your Facebook Page for free. With Posting, we post it to Kijiji, Rentals.ca and Zumper for you. Done when one ad is live.",
+      "Once. Connect your Facebook Page, install the helper for Marketplace, and sign in to Kijiji, Rentals.ca and Zumper. After this, Set Live posts every rental everywhere.",
+    href: "/dashboard/sites?from=getting-started",
+    cta: "Connect sites",
+  },
+  {
+    key: "get_online",
+    label: "Set your rental live",
+    description:
+      "Press Set Live on your rental. We post it to every site you connected and keep the ads up. Done when one ad is live.",
     href: "/dashboard/properties",
     cta: "Post my rental",
   },
@@ -115,6 +132,7 @@ export function computeOnboardingState(
   const done: Record<OnboardingWizardStepKey, boolean> = {
     property: input.hasProperty,
     viewing_times: input.hasViewingTimes === true,
+    connect_sites: input.hasConnectedSite === true || input.hasLiveListing || input.hasTenancy,
     // A tenanted unit has nothing to advertise; do not resurrect the checklist
     // for every org that finished the old three steps (reviewer S691 #3).
     get_online: input.hasLiveListing || input.hasTenancy,
@@ -125,6 +143,7 @@ export function computeOnboardingState(
   let currentAssigned = false;
   const defs = STEP_DEFS.filter((def) => {
     if (def.key === "viewing_times" && input.hasViewingTimes === undefined) return false;
+    if (def.key === "connect_sites" && input.hasConnectedSite === undefined) return false;
     if (input.postLeaseEnabled === false && (def.key === "tenancy" || def.key === "rent_rail")) {
       return false;
     }

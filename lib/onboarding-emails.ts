@@ -71,24 +71,25 @@ export function decideOnboardingEmail(args: {
 
   if (args.stepSent < 1) {
     const steps = [
-      "1. Add your rental and put it live.",
+      "1. Add your rental.",
       "2. Set the times you can show it.",
-      "3. Paste your rental link into your ads.",
+      "3. Connect your rental sites once: your Facebook Page, the helper for Marketplace, and Kijiji, Rentals.ca and Zumper.",
+      "4. Press Set Live. We post it everywhere you connected.",
     ].join("\n");
     const nextLine = next
       ? `Your next step: ${next.line}`
       : "You already have renters coming in. Your list of renters is on your dashboard.";
     return {
       step: 1,
-      subject: "Welcome to Vacantless: your first renter in 3 steps",
+      subject: "Welcome to Vacantless: your first renter in 4 steps",
       body: [
-        "Thanks for signing up. Here is how to get your first renter booked.",
+        "Thanks for signing up. Here is how to get your first renter booked, in four steps.",
         steps,
         "After that, every renter gets an answer right away. They book a viewing on their own, and you get an email.",
         // S726: one link to the how-to videos (count from lib/how-to-videos).
         `Prefer to watch? ${HOW_TO_COUNT_WORD} short videos, about a minute each: https://www.vacantless.com/how-to`,
         // S751: the Chrome helper was only findable on a rental's Marketplace row.
-        `Posting on Facebook Marketplace from a computer? Add the free Vacantless helper to Chrome. It fills in the ad for you, photos included: ${MARKETPLACE_HELPER_INSTALL_URL}`,
+        `Facebook Marketplace is where most renters look. Facebook only lets a person press Post there. On a computer, add the free Vacantless helper to Chrome once. It fills in the ad and photos, and you press Post: ${MARKETPLACE_HELPER_INSTALL_URL}`,
         nextLine,
         "Reply to this email if you get stuck. I read every one.",
         "Noam, founder of Vacantless",

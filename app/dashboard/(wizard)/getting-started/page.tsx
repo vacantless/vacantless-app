@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { HelperInstallTip } from "@/components/helper-install-tip";
+import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
+import { isHiddenForOrg } from "@/lib/posting-lanes";
+import { orgHasConnectedSite } from "@/lib/sites-setup";
 import { notFound } from "next/navigation";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { createClient } from "@/lib/supabase/server";
@@ -97,7 +100,12 @@ export default async function GettingStartedPage({
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  // S760: "Connect your rental sites" counts as done once a site is linked.
+  const siteTiles = await listChannelTileStatuses(org.id);
+  const tileStateByChannel: Record<string, string> = {};
+  for (const t of siteTiles) if (!isHiddenForOrg(t.channel, org.id)) tileStateByChannel[t.channel] = t.state;
   const state = computeOnboardingState({
+    hasConnectedSite: orgHasConnectedSite(tileStateByChannel),
     hasProperty: (propertyCount ?? 0) > 0,
     hasLiveListing: (liveListingCount ?? 0) > 0,
     wizardEnabled: distributionWizardEnabled(),

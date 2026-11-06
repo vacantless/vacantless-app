@@ -62,6 +62,10 @@ const SURFACES: Surface[] = [
   // S750: Quick replies, the phone reply kit.
   { file: "app/dashboard/replies/page.tsx", mode: "ui" },
   { file: "app/dashboard/replies/reply-kit.tsx", mode: "ui" },
+  // S760: the one-time "Connect your rental sites" step.
+  { file: "app/dashboard/sites/page.tsx", mode: "ui" },
+  { file: "app/dashboard/sites/sites-rows.tsx", mode: "ui" },
+  { file: "lib/sites-setup.ts", mode: "ui" },
   { file: "lib/marketplace-phone-email.ts", mode: "ui" },
   // S736: the email when a site signs a landlord out.
   { file: "lib/signin-lost.ts", mode: "ui" },

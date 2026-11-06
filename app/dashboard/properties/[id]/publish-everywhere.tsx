@@ -42,6 +42,7 @@ import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
 import { allowChannelAndPostNow, publishProperty, requestConciergePublish, startSitePost } from "../actions";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
+import { SITES_SETUP_HREF, SITE_WORD_CLASS } from "@/lib/sites-setup";
 import {
   authorizeAutopilotSubmit,
   readInstantPublishDestinations,
@@ -108,11 +109,12 @@ export type PublishEverywherePostingBlocker = {
 // One place maps a resolved mode to its user-facing chip. No new color system:
 // green = instant, indigo = we-post-for-you, gray = after-setup (same tones the
 // north-star and the rest of the tab already use).
+// S760: the same four words as the for-you rows (On, Posting, Needs you).
 const MODE_CHIP: Record<PublishMode, { label: string; cls: string }> = {
-  instant_auto: { label: "Instant", cls: "bg-green-50 text-green-700" },
-  copilot_fill: { label: "We post it", cls: "bg-indigo-50 text-indigo-700" },
-  paid_optin: { label: "We post it. Site fee", cls: "bg-indigo-50 text-indigo-700" },
-  needs_connection: { label: "Sign in first", cls: "bg-gray-100 text-gray-600" },
+  instant_auto: { label: "On", cls: "bg-green-50 text-green-700" },
+  copilot_fill: { label: "Posting", cls: "bg-sky-50 text-sky-700" },
+  paid_optin: { label: "Posting", cls: "bg-sky-50 text-sky-700" },
+  needs_connection: { label: "Needs you", cls: "bg-amber-50 text-amber-800" },
   brokerage_gated: { label: "Via brokerage", cls: "bg-gray-100 text-gray-600" },
   planned: { label: "Coming soon", cls: "bg-gray-100 text-gray-600" },
 };
@@ -287,11 +289,11 @@ function ChannelRow({
   const isLive = live?.isLive === true;
   const locked = addonLocked && !isLive;
   const chip = isLive
-    ? { label: "Live", cls: "bg-green-50 text-green-700" }
+    ? { label: "On", cls: "bg-green-50 text-green-700" }
     : locked
       ? ADDON_CHIP
     : row.automationAction === "authorize"
-      ? { label: "Needs your OK", cls: "bg-amber-50 text-amber-700" }
+      ? { label: "Needs you", cls: "bg-amber-50 text-amber-800" }
       : MODE_CHIP[row.mode];
   // S691: "Connect once" was a dead chip; it now opens the Connect sites
   // screen for this property. Every row shows what the site costs so a
@@ -307,7 +309,7 @@ function ChannelRow({
       : isMetaRow
         ? "/dashboard/settings?tab=distribution#facebook-page"
         : propertyId && wizardEnabled
-          ? `/dashboard/link-portals?property=${encodeURIComponent(propertyId)}`
+          ? `${SITES_SETUP_HREF}?property=${encodeURIComponent(propertyId)}`
           : null;
   const connectLabel = isMetaRow ? "Connect →" : "Sign in once →";
   const costLine =
@@ -326,7 +328,7 @@ function ChannelRow({
             rel="noreferrer"
             className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold underline-offset-2 hover:underline ${chip.cls}`}
           >
-            Live ↗
+            On ↗
           </a>
         ) : connectHref ? (
           <a
@@ -901,7 +903,7 @@ function ForYouHandoff({
       })()}
       {conciergeDeskEnabled && !postingBlocker && (
         <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
-          A site shows Live once the link to your ad is saved.
+          A site shows On once the link to your ad is saved.
         </p>
       )}
       {/* S735: Realtor.ca is an MLS listing a licensed agent places, so it is
@@ -995,37 +997,39 @@ function ForYouRow({
   // is "getting it ready", not "posting".
   // S724 (V251-28): until the landlord approves, the robot is only building the
   // ad (queued, then submitting while it fills the site's form). Say "Getting it
-  // ready" through all of it; "We're posting it" only after Approve.
+  // ready" through all of it; "Posting" only after Approve.
   const preparing =
     working &&
     (gate === "queued" || gate === "submitting" || gate === "submitted") &&
     item?.approved !== true &&
     isRobotPostedChannel(row.key);
   const locked = addonLocked && !isLive;
+  // S760: a robot site with no sign-in yet. Before, "Add this site" queued a
+  // post that could only park at needs-login (seen on the Lakeview walk,
+  // 2026-11-06). Now the row says what it needs and opens the sites setup.
+  const signinFirst =
+    !isLive &&
+    !locked &&
+    item == null &&
+    isRobotPostedChannel(row.key) &&
+    row.alreadySignedIn !== true;
 
+  // S760 (REVIEW-S760 section 4): one vocabulary on every site row. The chip
+  // is one of four words; the line under it says what is happening or what
+  // the landlord has to do. Mechanism (robot, helper, API) never shows.
   const stateChip = isLive
-    ? { label: "Live", cls: "bg-green-50 text-green-700" }
+    ? { label: "On", cls: SITE_WORD_CLASS.On }
     : locked
       ? ADDON_CHIP
     : postingBlocked
-      ? { label: "Waiting", cls: "bg-amber-50 text-amber-700" }
-    : payAtCheckout
-      ? { label: "Ready. Pay the site", cls: "bg-emerald-50 text-emerald-700" }
-    : siteSetup
-      ? { label: "Needs you", cls: "bg-amber-50 text-amber-700" }
-    : needsApproval
-      ? { label: "Ready. Approve it", cls: "bg-emerald-50 text-emerald-700" }
-      : needsConnect
-        ? { label: "Sign-in needed", cls: "bg-amber-50 text-amber-700" }
-        : preparing
-          ? { label: "Getting it ready", cls: "bg-amber-50 text-amber-700" }
-        : working
-          ? { label: "We're posting it", cls: "bg-amber-50 text-amber-700" }
-          : repostable
-            ? { label: "Needs a repost", cls: "bg-amber-50 text-amber-700" }
-          : paid
-            ? { label: "Not posted. Site fee", cls: "bg-indigo-50 text-indigo-700" }
-            : { label: "Not posted yet", cls: "bg-indigo-50 text-indigo-700" };
+      ? { label: "Posting", cls: SITE_WORD_CLASS.Posting }
+    : payAtCheckout || siteSetup || needsApproval || needsConnect || signinFirst || repostable
+      ? { label: "Needs you", cls: SITE_WORD_CLASS["Needs you"] }
+    : preparing || working
+      ? { label: "Posting", cls: SITE_WORD_CLASS.Posting }
+    : row.alreadySignedIn === true && isRobotPostedChannel(row.key)
+      ? { label: "Posting", cls: SITE_WORD_CLASS.Posting }
+      : { label: "Needs you", cls: SITE_WORD_CLASS["Needs you"] };
 
   return (
     <li
@@ -1071,7 +1075,7 @@ function ForYouRow({
               View live ad ↗
             </a>
           ) : (
-            <p className="mt-2 text-[12px] font-semibold text-green-700">Live.</p>
+            <p className="mt-2 text-[12px] font-semibold text-green-700">On.</p>
           )}
           {item?.photoNote ? (
             <p className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-950">
@@ -1083,6 +1087,16 @@ function ForYouRow({
         // S712: Marketplace is posted by the org's own team from the kit, never
         // by the desk or the robot (Facebook has no API for it).
         <MarketplaceRow propertyId={propertyId} kit={marketplaceKit} />
+      ) : signinFirst ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <a
+            href={`${SITES_SETUP_HREF}?property=${encodeURIComponent(propertyId)}`}
+            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
+          >
+            Sign in once →
+          </a>
+          <span className="text-[11px] text-gray-500">About 2 minutes. Then we post it here on its own.</span>
+        </div>
       ) : item == null || repostable ? (
         linkIsLive ? (
           <>
@@ -1104,7 +1118,7 @@ function ForYouRow({
               type="submit"
               className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
             >
-              {repostable ? "Post it again →" : "Add this site →"}
+              {repostable ? "Post it again →" : "Post here →"}
             </button>
           </form>
           </>
@@ -1161,7 +1175,7 @@ function ForYouRow({
           <a
             href={
               wizardEnabled
-                ? `/dashboard/link-portals?property=${encodeURIComponent(propertyId)}`
+                ? `${SITES_SETUP_HREF}?property=${encodeURIComponent(propertyId)}`
                 : `/dashboard/settings?tab=distribution#channel-${row.key}`
             }
             className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
@@ -1339,7 +1353,7 @@ function ApprovalModal({
           </button>
         </form>
         <p className="mt-3 text-center text-[11px] text-gray-400">
-          We save the link to your ad before it shows as Live. Paid sites wait
+          We save the link to your ad before it shows as On. Paid sites wait
           for you at checkout.
         </p>
       </div>
@@ -1413,7 +1427,7 @@ function ConfirmModal({
           <div className="flex items-center gap-2 border-b border-gray-100 py-2.5 text-[13px]">
             🌐 Vacantless page
             <span className="ml-auto text-[10px] font-black tracking-wide text-green-700">
-              Instant
+              On
             </span>
           </div>
           <div className="flex items-center gap-2 border-b border-gray-100 py-2.5 text-[13px]">
@@ -1434,7 +1448,7 @@ function ConfirmModal({
               >
                 {CHANNEL_GLYPH[r.key] ?? "🏠"} {r.label}
                 <span className="ml-auto text-[10px] font-black tracking-wide text-green-700">
-                  Instant
+                  On
                 </span>
               </div>
             ))

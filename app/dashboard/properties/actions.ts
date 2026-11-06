@@ -1,6 +1,7 @@
 "use server";
 
 import { countViewingTimes } from "@/lib/viewing-times-count";
+import { SITES_SETUP_HREF } from "@/lib/sites-setup";
 import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/posting-lanes";
 import { readRobotPostingAccess, type RobotPostingAccess } from "@/lib/robot-posting-access";
 import { queueOnFirstClick } from "@/lib/posting-autopilot";
@@ -3333,6 +3334,19 @@ export async function startSitePost(formData: FormData) {
     robotAccess = await readRobotPostingAccess(supabase, org.id);
     if (!robotAccess.allowed) {
       redirect(`/dashboard/properties/${propertyId}?run=postingaddon#distribute-header`);
+    }
+    // S760: without a sign-in the robot can only park the item at needs-login
+    // and email "needs you" later (seen on the Lakeview walk, 2026-11-06).
+    // Send the landlord to the one-time sites setup instead of queueing.
+    const { data: authorized } = await supabase
+      .from("distribution_channel_accounts")
+      .select("channel")
+      .eq("organization_id", org.id)
+      .eq("channel", channel)
+      .eq("automation_authorized", true)
+      .maybeSingle();
+    if (!authorized) {
+      redirect(`${SITES_SETUP_HREF}?property=${encodeURIComponent(propertyId)}`);
     }
   }
   // RLS-scoped: a foreign property id returns nothing.

@@ -35,7 +35,7 @@ export function HelperInstallTip() {
       className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
     >
       <h2 id="helper-tip-title" className="font-semibold text-gray-900">
-        Optional: the Vacantless helper for Facebook Marketplace
+        The Vacantless helper for Facebook Marketplace
       </h2>
       {installed ? (
         <p className="mt-1 text-sm leading-relaxed text-gray-600">
@@ -53,8 +53,8 @@ export function HelperInstallTip() {
           >
             add the free Vacantless helper to Chrome
           </a>{" "}
-          and it fills the Marketplace form for you, photos included. You don&apos;t need it for the other rental
-          sites.
+          and it fills the Marketplace form for you, photos included. Facebook only lets a person press Post there;
+          the helper does the typing. You don&apos;t need it for the other rental sites.
         </p>
       )}
     </section>

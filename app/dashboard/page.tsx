@@ -16,6 +16,7 @@ import {
 } from "@/lib/onboarding";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { computeOnboardingState } from "@/lib/onboarding-wizard";
+import { orgHasConnectedSite } from "@/lib/sites-setup";
 import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { overListingCapNotice } from "@/lib/billing";
@@ -42,6 +43,8 @@ import {
   type AssignedView,
 } from "@/lib/dashboard-assigned";
 import { leaseTermShiftEnabled } from "@/lib/rent-adjustments-server";
+import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
+import { isHiddenForOrg } from "@/lib/posting-lanes";
 
 export const dynamic = "force-dynamic";
 
@@ -465,8 +468,17 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   const onboardingPostLease = onboardingWizardEnabled
     ? await orgShowsPostLease(supabase, org.id)
     : true;
+  // S760: the "Connect your rental sites" step.
+  let onboardingHasConnectedSite = false;
+  if (onboardingWizardEnabled) {
+    const siteTiles = await listChannelTileStatuses(org.id);
+    const byChannel: Record<string, string> = {};
+    for (const t of siteTiles) if (!isHiddenForOrg(t.channel, org.id)) byChannel[t.channel] = t.state;
+    onboardingHasConnectedSite = orgHasConnectedSite(byChannel);
+  }
   const onboardingWizardState = onboardingWizardEnabled
     ? computeOnboardingState({
+        hasConnectedSite: onboardingHasConnectedSite,
         postLeaseEnabled: onboardingPostLease,
         addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED),
         hasProperty: (propertyCount ?? 0) > 0,

@@ -768,7 +768,7 @@ function SyndicationFirstCard({
     : needsListingWork
       ? "Post shows what your listing still needs. It then opens only the steps that need your sign-in or the link to your ad."
     : expiredOnly
-      ? "Previous ads on rental sites need refresh or repost before they count as live."
+      ? "An older ad on a rental site is down. Post it again and it counts as On."
       : liveOutsideCount > 0
         ? `${totalInquiryCount} ${
             totalInquiryCount === 1 ? "inquiry is" : "inquiries are"
@@ -859,8 +859,8 @@ function SyndicationFirstCard({
           {!packetBlocked ? (
             <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-400">
               {robotPostingAllowed
-                ? "We post your ad on each site as soon as it is ready. A site counts as Live once the link to your ad is saved."
-                : "Your Facebook Page posts from here, free. The Marketplace kit gives you the ad to paste. With the Posting add-on we post Kijiji, Rentals.ca and Zumper for you. A site counts as Live once the link to your ad is saved."}
+                ? "We post your ad on each site as soon as it is ready. A site counts as On once the link to your ad is saved."
+                : "Your Facebook Page posts from here, free. The Marketplace kit gives you the ad to paste. With the Posting add-on we post Kijiji, Rentals.ca and Zumper for you. A site counts as On once the link to your ad is saved."}
             </p>
           ) : null}
         </div>

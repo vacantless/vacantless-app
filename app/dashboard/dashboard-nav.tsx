@@ -115,10 +115,13 @@ const CAPTURES: NavItem = { href: "/dashboard/captures", label: "Captures" };
 // reachable by URL, but this More-menu entry only appears when
 // DISTRIBUTION_WIZARD_ENABLED is set (read in the layout, passed as
 // distributionWizardEnabled). Opens at Stage 1 "Link your portals".
+// S760: the entry opens the one-time "Connect your rental sites" page; the
+// detailed per-site page (/dashboard/link-portals) is linked from it.
 const DISTRIBUTION_WIZARD: NavItem = {
-  href: "/dashboard/link-portals",
+  href: "/dashboard/sites",
   label: "Rental sites",
   match: [
+    "/dashboard/link-portals",
     "/dashboard/add-details",
     "/dashboard/send-live",
     "/dashboard/after-live",

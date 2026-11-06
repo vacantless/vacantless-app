@@ -138,12 +138,13 @@ function Hero() {
             <span className="block">Every viewing booked.</span>
           </h1>
           <p className="mb-[18px] max-w-[34rem] text-[clamp(1.1rem,1.8vw,1.32rem)] font-semibold leading-[1.4] text-[#203029]">
-            Put one link in your rental ads. Vacantless does the back and forth.
+            Posted everywhere. Every renter answered. Every viewing booked. Then rent, repairs, notices and taxes run on their own.
           </p>
           <p className="mb-[26px] max-w-[34rem] text-[clamp(1.02rem,1.6vw,1.16rem)] leading-[1.55] text-[#384a42]">
-            Renters get a reply in seconds. They pick a viewing time from your
-            hours and get reminders before they come. You see every renter in
-            one list, and you stop playing phone tag.
+            Press Set Live and your ad goes up on the rental sites. Renters get a
+            reply in seconds, pick a viewing time from your hours and get
+            reminders before they come. You see every renter in one list, and
+            you stop playing phone tag.
           </p>
           <div className="mb-3.5 flex flex-wrap items-center gap-3">
             <PrimaryButton href="/signup">{SIGNUP_LABEL}</PrimaryButton>
@@ -395,8 +396,8 @@ const HOW_STEPS: { title: string; body: string }[] = [
     body: "Pick the times you can show the unit. Booked times drop off on their own.",
   },
   {
-    title: "Share your link",
-    body: "Paste it into Facebook Marketplace, Kijiji or any ad. Every renter lands in the same place.",
+    title: "Press Set Live",
+    body: "Your rental goes up on your Facebook Page and Marketplace, and with Posting on Kijiji, Rentals.ca and Zumper. Every renter lands in the same place.",
   },
   {
     title: "Show up",
@@ -505,12 +506,13 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img: strin
     alt: "A repair job with the tenant's free times, the technician's window and the time that works for both",
   },
   {
-    kicker: "Year-end",
-    title: "Tax time without the shoebox.",
+    kicker: "Rent and taxes",
+    title: "Rent in on the first. Tax time without the shoebox.",
     points: [
-      "Collect rent by pre-authorized debit through your own Stripe or Rotessa account, or log e-transfers",
+      "Rent by pre-authorized debit through your own Stripe or Rotessa account, or log e-transfers; you see who paid and who owes",
       "Costs come in from your bank, a bank file, repairs, or typed in",
-      "One owner statement per building, with a download for your accountant",
+      "One owner statement per building, and your T776 rental tax summary line by line",
+      "One zip for your accountant: ledger, T776, statements, rent roll and QuickBooks or Xero files",
     ],
     img: "/marketing/auto-year-end.jpg",
     alt: "The owner statement: rent collected, expenses and net for the year",
@@ -522,7 +524,7 @@ function Automations() {
     <section id="automations" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
         <SectionHead title="Then it runs the rest.">
-          Once the unit is rented, Vacantless keeps working: rent increases, repairs and the books, on Growth.
+          Ads posted and kept up. Renters answered and booked. Once the unit is rented: rent collected, rent increases served, repairs booked, and the books and tax papers done, on Growth.
         </SectionHead>
         <div className="grid gap-12 sm:gap-16">
           {AUTOMATIONS.map((a, i) => (
@@ -698,7 +700,7 @@ function Pricing() {
 const POSTING_ADDON_INCLUDES: string[] = [
   "We post your rental to Kijiji, Rentals.ca and Zumper for you",
   "On your own accounts. You sign in to each site once",
-  "Ads go up as soon as they are ready, on your own accounts",
+  "Ads go up as soon as they are ready, are kept up, and come down when the unit rents",
   "Every renter from those sites lands in the same list",
 ];
 

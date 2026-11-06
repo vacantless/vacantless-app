@@ -29,7 +29,7 @@ ok("page reads error_code", /error_message, error_code, audit_message/.test(page
 const tab = readFileSync("app/dashboard/properties/[id]/distribute-tab.tsx", "utf8");
 ok("tab passes the notice to the row", /siteSetup: siteSetupNotice\(it\.publishStatus, it\.errorCode, it\.errorMessage\)/.test(tab));
 const row = readFileSync("app/dashboard/properties/[id]/publish-everywhere.tsx", "utf8");
-ok("row shows Needs you", /siteSetup\s*\n?\s*\? \{ label: "Needs you"/.test(row));
+ok("row shows Needs you", /payAtCheckout || siteSetup || needsApproval[^\n]*\n\s*\? \{ label: "Needs you"/.test(row));
 ok("row renders the message and link", /\{siteSetup\.message\}/.test(row) && /href=\{siteSetup\.href\}/.test(row));
 const actions = readFileSync("app/dashboard/properties/distribution-actions.ts", "utf8");
 ok("approving again clears the blocker", /operator_submit_approved_by: uid,[\s\S]{0,300}error_code: null,\s*error_message: null,/.test(actions));
