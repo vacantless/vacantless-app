@@ -41,6 +41,7 @@ export default async function Home() {
         <LeasingProof />
         <HowItWorks />
         <WhatYouGet />
+        <Automations />
         <AfterTheLease />
         <Pricing />
         <FounderBand />
@@ -457,6 +458,109 @@ const GET_GROUPS: { title: string; items: string[] }[] = [
   },
 ];
 
+/* S759: the four jobs Vacantless runs for a landlord (Noam, 2026-11-06:
+   "automate showings, rent increases, taxes, repairs and the back and
+   forth"). Every line was walked end to end on prod (Lakeview, S759):
+   booking and reminders; the rent-increase sweep emailing the N1 reminder;
+   tenant report -> tenant picks times -> trade accepts, quotes and books
+   from a link -> tenant emailed -> cost on the owner statement; rent by
+   pre-authorized debit (Stripe or Rotessa) or logged, costs from the bank,
+   a file or typed in. Screenshots are real Lakeview pages
+   (demo-videos/shots.mjs, public/marketing). */
+const AUTOMATIONS: { kicker: string; title: string; points: string[]; img: string; alt: string; phone?: boolean }[] = [
+  {
+    kicker: "Showings",
+    title: "Every renter answered and booked.",
+    points: [
+      "A reply with your booking link within seconds, day or night",
+      "Renters pick a time from your viewing hours",
+      "Reminders the day before, and they confirm with one tap or a YES by text",
+      "Cancelled or no-show? They land on a follow-up list",
+    ],
+    img: "/marketing/auto-showings.jpg",
+    alt: "A rental's booking page with open viewing times",
+    phone: true,
+  },
+  {
+    kicker: "Rent increases",
+    title: "Never miss a rent increase again.",
+    points: [
+      "Vacantless tracks each lease's 12-month clock and this year's guideline",
+      "We email you before the last day to serve, with the new rent worked out",
+      "The N1 comes filled in. Record it and the clock resets for next year",
+    ],
+    img: "/marketing/auto-rent-increase.png",
+    alt: "A tenancy's rent increase card: serve the N1 by November 17 for a February 15 increase",
+  },
+  {
+    kicker: "Repairs",
+    title: "Repairs without the back and forth.",
+    points: [
+      "Tenants report a problem from their own link, with photos",
+      "They pick when they can be home. Your trade accepts, quotes and books from a link",
+      "Vacantless finds the time that works for both and emails the tenant",
+      "Mark it done and the cost goes on your books",
+    ],
+    img: "/marketing/auto-repairs.png",
+    alt: "A repair job with the tenant's free times, the technician's window and the time that works for both",
+  },
+  {
+    kicker: "Year-end",
+    title: "Tax time without the shoebox.",
+    points: [
+      "Collect rent by pre-authorized debit through your own Stripe or Rotessa account, or log e-transfers",
+      "Costs come in from your bank, a bank file, repairs, or typed in",
+      "One owner statement per building, with a download for your accountant",
+    ],
+    img: "/marketing/auto-year-end.jpg",
+    alt: "The owner statement: rent collected, expenses and net for the year",
+  },
+];
+
+function Automations() {
+  return (
+    <section id="automations" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="Then it runs the rest.">
+          Once the unit is rented, Vacantless keeps working: rent increases, repairs and the books, on Growth.
+        </SectionHead>
+        <div className="grid gap-12 sm:gap-16">
+          {AUTOMATIONS.map((a, i) => (
+            <div
+              key={a.kicker}
+              className={`grid items-center gap-7 lg:grid-cols-2 lg:gap-12 ${i % 2 === 1 ? "lg:[&>figure]:order-first" : ""}`}
+            >
+              <div>
+                <Eyebrow>{a.kicker}</Eyebrow>
+                <h3 className="mb-4 max-w-[22ch] text-[clamp(1.5rem,2.6vw,2.05rem)] font-extrabold leading-[1.1]">
+                  {a.title}
+                </h3>
+                <ul className="grid list-none gap-2.5 p-0">
+                  {a.points.map((p) => (
+                    <li key={p} className="flex items-start gap-2 text-[0.98rem] leading-snug text-[#273832]">
+                      <CheckMark />
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <figure className={`m-0 ${a.phone ? "flex justify-center" : ""}`}>
+                <img
+                  src={a.img}
+                  alt={a.alt}
+                  loading="lazy"
+                  decoding="async"
+                  className={`h-auto rounded-xl border border-[#d9e1dc] bg-white shadow-[0_18px_50px_rgba(16,40,32,0.12)] ${a.phone ? "w-[min(320px,80%)]" : "w-full"}`}
+                />
+              </figure>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* S754d: the Ontario paperwork that comes after the lease. Every line is
    live: LTB forms N4, N5, N6, N8, N12, N13, L1, L2, L9, L10 filled from the
    tenancy (S748-S751), the rent increase tool with a filled N1 and the
@@ -472,20 +576,16 @@ const AFTER_LEASE: { title: string; body: string; href?: string; link?: string }
     link: "Free N4, N8 and N12 fillers",
   },
   {
-    title: "Rent increases, done right",
-    body: "This year's guideline, the right dates and a filled Form N1.",
-    href: "/tools/rent-increase",
-    link: "Try the free calculator",
-  },
-  {
     title: "The Ontario Standard Lease",
     body: "Filled from your rental. In Vacantless, everyone signs it online.",
     href: "/tools/standard-lease",
     link: "Fill one free",
   },
   {
-    title: "Rent, expenses and repairs",
-    body: "Collect rent by pre-authorized debit through your own Stripe or Rotessa account. Log costs and repairs, and see each building's net on one owner statement.",
+    title: "Free tools, no sign-up",
+    body: "The rent increase calculator with a filled N1, and the N4, N8 and N12 fillers.",
+    href: "/tools/rent-increase",
+    link: "Try the rent increase tool",
   },
 ];
 
@@ -493,10 +593,10 @@ function AfterTheLease() {
   return (
     <section id="paperwork" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="After the lease, it keeps going.">
-          The forms come straight from the tenancy you already have (Ontario). Rent and the books work anywhere in Canada.
+        <SectionHead title="The paperwork, filled in.">
+          For Ontario rentals. The forms come straight from the tenancy you already have.
         </SectionHead>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3">
           {AFTER_LEASE.map((c) => (
             <article key={c.title} className="rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
               <h3 className="mb-2 text-[1.08rem] font-bold">{c.title}</h3>

@@ -98,7 +98,7 @@ export type PlanFeature =
   | "capture_email_in"
   | "capture_text_in"
   // Repair-scheduling appointment reminders (S387, Slice 4): the SMS leg of the
-  // 1-day / same-day tenant appointment reminder. Premium+ (per-message SMS cost),
+  // 1-day / same-day tenant appointment reminder. Growth+ since S759n (was Premium+),
   // mirroring capture_text_in — the email/in-app legs need no entitlement.
   | "repair_sms"
   // Listing-marketing kit (S388, Tier A): the self-serve promotion kit for an
@@ -218,7 +218,7 @@ export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   plus: { serve_notice: false, applications: false, sms: true, renter_sms: true, rent_collection: false, tax_export: false, bank_feed: false, accounting: false, incident_intake: false, incident_dispatch: false, capture_email_in: false, capture_text_in: false, repair_sms: false, listing_marketing: false, lease_ocr: false, listing_ai_import: false, waitlist: false, market_rent: false },
   // Live ladder.
   free: { ...noEntitlements(), rent_collection: true }, // funnel tier: email only; rent collection included
-  growth: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: false, repair_sms: false, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
+  growth: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: false, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
   premium: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
   managed: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Premium feature set plus the larger concierge allowance.
 };
@@ -544,8 +544,10 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "Text renters their confirmations and reminders from your own local number; they reply YES to confirm",
       "Renter applications, questions before booking and a waiting list",
       "Ontario LTB notices filled for you: N4, N5, N8, N12, L1 and more",
+      "Rent increase reminders with the N1 filled in",
+      "Repairs: tenants report and pick times; your trade accepts, quotes and books from a link; the tenant gets a reminder by email and text",
       "Rent by pre-authorized debit through your own Stripe or Rotessa account",
-      "Expenses from your bank or typed in, repairs, and an owner statement per building",
+      "Expenses from your bank or typed in, and an owner statement per building",
       "Email help from us within one business day",
     ],
   },

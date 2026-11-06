@@ -1002,7 +1002,14 @@ export async function dispatchWorkOrderToTrade(formData: FormData) {
   // accepts/quotes from the job page; a blank description makes that impossible
   // (S328 dogfood). The work order can exist bare for the owner's own tracking —
   // this is only the outbound-to-a-trade boundary.
-  if (!dispatchBriefOk(w.description)) redirect(`${BASE}?disp=needs_brief`);
+  // S759: a note typed next to Dispatch counts as the brief when the job has no
+  // description yet; it is saved as the description so the trade's page shows it.
+  if (!dispatchBriefOk(w.description)) {
+    const note = s(formData, "operator_note").trim();
+    if (!dispatchBriefOk(note)) redirect(`${BASE}?disp=needs_brief`);
+    await supabase.from("work_orders").update({ description: note }).eq("id", w.id);
+    w.description = note;
+  }
 
   const { data: trade } = await supabase
     .from("trade_contacts")

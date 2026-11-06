@@ -170,7 +170,7 @@ export default async function StatementPage({
       <BrandBanner
         eyebrow="Money"
         title="Owner statement"
-        subtitle="Rent collected minus expenses, per property, for any period. The year-end picture for you and your accountant — built from what you already logged. Vacantless reports; it never moves your money."
+        subtitle="Rent collected minus expenses, per property, for any period. The year-end picture for you and your accountant, built from what you already logged. Vacantless reports; it never moves your money."
         icon={<Icons.chart className="h-6 w-6" />}
         action={
           <div className="flex flex-wrap items-center gap-2">
