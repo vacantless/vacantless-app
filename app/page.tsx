@@ -122,7 +122,8 @@ function Eyebrow({ children }: { children: ReactNode }) {
 /* S702: the site sells the leasing funnel only (Noam's go-to-market call,
    2026-10-05; price CA$99 a month flat, 2026-10-09). Everything on this page
    was walked on prod by a brand-new org on 2026-10-08. Rent collection and
-   expenses come later as upgrades and are not sold here. S713 (2026-10-13):
+   expenses come later as upgrades and are not sold here. [S759: superseded;
+   see AFTER_LEASE below. Everything built is offered once tested.] S713 (2026-10-13):
    posting to Kijiji, Rentals.ca and Zumper for you is the CA$49 Posting
    add-on on top of Growth, named once under the Growth card. */
 function Hero() {
@@ -459,9 +460,10 @@ const GET_GROUPS: { title: string; items: string[] }[] = [
 /* S754d: the Ontario paperwork that comes after the lease. Every line is
    live: LTB forms N4, N5, N6, N8, N12, N13, L1, L2, L9, L10 filled from the
    tenancy (S748-S751), the rent increase tool with a filled N1 and the
-   Ontario Standard Lease (public tools, S746-S743). Leasing stays the
-   headline; rent collection, expenses and repairs stay off this page until
-   an outside landlord has used them. */
+   Ontario Standard Lease (public tools, S746-S743). S759 (Noam, 2026-11-06):
+   offer everything that is built, backed by heavy testing, rather than
+   waiting for a first outside user; rent collection, expenses and repairs
+   were walked end to end on prod (Lakeview) before this card went up. */
 const AFTER_LEASE: { title: string; body: string; href?: string; link?: string }[] = [
   {
     title: "Official LTB notices, filled in",
@@ -481,16 +483,20 @@ const AFTER_LEASE: { title: string; body: string; href?: string; link?: string }
     href: "/tools/standard-lease",
     link: "Fill one free",
   },
+  {
+    title: "Rent, expenses and repairs",
+    body: "Collect rent by pre-authorized debit through your own Stripe or Rotessa account. Log costs and repairs, and see each building's net on one owner statement.",
+  },
 ];
 
 function AfterTheLease() {
   return (
     <section id="paperwork" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="After the lease, the paperwork.">
-          For Ontario rentals. The forms come straight from the tenancy you already have.
+        <SectionHead title="After the lease, it keeps going.">
+          The forms come straight from the tenancy you already have (Ontario). Rent and the books work anywhere in Canada.
         </SectionHead>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {AFTER_LEASE.map((c) => (
             <article key={c.title} className="rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
               <h3 className="mb-2 text-[1.08rem] font-bold">{c.title}</h3>

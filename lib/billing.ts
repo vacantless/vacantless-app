@@ -542,6 +542,8 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "Text renters their confirmations and reminders from your own local number; they reply YES to confirm",
       "Renter applications, questions before booking and a waiting list",
       "Ontario LTB notices filled for you: N4, N5, N8, N12, L1 and more",
+      "Rent by pre-authorized debit through your own Stripe or Rotessa account",
+      "Expenses from your bank or typed in, repairs, and an owner statement per building",
       "Email help from us within one business day",
     ],
   },
