@@ -185,7 +185,7 @@ export function buildHealthDigest(input: HealthInput): { subject: string; body: 
   if (input.serverNode) {
     parts.push(
       input.serverNode.fixed
-        ? `Server Node: ${input.serverNode.version}. The security fix is in. Roll the Stripe key now if not done yet (WORKFLOW 306 step 6).`
+        ? `Server Node: ${input.serverNode.version}. The security fix is in; the Stripe key was rotated 2026-11-06.`
         : `Server Node: ${input.serverNode.version}. The security fix is not on the server yet.`,
     );
   }

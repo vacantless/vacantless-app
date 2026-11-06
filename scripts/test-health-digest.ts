@@ -138,7 +138,7 @@ ok("toronto: 03:00Z is the previous local day", torontoDateHour(new Date("2026-1
   ok("node: unpatched line", waiting.body.includes("Server Node: v24.21.0. The security fix is not on the server yet."), waiting.body);
   ok("node: unpatched is not a problem", waiting.problems === 0 && waiting.subject.endsWith("all clear"));
   const fixed = buildHealthDigest({ ...clean, serverNode: { version: "v24.22.1", fixed: true } });
-  ok("node: patched says roll the Stripe key", fixed.body.includes("Roll the Stripe key now"), fixed.body);
+  ok("node: patched says the Stripe key was rotated", fixed.body.includes("Stripe key was rotated") && !fixed.body.includes("Roll the Stripe key"), fixed.body);
   ok("node: no line when not given", !buildHealthDigest(clean).body.includes("Server Node"));
   ok("node: route passes the server Node", readFileSync("app/api/cron/health-digest/route.ts", "utf8").includes("nodeHasBrotliFix(process.version)"));
   ok("node: the 15-minute log keeps it", readFileSync("app/api/cron/sweep-all/route.ts", "utf8").includes('"server-node": { status: null, reason: process.version }'));
