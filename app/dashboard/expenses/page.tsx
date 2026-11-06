@@ -301,6 +301,8 @@ export default async function ExpensesPage({
     .eq("source", "manual")
     .order("incurred_on", { ascending: false })
     .limit(10);
+  // S759: the "For" list in address order, so the default is predictable.
+  const sortedProps = [...properties].sort((a, b) => a.address.localeCompare(b.address, undefined, { numeric: true }));
   const manualExpenses = (manualData ?? []) as {
     id: string; category: string; amount_cents: number; incurred_on: string;
     merchant: string | null; property_id: string | null; building_key: string | null;
@@ -543,8 +545,8 @@ export default async function ExpensesPage({
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-gray-600">For</span>
-              <select name="scope" defaultValue={properties[0] ? `p:${properties[0].id}` : ""} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                {properties.map((p) => (
+              <select name="scope" defaultValue={sortedProps[0] ? `p:${sortedProps[0].id}` : ""} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                {sortedProps.map((p) => (
                   <option key={p.id} value={`p:${p.id}`}>{p.address}</option>
                 ))}
                 {buildingOptions.map((b) => (
