@@ -138,7 +138,7 @@ function isActive(pathname: string, item: NavItem) {
 }
 
 /**
- * Responsive dashboard nav. On md+ the primary links sit inline with an ORG
+ * Responsive dashboard nav. On lg+ (S759f: md+ squeezed seven links and a long org name) the primary links sit inline with an ORG
  * pill ("{orgName} ▾") that opens the account menu; on small screens everything
  * collapses behind a Menu toggle listing primary + account together.
  */
@@ -235,7 +235,7 @@ export function DashboardNav({
   return (
     <>
       {/* Desktop: inline primary links + org account pill */}
-      <div className="hidden items-center gap-1 text-sm md:flex">
+      <div className="hidden items-center gap-1 text-sm lg:flex">
         {primary.map((item) => (
           <Link
             key={item.href}
@@ -338,14 +338,14 @@ export function DashboardNav({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label="Toggle navigation menu"
-        className="rounded-lg bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30 md:hidden"
+        className="rounded-lg bg-white/20 px-3 py-1.5 text-sm font-medium hover:bg-white/30 lg:hidden"
       >
         {open ? "Close" : "Menu"}
       </button>
 
       {/* Mobile: dropdown panel (primary + account together) */}
       {open && (
-        <div className="absolute left-0 right-0 top-full z-20 border-t border-white/20 bg-brand shadow-lg md:hidden">
+        <div className="absolute left-0 right-0 top-full z-20 border-t border-white/20 bg-brand shadow-lg lg:hidden">
           <nav className="mx-auto flex max-w-5xl flex-col gap-1 px-6 py-3 text-sm">
             <p className="px-3 pb-0.5 pt-1 text-xs uppercase tracking-wider text-white/60">
               Daily work
