@@ -498,7 +498,7 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img: strin
     points: [
       "Tenants report a problem from their own link, with photos",
       "They pick when they can be home. Your trade accepts, quotes and books from a link",
-      "Vacantless finds the time that works for both and emails the tenant",
+      "Vacantless finds the time that works for both, tells the tenant and reminds them the day before",
       "Mark it done and the cost goes on your books",
     ],
     img: "/marketing/auto-repairs.png",

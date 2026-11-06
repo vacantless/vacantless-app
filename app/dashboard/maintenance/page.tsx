@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { isRepairReminderEnabled, type NotificationSettingRow } from "@/lib/notifications";
+import { canUseRepairSms } from "@/lib/billing";
 import {
   PageHeader,
   Card,
@@ -1035,7 +1037,21 @@ export default async function MaintenancePage({
 
   // Repair-scheduling outcomes (S386). Success/info codes show a neutral banner;
   // the rest map to a short error line.
-  const schedFlash = searchParams.sched ? SCHED_SUCCESS[searchParams.sched] : null;
+  let schedFlash = searchParams.sched ? SCHED_SUCCESS[searchParams.sched] : null;
+  // S759o: say what happens next after a visit is confirmed, so the landlord
+  // knows the reminders run on their own (and where to change them).
+  if (schedFlash && (searchParams.sched === "confirmed" || searchParams.sched === "confirmed_told")) {
+    const { data: remRow } = await supabase
+      .from("notification_settings")
+      .select("event_key, enabled")
+      .eq("organization_id", org.id)
+      .eq("event_key", "leasing.repair_appointment_reminder")
+      .maybeSingle();
+    if (isRepairReminderEnabled((remRow as NotificationSettingRow | null) ?? null)) {
+      const byText = org.sms_enabled === true && canUseRepairSms(org.plan);
+      schedFlash += ` The tenant also gets a reminder ${byText ? "by email and text" : "by email"} the day before and the same day. Change this in Automations.`;
+    }
+  }
   const schedError =
     searchParams.sched && !SCHED_SUCCESS[searchParams.sched]
       ? (SCHED_ERROR[searchParams.sched] ?? "Couldn't update the schedule. Check the times and try again.")
