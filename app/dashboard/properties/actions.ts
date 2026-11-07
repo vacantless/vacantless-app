@@ -1233,7 +1233,9 @@ export async function updateProperty(formData: FormData) {
   // that stays live, reaches the ads. Free robot sites re-post on their own;
   // the notice names the sites the landlord edits by hand.
   let adUpdateParam = "";
-  if (priorStatus === "available" && effectiveStatus === "available" && orgAfterSave) {
+  if (priorStatus === "available" && effectiveStatus === "available") {
+    // orgAfterSave is only read on a status change; a plain edit needs it too.
+    const orgForAds = orgAfterSave ?? (await getCurrentOrg());
     const changed = adDetailsChanged(
       (prior ?? {}) as Parameters<typeof adDetailsChanged>[0],
       {
@@ -1245,8 +1247,8 @@ export async function updateProperty(formData: FormData) {
         parking: String(formData.get("parking") ?? "").trim() || null,
       },
     );
-    if (changed.length > 0) {
-      const plan = await queueAdUpdates({ supabase, org: orgAfterSave, propertyId: id, changed });
+    if (changed.length > 0 && orgForAds) {
+      const plan = await queueAdUpdates({ supabase, org: orgForAds, propertyId: id, changed });
       if (plan.repost.length || plan.byHand.length) {
         adUpdateParam = `&adupdate=${encodeURIComponent([...plan.repost, ...plan.byHand.map((b) => `hand:${b.portal}`)].join(","))}`;
       }

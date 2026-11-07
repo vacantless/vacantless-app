@@ -77,8 +77,10 @@ ok("param round-trips", round.repost.join() === "rentals_ca,zumper" && round.byH
 
 // 5. Wiring.
 const actions = readFileSync("app/dashboard/properties/actions.ts", "utf8");
-ok("save queues the update", /queueAdUpdates\(\{ supabase, org: orgAfterSave, propertyId: id, changed \}\)/.test(actions));
-ok("only while the rental stays live", /priorStatus === "available" && effectiveStatus === "available" && orgAfterSave/.test(actions));
+ok("save queues the update", /queueAdUpdates\(\{ supabase, org: orgForAds, propertyId: id, changed \}\)/.test(actions));
+ok("only while the rental stays live", /priorStatus === "available" && effectiveStatus === "available"\) \{/.test(actions));
+// The org is loaded for a plain edit too (orgAfterSave is only read on a status change; the first live proof found this).
+ok("org read on a plain edit", /orgAfterSave \?\? \(await getCurrentOrg\(\)\)/.test(actions));
 ok("takedown carries the mark", /notes: updateRepostNote\(/.test(actions));
 ok("sweep in the 15-minute timer", (SWEEP_PATHS as readonly string[]).includes("/api/cron/ad-update-repost"));
 const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
