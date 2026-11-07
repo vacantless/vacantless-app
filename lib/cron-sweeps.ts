@@ -50,6 +50,8 @@ export const SWEEP_PATHS = [
   "/api/cron/texting-numbers",
   // S737: one "your ads are live" email per rental turn (lib/posted-results-email).
   "/api/cron/posted-results-email",
+  // S761: posts an edited rental's new ad once the robot took the old one down.
+  "/api/cron/ad-update-repost",
 ] as const;
 
 export type SweepResult = {

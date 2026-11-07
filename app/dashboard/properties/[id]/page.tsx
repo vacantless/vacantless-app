@@ -6,6 +6,7 @@ import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { showOnlyProvenChannelsEnabled } from "@/lib/channel-provenness";
 import { loadShownChannelKeys } from "./provenness-load";
+import { adUpdateNotice, adUpdatePlanFromParam } from "@/lib/ad-edits-follow";
 import { isHiddenForOrg, isRobotPostedChannel, withoutHiddenChannels } from "@/lib/posting-lanes";
 import { loadQuestionSheet } from "@/lib/question-sheet-load";
 import { questionSheetFieldFacts } from "@/lib/question-sheet";
@@ -896,6 +897,8 @@ export default async function PropertyDetailPage({
     published?: string;
     /** S734: we deleted the Facebook Page post when the rental left the market. */
     fbdown?: string;
+    /** S761: sites updating after an edit ("rentals_ca,zumper,hand:kijiji"). */
+    adupdate?: string;
     publish?: string;
     blasted?: string;
     post?: string;
@@ -2923,6 +2926,11 @@ export default async function PropertyDetailPage({
       {searchParams.saved && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Changes saved.
+          {/* S761: what the edit does to the ads that are up. */}
+          {(() => {
+            const notice = adUpdateNotice(adUpdatePlanFromParam(searchParams.adupdate));
+            return notice ? <> {notice}</> : null;
+          })()}
         </p>
       )}
 

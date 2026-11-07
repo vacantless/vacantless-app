@@ -39,6 +39,12 @@ export async function queueRobotTakedowns(args: {
   supabase: SupabaseClient;
   organizationId: string;
   propertyId: string;
+  /** S761: only these sites (an edit re-posts the free sites; a lease-up takes every site down). */
+  portals?: readonly string[];
+  /** S761: a note line on the item (the "update re-post" mark the sweep reads). */
+  notes?: string | null;
+  /** S761: the audit line, when not the lease-up one. */
+  audit?: (portal: string) => string;
 }): Promise<RobotTakedownQueued[]> {
   const out: RobotTakedownQueued[] = [];
   try {
@@ -61,7 +67,7 @@ export async function queueRobotTakedowns(args: {
       posts: (posts ?? []) as { id: string; portal: string; status: string | null; url: string | null }[],
       aliveChannels: ((sessions ?? []) as { channel: string }[]).map((s) => s.channel),
       postingAllowed: access.allowed,
-    });
+    }).filter((t) => !args.portals || args.portals.includes(t.portal));
     if (targets.length === 0) return out;
 
     let runId: string | null = null;
@@ -101,7 +107,8 @@ export async function queueRobotTakedowns(args: {
             external_url: t.url,
             listing_post_id: t.id,
             operator_action_url: t.url,
-            audit_message: robotTakedownAudit(t.portal),
+            audit_message: (args.audit ?? robotTakedownAudit)(t.portal),
+            notes: args.notes ?? null,
             error_code: null,
             error_message: null,
             concierge_claimed_by: null,

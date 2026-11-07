@@ -6,6 +6,7 @@ import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/p
 import { readRobotPostingAccess, type RobotPostingAccess } from "@/lib/robot-posting-access";
 import { queueOnFirstClick } from "@/lib/posting-autopilot";
 import { robotSitesToPostAtSetLive, setLiveAudit } from "@/lib/set-live-posts";
+import { adDetailsChanged, adUpdatePlan, updateRepostNote, updateTakedownAudit, type AdUpdatePlan, type LivePostRow } from "@/lib/ad-edits-follow";
 import { SITE_SIGNIN_LABEL } from "@/lib/site-signin";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { revalidatePath } from "next/cache";
@@ -1008,7 +1009,7 @@ export async function updateProperty(formData: FormData) {
   // scopes this to the caller's org.
   const { data: prior } = await supabase
     .from("properties")
-    .select("rent_cents, price_drop_pending_cents, status, organization_id")
+    .select("rent_cents, price_drop_pending_cents, status, organization_id, description, available_date, beds, baths, parking")
     .eq("id", id)
     .maybeSingle();
   const oldRent = (prior as { rent_cents: number | null } | null)?.rent_cents ?? null;
@@ -1228,14 +1229,93 @@ export async function updateProperty(formData: FormData) {
     });
   }
 
+  // S761 (REVIEW-S761 item 2): a change to what the ads show, on a rental
+  // that stays live, reaches the ads. Free robot sites re-post on their own;
+  // the notice names the sites the landlord edits by hand.
+  let adUpdateParam = "";
+  if (priorStatus === "available" && effectiveStatus === "available" && orgAfterSave) {
+    const changed = adDetailsChanged(
+      (prior ?? {}) as Parameters<typeof adDetailsChanged>[0],
+      {
+        rent_cents: newRent,
+        description: String(formData.get("description") ?? "").trim() || null,
+        available_date: parseDateOrNull(String(formData.get("available_date") ?? "")),
+        beds: parseIntOrNull(String(formData.get("beds") ?? "")),
+        baths: parseFloatOrNull(String(formData.get("baths") ?? "")),
+        parking: String(formData.get("parking") ?? "").trim() || null,
+      },
+    );
+    if (changed.length > 0) {
+      const plan = await queueAdUpdates({ supabase, org: orgAfterSave, propertyId: id, changed });
+      if (plan.repost.length || plan.byHand.length) {
+        adUpdateParam = `&adupdate=${encodeURIComponent([...plan.repost, ...plan.byHand.map((b) => `hand:${b.portal}`)].join(","))}`;
+      }
+    }
+  }
+
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/properties");
   const returnTab = tabFromReferer(headers().get("referer"), id);
   redirect(
     `/dashboard/properties/${id}?${relistBlocked ? "relist=confirm" : capBlocked ? "saved=1&publish=plan" : "saved=1"}${
       tourRejected ? "&tourerr=host" : ""
-    }${videoRejected ? "&videoerr=host" : ""}${facebookPostsTakenDown > 0 ? "&fbdown=1" : ""}${returnTab ? `&tab=${returnTab}` : ""}`,
+    }${videoRejected ? "&videoerr=host" : ""}${facebookPostsTakenDown > 0 ? "&fbdown=1" : ""}${adUpdateParam}${returnTab ? `&tab=${returnTab}` : ""}`,
   );
+}
+
+/**
+ * S761: queue the robot to refresh the free sites' ads after an edit (take
+ * the old ad down with the "update re-post" mark; the ad-update-repost sweep
+ * posts the new one once the site shows it gone). Returns the plan so the
+ * save can say what is updating and what the landlord edits by hand.
+ */
+async function queueAdUpdates({
+  supabase,
+  org,
+  propertyId,
+  changed,
+}: {
+  supabase: ReturnType<typeof createClient>;
+  org: Org;
+  propertyId: string;
+  changed: string[];
+}): Promise<AdUpdatePlan> {
+  const empty: AdUpdatePlan = { repost: [], byHand: [] };
+  try {
+    const access = await readRobotPostingAccess(supabase, org.id);
+    const [{ data: posts }, { data: sessions }] = await Promise.all([
+      supabase
+        .from("listing_posts")
+        .select("id, portal, status, url")
+        .eq("organization_id", org.id)
+        .eq("property_id", propertyId),
+      supabase
+        .from("distribution_channel_session_status")
+        .select("channel, alive")
+        .eq("organization_id", org.id)
+        .eq("alive", true),
+    ]);
+    const plan = adUpdatePlan({
+      posts: (posts ?? []) as LivePostRow[],
+      aliveChannels: ((sessions ?? []) as { channel: string }[]).map((s) => s.channel),
+      postingAllowed: access.allowed,
+      autopilot: access.autopilot,
+    });
+    if (plan.repost.length > 0) {
+      await queueRobotTakedowns({
+        supabase,
+        organizationId: org.id,
+        propertyId,
+        portals: plan.repost,
+        notes: updateRepostNote(new Date().toISOString(), changed),
+        audit: updateTakedownAudit,
+      });
+    }
+    return plan;
+  } catch (err) {
+    console.error("queueAdUpdates: failed", { propertyId, error: err instanceof Error ? err.message : String(err) });
+    return empty;
+  }
 }
 
 /**
