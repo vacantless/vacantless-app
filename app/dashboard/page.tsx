@@ -45,6 +45,9 @@ import {
 import { leaseTermShiftEnabled } from "@/lib/rent-adjustments-server";
 import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
 import { isHiddenForOrg } from "@/lib/posting-lanes";
+import { needsYouNotices } from "@/lib/needs-you";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { NeedsYouCards } from "./needs-you-cards";
 
 export const dynamic = "force-dynamic";
 
@@ -468,14 +471,18 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   const onboardingPostLease = onboardingWizardEnabled
     ? await orgShowsPostLease(supabase, org.id)
     : true;
-  // S760: the "Connect your rental sites" step.
-  let onboardingHasConnectedSite = false;
-  if (onboardingWizardEnabled) {
-    const siteTiles = await listChannelTileStatuses(org.id);
-    const byChannel: Record<string, string> = {};
-    for (const t of siteTiles) if (!isHiddenForOrg(t.channel, org.id)) byChannel[t.channel] = t.state;
-    onboardingHasConnectedSite = orgHasConnectedSite(byChannel);
-  }
+  // S760: the "Connect your rental sites" step. S761: the same tile states
+  // feed the "signed you out" cards above the lane.
+  const siteTiles = await listChannelTileStatuses(org.id);
+  const siteStateByChannel: Record<string, string> = {};
+  for (const t of siteTiles) if (!isHiddenForOrg(t.channel, org.id)) siteStateByChannel[t.channel] = t.state;
+  const onboardingHasConnectedSite = onboardingWizardEnabled ? orgHasConnectedSite(siteStateByChannel) : false;
+  const robotAccess = await readRobotPostingAccess(supabase, org.id);
+  const needsYou = needsYouNotices({
+    postingAllowed: robotAccess.allowed,
+    tileStateByChannel: siteStateByChannel,
+    hiddenFor: (c) => isHiddenForOrg(c, org.id),
+  });
   const onboardingWizardState = onboardingWizardEnabled
     ? computeOnboardingState({
         hasConnectedSite: onboardingHasConnectedSite,
@@ -531,6 +538,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
           </Link>
         </div>
       )}
+
+      <NeedsYouCards notices={needsYou} />
 
       {presetNotice && (
         <div role="status" className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
