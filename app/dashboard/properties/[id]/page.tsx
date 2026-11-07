@@ -3216,7 +3216,18 @@ export default async function PropertyDetailPage({
           messages that disagreed. Rental sites only matter once the rental
           is live, so this card shows only then; the draft banner above is
           the one status line before that. */}
-      {publicPageIsBookable && (
+      {/* S761 (REVIEW-S761 item 4): once the rental is up on at least one
+          rental site with nothing in the way, the Get online tab's own
+          "On N of M sites" card and the site rows are the status. A second
+          box above them said the same thing in other words. */}
+      {publicPageIsBookable &&
+        !(
+          liveListingPostCount > 0 &&
+          syndicationBlockerSummary == null &&
+          listingPacketReadiness.missingRequired.length === 0 &&
+          setupOutstandingCount === 0 &&
+          hasListingPhotos
+        ) && (
         <SyndicationFirstCard
           propertyId={p.id}
           robotPostingAllowed={robotPostingAccess.allowed}

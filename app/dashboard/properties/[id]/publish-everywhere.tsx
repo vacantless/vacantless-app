@@ -519,11 +519,20 @@ export function PublishEverywhere({
   // It used to count only fresh "posted" cards and read 2 while the list
   // showed 3 sites Live (an aging ad is still live).
   const proofSavedCount = resolved.filter((row) => liveStateFor(row).isLive).length;
+  // S761 (REVIEW-S761 item 4): Instagram is not a rental site. It stays in
+  // the list only once it is connected; before that the Page row is the way in.
+  const isSiteRow = (r: ResolvedRow) =>
+    r.key !== "site" &&
+    r.key !== "email" &&
+    r.key !== "vacantless" &&
+    r.key !== "org_feed" &&
+    r.key !== "network_feed" &&
+    !(r.key === "instagram" && r.mode === "needs_connection");
+  const siteRowCount = resolved.filter(isSiteRow).length;
+  // One sentence the landlord can read: how many of their sites it is on.
   const onlineHeadline =
     proofSavedCount > 0
-      ? `Live on ${proofSavedCount} ${
-          proofSavedCount === 1 ? "site" : "sites"
-        }.`
+      ? `On ${proofSavedCount} of ${siteRowCount} ${siteRowCount === 1 ? "site" : "sites"}.`
       : "Your Vacantless page is live.";
 
   const publishBlockedByBasics = setupOutstanding > 0;
@@ -733,7 +742,7 @@ export function PublishEverywhere({
             robotPostingAllowed={robotPostingAllowed}
             capNotes={capNotes}
             adPreview={adPreview}
-            otherRows={[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows]}
+            otherRows={[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows].filter(isSiteRow)}
             liveStateFor={liveStateFor}
           />
         )}
