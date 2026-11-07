@@ -76,7 +76,7 @@ export default async function TenanciesPage({
         icon={<Icons.key />}
         eyebrow="Leases & tenants"
         title="Tenancies"
-        subtitle="Your active leases. Each tenancy links a tenant to a unit with the signed rent and lease dates — the record rent collection and tenant messaging build on."
+        subtitle="Your active leases. Each tenancy links a tenant to a unit with the signed rent and lease dates. The record rent collection and tenant messaging build on."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Link
@@ -156,7 +156,7 @@ export default async function TenanciesPage({
         <EmptyState
           icon={<Icons.key />}
           title="No tenancies yet"
-          description="When a renter signs a lease, mark their inquiry Leased and use Convert to tenancy — or add one directly here for a unit that's already occupied."
+          description="When a renter signs a lease, mark their inquiry Leased and use Convert to tenancy, or add one directly here for a unit that's already occupied."
           cta={{ href: "/dashboard/tenancies/new", label: "Add a tenancy" }}
         />
       )}

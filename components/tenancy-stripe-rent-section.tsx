@@ -82,7 +82,7 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
         </p>
       ) : !view.primaryName || !view.primaryHasEmail ? (
         <p className="text-sm text-gray-600">
-          Add a name and email to the primary tenant above first — bank mandates
+          Add a name and email to the primary tenant above first. Bank mandates
           and debit notices are emailed to them.
         </p>
       ) : status === "active" ? (
@@ -95,12 +95,12 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-gray-500">Payment method</dt>
-                <dd className="font-mono text-xs text-gray-700">{view.paymentMethodId ?? "—"}</dd>
+                <dd className="font-mono text-xs text-gray-700">{view.paymentMethodId ?? "-"}</dd>
               </div>
               <div>
                 <dt className="text-gray-500">Last checked</dt>
                 <dd className="font-medium text-gray-900">
-                  {view.syncedAt ? new Date(view.syncedAt).toLocaleString() : "—"}
+                  {view.syncedAt ? new Date(view.syncedAt).toLocaleString() : "-"}
                 </dd>
               </div>
             </dl>
@@ -137,7 +137,7 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
                   <div>
                     <dt className="text-gray-500">Last synced</dt>
                     <dd className="font-medium text-gray-900">
-                      {view.syncedAt ? new Date(view.syncedAt).toLocaleString() : "—"}
+                      {view.syncedAt ? new Date(view.syncedAt).toLocaleString() : "-"}
                     </dd>
                   </div>
                 </dl>
@@ -236,7 +236,7 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
             Authorize <span className="font-medium text-gray-900">{view.primaryName}</span>&apos;s
             bank account for rent by {method.label.toLowerCase()} ({connectCountryLabel(view.country)}).
             They complete a secure Stripe page; we never see their bank numbers.
-            {status === "failed" && " The previous attempt didn't complete — you can start a new one."}
+            {status === "failed" && " The previous attempt didn't complete. You can start a new one."}
           </p>
           <form action={startStripeRentMandate}>
             <input type="hidden" name="tenancy_id" value={view.tenancyId} />

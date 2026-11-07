@@ -111,7 +111,7 @@ export function TenancyLeaseSection({
             </div>
             {diff.identical ? (
               <p className="text-sm text-gray-600">
-                The latest lease is identical to the previous one — same clauses,
+                The latest lease is identical to the previous one, same clauses,
                 same versions.
               </p>
             ) : (

@@ -104,7 +104,7 @@ ok(
 ok(
   "authorized-but-not-scheduled is NOT 'Not set up' -> falls through",
   pickDefaultOpenSection(
-    inp({ rentCollectionStatus: "Authorized — not scheduled" }),
+    inp({ rentCollectionStatus: "Authorized, not scheduled" }),
   ) === "tenants",
 );
 

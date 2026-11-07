@@ -315,7 +315,7 @@ const DISP_SUCCESS: Record<string, string> = {
 const SCHED_SUCCESS: Record<string, string> = {
   added: "Window added.",
   removed: "Window removed.",
-  filled: "Filled the supplier's offered windows from their saved times — edit as needed.",
+  filled: "Filled the supplier's offered windows from their saved times. Edit as needed.",
   remembered: "Saved these windows as this supplier's default.",
   confirmed: "Visit confirmed. The date is on the work order.",
   cleared: "Cleared the confirmed visit.",
@@ -340,7 +340,7 @@ const SCHED_ERROR: Record<string, string> = {
 };
 
 function fmtDate(d: string | null): string {
-  if (!d) return "—";
+  if (!d) return "-";
   // d is a plain "YYYY-MM-DD" date string; render without timezone drift.
   const [y, m, day] = d.split("-").map((n) => parseInt(n, 10));
   if (!y || !m || !day) return d;
@@ -354,7 +354,7 @@ function fmtDate(d: string | null): string {
 
 // A timestamptz (incident report submitted_at) -> short local datetime.
 function fmtDateTime(ts: string | null): string {
-  if (!ts) return "—";
+  if (!ts) return "-";
   const d = new Date(ts);
   if (isNaN(d.getTime())) return ts;
   return d.toLocaleString("en-CA", { timeZone: DEFAULT_TIME_ZONE,
@@ -529,7 +529,7 @@ function SchedulingBlock({
                 <form action={provisionTenantLink}>
                   <input type="hidden" name="work_order_id" value={workOrderId} />
                   <button type="submit" className="text-xs font-medium text-brand hover:underline">
-                    {tenantLinkExpired ? "Tenant link expired — get a new one" : "Get a link for the tenant to pick their times"}
+                    {tenantLinkExpired ? "Tenant link expired. Get a new one" : "Get a link for the tenant to pick their times"}
                   </button>
                 </form>
               )}
@@ -597,7 +597,7 @@ function SchedulingBlock({
                       </div>
                       {m.status === "partial" && m.gaps.length > 0 && (
                         <p className="mt-1 text-amber-700">
-                          Tenant not free: {gapText(m.gaps)} — ask them to cover the gap.
+                          Tenant not free: {gapText(m.gaps)}. Ask them to cover the gap.
                         </p>
                       )}
                       {prefill && m.status !== "unavailable" && (
@@ -954,7 +954,7 @@ export default async function MaintenancePage({
   // The scope line for a work-order row: a specific unit, a whole building, or
   // not unit-specific.
   function scopeLine(o: WorkOrderRow): { label: string; value: string } {
-    if (o.property_id) return { label: "Unit", value: o.property?.address ?? "—" };
+    if (o.property_id) return { label: "Unit", value: o.property?.address ?? "-" };
     if (o.building_key)
       return { label: "Building-wide", value: buildingLabels.get(o.building_key) ?? o.building_key };
     return { label: "Scope", value: "Not unit-specific" };
@@ -1214,8 +1214,8 @@ export default async function MaintenancePage({
         The costs you record here roll into your{" "}
         <Link href="/dashboard/rent/statement" className="font-medium text-brand hover:underline">
           owner statement
-        </Link>{" "}
-        — rent in minus maintenance out, per property, for year-end.
+        </Link>
+        : rent in minus maintenance out, per property, for year-end.
       </div>
 
       {/* Tenant-reported issues — triage inbox (Option B Slice 3) */}
@@ -1232,7 +1232,7 @@ export default async function MaintenancePage({
                 <h3 className="font-semibold text-gray-900">Let tenants report issues themselves</h3>
                 <p className="mt-1 text-sm text-gray-600">
                   Give each tenancy a private link to report a maintenance problem with photos or a
-                  short video. Reports land here for you to approve into a work order — no tenant
+                  short video. Reports land here for you to approve into a work order. No tenant
                   account needed. Available on Growth and up.
                 </p>
               </div>
@@ -1281,7 +1281,7 @@ export default async function MaintenancePage({
                         )}
                         <div>
                           <dt className="inline font-medium text-gray-600">Unit: </dt>
-                          <dd className="inline">{r.property?.address ?? "—"}</dd>
+                          <dd className="inline">{r.property?.address ?? "-"}</dd>
                         </div>
                       </dl>
 
@@ -1417,7 +1417,7 @@ export default async function MaintenancePage({
           </ul>
           <form action={acknowledgeDispatchTerms} className="mt-3">
             <SubmitButton className={PRIMARY_ACTION_CLASS} pendingLabel="Enabling…">
-              I understand — enable trade dispatch
+              I understand. Enable trade dispatch
             </SubmitButton>
           </form>
         </div>
@@ -1493,7 +1493,7 @@ export default async function MaintenancePage({
                       )}
                       <div>
                         <dt className="inline font-medium text-gray-600">Cost: </dt>
-                        <dd className="inline">{o.cost_cents != null ? formatMoneyCents(o.cost_cents) : "—"}</dd>
+                        <dd className="inline">{o.cost_cents != null ? formatMoneyCents(o.cost_cents) : "-"}</dd>
                       </div>
                       {o.quote_cents != null && (
                         <div>
@@ -1706,7 +1706,7 @@ export default async function MaintenancePage({
                 </div>
 
                 {/* In-app trade dispatch (Option B Slice 5). Premium only; shown
-                    per work order. We never move money — the trade quotes, the
+                    per work order. We never move money. The trade quotes, the
                     owner approves a date, the owner pays the trade directly. */}
                 {canDispatch &&
                   (() => {
@@ -1946,7 +1946,7 @@ export default async function MaintenancePage({
                     <div>
                       <label className={labelCls}>Unit (for a unit cost)</label>
                       <select name="property_id" defaultValue={o.property_id ?? ""} className={inputCls}>
-                        <option value="">—</option>
+                        <option value="">None</option>
                         {properties.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.address}
@@ -1957,7 +1957,7 @@ export default async function MaintenancePage({
                     <div>
                       <label className={labelCls}>Building (for a shared cost)</label>
                       <select name="building_key" defaultValue={o.building_key ?? ""} className={inputCls}>
-                        <option value="">—</option>
+                        <option value="">None</option>
                         {buildingOptions.map((b) => (
                           <option key={b.key} value={b.key}>
                             {b.label}
@@ -1968,7 +1968,7 @@ export default async function MaintenancePage({
                     <div>
                       <label className={labelCls}>Tenancy (optional)</label>
                       <select name="tenancy_id" defaultValue={o.tenancy_id ?? ""} className={inputCls}>
-                        <option value="">—</option>
+                        <option value="">None</option>
                         {tenancies.map((t) => (
                           <option key={t.id} value={t.id}>
                             {t.label}
@@ -2000,7 +2000,7 @@ export default async function MaintenancePage({
                       <p className="text-xs font-medium text-gray-600">Quote &amp; timeline for the tenant</p>
                       <p className="mt-0.5 text-xs text-gray-500">
                         An estimate and expected dates you can share with the tenant in a message. The
-                        owner still pays the trade directly — Vacantless never moves money.
+                        owner still pays the trade directly. Vacantless never moves money.
                       </p>
                     </div>
                     <div>
@@ -2087,7 +2087,7 @@ export default async function MaintenancePage({
             <div>
               <label className={labelCls}>Unit (for a unit cost)</label>
               <select name="property_id" defaultValue="" className={inputCls}>
-                <option value="">—</option>
+                <option value="">None</option>
                 {properties.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.address}
@@ -2098,7 +2098,7 @@ export default async function MaintenancePage({
             <div>
               <label className={labelCls}>Building (for a shared cost)</label>
               <select name="building_key" defaultValue="" className={inputCls}>
-                <option value="">—</option>
+                <option value="">None</option>
                 {buildingOptions.map((b) => (
                   <option key={b.key} value={b.key}>
                     {b.label}
@@ -2109,7 +2109,7 @@ export default async function MaintenancePage({
             <div>
               <label className={labelCls}>Tenancy (optional)</label>
               <select name="tenancy_id" defaultValue="" className={inputCls}>
-                <option value="">—</option>
+                <option value="">None</option>
                 {tenancies.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.label}

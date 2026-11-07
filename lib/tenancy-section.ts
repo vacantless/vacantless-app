@@ -26,7 +26,7 @@ export type LeaseDocStatusLabel =
 /** Rent-collection header status (see the page's rentCollectionStatus). */
 export type RentCollectionStatusLabel =
   | "Not set up"
-  | "Authorized — not scheduled"
+  | "Authorized, not scheduled"
   | "Automatic monthly debit";
 
 export type TenancyOpenInput = {

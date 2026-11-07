@@ -91,7 +91,7 @@ export default async function TenantMessageTemplatesPage({
             (rent reminders, maintenance notices, and more). Use tokens like{" "}
             <code className="rounded bg-gray-100 px-1 text-xs">{"{{first_name}}"}</code>,{" "}
             <code className="rounded bg-gray-100 px-1 text-xs">{"{{property_address}}"}</code>,{" "}
-            <code className="rounded bg-gray-100 px-1 text-xs">{"{{rent}}"}</code> — they fill
+            <code className="rounded bg-gray-100 px-1 text-xs">{"{{rent}}"}</code>. They fill
             in per tenant when you send.
           </p>
           <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">

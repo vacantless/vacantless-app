@@ -103,7 +103,7 @@ export default function RotessaSettingsCard({
               <dd className="font-medium text-gray-900">
                 {account?.last_verified_at
                   ? new Date(account.last_verified_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE })
-                  : "—"}
+                  : "-"}
               </dd>
             </div>
           </dl>

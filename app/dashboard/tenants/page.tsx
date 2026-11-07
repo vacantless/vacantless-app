@@ -37,7 +37,7 @@ const SECTIONS: Section[] = [
   {
     href: "/dashboard/people",
     title: "People",
-    desc: "Everyone you've leased to, across tenancies — the contact record behind each tenant.",
+    desc: "Everyone you've leased to, across tenancies. The contact record behind each tenant.",
     icon: "users",
   },
   {

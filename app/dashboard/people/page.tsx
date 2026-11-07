@@ -144,7 +144,7 @@ export default async function PeoplePage() {
         icon={<Icons.users />}
         eyebrow="Tenants & contacts"
         title="People"
-        subtitle="Everyone you've rented to, as a permanent record that follows the person across units and tenancies. Open anyone to see every lease and document tied to them — even from a tenancy that has ended."
+        subtitle="Everyone you've rented to, as a permanent record that follows the person across units and tenancies. Open anyone to see every lease and document tied to them, even from a tenancy that has ended."
       />
 
       {rows.length > 0 ? (

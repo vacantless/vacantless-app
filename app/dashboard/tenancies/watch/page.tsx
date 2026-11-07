@@ -87,7 +87,7 @@ export default async function WatchLeasePage({
             icon={<Icons.calendar />}
             eyebrow="Rent-increase autopilot"
             title="Confirm this lease for rent-increase tracking"
-            subtitle="The unit and tenant are already on file — just confirm the lease start and tell us when rent was last raised (and whether the unit is rent-control exempt). We'll remind you, well ahead of the deadline, when you can raise the rent — with the guideline amount and a pre-filled N1."
+            subtitle="The unit and tenant are already on file, just confirm the lease start and tell us when rent was last raised (and whether the unit is rent-control exempt). We'll remind you, well ahead of the deadline, when you can raise the rent, with the guideline amount and a pre-filled N1."
           />
 
           {errMsg && (
@@ -147,7 +147,7 @@ export default async function WatchLeasePage({
                     className={`${inputCls} max-w-xs`}
                   />
                   <p className="mt-1 text-xs text-gray-400">
-                    Leave blank if rent hasn&apos;t been raised since move-in — the
+                    Leave blank if rent hasn&apos;t been raised since move-in. The
                     clock runs from the lease start.
                   </p>
                 </div>
@@ -175,7 +175,7 @@ export default async function WatchLeasePage({
                   This unit was first occupied after Nov 15, 2018 (rent-control
                   exempt).
                   <span className="mt-0.5 block text-xs text-gray-500">
-                    You&apos;re responsible for this classification — we don&apos;t
+                    You&apos;re responsible for this classification. We don&apos;t
                     determine it for you. When set, we won&apos;t cap the increase
                     to the provincial guideline.
                   </span>
@@ -239,7 +239,7 @@ export default async function WatchLeasePage({
         icon={<Icons.calendar />}
         eyebrow="Rent-increase autopilot"
         title="Watch a lease"
-        subtitle="Add one existing lease and we'll remind you — well ahead of the deadline — when you can raise the rent, with the guideline amount and a pre-filled N1 ready to serve. Just the lease details; no marketing, screening, or rent collection setup."
+        subtitle="Add one existing lease and we'll remind you well ahead of the deadline when you can raise the rent, with the guideline amount and a pre-filled N1 ready to serve. Just the lease details; no marketing, screening, or rent collection setup."
       />
 
       {errMsg && (
@@ -270,7 +270,7 @@ export default async function WatchLeasePage({
                       {one(t.property)?.address ?? "Unit on file"}
                     </span>
                     <span className="block truncate text-xs text-gray-500">
-                      {primaryName(t)} · from {t.start_date ?? "—"}
+                      {primaryName(t)} · from {t.start_date ?? "-"}
                     </span>
                   </span>
                   <span className="shrink-0 text-xs font-medium text-brand">
@@ -325,7 +325,7 @@ export default async function WatchLeasePage({
                 className={inputCls}
               />
               <p className="mt-1 text-xs text-gray-400">
-                Leave blank if rent hasn&apos;t been raised since move-in — the clock
+                Leave blank if rent hasn&apos;t been raised since move-in. The clock
                 runs from the lease start.
               </p>
             </div>
@@ -346,7 +346,7 @@ export default async function WatchLeasePage({
               This unit was first occupied after Nov 15, 2018 (rent-control
               exempt).
               <span className="mt-0.5 block text-xs text-gray-500">
-                You&apos;re responsible for this classification — we don&apos;t
+                You&apos;re responsible for this classification. We don&apos;t
                 determine it for you. When set, we won&apos;t cap the increase to
                 the provincial guideline.
               </span>
@@ -366,7 +366,7 @@ export default async function WatchLeasePage({
         <div>
           <p className="mb-1 text-sm font-semibold text-gray-700">Tenant</p>
           <p className="mb-3 text-xs text-gray-500">
-            Who&apos;s on the lease. Email and phone are optional — you can add
+            Who&apos;s on the lease. Email and phone are optional. You can add
             co-tenants later from the tenancy page.
           </p>
           <div className="grid grid-cols-1 gap-2 rounded-xl border border-gray-200 p-3 sm:grid-cols-3">

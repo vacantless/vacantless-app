@@ -216,7 +216,7 @@ export default async function RentRollPage({
       <BrandBanner
         eyebrow={`Money · ${org.name}`}
         title="Rent roll & cap rate"
-        subtitle="A per-building rent roll, net operating income, and cap rate — the package a buyer or lender asks for. NOI excludes financing (mortgage and interest); Vacantless reports, it never moves your money."
+        subtitle="A per-building rent roll, net operating income, and cap rate. The package a buyer or lender asks for. NOI excludes financing (mortgage and interest); Vacantless reports, it never moves your money."
         icon={<Icons.chart className="h-6 w-6" />}
         action={
           <div className="flex flex-wrap items-center gap-2">
@@ -327,7 +327,7 @@ export default async function RentRollPage({
         />
         <StatCard
           label="Cap rate"
-          value={cap.capRatePct == null ? "—" : `${cap.capRatePct}%`}
+          value={cap.capRatePct == null ? "-" : `${cap.capRatePct}%`}
           hint={cap.capRatePct == null ? "Enter a property value" : `on ${formatMoneyCents(propertyValueCents ?? 0)}`}
           icon={<Icons.bolt className="h-4 w-4" />}
         />
@@ -340,7 +340,7 @@ export default async function RentRollPage({
           <EmptyState
             icon={<Icons.key className="h-5 w-5" />}
             title="No units yet"
-            description="Add rentals and record tenancies, and your rent roll fills in here — one row per unit with the tenant, lease dates, rent and occupancy."
+            description="Add rentals and record tenancies, and your rent roll fills in here. One row per unit with the tenant, lease dates, rent and occupancy."
           />
         ) : (
           <Card padded={false} className="overflow-x-auto">
@@ -377,14 +377,14 @@ export default async function RentRollPage({
                         <td className="px-4 py-2 text-gray-700">{u.tenantLabel ?? <span className="text-gray-400">Vacant</span>}</td>
                         <td className="px-4 py-2 text-xs text-gray-500">
                           {u.status === "vacant"
-                            ? "—"
+                            ? "-"
                             : `${u.leaseStart ?? "?"} ${u.leaseEnd ? `to ${u.leaseEnd}` : "· month-to-month"}`}
                         </td>
                         <td className="px-4 py-2 text-center">
                           <StatusChip tone={STATUS_TONE[u.status]}>{rentRollStatusLabel(u.status)}</StatusChip>
                         </td>
                         <td className="px-4 py-2 text-right tabular-nums text-gray-700">
-                          {u.monthlyRentCents == null ? "—" : formatMoneyCents(u.monthlyRentCents)}
+                          {u.monthlyRentCents == null ? "-" : formatMoneyCents(u.monthlyRentCents)}
                         </td>
                       </tr>
                     ))}
@@ -436,18 +436,18 @@ export default async function RentRollPage({
               />
               <ValRow
                 label="Cap rate"
-                value={cap.capRatePct == null ? "—" : `${cap.capRatePct}%`}
+                value={cap.capRatePct == null ? "-" : `${cap.capRatePct}%`}
                 strong
               />
               <ValRow
                 label="Gross rent multiplier"
-                value={cap.grossRentMultiplier == null ? "—" : `${cap.grossRentMultiplier}×`}
+                value={cap.grossRentMultiplier == null ? "-" : `${cap.grossRentMultiplier}×`}
               />
             </tbody>
           </table>
         </Card>
         <p className="mt-2 text-xs text-gray-500">
-          NOI excludes financing (mortgage and interest) — a property is valued on what it earns from operations. Cap rate =
+          NOI excludes financing (mortgage and interest). A property is valued on what it earns from operations. Cap rate =
           NOI ÷ property value. Gross rent multiplier = value ÷ annual rent.
         </p>
       </div>

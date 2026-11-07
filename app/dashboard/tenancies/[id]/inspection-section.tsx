@@ -128,7 +128,7 @@ function InspectionFields({ d }: { d?: InspectionView }) {
           name="condition_notes"
           defaultValue={d?.condition_notes ?? ""}
           rows={2}
-          placeholder="e.g. Walls clean; small scuff by the front door; fridge seal worn — flagged for follow-up"
+          placeholder="e.g. Walls clean; small scuff by the front door; fridge seal worn, flagged for follow-up"
           className={INPUT_CLS}
         />
       </div>

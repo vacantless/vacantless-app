@@ -447,7 +447,7 @@ export default function TenantMessageComposer({
             onChange={(e) => applyTemplate(e.target.value)}
             className={inputCls}
           >
-            <option value="">— Write a one-off message —</option>
+            <option value="">Write a one-off message</option>
             {templates.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name} ({channelLabel(t.channel)})
@@ -622,7 +622,7 @@ export default function TenantMessageComposer({
                     }
                   >
                     {note.text}
-                    {isSel && !note.ok ? " — will be skipped" : ""}
+                    {isSel && !note.ok ? ", will be skipped" : ""}
                   </span>
                 </span>
               </li>

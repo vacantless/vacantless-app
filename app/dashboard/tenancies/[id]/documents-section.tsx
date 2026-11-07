@@ -65,7 +65,7 @@ const labelCls = "mb-1 block text-xs font-medium text-gray-600";
 const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
 
 function fmtDay(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleDateString("en-US", { timeZone: DEFAULT_TIME_ZONE });
 }
 
@@ -86,7 +86,7 @@ export function TenancyDocumentsSection({
     <div className="mb-8 space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <p className="text-sm text-gray-600">
         Store signed leases, amendments, notices, and other documents for this
-        tenancy. Files are private — only you can see them, and each download
+        tenancy. Files are private. Only you can see them, and each download
         uses a short-lived secure link. Share any document with an expiring,
         revocable read-only link.
       </p>
@@ -201,7 +201,7 @@ export function TenancyDocumentsSection({
                                 Read-only link · expires{" "}
                                 {s.expires_at
                                   ? new Date(s.expires_at).toLocaleDateString("en-US", { timeZone: DEFAULT_TIME_ZONE })
-                                  : "—"}
+                                  : "-"}
                               </span>
                               <span className="flex items-center gap-2">
                                 <CopyLinkButton
@@ -347,7 +347,7 @@ export function TenancyDocumentsSection({
                           Read-only link · expires{" "}
                           {l.expires_at
                             ? new Date(l.expires_at).toLocaleDateString("en-US", { timeZone: DEFAULT_TIME_ZONE })
-                            : "—"}
+                            : "-"}
                         </span>
                         <span className="flex items-center gap-2">
                           <CopyLinkButton
@@ -381,7 +381,7 @@ export function TenancyDocumentsSection({
       ) : (
         <p className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
           {inAppLeases.length > 0
-            ? "No uploaded files yet — your in-app signed lease is shown above."
+            ? "No uploaded files yet. Your in-app signed lease is shown above."
             : "No documents stored for this tenancy yet."}
         </p>
       )}
@@ -414,14 +414,14 @@ export function TenancyDocumentsSection({
           </select>
         </div>
         <div className="min-w-[10rem] flex-1">
-          <label className={labelCls}>Title (optional — single file)</label>
+          <label className={labelCls}>Title (optional, single file)</label>
           <input name="title" placeholder="e.g. Executed lease 2026" className={inputCls} />
         </div>
         {tenants.length > 0 && (
           <div className="w-48">
             <label className={labelCls}>About (optional)</label>
             <select name="about_tenant_id" defaultValue="" className={inputCls}>
-              <option value="">— the tenancy</option>
+              <option value="">The tenancy</option>
               {tenants.map((tn) => (
                 <option key={tn.id} value={tn.id}>
                   {tn.name}

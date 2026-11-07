@@ -26,9 +26,9 @@ const MSG: Record<string, { tone: "ok" | "err"; text: string }> = {
   sent: { tone: "ok", text: "Sent to the tenant." },
   dismissed: { tone: "ok", text: "Draft dismissed." },
   not_found: { tone: "err", text: "That draft no longer exists." },
-  cannot_send: { tone: "err", text: "That draft can't be sent — it may have no tenant email, or it was already handled." },
+  cannot_send: { tone: "err", text: "That draft can't be sent. It may have no tenant email, or it was already handled." },
   cannot_dismiss: { tone: "err", text: "That draft was already handled." },
-  send_failed: { tone: "err", text: "The email didn't go through. The draft is still here — try again in a moment." },
+  send_failed: { tone: "err", text: "The email didn't go through. The draft is still here. Try again in a moment." },
   empty_subject: { tone: "err", text: "Add a subject before sending." },
   empty_body: { tone: "err", text: "Add a message before sending." },
   subject_too_long: { tone: "err", text: "That subject is too long." },
@@ -76,7 +76,7 @@ export default async function TenantMessagesPage({
         icon={<Icons.mail />}
         eyebrow="Tenant communications"
         title="Messages awaiting approval"
-        subtitle="Courtesy notes we've drafted for your tenants — triggered by your lease calendar. Nothing here has been sent. Review, edit if you like, then approve to send from your account. These are friendly notes, not legal notices."
+        subtitle="Courtesy notes we've drafted for your tenants, triggered by your lease calendar. Nothing here has been sent. Review, edit if you like, then approve to send from your account. These are friendly notes, not legal notices."
       />
 
       {banner && (
@@ -120,7 +120,7 @@ export default async function TenantMessagesPage({
                       ) : null}
                     </p>
                     <p className="text-xs text-gray-500">
-                      To: {r.tenant_email || "— no email on file —"}
+                      To: {r.tenant_email || "No email on file"}
                     </p>
                   </div>
                 </div>
@@ -161,7 +161,7 @@ export default async function TenantMessagesPage({
 
                 {noEmail && (
                   <p className="mt-2 text-xs text-amber-600">
-                    No email on file for this tenant — add one on the tenancy to send.
+                    No email on file for this tenant. Add one on the tenancy to send.
                   </p>
                 )}
               </div>

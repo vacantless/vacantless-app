@@ -90,7 +90,7 @@ export function ReferAFriendForm() {
           </div>
         </div>
         <p className="text-xs text-slate-500">
-          Name and email are just for your own tracking — your friend still
+          Name and email are just for your own tracking. Your friend still
           creates their own account.
         </p>
         <button
@@ -105,7 +105,7 @@ export function ReferAFriendForm() {
       {result && result.ok && (
         <div className="space-y-2 rounded-lg border border-green-200 bg-green-50 p-4">
           <p className="text-xs text-green-700">
-            Share this link with the landlord — it sets them up with their own
+            Share this link with the landlord. It sets them up with their own
             free account:
           </p>
           <div className="flex gap-2">

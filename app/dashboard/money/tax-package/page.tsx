@@ -251,7 +251,7 @@ export default async function TaxPackagePage({
         action={
           <div className="print:hidden flex flex-wrap items-center gap-2">
             {/* S528: the statement trio (P&L / owner statement / T776) should
-                reciprocally link — this package reconciles to the P&L. */}
+                reciprocally link, this package reconciles to the P&L. */}
             <Link
               href="/dashboard/money/income-statement"
               className={SECONDARY_ACTION_CLASS}

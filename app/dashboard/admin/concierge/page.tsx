@@ -31,7 +31,7 @@ const FIELD =
 const STALE_CONCIERGE_QUEUE_MS = 24 * 60 * 60 * 1000;
 
 function money(cents: number | null | undefined): string {
-  if (cents == null) return "—";
+  if (cents == null) return "-";
   return `$${(cents / 100).toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
@@ -397,7 +397,7 @@ export default async function ConciergeDeskPage({
                     post (filled the form, screenshotted, stopped at the gate).
                     The operator reviews what it filled and approves the submit;
                     the worker then completes it. Payment/login/CAPTCHA walls stop
-                    the worker for a human — never auto-solved. */}
+                    the worker for a human, never auto-solved. */}
                 {prep && (
                   <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2">
                     <p className="text-xs font-semibold text-violet-800">
@@ -463,7 +463,7 @@ export default async function ConciergeDeskPage({
                       </form>
                     ) : (
                       <p className="text-[11px] text-violet-600">
-                        Not ready to submit — the worker did not reach a filled
+                        Not ready to submit. The worker did not reach a filled
                         form. Post this one by hand, or re-run the worker.
                       </p>
                     )}

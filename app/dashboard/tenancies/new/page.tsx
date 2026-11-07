@@ -165,7 +165,7 @@ export default async function NewTenancyPage({
         <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center text-sm text-gray-500">
           {emptyState === "no_rentals" ? (
             <>
-              Add a rental first — a tenancy has to attach to a unit.{" "}
+              Add a rental first. A tenancy has to attach to a unit.{" "}
               <Link href="/dashboard/properties" className="font-medium text-brand hover:underline">
                 Go to Rentals
               </Link>
@@ -242,7 +242,7 @@ export default async function NewTenancyPage({
             </div>
             <div>
               <label htmlFor="tenancy-term-months" className={labelCls}>
-                Term (months — blank = month-to-month)
+                Term (months, blank = month-to-month)
               </label>
               <input
                 id="tenancy-term-months"
@@ -297,7 +297,7 @@ export default async function NewTenancyPage({
                 className={inputCls}
               />
               {isConvert && leadProperty?.rent_cents != null && (
-                <p className="mt-1 text-xs text-gray-400">Prefilled from the unit — edit if the signed rent differs.</p>
+                <p className="mt-1 text-xs text-gray-400">Prefilled from the unit. Edit if the signed rent differs.</p>
               )}
             </div>
             <div>
@@ -330,7 +330,7 @@ export default async function NewTenancyPage({
           <div>
             <p className="mb-1 text-sm font-semibold text-gray-700">Tenants</p>
             <p className="mb-3 text-xs text-gray-500">
-              Add up to three. Mark one as primary — that&apos;s who rent collection bills.
+              Add up to three. Mark one as primary. That&apos;s who rent collection bills.
             </p>
             <div className="space-y-3">
               {[0, 1, 2].map((i) => (

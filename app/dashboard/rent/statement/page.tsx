@@ -328,7 +328,7 @@ export default async function StatementPage({
                   {b.sharedMaintenanceCents > 0 && (
                     <tr>
                       <td className="px-4 py-2 pl-8 italic text-gray-500">Building-wide (shared)</td>
-                      <td className="px-4 py-2 text-right tabular-nums text-gray-400">—</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-gray-400">-</td>
                       <td className="px-4 py-2 text-right tabular-nums text-gray-600">{formatMoneyCents(b.sharedMaintenanceCents)}</td>
                       <td className="px-4 py-2 text-right tabular-nums text-red-600">{formatMoneyCents(-b.sharedMaintenanceCents)}</td>
                     </tr>

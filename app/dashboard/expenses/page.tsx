@@ -408,7 +408,7 @@ export default async function ExpensesPage({
   const banner = (() => {
     if (searchParams.synced != null) {
       const n = parseInt(searchParams.synced, 10) || 0;
-      return { tone: "success" as const, text: n > 0 ? `Synced ${n} new transaction${n === 1 ? "" : "s"}.` : "Up to date — no new transactions." };
+      return { tone: "success" as const, text: n > 0 ? `Synced ${n} new transaction${n === 1 ? "" : "s"}.` : "Up to date. No new transactions." };
     }
     if (searchParams.assigned) {
       const n = parseInt(searchParams.swept ?? "0", 10) || 0;
@@ -416,7 +416,7 @@ export default async function ExpensesPage({
         tone: "success" as const,
         text:
           n > 0
-            ? `Expense logged — and filed ${n} more matching line${n === 1 ? "" : "s"} automatically.`
+            ? `Expense logged, and filed ${n} more matching line${n === 1 ? "" : "s"} automatically.`
             : "Expense logged.",
       };
     }
@@ -481,7 +481,7 @@ export default async function ExpensesPage({
       }
       return {
         tone: "neutral" as const,
-        text: sk > 0 ? `No new transactions — all ${sk} were already imported.` : "No transactions found in that file.",
+        text: sk > 0 ? `No new transactions. All ${sk} were already imported.` : "No transactions found in that file.",
       };
     }
     if (searchParams.import) return { tone: "danger" as const, text: importErrorText(searchParams.import) };
@@ -490,7 +490,7 @@ export default async function ExpensesPage({
     if (searchParams.bank) return { tone: "danger" as const, text: "That transaction or connection could not be found." };
     if (searchParams.expadded) return { tone: "success" as const, text: "Expense added. It counts on your owner statement." };
     if (searchParams.expdeleted) return { tone: "neutral" as const, text: "Expense removed." };
-    if (searchParams.exp) return { tone: "danger" as const, text: "Could not log the expense — please check the fields." };
+    if (searchParams.exp) return { tone: "danger" as const, text: "Could not log the expense, please check the fields." };
     return null;
   })();
 
@@ -681,9 +681,9 @@ export default async function ExpensesPage({
       {/* --- Money in: is any of this rent? (dark behind RENT_FROM_BANK) ------- */}
       {rentFromBank && credits.length > 0 && (
         <div className="mt-8">
-          <SectionHeading>Money in — is any of this rent?</SectionHeading>
+          <SectionHeading>Money in: is any of this rent?</SectionHeading>
           <p className="mb-3 text-sm text-gray-600">
-            Deposits from your bank. Record one as rent to count it on your owner statement — split it across the
+            Deposits from your bank. Record one as rent to count it on your owner statement. Split it across the
             tenancies it covers. Vacantless never moves money; it only records what already landed.
           </p>
           {activeTenancies.length === 0 ? (
@@ -1055,7 +1055,7 @@ export default async function ExpensesPage({
                     className="mt-3 inline-flex items-center gap-1 rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium ring-1 ring-inset ring-gray-200"
                     style={{ color: "var(--brand-color)" }}
                   >
-                    Pre-filled from a rule you saved — confirm or change it
+                    Pre-filled from a rule you saved. Confirm or change it
                   </p>
                 )}
 
@@ -1072,7 +1072,7 @@ export default async function ExpensesPage({
                   <label className="text-sm">
                     <span className="mb-1 block text-gray-600">Unit</span>
                     <select name="property_id" defaultValue={sug?.propertyId ?? ""} className="w-full rounded-lg border border-gray-300 px-3 py-2">
-                      <option value="">—</option>
+                      <option value="">None</option>
                       {properties.map((p) => (
                         <option key={p.id} value={p.id}>{p.address}</option>
                       ))}
@@ -1081,7 +1081,7 @@ export default async function ExpensesPage({
                   <label className="text-sm">
                     <span className="mb-1 block text-gray-600">Building</span>
                     <select name="building_key" defaultValue={sug?.buildingKey ?? ""} className="w-full rounded-lg border border-gray-300 px-3 py-2">
-                      <option value="">—</option>
+                      <option value="">None</option>
                       {buildingOptions.map((b) => (
                         <option key={b.key} value={b.key}>{b.label}</option>
                       ))}
@@ -1101,7 +1101,7 @@ export default async function ExpensesPage({
                     </SubmitButton>
                     <label className="flex items-center gap-2 text-sm text-gray-600">
                       <input type="checkbox" name="remember" value="1" className="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
-                      Remember this — auto-sort matching {t.merchant ? t.merchant : ""} charges, now and going forward
+                      Remember this. Auto-sort matching {t.merchant ? t.merchant : ""} charges, now and going forward
                     </label>
                   </div>
                 </form>
@@ -1118,7 +1118,7 @@ export default async function ExpensesPage({
             {/* Bulk-ignore the personal remainder of a commingled import (S433).
                 Placed AFTER the list so the operator files real property costs
                 first; "ignore" is a soft status, so nothing is deleted. The form
-                submits the VISIBLE line IDs, and the action ignores ONLY those —
+                submits the VISIBLE line IDs, and the action ignores ONLY those,
                 it never clears a pending line the operator couldn't see on screen
                 (S433b P2). When more lines exist beyond the first 100, we say so;
                 clearing this page reveals the next batch to sort. */}
@@ -1126,7 +1126,7 @@ export default async function ExpensesPage({
               <p className="text-xs text-gray-500">
                 Imported a personal account too? Sort the property costs above, then clear the rest in one step.
                 {pendingBeyondView > 0
-                  ? ` Showing the ${pending.length} most recent — ${pendingBeyondView} older line${pendingBeyondView === 1 ? "" : "s"} will appear after you clear these.`
+                  ? ` Showing the ${pending.length} most recent, ${pendingBeyondView} older line${pendingBeyondView === 1 ? "" : "s"} will appear after you clear these.`
                   : ""}
               </p>
               <form action={ignoreAllPending}>

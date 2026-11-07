@@ -396,7 +396,7 @@ export default function LeaseClauseWizard({
         </p>
         <p className="text-xs text-gray-500">
           Tell us about this tenancy and we&apos;ll recommend the clauses to
-          include. You stay in control — include or exclude any clause below.
+          include. You stay in control. Include or exclude any clause below.
         </p>
       </div>
 
@@ -459,7 +459,7 @@ export default function LeaseClauseWizard({
               <span>
                 Rent runs from the {ordinalDay(startDay)} of each month
                 <span className="block text-xs text-gray-500">
-                  No proration needed — full cycles from the {ordinalDay(startDay)}.
+                  No proration needed, full cycles from the {ordinalDay(startDay)}.
                 </span>
               </span>
             </label>
@@ -489,7 +489,7 @@ export default function LeaseClauseWizard({
                 </span>
                 <span className="block text-xs text-gray-500">
                   {clampRentDay(specificDay) === startDay
-                    ? `Matches the start day — no proration needed.`
+                    ? `Matches the start day. No proration needed.`
                     : `Prorate the partial period up to the ${ordinalDay(clampRentDay(specificDay))}.`}{" "}
                   The 29th–31st bill on the last day in shorter months.
                 </span>
@@ -633,7 +633,7 @@ export default function LeaseClauseWizard({
             {showProrationBanner && proration && (
               <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand/30 bg-brand/5 px-3 py-2">
                 <span className="text-xs text-gray-700">
-                  Lease starts {proration.startDate} — proration covers{" "}
+                  Lease starts {proration.startDate}, proration covers{" "}
                   {proration.calendar.daysCharged} of {proration.daysInMonth} days,
                   full rent from {proration.fullRentStart}.
                 </span>

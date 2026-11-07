@@ -306,7 +306,7 @@ const LEASE_ERROR: Record<string, string> = {
   incomplete:
     "Fill every {{value}} in the lease before sending it for signature.",
   cannotwithdraw:
-    "This lease can't be withdrawn — someone has already signed it. Generate a new version to make changes.",
+    "This lease can't be withdrawn. Someone has already signed it. Generate a new version to make changes.",
 };
 const TENANT_FLASH: Record<string, string> = {
   added: "Tenant added.",
@@ -370,10 +370,10 @@ const STRIPE_RENT_SUCCESS: Record<string, string> = {
 const STRIPE_RENT_ERROR: Record<string, string> = {
   notconfigured: "Payments aren't configured on this deployment yet.",
   notconnected: "Set up Stripe rent collection in Settings first.",
-  notready: "Finish your Stripe onboarding in Settings — it can't collect payments yet.",
+  notready: "Finish your Stripe onboarding in Settings. It can't collect payments yet.",
   noprimary: "This tenancy needs a primary tenant first.",
   noname: "Give the primary tenant a name before starting Stripe authorization.",
-  noemail: "The primary tenant needs an email — bank mandates and notices are sent there.",
+  noemail: "The primary tenant needs an email. Bank mandates and notices are sent there.",
   nosession: "Start the bank authorization before refreshing.",
   createfail: "Stripe couldn't start the authorization. Try again.",
   linkfail: "Stripe couldn't create the authorization link. Try again.",
@@ -382,7 +382,7 @@ const STRIPE_RENT_ERROR: Record<string, string> = {
   subalready: "This tenancy already has a rent subscription.",
   nocustomer: "Authorize the tenant's bank account before scheduling rent.",
   nomandate: "The tenant needs to authorize their bank (mandate) before scheduling rent.",
-  nopm: "No saved payment method yet — finish the bank authorization first.",
+  nopm: "No saved payment method yet. Finish the bank authorization first.",
   norent: "Set a monthly rent amount on this tenancy before scheduling rent.",
   baddate: "Pick a first charge date at least 2 business days from today.",
   subfail: "Stripe couldn't create the rent subscription. Try again.",
@@ -913,17 +913,17 @@ export default async function TenancyDetailPage({
     emailed: "Notice emailed to the tenant and recorded as served.",
     recorded: "Recorded as served.",
     filed: "Filed to the document vault.",
-    sendfail: "Could not email the notice — check email is configured. Nothing was recorded as served.",
+    sendfail: "Could not email the notice. Check email is configured. Nothing was recorded as served.",
     noconsent: "Emailing needs the tenant's consent to electronic service. Tick the consent box, or serve by hand/mail.",
-    noemail: "No tenant email on file — add one, or serve by hand/mail.",
+    noemail: "No tenant email on file. Add one, or serve by hand/mail.",
     upgrade: "Serving the notice for you is a Growth feature.",
     notoken: "Could not build the tenant link. Try again.",
     badmethod: "Pick how the notice was served.",
     noamount:
-      "No new-rent amount yet — the rent-increase guideline for this notice's effective year isn't in the system (or the unit is exempt). It can't be served until an amount is available.",
+      "No new-rent amount yet. The rent-increase guideline for this notice's effective year isn't in the system (or the unit is exempt). It can't be served until an amount is available.",
     unconfirmed: "Confirm the current rent before serving an N1.",
     filenone: "Attach the printed N1 PDF to file it.",
-    filetype: "The vault accepts a PDF — print the N1 and save it as PDF first.",
+    filetype: "The vault accepts a PDF. Print the N1 and save it as PDF first.",
     filefail: "Could not file the notice. Try again.",
   };
   const serveFlash = searchParams.serve ? (SERVE_FLASH[searchParams.serve] ?? null) : null;
@@ -1245,7 +1245,7 @@ export default async function TenancyDetailPage({
     searchParams.msg === "failed"
       ? "We couldn't send the message. Check that email/SMS is configured and try again."
       : searchParams.msg === "noone"
-        ? "Nobody was messaged — the selected tenants have no usable contact details for that channel (or opted out of texts)."
+        ? "Nobody was messaged. The selected tenants have no usable contact details for that channel (or opted out of texts)."
         : searchParams.msg && searchParams.msg !== "sent" && searchParams.msg !== "scheduled"
           ? commsErrorMessage(searchParams.msg)
           : null;
@@ -1288,7 +1288,7 @@ export default async function TenancyDetailPage({
   };
   const increaseFlash =
     searchParams.increase === "recorded"
-      ? "Rent increase recorded — the next eligible date has moved forward a year."
+      ? "Rent increase recorded. The next eligible date has moved forward a year."
       : null;
   const increaseError =
     searchParams.increase && !increaseFlash
@@ -1455,7 +1455,7 @@ export default async function TenancyDetailPage({
   const rentCollectionStatus: RentCollectionStatusLabel = rentAutomatic
     ? "Automatic monthly debit"
     : t.rotessa_customer_id || stripeRentView.paymentMethodId
-      ? "Authorized — not scheduled"
+      ? "Authorized, not scheduled"
       : "Not set up";
   const paymentsStatus =
     payments.length > 0
@@ -1771,7 +1771,7 @@ export default async function TenancyDetailPage({
         >
           <input type="hidden" name="tenancy_id" value={t.id} />
           <div className="min-w-[10rem] flex-1">
-            <label className={labelCls}>Add co-tenant — name</label>
+            <label className={labelCls}>Add co-tenant: name</label>
             <input name="name" placeholder="Full name" className={inputCls} />
           </div>
           <div className="min-w-[10rem] flex-1">
@@ -1804,7 +1804,7 @@ export default async function TenancyDetailPage({
             <input type="date" name="end_date" defaultValue={t.end_date ?? ""} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Term (months — blank = month-to-month)</label>
+            <label className={labelCls}>Term (months, blank = month-to-month)</label>
             <input
               type="number"
               name="term_months"
@@ -2080,7 +2080,7 @@ export default async function TenancyDetailPage({
                 }
               >
                 {t.renewal_autopilot
-                  ? "Autopilot is ON — turn off"
+                  ? "Autopilot is ON. Turn off"
                   : "Turn on renewal autopilot"}
               </button>
             </form>
@@ -2106,7 +2106,7 @@ export default async function TenancyDetailPage({
                 </p>
                 <p className="mt-1 text-xs text-gray-600">
                   {renewalCheckin.branch === "handoff_turnover"
-                    ? "Start the turnover — list the unit and line up the next tenant."
+                    ? "Start the turnover. List the unit and line up the next tenant."
                     : "Next step: serve the rent increase in the section below."}
                 </p>
               </div>
@@ -2245,7 +2245,7 @@ export default async function TenancyDetailPage({
           <p className="mb-8 text-xs text-gray-500">
             {t.last_rent_increase_date
               ? `Last increase on file: ${t.last_rent_increase_date}.`
-              : "No last-increase date on file — the clock runs from the lease start."}
+              : "No last-increase date on file. The clock runs from the lease start."}
             {t.property?.rent_control_exempt ? " Marked rent-control exempt." : ""}{" "}
             <Link
               href={`/dashboard/tenancies/watch?tenancy=${t.id}`}
@@ -2269,7 +2269,7 @@ export default async function TenancyDetailPage({
                 Served this increase?
               </p>
               <p className="mb-3 text-xs text-gray-500">
-                Record it to reset the clock — we&apos;ll start counting toward
+                Record it to reset the clock. We&apos;ll start counting toward
                 next year&apos;s eligible date from the effective date below.
               </p>
               <div className="flex flex-wrap items-end gap-3">
@@ -2359,7 +2359,7 @@ export default async function TenancyDetailPage({
                   <input type="hidden" name="id" value={t.id} />
                   <input type="hidden" name="effective_date" value={rentIncrease.effectiveDate} />
                   <p className="mb-2 text-xs text-gray-500">
-                    You stay the named landlord on the notice — Vacantless only delivers it at your direction.
+                    You stay the named landlord on the notice. Vacantless only delivers it at your direction.
                   </p>
                   <label className="block text-xs font-medium text-gray-600">How are you serving it?</label>
                   <select name="method" className={inputCls}>
@@ -2443,7 +2443,7 @@ export default async function TenancyDetailPage({
                 <dd className="font-medium text-gray-900">
                   {t.rotessa_customer_synced_at
                     ? new Date(t.rotessa_customer_synced_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE })
-                    : "—"}
+                    : "-"}
                 </dd>
               </div>
             </dl>
@@ -2468,7 +2468,7 @@ export default async function TenancyDetailPage({
                       <dd className="font-medium text-gray-900">
                         {t.rotessa_schedule_synced_at
                           ? new Date(t.rotessa_schedule_synced_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE })
-                          : "—"}
+                          : "-"}
                       </dd>
                     </div>
                   </dl>
@@ -2537,7 +2537,7 @@ export default async function TenancyDetailPage({
               Create a Rotessa customer for{" "}
               <span className="font-medium text-gray-900">{primary.name}</span>{" "}
               (the primary tenant) to start collecting rent. We send only their
-              name and contact details — never bank account numbers.
+              name and contact details, never bank account numbers.
             </p>
             {rotessaStatus === "error" && (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -2591,7 +2591,7 @@ export default async function TenancyDetailPage({
       <div className="mb-8 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <p className="text-sm text-gray-600">
           Record rent you collected manually (e-transfer, cheque, or cash) and
-          reconcile it against the monthly rent. This is a bookkeeping log — no
+          reconcile it against the monthly rent. This is a bookkeeping log. No
           money moves here. For automatic pre-authorized debit, use rent
           collection above.
         </p>
@@ -2816,7 +2816,7 @@ export default async function TenancyDetailPage({
               <p className="text-sm font-semibold text-gray-800">Tenant reporting link</p>
               <p className="text-xs text-gray-500">
                 Share this with the tenant so they can report maintenance issues
-                (with photos or video) — no account needed.
+                (with photos or video). No account needed.
               </p>
             </div>
             {t.report_token ? (
@@ -2851,7 +2851,7 @@ export default async function TenancyDetailPage({
             </p>
           ) : searchParams.report === "ready" && t.report_token ? (
             <p className="mt-2 text-xs text-green-700">
-              Link ready — copy it and send it to your tenant.
+              Link ready. Copy it and send it to your tenant.
             </p>
           ) : null}
         </div>
@@ -2957,7 +2957,7 @@ export default async function TenancyDetailPage({
       >
       <div className="mb-8 space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <p className="text-sm text-gray-600">
-          Message the tenants on this tenancy by email and/or text — rent
+          Message the tenants on this tenancy by email and/or text, rent
           reminders, maintenance notices, or general updates. Messages send under
           your brand; replies come back to your reply-to address.{" "}
           <Link href="/dashboard/tenancies/message-templates" className="font-medium text-brand hover:underline">

@@ -107,7 +107,7 @@ async function sampleLogoColors(src: string): Promise<string[]> {
         }
         resolve(out);
       } catch {
-        resolve([]); // tainted canvas (CORS) — no suggestions, no error
+        resolve([]); // tainted canvas (CORS). No suggestions, no error
       }
     };
     img.onerror = () => resolve([]);

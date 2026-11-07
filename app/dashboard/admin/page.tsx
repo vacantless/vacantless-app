@@ -313,16 +313,16 @@ export default async function AdminConsolePage({
                     !!inv.intended_owner_email;
                   return (
                     <tr key={inv.id} className="align-top">
-                      <td className="px-3 py-2 text-slate-800">{inv.invited_email ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-800">{inv.invited_email ?? "-"}</td>
                       <td className="px-3 py-2 text-slate-600">
-                        {inv.handed_off_to_email ?? inv.intended_owner_email ?? "—"}
+                        {inv.handed_off_to_email ?? inv.intended_owner_email ?? "-"}
                         {inv.handed_off_at && (
                           <span className="block text-xs text-green-700">
                             handed off {new Date(inv.handed_off_at).toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE })}
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-slate-600">{inv.invited_name ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-600">{inv.invited_name ?? "-"}</td>
                       <td className="px-3 py-2 text-slate-600">{inviteStatusLabel(inv.status)}</td>
                       <td className="px-3 py-2 text-slate-600">{inviteSourceLabel(inv.source)}</td>
                       <td className="min-w-48 px-3 py-2 text-slate-600">

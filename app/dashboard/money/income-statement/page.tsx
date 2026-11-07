@@ -409,7 +409,7 @@ export default async function IncomeStatementPage({
       </p>
 
       {/* S528: with no activity in the range, an all-zeros table tells the
-          operator nothing — say so and point at the next action instead. */}
+          operator nothing, say so and point at the next action instead. */}
       {statement.totals.rentCount === 0 &&
         statement.totals.revenueCents === 0 &&
         statement.totals.operatingExpensesCents === 0 &&

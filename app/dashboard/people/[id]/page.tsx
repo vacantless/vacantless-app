@@ -39,7 +39,7 @@ function leaseStatusLabel(status: string): string {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return iso.slice(0, 10);
 }
 

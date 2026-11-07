@@ -40,13 +40,13 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
 
 const MSG_META: Record<string, { cls: string; text: string }> = {
   prepared: { cls: "bg-green-50 text-green-800 border-green-200", text: "N4 prepared. Download the official form to serve it, then record how you served it." },
-  served: { cls: "bg-green-50 text-green-800 border-green-200", text: "Service recorded — the tenant can now view the notice." },
+  served: { cls: "bg-green-50 text-green-800 border-green-200", text: "Service recorded. The tenant can now view the notice." },
   filed: { cls: "bg-green-50 text-green-800 border-green-200", text: "Filed the served N4 to the document vault." },
   voided: { cls: "bg-gray-50 text-gray-700 border-gray-200", text: "Notice voided." },
-  no_arrears: { cls: "bg-amber-50 text-amber-800 border-amber-200", text: "Nothing to serve — the rent ledger shows no arrears owing." },
+  no_arrears: { cls: "bg-amber-50 text-amber-800 border-amber-200", text: "Nothing to serve. The rent ledger shows no arrears owing." },
   unresolved_credits: { cls: "bg-amber-50 text-amber-800 border-amber-200", text: "Some payments aren't assigned to a rental period. Assign them under Rent first, so the N4 can't overstate arrears." },
   not_reconciling: { cls: "bg-amber-50 text-amber-800 border-amber-200", text: "The arrears table doesn't reconcile. Review the rent ledger before preparing an N4." },
-  overstated: { cls: "bg-amber-50 text-amber-800 border-amber-200", text: "That override is higher than the arrears the ledger supports. An override can only LOWER the total (to settle a disputed period), never raise it — an overstated N4 is void." },
+  overstated: { cls: "bg-amber-50 text-amber-800 border-amber-200", text: "That override is higher than the arrears the ledger supports. An override can only LOWER the total (to settle a disputed period), never raise it, an overstated N4 is void." },
   notready: { cls: "bg-amber-50 text-amber-800 border-amber-200", text: "An N4 needs an active tenancy with a rent and start date." },
   notdraft: { cls: "bg-amber-50 text-amber-800 border-amber-200", text: "That notice was already served." },
   notserved: { cls: "bg-amber-50 text-amber-800 border-amber-200", text: "Record service before filing the notice to the vault." },
@@ -137,7 +137,7 @@ export function TenancyN4Section({
       <p className="text-sm text-gray-600">
         Prepare an Ontario <strong>Form N4</strong> (Notice to End a Tenancy Early for Non-payment
         of Rent) from this tenancy&apos;s rent ledger. Vacantless fills the official Board-approved form
-        for you to review and <strong>serve yourself</strong> — it does not serve the tenant on your
+        for you to review and <strong>serve yourself</strong>. It does not serve the tenant on your
         behalf. An N4 that overstates arrears or gives too little notice is void, so review every
         figure.
       </p>
@@ -151,7 +151,7 @@ export function TenancyN4Section({
       <p className="text-xs text-gray-500">
         v1 records <strong>in-person</strong> service. Mail or courier service shifts the deemed
         service date (and the termination date), so those are coming with the legal-verification
-        step — for now, serve in person.
+        step, for now, serve in person.
       </p>
 
       {/* Arrears preview + prepare form */}
@@ -177,7 +177,7 @@ export function TenancyN4Section({
               <div>
                 <div className="text-xs uppercase tracking-wide text-gray-500">Pay-by / termination</div>
                 <div className="text-sm font-medium text-gray-900">
-                  {formatLongDate(preview.terminationDateISO) ?? "—"}{" "}
+                  {formatLongDate(preview.terminationDateISO) ?? "-"}{" "}
                   <span className="text-gray-400">(as of a notice served today)</span>
                 </div>
               </div>
@@ -213,7 +213,7 @@ export function TenancyN4Section({
             <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               {formatMoneyCents(preview.unassignedPaidCents + preview.outOfWindowPaidCents)} of payments
               aren&apos;t assigned to a rental period in the window. Assign them under{" "}
-              <a href="#rent" className="font-medium underline">Rent</a> so the N4 can&apos;t overstate arrears — then re-check here.
+              <a href="#rent" className="font-medium underline">Rent</a> so the N4 can&apos;t overstate arrears, then re-check here.
             </div>
           )}
           {preview?.blocker === "no_arrears" && (
@@ -249,7 +249,7 @@ export function TenancyN4Section({
           </form>
           <p className="mt-2 text-xs text-gray-400">
             The default uses the tenant-protective figure. An override can only LOWER the total (to
-            settle a disputed period) — a total above the ledger arrears is rejected. Preparing freezes
+            settle a disputed period). A total above the ledger arrears is rejected. Preparing freezes
             an immutable copy of these figures.
           </p>
         </div>
@@ -270,7 +270,7 @@ export function TenancyN4Section({
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.cls}`}>{meta.label}</span>
                   <span className="text-sm font-medium text-gray-900">{formatMoneyCents(n.total_owing_cents)}</span>
                   <span className="text-xs text-gray-500">
-                    pay-by {formatLongDate(n.termination_date) ?? "—"}
+                    pay-by {formatLongDate(n.termination_date) ?? "-"}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

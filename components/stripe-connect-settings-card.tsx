@@ -125,7 +125,7 @@ export default function StripeConnectSettingsCard({
             <div>
               <dt className="text-gray-500">Last synced</dt>
               <dd className="font-medium text-gray-900">
-                {account?.last_synced_at ? new Date(account.last_synced_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE }) : "—"}
+                {account?.last_synced_at ? new Date(account.last_synced_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE }) : "-"}
               </dd>
             </div>
           </dl>

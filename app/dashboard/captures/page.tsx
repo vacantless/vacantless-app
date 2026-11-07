@@ -179,7 +179,7 @@ export default async function CapturesPage({
               <CopyTextButton value={address} />
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Forward photos here from a verified sender. Keep it private — if it
+              Forward photos here from a verified sender. Keep it private, if it
               ever leaks, rotate it.
             </p>
             <form action={rotateIngestAddress} className="mt-3">
@@ -281,8 +281,8 @@ export default async function CapturesPage({
                       <p className="mt-0.5 text-xs text-slate-500">
                         {ap
                           ? [ap.appliance_type, ap.make, ap.model].filter(Boolean).join(" · ") ||
-                            "Couldn't read details — file it to a unit below."
-                          : "Couldn't auto-read this one — file it to a unit below."}
+                            "Couldn't read details. File it to a unit below."
+                          : "Couldn't auto-read this one. File it to a unit below."}
                         {exp ? ` · $${(exp.total_cents / 100).toFixed(2)}` : ""}
                       </p>
                     </div>

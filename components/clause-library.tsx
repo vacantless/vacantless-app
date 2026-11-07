@@ -66,7 +66,7 @@ const RISK_WARNING: Partial<Record<RiskLevel, string>> = {
   caution:
     "This clause can be valid but needs careful wording. Make sure it doesn't remove a tenant right under the RTA.",
   legal_review:
-    "Review recommended. This clause may affect legal rights or obligations — consider legal advice before using it.",
+    "Review recommended. This clause may affect legal rights or obligations. Consider legal advice before using it.",
 };
 
 const JURISDICTION_LABEL: Record<Jurisdiction, string> = {
@@ -334,7 +334,7 @@ export function ClauseLibrary({ clauses }: { clauses: ClauseView[] }) {
         </div>
         <p className="text-sm text-gray-600">
           Reusable clauses for the leases you generate. Each clause keeps a full
-          version history — when you change wording, the old version is preserved
+          version history. When you change wording, the old version is preserved
           and every executed lease records exactly which version the tenant
           signed, so a renewal can show what changed. Use{" "}
           <code className="rounded bg-gray-100 px-1 text-xs">{"{{token}}"}</code>{" "}
@@ -349,14 +349,14 @@ export function ClauseLibrary({ clauses }: { clauses: ClauseView[] }) {
         <strong className="font-semibold">Ontario reminder:</strong> Additional terms
         cannot remove tenant rights under the Residential Tenancies Act or the Ontario
         Standard Lease. For sensitive or unusual clauses (marked Caution or Legal review),
-        get legal advice. Vacantless helps organize lease details — it does not replace
+        get legal advice. Vacantless helps organize lease details. It does not replace
         legal advice.
       </div>
 
       {/* Existing clauses, grouped by category */}
       {clauses.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
-          No clauses yet. Add your first clause below — new accounts start with a
+          No clauses yet. Add your first clause below. New accounts start with a
           residential starter set automatically.
         </div>
       ) : (
