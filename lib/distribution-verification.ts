@@ -45,7 +45,7 @@ export function isVerificationResult(v: unknown): v is VerificationResult {
 const RESULT_LABELS: Record<VerificationResult, string> = {
   verified_live: "Verified live",
   verified_submitted: "Submitted",
-  stale: "Stale — refresh",
+  stale: "Stale. Refresh",
   not_found: "Not found",
   blocked: "Blocked",
   needs_login: "Needs login",

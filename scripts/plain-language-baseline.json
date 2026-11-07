@@ -1,8 +1,8 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-11-06",
-  "checksum": "fd178e8f2a9705623c1f8fd5f4646386b8071999ce3bae915e6717bf191e36f9",
+  "generated": "2026-11-07",
+  "checksum": "940fe9a26c2020b58d8f7f1e15f0c8d0fcb4f976c55eedebd34fe0734f16c6ab",
   "surfaces": [
     "app/agent/[token]/marketplace/[propertyId]/page.tsx",
     "app/dashboard/(wizard)/getting-started/page.tsx",
@@ -109,7 +109,6 @@
     "app/dashboard/settings/page.tsx\u0000all_caps": 2,
     "app/dashboard/settings/page.tsx\u0000ampersand_or_slash": 7,
     "app/dashboard/settings/page.tsx\u0000banned_word": 64,
-    "app/dashboard/settings/page.tsx\u0000em_dash": 1,
     "app/dashboard/settings/page.tsx\u0000parentheses": 15,
     "app/dashboard/settings/page.tsx\u0000sentence_length": 15,
     "app/dashboard/today-lane.tsx\u0000banned_word": 1,
@@ -118,7 +117,6 @@
     "lib/distribution-analytics.ts\u0000banned_word": 9,
     "lib/distribution-analytics.ts\u0000sentence_length": 3,
     "lib/distribution-capabilities.ts\u0000banned_word": 9,
-    "lib/distribution-capabilities.ts\u0000em_dash": 1,
     "lib/distribution-channel-contracts.ts\u0000banned_word": 44,
     "lib/distribution-channel-contracts.ts\u0000sentence_length": 1,
     "lib/distribution-channel-tile-statuses.ts\u0000banned_word": 9,
@@ -141,7 +139,6 @@
     "lib/distribution-stuck-sweep.ts\u0000sentence_length": 2,
     "lib/distribution-verification.ts\u0000ampersand_or_slash": 1,
     "lib/distribution-verification.ts\u0000banned_word": 9,
-    "lib/distribution-verification.ts\u0000em_dash": 1,
     "lib/distribution-verification.ts\u0000parentheses": 2,
     "lib/listing-copy.ts\u0000banned_word": 1,
     "lib/listing-description.ts\u0000all_caps": 1,
@@ -1393,7 +1390,7 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/settings/page.tsx",
-      "text": "Renters get a one-tap 1–5 star rating link once you mark their viewing as Attended. Results show on the viewing and in Reports.",
+      "text": "Renters get a one-tap 1 to 5 star rating link once you mark their viewing as Attended. Results show on the viewing and in Reports.",
       "count": 1
     },
     {
@@ -1490,12 +1487,6 @@
       "rule": "banned_word",
       "file": "app/dashboard/settings/page.tsx",
       "text": "Where renter replies to your automated emails are delivered. Leave blank to use the shared Vacantless inbox.",
-      "count": 1
-    },
-    {
-      "rule": "em_dash",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "Renters get a one-tap 1–5 star rating link once you mark their viewing as Attended. Results show on the viewing and in Reports.",
       "count": 1
     },
     {
@@ -1639,7 +1630,7 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/settings/page.tsx",
-      "text": "Renters get a one-tap 1–5 star rating link once you mark their viewing as Attended. Results show on the viewing and in Reports.",
+      "text": "Renters get a one-tap 1 to 5 star rating link once you mark their viewing as Attended. Results show on the viewing and in Reports.",
       "count": 1
     },
     {
@@ -1801,19 +1792,13 @@
     {
       "rule": "banned_word",
       "file": "lib/distribution-capabilities.ts",
-      "text": "This channel rejected the route — fix the reason and resubmit.",
+      "text": "This channel rejected the route. Fix the reason and resubmit.",
       "count": 1
     },
     {
       "rule": "banned_word",
       "file": "lib/distribution-capabilities.ts",
       "text": "Use posting assist",
-      "count": 1
-    },
-    {
-      "rule": "em_dash",
-      "file": "lib/distribution-capabilities.ts",
-      "text": "This channel rejected the route — fix the reason and resubmit.",
       "count": 1
     },
     {
@@ -2918,12 +2903,6 @@
       "rule": "banned_word",
       "file": "lib/distribution-verification.ts",
       "text": "This listing is not present in the org feed yet.",
-      "count": 1
-    },
-    {
-      "rule": "em_dash",
-      "file": "lib/distribution-verification.ts",
-      "text": "Stale — refresh",
       "count": 1
     },
     {

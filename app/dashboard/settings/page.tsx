@@ -2117,7 +2117,7 @@ export default async function SettingsPage({
                     Email a feedback request after each attended viewing
                   </span>
                   <span className="block text-xs text-gray-400">
-                    Renters get a one-tap 1–5 star rating link once you mark their
+                    Renters get a one-tap 1 to 5 star rating link once you mark their
                     viewing as Attended. Results show on the viewing and in Reports.
                   </span>
                 </span>

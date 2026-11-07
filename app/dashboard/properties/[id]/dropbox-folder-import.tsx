@@ -127,9 +127,9 @@ export function DropboxFolderImport({ propertyId }: { propertyId: string }) {
                   className="mt-0.5 h-4 w-4 accent-[var(--brand-color)]"
                 />
                 <span>
-                  {f.label}{" "}
+                  {f.label},{" "}
                   <span className="text-gray-400">
-                   , {f.count} {f.count === 1 ? "photo" : "photos"}
+                    {f.count} {f.count === 1 ? "photo" : "photos"}
                   </span>
                 </span>
               </label>

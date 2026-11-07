@@ -281,7 +281,7 @@ export function channelAccountReadiness(
     return {
       ...base,
       status: "rejected",
-      blockers: ["This channel rejected the route — fix the reason and resubmit."],
+      blockers: ["This channel rejected the route. Fix the reason and resubmit."],
       nextActionLabel: "Review rejection",
       nextActionKind: cap.needsOrgAccount ? "feed_setup" : "queue_concierge",
     };
