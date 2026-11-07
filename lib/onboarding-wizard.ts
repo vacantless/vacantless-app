@@ -93,7 +93,7 @@ const STEP_DEFS: StepDef[] = [
     key: "connect_sites",
     label: "Connect your rental sites",
     description:
-      "Once. Connect your Facebook Page, install the helper for Marketplace, and sign in to Kijiji, Rentals.ca and Zumper. After this, Set Live posts every rental everywhere.",
+      "Connect your Facebook Page, install the helper for Marketplace, and sign in to Kijiji, Rentals.ca and Zumper. After this, Set Live posts each rental on every connected site. If a site signs you out, we tell you.",
     href: "/dashboard/sites?from=getting-started",
     cta: "Connect sites",
   },

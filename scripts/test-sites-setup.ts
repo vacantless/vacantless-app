@@ -51,7 +51,7 @@ ok("Zumper sign in again", some.rows[4].state === "needs_you" && some.rows[4].ac
 ok("next sign-in skips signed-in Kijiji", some.nextSignin === "zumper");
 ok("2 of 5", some.progress === "2 of 5 connected" && some.done);
 const all = buildSitesSetup({ ...base, helperInstalled: true, tileStateByChannel: { facebook_feed: "linked", kijiji: "linked", zumper: "linked", rentals_ca: "linked" } });
-ok("all five on", all.connectedCount === 5 && all.nextSignin === null && /goes up everywhere/.test(all.summary));
+ok("all five on", all.connectedCount === 5 && all.nextSignin === null && /goes up on each one/.test(all.summary));
 const needsOk = buildSitesSetup({ ...base, tileStateByChannel: { facebook_feed: "connected_needs_authorization" } });
 ok("Page connected but not allowed: Allow posting", needsOk.rows[0].state === "needs_you" && needsOk.rows[0].action?.label === "Allow posting");
 

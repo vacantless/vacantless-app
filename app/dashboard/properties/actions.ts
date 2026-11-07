@@ -5,6 +5,8 @@ import { SITES_SETUP_HREF } from "@/lib/sites-setup";
 import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/posting-lanes";
 import { readRobotPostingAccess, type RobotPostingAccess } from "@/lib/robot-posting-access";
 import { queueOnFirstClick } from "@/lib/posting-autopilot";
+import { robotSitesToPostAtSetLive, setLiveAudit } from "@/lib/set-live-posts";
+import { SITE_SIGNIN_LABEL } from "@/lib/site-signin";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -1236,6 +1238,96 @@ export async function updateProperty(formData: FormData) {
   );
 }
 
+/**
+ * S761 (REVIEW-S761 item 1): after Set Live, queue the robot on every
+ * connected site for this org. Pure decision in lib/set-live-posts; here only
+ * the reads and the two existing writes (stage the run items, queue them).
+ * Never throws: a failure here must not undo Set Live.
+ */
+async function postRobotSitesAfterPageLive({
+  supabase,
+  org,
+  propertyId,
+}: {
+  supabase: ReturnType<typeof createClient>;
+  org: Org;
+  propertyId: string;
+}): Promise<number> {
+  try {
+    const access = await readRobotPostingAccess(supabase, org.id);
+    if (!access.allowed || access.autopilot !== true) return 0;
+
+    const tiles = await listChannelTileStatuses(org.id);
+    const tileStateByChannel: Record<string, string> = {};
+    for (const t of tiles) tileStateByChannel[t.channel] = t.state;
+
+    const { data: run } = await supabase
+      .from("distribution_runs")
+      .select("id")
+      .eq("property_id", propertyId)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    const existingRunId = (run?.id as string | undefined) ?? null;
+    const existingItemStatusByChannel: Record<string, string | null> = {};
+    if (existingRunId) {
+      const { data: items } = await supabase
+        .from("distribution_run_items")
+        .select("channel, publish_status")
+        .eq("run_id", existingRunId);
+      for (const it of (items ?? []) as { channel: string; publish_status: string | null }[]) {
+        existingItemStatusByChannel[it.channel] = it.publish_status;
+      }
+    }
+
+    const channels = robotSitesToPostAtSetLive({
+      postingAllowed: access.allowed,
+      autopilot: access.autopilot,
+      tileStateByChannel,
+      existingItemStatusByChannel,
+      hiddenFor: (c) => isHiddenForOrg(c, org.id),
+    });
+    if (channels.length === 0) return 0;
+
+    const staged = await stageDistributionRunForProperty({
+      supabase,
+      org,
+      propertyId,
+      channels,
+    });
+    if (!staged) return 0;
+
+    const { data: runAfter } = await supabase
+      .from("distribution_runs")
+      .select("id")
+      .eq("property_id", propertyId)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    const runId = (runAfter?.id as string | undefined) ?? null;
+    if (!runId) return 0;
+    const queued = await queueRobotRunItems(supabase, runId, channels);
+    if (queued > 0) {
+      // The audit line says why it is posting: Set Live, not a per-site click.
+      for (const channel of channels) {
+        await supabase
+          .from("distribution_run_items")
+          .update({ audit_message: setLiveAudit(SITE_SIGNIN_LABEL[channel]) })
+          .eq("run_id", runId)
+          .eq("channel", channel)
+          .eq("publish_status", "queued");
+      }
+    }
+    return queued;
+  } catch (err) {
+    console.error("postRobotSitesAfterPageLive: failed", {
+      propertyId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 0;
+  }
+}
+
 async function publishAuthorizedInstantChannelsAfterPageLive({
   supabase,
   orgId,
@@ -1518,6 +1610,10 @@ export async function publishProperty(formData: FormData) {
       orgId: org.id,
       propertyId: id,
     });
+    // S761: Set Live also queues every connected robot site (Kijiji,
+    // Rentals.ca, Zumper) when the org has Posting and the standing setting
+    // is on. Before this, those sites waited for a click per site per rental.
+    await postRobotSitesAfterPageLive({ supabase, org, propertyId: id });
   }
 
   revalidatePath(`/dashboard/properties/${id}`);

@@ -69,7 +69,7 @@ export default async function SitesSetupPage({
         icon={<Icons.check />}
         eyebrow="Set up once"
         title="Connect your rental sites"
-        subtitle="Sign in to each site one time. After that, post a rental and it goes up everywhere. We keep the ads up and take them down when it rents."
+        subtitle="Sign in to each site. After that, post a rental and it goes up on every connected site. We keep the ads up and take them down when it rents. If a site signs you out, we tell you."
       />
       {!access.allowed ? (
         <p className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
