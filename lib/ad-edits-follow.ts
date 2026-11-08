@@ -58,6 +58,10 @@ export type AdUpdatePlan = {
   repost: string[];
   /** Sites whose ad the landlord edits on the site, with the ad link. */
   byHand: { portal: string; url: string | null }[];
+  /** S762: the Facebook Page post's text was changed in place. */
+  page?: boolean;
+  /** S762: sites the robot edits in place (Kijiji, behind the kijiji_edits switch). */
+  edit?: string[];
 };
 
 export function adUpdatePlan(input: {
@@ -65,11 +69,23 @@ export function adUpdatePlan(input: {
   aliveChannels: readonly string[];
   postingAllowed: boolean;
   autopilot: boolean | null | undefined;
+  /** S762: sites the robot may edit in place for this change (Kijiji with the switch on, text changes only). */
+  editInPlace?: readonly string[];
 }): AdUpdatePlan {
   const alive = new Set(input.aliveChannels);
-  const plan: AdUpdatePlan = { repost: [], byHand: [] };
+  const plan: AdUpdatePlan = { repost: [], byHand: [], edit: [] };
   for (const p of input.posts) {
     if (p.status !== "live") continue;
+    const robotCanEdit =
+      input.postingAllowed &&
+      input.autopilot === true &&
+      (input.editInPlace ?? []).includes(p.portal) &&
+      alive.has(p.portal) &&
+      !!p.url;
+    if (robotCanEdit) {
+      if (!plan.edit!.includes(p.portal)) plan.edit!.push(p.portal);
+      continue;
+    }
     const robotCanRepost =
       input.postingAllowed &&
       input.autopilot === true &&
@@ -101,6 +117,15 @@ export function updateTakedownAudit(portal: string): string {
   return `Updating your ${siteName(portal)} ad. We take the old one down, then post the new details.`;
 }
 
+/** S762: text changes the robot can carry into a Kijiji edit (not photos). Pure. */
+export function editableInPlace(changed: readonly string[]): boolean {
+  return changed.some((c) => c !== "photos");
+}
+
+export function editInPlaceAudit(portal: string): string {
+  return `Editing your ${siteName(portal)} ad with the new details. No new fee.`;
+}
+
 export function updateRepostAudit(portal: string): string {
   return `Posting your updated ${siteName(portal)} ad now. Press Stop on the rental to hold it.`;
 }
@@ -128,6 +153,8 @@ export function updateRepostDecision(input: {
 /** The saved notice after a save: what is updating on its own, what is the landlord's. */
 export function adUpdateNotice(plan: AdUpdatePlan): string | null {
   const parts: string[] = [];
+  if (plan.page) parts.push("Facebook Page: we updated your post.");
+  if (plan.edit?.length) parts.push(`${plan.edit.map(siteName).join(" and ")}: we are editing your ad. No new fee.`);
   if (plan.repost.length) {
     parts.push(`${plan.repost.map(siteName).join(" and ")}: we are updating your ad.`);
   }
@@ -143,7 +170,9 @@ export function adUpdatePlanFromParam(value: string | null | undefined): AdUpdat
   for (const raw of String(value ?? "").split(",")) {
     const part = raw.trim();
     if (!part) continue;
-    if (part.startsWith("hand:")) plan.byHand.push({ portal: part.slice(5), url: null });
+    if (part === "page") plan.page = true;
+    else if (part.startsWith("edit:")) (plan.edit ??= []).push(part.slice(5));
+    else if (part.startsWith("hand:")) plan.byHand.push({ portal: part.slice(5), url: null });
     else plan.repost.push(part);
   }
   return plan;

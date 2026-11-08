@@ -61,7 +61,7 @@ export function WindowPanel({
   const [pending, startTransition] = useTransition();
   const [asked, setAsked] = useState(false);
   const router = useRouter();
-  // S724 (V251-23): when an open window ends (closed after 10 minutes, stopped,
+  // S724 (V251-23): when an open window ends (closed after 25 minutes, stopped,
   // failed or done) re-render the page, so "Try again" shows without a reload.
   const wasOpen = useRef(siteSigninIsOpen(initial.status));
   useEffect(() => {

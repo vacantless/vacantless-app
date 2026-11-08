@@ -17,7 +17,7 @@ function ok(name: string, cond: boolean) {
 const dead = needsYouNotices({ postingAllowed: true, tileStateByChannel: { kijiji: "linked", zumper: "dead_session", rentals_ca: "dead_session" } });
 ok("two cards, in site order", dead.map((n) => n.channel).join(",") === "rentals_ca,zumper");
 ok("title names the site", dead[1].title === "Zumper signed you out.");
-ok("button opens the sign-in page", dead[1].action.href === "/dashboard/site-signin/zumper" && dead[1].action.label === "Sign in to Zumper");
+ok("button opens the sign-in page", dead[1].action.href === "/dashboard/site-signin/zumper?open=1" && dead[1].action.label === "Sign in to Zumper");
 ok("line says what stopped and how long", /stopped/.test(dead[0].line) && /2 minutes/.test(dead[0].line));
 ok("short sentences", dead.every((n) => splitSentences(`${n.title} ${n.line}`).every((s) => countWords(s) <= 12)));
 ok("no dash, no mechanism word", dead.every((n) => !/—|robot|session|extension/i.test(`${n.title} ${n.line} ${n.action.label}`)));

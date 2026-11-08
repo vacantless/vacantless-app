@@ -725,6 +725,22 @@ export default async function SettingsPage({
     : { data: null };
   const smsRequestedAt = (smsReqRow as { sms_requested_at: string | null } | null)?.sms_requested_at ?? null;
   const textsThisMonth = ownSmsNumber ? await textsSentThisMonth(smsAdmin, org.id) : 0;
+  // S762: read on its own so a missing column never breaks Settings.
+  let alertMobile: string | null = null;
+  // The field shows only once the column exists (migration 0274), so a save never fails on it.
+  let alertMobileReady = false;
+  try {
+    if (!smsAdmin) throw new Error("no admin");
+    const { data: am, error: amErr } = await smsAdmin
+      .from("organizations")
+      .select("alert_mobile_e164")
+      .eq("id", org.id)
+      .maybeSingle();
+    alertMobileReady = !amErr;
+    alertMobile = ((am as { alert_mobile_e164?: string | null } | null)?.alert_mobile_e164 ?? null) || null;
+  } catch {
+    alertMobile = null;
+  }
 
   return (
     <div>
@@ -2060,6 +2076,27 @@ export default async function SettingsPage({
                 </span>
               </span>
             </label>
+            {/* S762: the landlord's own mobile, for a text when a rental site signs them out. */}
+            {canRenterSms && alertMobileReady && (
+              <label className="mt-4 block">
+                <input type="hidden" name="has_alert_mobile" value="1" />
+                <span className="block text-sm font-medium text-gray-700">
+                  Your mobile, for a text when a rental site signs you out
+                </span>
+                <input
+                  name="alert_mobile"
+                  type="tel"
+                  autoComplete="tel"
+                  defaultValue={alertMobile ? displayCanadianNumber(alertMobile) : ""}
+                  placeholder="519 555 0123"
+                  className="mt-1 w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <span className="mt-1 block text-xs text-gray-400">
+                  Signed out of a rental site? We text you a link. It opens the sign-in right away.
+                  Only with texting on. Leave it blank for email only.
+                </span>
+              </label>
+            )}
             {ownSmsNumber && (
               <p className="mt-3 text-xs text-gray-500">
                 Texts come from {displayCanadianNumber(ownSmsNumber)}. {textsThisMonth} of {SMS_MONTHLY_LIMIT} texts used

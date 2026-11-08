@@ -119,7 +119,7 @@ export default async function SiteSigninChainPage({
           <input type="hidden" name="chain" value="1" />
           {propertyId && <input type="hidden" name="property" value={propertyId} />}
           <ul className="space-y-1.5 text-sm text-gray-700">
-            <li>1. We open each site in a secure window, one at a time. Each stays open for 10 minutes.</li>
+            <li>1. We open each site in a secure window, one at a time. Each stays open for 25 minutes.</li>
             <li>2. You sign in yourself on each site. Your password stays with you.</li>
             <li>3. When one is done, the next opens by itself. You can stop after any site.</li>
           </ul>

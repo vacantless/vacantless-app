@@ -10,7 +10,7 @@
 // sign-in page. Pure: no I/O.
 // ============================================================================
 
-import { SITE_SIGNIN_LABEL, SITE_SIGNIN_ORDER, siteSigninHref, type SiteSigninChannel } from "./site-signin";
+import { SITE_SIGNIN_LABEL, SITE_SIGNIN_ORDER, siteSigninOpenHref, type SiteSigninChannel } from "./site-signin";
 
 export type NeedsYouNotice = {
   channel: SiteSigninChannel;
@@ -45,7 +45,8 @@ export function needsYouNotices(input: NeedsYouInput): NeedsYouNotice[] {
       channel,
       title: `${name} signed you out.`,
       line: "Posting there stopped. Sign in again, about 2 minutes. Your other sites keep working.",
-      action: { label: `Sign in to ${name}`, href: siteSigninHref(channel) },
+      // S762: the button opens the window at once (?open=1).
+      action: { label: `Sign in to ${name}`, href: siteSigninOpenHref(channel) },
     });
   }
   return out;

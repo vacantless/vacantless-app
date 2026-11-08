@@ -123,7 +123,7 @@ export type SiteSigninWindowRead = {
   status: string;
   viewUrl: string | null;
   detail: string | null;
-  /** S714: set by the worker when the window turns ready (ready + 10 minutes). */
+  /** S714: set by the worker when the window turns ready (ready + 25 minutes since S762). */
   expiresAt?: string | null;
 } | null;
 

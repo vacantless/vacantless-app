@@ -13,6 +13,9 @@ import {
   updateRepostAudit,
 } from "../lib/ad-edits-follow";
 import { SWEEP_PATHS } from "../lib/cron-sweeps";
+import { editableInPlace } from "../lib/ad-edits-follow";
+import { pagePostTextChanged } from "../lib/facebook-page-update";
+import { isAdUpkeepTransport, workerJobEligible } from "../lib/distribution-worker";
 
 let pass = 0;
 let fail = 0;
@@ -85,6 +88,45 @@ ok("takedown carries the mark", /notes: updateRepostNote\(/.test(actions));
 ok("sweep in the 15-minute timer", (SWEEP_PATHS as readonly string[]).includes("/api/cron/ad-update-repost"));
 const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
 ok("saved notice shows the plan", /adUpdateNotice\(adUpdatePlanFromParam\(searchParams\.adupdate\)\)/.test(page));
+
+// S762: photos, the Facebook Page post and Kijiji in place.
+{
+  const plan2 = adUpdatePlan;
+  const notice2 = adUpdateNotice;
+  const fromParam = adUpdatePlanFromParam;
+  const posts = [
+    { id: "a", portal: "kijiji", status: "live", url: "https://www.kijiji.ca/v-x/1744721877" },
+    { id: "b", portal: "zumper", status: "live", url: "https://www.zumper.com/x/listings/65724821" },
+  ];
+  const withEdit = plan2({ posts, aliveChannels: ["kijiji", "zumper"], postingAllowed: true, autopilot: true, editInPlace: ["kijiji"] });
+  ok("Kijiji edited in place with the switch", JSON.stringify(withEdit.edit) === '["kijiji"]' && !withEdit.byHand.some((b) => b.portal === "kijiji"));
+  ok("Zumper still re-posts", withEdit.repost.includes("zumper"));
+  const noSwitch = plan2({ posts, aliveChannels: ["kijiji", "zumper"], postingAllowed: true, autopilot: true });
+  ok("without the switch Kijiji stays by hand", noSwitch.byHand.some((b) => b.portal === "kijiji") && (noSwitch.edit ?? []).length === 0);
+  const signedOut = plan2({ posts, aliveChannels: ["zumper"], postingAllowed: true, autopilot: true, editInPlace: ["kijiji"] });
+  ok("signed out of Kijiji: by hand", signedOut.byHand.some((b) => b.portal === "kijiji"));
+  ok("photos alone are not a Kijiji edit", !editableInPlace(["photos"]) && editableInPlace(["rent"]) && editableInPlace(["photos", "move-in date"]));
+  ok("Page post text follows rent and description", pagePostTextChanged(["rent"]) && pagePostTextChanged(["description"]));
+  ok("Page post text ignores photos and move-in", !pagePostTextChanged(["photos"]) && !pagePostTextChanged(["move-in date"]));
+  const round = fromParam("page,zumper,edit:kijiji,hand:facebook");
+  ok("param round trip", round.page === true && round.repost.join() === "zumper" && (round.edit ?? []).join() === "kijiji" && round.byHand[0].portal === "facebook");
+  const n = notice2(round) ?? "";
+  ok("notice names the Page, the edit and the re-post", n.includes("Facebook Page: we updated your post.") && n.includes("Kijiji: we are editing your ad. No new fee.") && n.includes("we are updating your ad"));
+  ok("notice has no em dash", !/[—–]/.test(n));
+  ok("edit is upkeep, not a post", isAdUpkeepTransport("edit") && isAdUpkeepTransport("takedown") && !isAdUpkeepTransport(null));
+  ok("posting worker skips an edit item", !workerJobEligible({ mode: "concierge", transport: "edit", publishStatus: "queued", automationAuthorized: true, claimedBy: null } as Parameters<typeof workerJobEligible>[0]));
+  const act = readFileSync("app/dashboard/properties/actions.ts", "utf8");
+  ok("every photo change follows", (act.match(/await followPhotoChange\(supabase, propertyId\)/g) ?? []).length === 7);
+  ok("a refresh on its way is not re-queued", act.includes("robotTakedownPending({ supabase, organizationId: org.id, propertyId })"));
+  ok("Kijiji edits sit behind the staff switch", act.includes('orgHasSwitch(createAdminClient(), "kijiji_edits", org.id)'));
+  ok("Page post edited on a text change", act.includes("pagePostTextChanged(changed)") && act.includes("updateFacebookPagePosts({"));
+  const re = readFileSync("lib/robot-edit.ts", "utf8");
+  ok("edit never takes over a row being worked on", re.includes('cur.transport !== EDIT_TRANSPORT && cur.publish_status !== "live"'));
+  const sw = readFileSync("lib/platform-switches.ts", "utf8");
+  ok("switch is off for everyone by default", /kijiji_edits: \{[\s\S]{0,500}builtIn: \[\]/.test(sw));
+  const mig = readFileSync("supabase/migrations/0274_signin_lost_text_and_kijiji_edit.sql", "utf8");
+  ok("migration allows the edit transport", mig.includes("'takedown',\n      'edit'"));
+}
 
 console.log(`ad-edits-follow: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

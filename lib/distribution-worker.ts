@@ -25,6 +25,12 @@ import type { RunStep } from "./distribution-run";
 // would loop and re-notify. So the entry point is queued and only queued.
 export const WORKER_ELIGIBLE_STATUSES: readonly PublishStatus[] = ["queued"];
 export const TAKEDOWN_TRANSPORT = "takedown";
+/** S762: edit an ad in place (Kijiji). Like a takedown, never a new post. */
+export const EDIT_TRANSPORT = "edit";
+/** S762: transports that are work on an ad already up, not new-post preparation. */
+export function isAdUpkeepTransport(transport: string | null | undefined): boolean {
+  return transport === TAKEDOWN_TRANSPORT || transport === EDIT_TRANSPORT;
+}
 
 // The only publish_status values the worker may WRITE. Never live/submitted/
 // skipped/rejected — those are reached by a human (completeConciergeItem etc.).
@@ -58,7 +64,7 @@ export function workerJobEligible(input: {
 }): boolean {
   return (
     input.mode === "concierge" &&
-    input.transport !== TAKEDOWN_TRANSPORT &&
+    !isAdUpkeepTransport(input.transport) &&
     input.automationAuthorized === true &&
     input.claimedBy == null &&
     WORKER_ELIGIBLE_STATUSES.includes(input.publishStatus)

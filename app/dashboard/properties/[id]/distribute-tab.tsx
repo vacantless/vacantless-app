@@ -301,6 +301,8 @@ export function DistributeTab({
   robotPostingAllowed = false,
   capNotes = {},
   adPreview = null,
+  more = null,
+  moreOpen = false,
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -333,6 +335,10 @@ export function DistributeTab({
   capNotes?: Readonly<Record<string, string>>;
   /** S724 (V251-29): the ad's facts, shown in the approval box. */
   adPreview?: AdPreview | null;
+  /** S762 (REVIEW-S761 item 4): Keep it fresh and Relist, shown under More. */
+  more?: React.ReactNode;
+  /** S762: open More after a save inside it (the weekly Page posts switch). */
+  moreOpen?: boolean;
 }) {
   const proofPostCount =
     channelCards.reduce((sum, card) => sum + card.posts.length, 0) +
@@ -443,10 +449,24 @@ export function DistributeTab({
   // Facebook Page Connect / Disconnect controls moved to Settings; what stays
   // here is the one place to save, fix or remove a live ad link by hand.
   const liveAdLinks = (
-    <>
+    <details id="get-online-more" open={moreOpen || undefined} className="mt-5 rounded-2xl border border-gray-200 bg-white shadow-sm">
+      {/* S762 (REVIEW-S761 item 4): one screen. Everything a landlord does not
+          need every day (keep it fresh, relist, saved ad links) is one tap
+          down, under More. */}
+      <summary className="cursor-pointer list-none px-5 py-4 [&::-webkit-details-marker]:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-base font-semibold text-gray-900">More</p>
+            <p className="text-sm text-gray-500">Keep it fresh, relist, and the saved links to your ads</p>
+          </div>
+          <span className="text-sm font-semibold text-brand">Open</span>
+        </div>
+      </summary>
+      <div className="space-y-4 border-t border-gray-100 px-5 py-4">
+      {more}
       {/* Proof links (Slice 1): keep source-of-truth live ad URLs easy to save;
           tuck heavier posting tools behind per-channel disclosure rows. */}
-      <details className="mt-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <details className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <summary className="cursor-pointer list-none px-5 py-4 [&::-webkit-details-marker]:hidden">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
@@ -532,8 +552,8 @@ export function DistributeTab({
           </details>
         </div>
       </details>
-
-    </>
+      </div>
+    </details>
   );
 
   return (

@@ -16,12 +16,15 @@ import {
   SITE_SIGNIN_ACCOUNT_FIRST,
   SITE_SIGNIN_LABEL,
   SITE_SIGNUP_NOTE,
+  SIGNIN_WINDOW_MINUTES,
+  shouldAutoOpenSignin,
 } from "@/lib/site-signin";
 import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
 import { startSiteSignin } from "./actions";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { POSTING_ADDON_HREF, POSTING_ADDON_NOTE } from "@/lib/billing";
 import { WindowPanel } from "./window-panel";
+import { AutoSubmit } from "./auto-submit";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +38,7 @@ export default async function SiteSigninPage({
   searchParams,
 }: {
   params: { channel: string };
-  searchParams: { err?: string; property?: string; chain?: string };
+  searchParams: { err?: string; property?: string; chain?: string; open?: string };
 }) {
   const channel = params.channel;
   if (!isSiteSigninChannel(channel)) notFound();
@@ -98,6 +101,11 @@ export default async function SiteSigninPage({
   const access = await readRobotPostingAccess(supabase, org.id);
   const canStart =
     access.allowed && (!recent || !siteSigninIsOpen(recent.status as string));
+  const autoOpen = shouldAutoOpenSignin({
+    openParam: searchParams.open,
+    canStart,
+    recentStatus: (recent?.status as string | undefined) ?? null,
+  });
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 py-6">
@@ -170,7 +178,7 @@ export default async function SiteSigninPage({
       )}
 
       {canStart && (
-        <form action={startSiteSignin} className="rounded-2xl border border-gray-200 bg-white p-5">
+        <form id="site-signin-start" action={startSiteSignin} className="rounded-2xl border border-gray-200 bg-white p-5">
           <input type="hidden" name="channel" value={channel} />
           {propertyId && <input type="hidden" name="property" value={propertyId} />}
           {chainOn && <input type="hidden" name="chain" value="1" />}
@@ -188,7 +196,7 @@ export default async function SiteSigninPage({
             </p>
           )}
           <ul className="space-y-1.5 text-sm text-gray-700">
-            <li>1. We open {name} in a secure window. It stays open for 10 minutes.</li>
+            <li>1. We open {name} in a secure window. It stays open for {SIGNIN_WINDOW_MINUTES} minutes.</li>
             <li>2. You sign in yourself. If {name} asks you to prove you are a person, you do that too.</li>
             <li>3. We keep you signed in, locked with encryption, and close the window.</li>
           </ul>
@@ -201,6 +209,8 @@ export default async function SiteSigninPage({
           >
             {recent?.status === "done" ? "Sign in again" : recent ? "Try again" : `Sign in to ${name}`}
           </button>
+          {/* S762: from the Today card, the email or the text, the window opens by itself. */}
+          {autoOpen && <AutoSubmit formId="site-signin-start" />}
         </form>
       )}
 

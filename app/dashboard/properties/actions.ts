@@ -6,7 +6,8 @@ import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/p
 import { readRobotPostingAccess, type RobotPostingAccess } from "@/lib/robot-posting-access";
 import { queueOnFirstClick } from "@/lib/posting-autopilot";
 import { robotSitesToPostAtSetLive, setLiveAudit } from "@/lib/set-live-posts";
-import { adDetailsChanged, adUpdatePlan, updateRepostNote, updateTakedownAudit, type AdUpdatePlan, type LivePostRow } from "@/lib/ad-edits-follow";
+import { adDetailsChanged, adUpdatePlan, editableInPlace, editInPlaceAudit, updateRepostNote, updateTakedownAudit, type AdUpdatePlan, type LivePostRow } from "@/lib/ad-edits-follow";
+import { queueRobotEdits } from "@/lib/robot-edit";
 import { SITE_SIGNIN_LABEL } from "@/lib/site-signin";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { revalidatePath } from "next/cache";
@@ -15,6 +16,7 @@ import { headers } from "next/headers";
 import { tabFromReferer } from "@/lib/return-tab";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { orgHasSwitch } from "@/lib/platform-switches";
 import { getCurrentOrg, type Org } from "@/lib/org";
 import { localDateString } from "@/lib/leasing-snapshot";
 import { requireCapability, getRoleForOrg } from "@/lib/membership";
@@ -199,7 +201,8 @@ import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 import { notifyWaitingRentersRented } from "@/lib/rented-notice-server";
 import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
 import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
-import { queueRobotTakedowns } from "@/lib/robot-takedown";
+import { queueRobotTakedowns, robotTakedownPending } from "@/lib/robot-takedown";
+import { pagePostTextChanged, updateFacebookPagePosts } from "@/lib/facebook-page-update";
 import { isUnavailableStatus } from "@/lib/ads-still-up";
 import {
   listChannelTileStatuses as listChannelTileStatusesFromAccounts,
@@ -1249,8 +1252,18 @@ export async function updateProperty(formData: FormData) {
     );
     if (changed.length > 0 && orgForAds) {
       const plan = await queueAdUpdates({ supabase, org: orgForAds, propertyId: id, changed });
-      if (plan.repost.length || plan.byHand.length) {
-        adUpdateParam = `&adupdate=${encodeURIComponent([...plan.repost, ...plan.byHand.map((b) => `hand:${b.portal}`)].join(","))}`;
+      // S762: the Facebook Page post is ours, so its text is edited in place.
+      const pageEdit = pagePostTextChanged(changed)
+        ? await updateFacebookPagePosts({ supabase, organizationId: orgForAds.id, propertyId: id })
+        : { updated: 0, failed: 0 };
+      const tokens = [
+        ...(pageEdit.updated > 0 ? ["page"] : []),
+        ...plan.repost,
+        ...(plan.edit ?? []).map((p) => `edit:${p}`),
+        ...plan.byHand.map((b) => `hand:${b.portal}`),
+      ];
+      if (tokens.length) {
+        adUpdateParam = `&adupdate=${encodeURIComponent(tokens.join(","))}`;
       }
     }
   }
@@ -1297,26 +1310,75 @@ async function queueAdUpdates({
         .eq("organization_id", org.id)
         .eq("alive", true),
     ]);
+    // S762: Kijiji is edited in place (no new fee) for accounts with the
+    // staff switch on, for text changes; photos stay the landlord's there.
+    const kijijiEdits =
+      editableInPlace(changed) && (await orgHasSwitch(createAdminClient(), "kijiji_edits", org.id));
     const plan = adUpdatePlan({
       posts: (posts ?? []) as LivePostRow[],
       aliveChannels: ((sessions ?? []) as { channel: string }[]).map((s) => s.channel),
       postingAllowed: access.allowed,
       autopilot: access.autopilot,
+      editInPlace: kijijiEdits ? ["kijiji"] : [],
     });
-    if (plan.repost.length > 0) {
+    // S762: a refresh already on its way covers this change too (photos are
+    // often saved several in a row); re-queuing could reset a running takedown.
+    const pending = new Set(await robotTakedownPending({ supabase, organizationId: org.id, propertyId }));
+    const fresh = plan.repost.filter((portal) => !pending.has(portal));
+    if (fresh.length > 0) {
       await queueRobotTakedowns({
         supabase,
         organizationId: org.id,
         propertyId,
-        portals: plan.repost,
+        portals: fresh,
         notes: updateRepostNote(new Date().toISOString(), changed),
         audit: updateTakedownAudit,
       });
+    }
+    if (plan.edit && plan.edit.length > 0) {
+      const edited = await queueRobotEdits({
+        supabase,
+        organizationId: org.id,
+        propertyId,
+        portals: plan.edit,
+        notes: updateRepostNote(new Date().toISOString(), changed).replace("update re-post", "update edit"),
+        audit: editInPlaceAudit,
+      });
+      // A site we could not queue goes back on the landlord's list.
+      for (const portal of plan.edit.filter((p) => !edited.includes(p))) {
+        plan.byHand.push({ portal, url: null });
+      }
+      plan.edit = edited;
     }
     return plan;
   } catch (err) {
     console.error("queueAdUpdates: failed", { propertyId, error: err instanceof Error ? err.message : String(err) });
     return empty;
+  }
+}
+
+/**
+ * S762 (REVIEW-S761 item 2): adding, removing, reordering or changing the
+ * cover photo on a live rental refreshes the free sites' ads the same way a
+ * text edit does. Never throws: a photo save must not fail on this.
+ */
+async function followPhotoChange(
+  supabase: ReturnType<typeof createClient>,
+  propertyId: string,
+): Promise<void> {
+  try {
+    const { data: prop } = await supabase
+      .from("properties")
+      .select("status, archived_at")
+      .eq("id", propertyId)
+      .maybeSingle();
+    const row = prop as { status?: string | null; archived_at?: string | null } | null;
+    if (!row || row.status !== "available" || row.archived_at) return;
+    const org = await getCurrentOrg();
+    if (!org) return;
+    await queueAdUpdates({ supabase, org, propertyId, changed: ["photos"] });
+  } catch (err) {
+    console.error("followPhotoChange: failed", { propertyId, error: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -3967,6 +4029,8 @@ export async function confirmPropertyPhotos(
 
   if (added === 0) return { ok: false, reason: "failed" };
 
+  // S762: a photo change reaches the ads like any other edit.
+  if (added > 0) await followPhotoChange(supabase, propertyId);
   revalidatePath(`/dashboard/properties/${propertyId}`);
   return {
     ok: true,
@@ -4006,6 +4070,8 @@ export async function uploadPropertyPhotos(formData: FormData) {
   );
   if (!result.ok) return fail(result.reason);
 
+  // S762: a photo change reaches the ads like any other edit.
+  await followPhotoChange(supabase, propertyId);
   revalidatePath(`/dashboard/properties/${propertyId}`);
   redirect(`/dashboard/properties/${propertyId}?photos=${result.uploaded}`);
 }
@@ -4224,6 +4290,8 @@ export async function importPropertyPhotosFromUrls(formData: FormData) {
     added += 1;
   }
 
+  // S762: a photo change reaches the ads like any other edit.
+  if (added > 0) await followPhotoChange(supabase, propertyId);
   revalidatePath(`/dashboard/properties/${propertyId}`);
   if (added === 0) fail("urlfailed");
   const skip = skipped > 0 ? `&photoskipped=${skipped}` : "";
@@ -4658,6 +4726,8 @@ export async function importPropertyPhotosFromDropboxFolder(formData: FormData) 
     added += 1;
   }
 
+  // S762: a photo change reaches the ads like any other edit.
+  if (added > 0) await followPhotoChange(supabase, propertyId);
   revalidatePath(`/dashboard/properties/${propertyId}`);
   if (added === 0) fail("dropboxfailed");
   const skip = skipped > 0 ? `&photoskipped=${skipped}` : "";
@@ -4684,6 +4754,8 @@ export async function setCoverPhoto(formData: FormData) {
     .eq("id", id)
     .eq("property_id", propertyId);
 
+  // S762: a photo change reaches the ads like any other edit.
+  await followPhotoChange(supabase, propertyId);
   revalidatePath(`/dashboard/properties/${propertyId}`);
 }
 
@@ -4753,6 +4825,8 @@ export async function movePhoto(formData: FormData) {
     }
   }
 
+  // S762: a photo change reaches the ads like any other edit.
+  await followPhotoChange(supabase, propertyId);
   revalidatePath(`/dashboard/properties/${propertyId}`);
 }
 
@@ -4819,6 +4893,8 @@ export async function deletePhoto(formData: FormData) {
     }
   }
 
+  // S762: a photo change reaches the ads like any other edit.
+  await followPhotoChange(supabase, propertyId);
   revalidatePath(`/dashboard/properties/${propertyId}`);
 }
 

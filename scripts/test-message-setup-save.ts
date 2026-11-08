@@ -47,4 +47,19 @@ assert.equal(messageSetupFlash("nope"), null);
 for (const c of ["saved","alias_paused","sms_upgrade","invalid_reply_to","invalid_delay","invalid_confirm","invalid_autoclose","compliance_forbidden","error"]) {
   assert.ok(!/—/.test(messageSetupFlash(c)!.text), "no em dash: " + c);
 }
+
+// S762: the landlord's own mobile.
+{
+  const g = parseMessageSetup(f({ has_alert_mobile: "1", alert_mobile: "(519) 555-0123" }), { canRenterSms: true });
+  assert.ok(g.ok && g.patch.alert_mobile_e164 === "+15195550123", "mobile saved as E.164");
+  const blank = parseMessageSetup(f({ has_alert_mobile: "1", alert_mobile: "  " }), { canRenterSms: true });
+  assert.ok(blank.ok && blank.patch.alert_mobile_e164 === null, "blank clears it");
+  const bad = parseMessageSetup(f({ has_alert_mobile: "1", alert_mobile: "555-01" }), { canRenterSms: true });
+  assert.ok(!bad.ok && bad.code === "invalid_alert_mobile", "bad number refused");
+  const freeM = parseMessageSetup(f({ has_alert_mobile: "1", alert_mobile: "5195550123" }), { canRenterSms: false });
+  assert.ok(!freeM.ok && freeM.code === "sms_upgrade", "Growth only");
+  const absent = parseMessageSetup(f({}), { canRenterSms: true });
+  assert.ok(absent.ok && !("alert_mobile_e164" in absent.patch), "not posted, not touched");
+  assert.ok(!/—/.test(messageSetupFlash("invalid_alert_mobile")!.text));
+}
 console.log("message-setup-save: all checks passed");

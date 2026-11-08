@@ -24,6 +24,15 @@ export const PLATFORM_SWITCHES = {
     // it back on in /dashboard/admin.
     builtIn: [],
   },
+  // S762 (REVIEW-S761 item 2): the robot edits the live Kijiji ad in place
+  // after an edit (no new $33.84). Off for everyone until the worker's
+  // KIJIJI_EDIT_LIVE run is proven on a real ad; staff turn it on per account.
+  kijiji_edits: {
+    label: "Kijiji edits in place",
+    description:
+      "When the rental's rent, description, move-in date, beds, baths or parking change, the robot edits the live Kijiji ad on Kijiji's own edit page. It saves only when Kijiji's total reads $0.00.",
+    builtIn: [],
+  },
 } as const;
 
 export type PlatformSwitchKey = keyof typeof PLATFORM_SWITCHES;

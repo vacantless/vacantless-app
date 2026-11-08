@@ -42,6 +42,7 @@ import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
 import { allowChannelAndPostNow, publishProperty, requestConciergePublish, startSitePost } from "../actions";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
+import { forYouRowState, needsYouSentence } from "@/lib/for-you-row-state";
 import { SITES_SETUP_HREF, SITE_WORD_CLASS } from "@/lib/sites-setup";
 import {
   authorizeAutopilotSubmit,
@@ -528,11 +529,34 @@ export function PublishEverywhere({
     r.key !== "org_feed" &&
     r.key !== "network_feed" &&
     !(r.key === "instagram" && r.mode === "needs_connection");
-  const siteRowCount = resolved.filter(isSiteRow).length;
-  // One sentence the landlord can read: how many of their sites it is on.
+  // Count the rows the list below shows, not the whole catalog (a landlord
+  // read "On 3 of 12 sites" on Pillette 36 while the list showed five).
+  const siteRowCount =
+    (copilotEnabled ? forYou : []).filter(isSiteRow).length +
+    [...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows].filter(isSiteRow).length;
+  // S762 (REVIEW-S761 item 4): the rows below that say "Needs you", read with
+  // the same rules each row uses (lib/for-you-row-state).
+  const needsYouRows = (copilotEnabled ? forYou : []).filter(
+    (row) =>
+      forYouRowState({
+        rowKey: row.key,
+        item: runItemByChannel.get(row.key) ?? null,
+        liveProofUrl: row.liveProofUrl ?? null,
+        retiredUrls: row.retiredProofUrls ?? [],
+        alreadySignedIn: row.alreadySignedIn,
+        addonLocked: !robotPostingAllowed && isRobotPostedChannel(row.key),
+        postingBlocked: Boolean(postingBlocker),
+        hasMarketplaceKit: row.key === "facebook" && Boolean(marketplaceKit),
+      }).word === "Needs you",
+  );
+  const firstNeedsYou = needsYouRows[0] ?? null;
+  // One sentence the landlord can read: how many of their sites it is on,
+  // and which ones need them (S762).
   const onlineHeadline =
     proofSavedCount > 0
-      ? `On ${proofSavedCount} of ${siteRowCount} ${siteRowCount === 1 ? "site" : "sites"}.`
+      ? `On ${proofSavedCount} of ${siteRowCount} ${siteRowCount === 1 ? "site" : "sites"}.${
+          needsYouRows.length > 0 ? ` ${needsYouSentence(needsYouRows.map((r) => r.label))}` : ""
+        }`
       : "Your Vacantless page is live.";
 
   const publishBlockedByBasics = setupOutstanding > 0;
@@ -609,19 +633,46 @@ export function PublishEverywhere({
               </div>
             )}
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              {publicLink && <CopyLink url={publicLink} />}
-              {!postingBlocker && (
+            {/* S762 (REVIEW-S761 item 4): one button, and only when a site
+                needs the landlord. Edits reach Rentals.ca and Zumper on their
+                own (S761d), so posting everything again moves under More. */}
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              {!postingBlocker && firstNeedsYou && (
+                <a
+                  href={`#for-you-${firstNeedsYou.key}`}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 text-base font-semibold text-white hover:bg-amber-700 sm:w-auto"
+                >
+                  Finish {firstNeedsYou.label} &rarr;
+                </a>
+              )}
+              {!postingBlocker && proofSavedCount === 0 && (
                 <button
                   type="button"
                   onClick={openConfirm}
-                  className="inline-flex items-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-2.5 text-sm font-semibold text-green-800 hover:bg-green-100"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-3 text-base font-semibold text-green-800 hover:bg-green-100 sm:w-auto"
                 >
                   <Icons.bolt className="h-4 w-4" />
-                  {proofSavedCount > 0 ? "Post your edits to every site" : "Post everywhere"}
+                  Post everywhere
                 </button>
               )}
+              {publicLink && <CopyLink url={publicLink} />}
             </div>
+            {!postingBlocker && proofSavedCount > 0 && (
+              <details className="mt-4 text-sm text-green-900">
+                <summary className="cursor-pointer font-semibold">More</summary>
+                <p className="mt-2 max-w-2xl leading-relaxed">
+                  Edit the rental and Rentals.ca and Zumper update on their own. Kijiji you edit on Kijiji.
+                </p>
+                <button
+                  type="button"
+                  onClick={openConfirm}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-green-300 bg-white px-4 py-3 text-base font-semibold text-green-800 hover:bg-green-100 sm:w-auto"
+                >
+                  <Icons.bolt className="h-4 w-4" />
+                  Post every site again
+                </button>
+              </details>
+            )}
           </section>
         ) : (
           <section className="relative overflow-hidden rounded-2xl border border-emerald-900 bg-gradient-to-b from-emerald-900 to-emerald-950 p-7 text-center text-white shadow-sm">
@@ -957,90 +1008,39 @@ function ForYouRow({
   postingBlocked?: boolean;
 }) {
   const [approveOpen, setApproveOpen] = useState(false);
-  // S712: Marketplace needs no sign-in, fee or square footage, so the "finish
-  // your listing first" hold does not apply; its kit warns when photos are missing.
-  const postingBlocked = postingBlockedProp && !marketplaceKit;
-  const paid = row.mode === "paid_optin";
-  const { isLive, liveUrl } = forYouLiveState({
-    runItem: item,
+  // S762: the row's state lives in lib/for-you-row-state, so the green card's
+  // headline reads the same rules (which sites need you).
+  const {
+    postingBlocked,
+    isLive,
+    liveUrl,
+    gate,
+    payAtCheckout,
+    approvedRunning,
+    needsApproval,
+    siteSetup,
+    needsConnect,
+    repostable,
+    working,
+    preparing,
+    locked,
+    signinFirst,
+    word,
+  } = forYouRowState({
+    rowKey: row.key,
+    item,
     liveProofUrl: row.liveProofUrl ?? null,
     retiredUrls: row.retiredProofUrls ?? [],
+    alreadySignedIn: row.alreadySignedIn,
+    addonLocked,
+    postingBlocked: Boolean(postingBlockedProp),
+    hasMarketplaceKit: Boolean(marketplaceKit),
   });
-  const gate =
-    item != null && item.mode === "concierge" ? item.publishStatus : null;
-  // needs_operator (free channel, prepared) + needs_payment (paid site, prepared
-  // pending the fee) both collapse to one branded "Approve & publish" tap.
-  // S708: the robot built a paid ad and stopped at the site's checkout. The
-  // landlord pays there (a saved card still needs its CVV); no approval left.
-  const payAtCheckout = !isLive && gate === "needs_payment" && !!item?.checkoutUrl;
-  // S724 (V251-33): once approved, the item is the robot's until it finishes or
-  // the landlord stops it. Offering "Approve" again invited a second post.
-  const approvedRunning =
-    !isLive &&
-    !payAtCheckout &&
-    item?.approved === true &&
-    (gate === "needs_operator" || gate === "needs_payment");
-  const needsApproval =
-    !isLive &&
-    !payAtCheckout &&
-    !approvedRunning &&
-    (gate === "needs_operator" || gate === "needs_payment");
-  // S713d: the robot found a step only the landlord can do on the site itself.
-  const siteSetup = needsApproval ? (item?.siteSetup ?? null) : null;
-  // needs_login can't be approved — it needs a re-connect, so route to posting assist.
-  const needsConnect = !isLive && gate === "needs_login";
-  // S703: the run item still says live but its ad is gone (expired or
-  // removed on the site, so the listing row no longer proves it). Re-staging
-  // the site resets the item, so offer the same "add" step as a fresh site.
-  // S708: a rejected item (e.g. an old desk item closed as superseded) is a
-  // dead end too; without this it fell through to a billing link.
-  const repostable =
-    !isLive &&
-    item != null &&
-    (item.publishStatus === "live" || item.publishStatus === "rejected");
-  const working =
-    !isLive &&
-    (approvedRunning || gate === "queued" || gate === "submitting" || gate === "submitted");
-  // S719 (KI1303): right after "Post it for me" a robot item is queued while we
-  // fill in the ad. Nothing is posted until the landlord approves it, so this
-  // is "getting it ready", not "posting".
-  // S724 (V251-28): until the landlord approves, the robot is only building the
-  // ad (queued, then submitting while it fills the site's form). Say "Getting it
-  // ready" through all of it; "Posting" only after Approve.
-  const preparing =
-    working &&
-    (gate === "queued" || gate === "submitting" || gate === "submitted") &&
-    item?.approved !== true &&
-    isRobotPostedChannel(row.key);
-  const locked = addonLocked && !isLive;
-  // S760: a robot site with no sign-in yet. Before, "Add this site" queued a
-  // post that could only park at needs-login (seen on the Lakeview walk,
-  // 2026-11-06). Now the row says what it needs and opens the sites setup.
-  // Also covers an old item that is parked, skipped or rejected: with no
-  // sign-in, "Post it for me" or "Turn that on" would only park it again.
-  const signinFirst =
-    !isLive &&
-    !locked &&
-    isRobotPostedChannel(row.key) &&
-    row.alreadySignedIn !== true &&
-    !(working || payAtCheckout || needsApproval || needsConnect);
-
-  // S760 (REVIEW-S760 section 4): one vocabulary on every site row. The chip
-  // is one of four words; the line under it says what is happening or what
-  // the landlord has to do. Mechanism (robot, helper, API) never shows.
-  const stateChip = isLive
-    ? { label: "On", cls: SITE_WORD_CLASS.On }
-    : locked
+  const paid = row.mode === "paid_optin";
+  const stateChip =
+    word === "addon"
       ? ADDON_CHIP
-    : postingBlocked
-      ? { label: "Posting", cls: SITE_WORD_CLASS.Posting }
-    : payAtCheckout || siteSetup || needsApproval || needsConnect || signinFirst || repostable
-      ? { label: "Needs you", cls: SITE_WORD_CLASS["Needs you"] }
-    : preparing || working
-      ? { label: "Posting", cls: SITE_WORD_CLASS.Posting }
-    : row.alreadySignedIn === true && isRobotPostedChannel(row.key)
-      ? { label: "Posting", cls: SITE_WORD_CLASS.Posting }
-      : { label: "Needs you", cls: SITE_WORD_CLASS["Needs you"] };
+      : { label: word, cls: SITE_WORD_CLASS[word] };
 
   return (
     <li
@@ -1051,7 +1051,7 @@ function ForYouRow({
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs">
           {CHANNEL_GLYPH[row.key] ?? "🏠"}
         </span>
-        <span className="text-sm font-semibold text-gray-800">{row.label}</span>
+        <span className="text-base font-semibold text-gray-800">{row.label}</span>
         <span
           className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold ${stateChip.cls}`}
         >
@@ -1059,18 +1059,18 @@ function ForYouRow({
         </span>
       </div>
       {!isLive && firstRunCostLine(row.key) ? (
-        <p className="mt-1 text-[11px] leading-snug text-gray-500">{firstRunCostLine(row.key)}</p>
+        <p className="mt-1 text-sm leading-snug text-gray-500">{firstRunCostLine(row.key)}</p>
       ) : null}
 
       {paid && !isLive && (
-        <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
+        <p className="mt-1.5 text-sm leading-relaxed text-gray-500">
           {PAID_SITE_LABEL[row.key] ?? "This site"} charges its own fee. You
           approve it here and pay the site with your own card.
         </p>
       )}
 
       {locked ? null : postingBlocked && !isLive ? (
-        <p className="mt-2 text-[12px] leading-relaxed text-indigo-900/70">
+        <p className="mt-2 text-base leading-relaxed text-indigo-900/70">
           Finish your listing first. Sign-in and any site fee come after the
           details are complete.
         </p>
@@ -1081,15 +1081,15 @@ function ForYouRow({
               href={liveUrl}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-semibold text-green-700 hover:underline"
+              className="mt-2 inline-flex items-center gap-1 text-base font-semibold text-green-700 hover:underline"
             >
               View live ad ↗
             </a>
           ) : (
-            <p className="mt-2 text-[12px] font-semibold text-green-700">On.</p>
+            <p className="mt-2 text-base font-semibold text-green-700">On.</p>
           )}
           {item?.photoNote ? (
-            <p className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-950">
+            <p className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-base leading-relaxed text-amber-950">
               {item.photoNote}
             </p>
           ) : null}
@@ -1102,11 +1102,11 @@ function ForYouRow({
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <a
             href={`${SITES_SETUP_HREF}?property=${encodeURIComponent(propertyId)}`}
-            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
+            className="inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto bg-indigo-600 px-4 py-2.5 text-base font-semibold text-white hover:bg-indigo-700"
           >
             Sign in once →
           </a>
-          <span className="text-[11px] text-gray-500">About 2 minutes. Then we post it here on its own.</span>
+          <span className="text-sm text-gray-500">About 2 minutes. Then we post it here on its own.</span>
         </div>
       ) : item == null || repostable ? (
         linkIsLive ? (
@@ -1115,7 +1115,7 @@ function ForYouRow({
               popup, so "Post it again" on Unit 3 gave no sign Agile already
               had all 3 free Rentals.ca listings in use. */}
           {capNote ? (
-            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-950">
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-base leading-relaxed text-amber-950">
               {capNote}
             </p>
           ) : null}
@@ -1127,20 +1127,20 @@ function ForYouRow({
             <input type="hidden" name="channel" value={row.key} />
             <button
               type="submit"
-              className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
+              className="inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto bg-indigo-600 px-4 py-2.5 text-base font-semibold text-white hover:bg-indigo-700"
             >
               {repostable ? "Post it again →" : "Post here →"}
             </button>
           </form>
           </>
         ) : (
-          <p className="mt-2 text-[12px] text-gray-500">
+          <p className="mt-2 text-base text-gray-500">
             Post first, then come back to this step.
           </p>
         )
       ) : payAtCheckout && item?.checkoutUrl ? (
         <div className="mt-2">
-          <p className="text-[12px] text-emerald-800">
+          <p className="text-base text-emerald-800">
             {item.checkoutHint ??
               "Your ad is built and waiting at checkout. You pay only when you press Pay. Pick your saved card, type its security code and press Pay."}
           </p>
@@ -1148,7 +1148,7 @@ function ForYouRow({
             href={item.checkoutUrl}
             target="_blank"
             rel="noreferrer"
-            className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-emerald-700"
+            className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
           >
             Pay on {PAID_SITE_LABEL[row.key] ?? row.label} ↗
           </a>
@@ -1157,18 +1157,18 @@ function ForYouRow({
         <div className="mt-2">
           {siteSetup ? (
             <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-              <p className="text-[12px] leading-relaxed text-amber-950">{siteSetup.message}</p>
+              <p className="text-base leading-relaxed text-amber-950">{siteSetup.message}</p>
               <a
                 href={siteSetup.href}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-semibold text-amber-900 hover:underline"
+                className="mt-1 inline-flex items-center gap-1 text-base font-semibold text-amber-900 hover:underline"
               >
                 {siteSetup.action} ↗
               </a>
             </div>
           ) : (
-          <p className="text-[12px] text-emerald-800">
+          <p className="text-base text-emerald-800">
             Your ad is ready. Approve it to post
             {paid ? " and cover the fee" : ""}.
           </p>
@@ -1176,7 +1176,7 @@ function ForYouRow({
           <button
             type="button"
             onClick={() => setApproveOpen(true)}
-            className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-emerald-700"
+            className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
           >
             Approve and post →
           </button>
@@ -1189,11 +1189,11 @@ function ForYouRow({
                 ? `${SITES_SETUP_HREF}?property=${encodeURIComponent(propertyId)}`
                 : `/dashboard/settings?tab=distribution#channel-${row.key}`
             }
-            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
+            className="inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto bg-indigo-600 px-4 py-2.5 text-base font-semibold text-white hover:bg-indigo-700"
           >
             Sign in once →
           </a>
-          <span className="text-[11px] text-gray-500">
+          <span className="text-sm text-gray-500">
             Or{" "}
             <a href="#ad-wording" className="underline">
               copy the ad wording
@@ -1202,13 +1202,13 @@ function ForYouRow({
           </span>
         </div>
       ) : preparing ? (
-        <p className="mt-2 text-[12px] text-amber-800">
+        <p className="mt-2 text-base text-amber-800">
           We&apos;re filling in the ad. Free sites post when it is ready. A
           paid site waits for you here. Reload this page in a few minutes.
         </p>
       ) : working ? (
         <div className="mt-2">
-          <p className="text-[12px] text-amber-800">
+          <p className="text-base text-amber-800">
             We&apos;re posting this now and will bring back the live link here.
           </p>
           {item?.approved === true && (
@@ -1218,7 +1218,7 @@ function ForYouRow({
               <input type="hidden" name="item_id" value={item.id} />
               <button
                 type="submit"
-                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-gray-700 hover:bg-gray-50"
+                className="inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto border border-gray-300 bg-white px-4 py-2.5 text-base font-semibold text-gray-700 hover:bg-gray-50"
               >
                 Stop this post
               </button>
@@ -1233,13 +1233,13 @@ function ForYouRow({
               <input type="hidden" name="item_id" value={item.id} />
               <button
                 type="submit"
-                className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-indigo-700"
+                className="inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto bg-indigo-600 px-4 py-2.5 text-base font-semibold text-white hover:bg-indigo-700"
               >
                 {isRobotPostedChannel(row.key) ? "Post it for me →" : "Have us post it →"}
               </button>
             </form>
           ) : (
-            <p className="text-[12px] text-gray-500">
+            <p className="text-base text-gray-500">
               We post this site for you.{" "}
               <a href="/dashboard/billing" className="font-semibold text-indigo-700 hover:underline">
                 Turn that on →

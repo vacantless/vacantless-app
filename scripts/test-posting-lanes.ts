@@ -96,10 +96,12 @@ ok("page marks authorized robot sites ready", page.includes("isRobotPostedChanne
 ok("publish surface passes robotReady", pe.includes("robotReady: card.robotReady === true"));
 
 // S703: a site whose ad died can be posted again from the app.
-ok("dead live item offers Post it again", pe.includes('item.publishStatus === "live"') && pe.includes("item == null || repostable") && pe.includes('"Post it again →"'));
+// S762: the repostable rule lives in lib/for-you-row-state.
+const rowState = readFileSync("lib/for-you-row-state.ts", "utf8");
+ok("dead live item offers Post it again", rowState.includes('item.publishStatus === "live"') && pe.includes("item == null || repostable") && pe.includes('"Post it again →"'));
 
 // S708: a rejected item can be posted again instead of pointing at billing.
-ok("rejected item offers Post it again", pe.includes('item.publishStatus === "rejected"'));
+ok("rejected item offers Post it again", rowState.includes('item.publishStatus === "rejected"'));
 
 // S708: a paid item the robot left at checkout shows a Pay link, not Approve.
 {

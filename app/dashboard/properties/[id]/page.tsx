@@ -3197,7 +3197,9 @@ export default async function PropertyDetailPage({
                 address={p.address}
               />
             )}
-            {showRelistOneTap && (
+            {/* S762 (REVIEW-S761 item 4): on a live rental the robot renews and
+                re-posts, so Relist moved under More on the Get online tab. */}
+            {showRelistOneTap && normalizedStatus === "leased" && (
               <Link
                 href={relistCtaHref}
                 className={PRIMARY_ACTION_CLASS}
@@ -4580,36 +4582,6 @@ export default async function PropertyDetailPage({
             c.status.value === "posted" || c.status.value === "needs_refresh",
         )}
       >
-        {/* S739 (review item 10): one "Keep it fresh" card. The weekly Page
-            posts switch shows only once the Page is connected (S705). */}
-        <KeepFreshCard
-          propertyId={p.id}
-          rows={keepFreshRows(
-            distributeChannelCards.map((c) => ({
-              key: c.channel.key,
-              label: c.channel.label,
-              status: c.status.value,
-              lastPostedOn: c.status.lastPostedOn,
-              liveUrl: c.status.liveUrl,
-            })),
-            {
-              today: distributeToday,
-              rentalsRobotRenews:
-                robotPostingAccess.allowed &&
-                channelAccountByKey.get("rentals_ca")?.status === "connected",
-            },
-          )}
-          weekly={
-            facebookPageEnabled && channelAccountByKey.get("facebook_feed")?.status === "connected"
-              ? {
-                  on: pageWeeklyPostsOn,
-                  pageName: channelAccountByKey.get("facebook_feed")?.externalAccountLabel ?? null,
-                  needsLogin: false,
-                  flash: typeof searchParams.pageposts === "string" ? searchParams.pageposts : undefined,
-                }
-              : null
-          }
-        />
         <DistributeTab
           propertyId={p.id}
           basics={getOnlineBasics}
@@ -4635,6 +4607,50 @@ export default async function PropertyDetailPage({
           robotPostingAllowed={robotPostingAccess.allowed}
           capNotes={capNotes}
           adPreview={adPreview}
+          moreOpen={typeof searchParams.pageposts === "string"}
+          more={
+            <>
+              {/* S762: Relist lives here on a live rental; the header keeps it for a leased one. */}
+              {showRelistOneTap && normalizedStatus !== "leased" && (
+                <Link
+                  href={relistCtaHref}
+                  className="inline-flex w-full items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-3 text-base font-semibold text-gray-800 hover:bg-gray-50 sm:w-auto"
+                >
+                  Relist or refresh this ad
+                </Link>
+              )}
+              {/* S739 (review item 10): one "Keep it fresh" card. The weekly Page
+                  posts switch shows only once the Page is connected (S705). */}
+              <KeepFreshCard
+                propertyId={p.id}
+                rows={keepFreshRows(
+                  distributeChannelCards.map((c) => ({
+                    key: c.channel.key,
+                    label: c.channel.label,
+                    status: c.status.value,
+                    lastPostedOn: c.status.lastPostedOn,
+                    liveUrl: c.status.liveUrl,
+                  })),
+                  {
+                    today: distributeToday,
+                    rentalsRobotRenews:
+                      robotPostingAccess.allowed &&
+                      channelAccountByKey.get("rentals_ca")?.status === "connected",
+                  },
+                )}
+                weekly={
+                  facebookPageEnabled && channelAccountByKey.get("facebook_feed")?.status === "connected"
+                    ? {
+                        on: pageWeeklyPostsOn,
+                        pageName: channelAccountByKey.get("facebook_feed")?.externalAccountLabel ?? null,
+                        needsLogin: false,
+                        flash: typeof searchParams.pageposts === "string" ? searchParams.pageposts : undefined,
+                      }
+                    : null
+                }
+              />
+            </>
+          }
         />
       </TabPanel>
 

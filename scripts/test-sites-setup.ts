@@ -98,11 +98,13 @@ ok("sentences stay short", copy.every((t) => splitSentences(t).every((sn) => cou
 
 // --- 9. Wiring -------------------------------------------------------------------------
 const pe = read("app/dashboard/properties/[id]/publish-everywhere.tsx");
-ok("chips use the four words", pe.includes('label: "On", cls: SITE_WORD_CLASS.On') && pe.includes('label: "Posting", cls: SITE_WORD_CLASS.Posting') && pe.includes('label: "Needs you", cls: SITE_WORD_CLASS["Needs you"]'));
+// S762: the row's rules moved to lib/for-you-row-state; the chip reads its word.
+const rs = read("lib/for-you-row-state.ts");
+ok("chips use the four words", rs.includes('? "On"') && rs.includes('? "Posting"') && rs.includes('"Needs you"') && pe.includes("{ label: word, cls: SITE_WORD_CLASS[word] }"));
 for (const old of ['"Live"', '"Getting it ready"', '"We\'re posting it"', '"Needs a repost"', '"Not posted yet"', '"Sign-in needed"', '"Ready. Approve it"', '"Ready. Pay the site"', "Add this site →"]) {
   ok(`old chip gone: ${old}`, !pe.includes(old));
 }
-ok("sign-in-first branch exists", pe.includes("const signinFirst =") && pe.includes("row.alreadySignedIn !== true") && pe.includes("!(working || payAtCheckout || needsApproval || needsConnect)"));
+ok("sign-in-first branch exists", rs.includes("const signinFirst =") && rs.includes("input.alreadySignedIn !== true") && rs.includes("!(working || payAtCheckout || needsApproval || needsConnect)") && pe.includes(") : signinFirst ? ("));
 ok("sign-in-first opens the sites setup", pe.includes("`${SITES_SETUP_HREF}?property=${encodeURIComponent(propertyId)}`"));
 const actions = read("app/dashboard/properties/actions.ts");
 const sp = actions.split("export async function startSitePost(")[1]?.split("\nexport async function ")[0] ?? "";

@@ -9,13 +9,15 @@
 // is never read as "turned off".
 
 import { validateFeedbackDelayHours, validateReplyToEmail } from "./branding";
+import { normalizePhoneE164 } from "./sms";
 
 export type MessageSetupCode =
   | "invalid_reply_to"
   | "invalid_delay"
   | "invalid_confirm"
   | "invalid_autoclose"
-  | "sms_upgrade";
+  | "sms_upgrade"
+  | "invalid_alert_mobile";
 
 export type MessageSetupParse =
   | {
@@ -53,6 +55,20 @@ export function parseMessageSetup(
     const wantsOn = has(form, "sms_enabled");
     if (wantsOn && !ctx.canRenterSms) return { ok: false, code: "sms_upgrade" };
     patch.sms_enabled = wantsOn;
+  }
+
+  // S762: the landlord's own mobile, for a text when a site signs them out.
+  // Blank clears it (no texts). Growth only, like every other text.
+  if (has(form, "has_alert_mobile")) {
+    const raw = str(form, "alert_mobile").trim();
+    if (!raw) {
+      patch.alert_mobile_e164 = null;
+    } else {
+      if (!ctx.canRenterSms) return { ok: false, code: "sms_upgrade" };
+      const e164 = normalizePhoneE164(raw);
+      if (!e164) return { ok: false, code: "invalid_alert_mobile" };
+      patch.alert_mobile_e164 = e164;
+    }
   }
 
   if (has(form, "has_renter")) {
@@ -108,6 +124,8 @@ export function messageSetupFlash(
       };
     case "sms_upgrade":
       return { tone: "amber", text: "Nothing was saved. Texting renters comes with Growth; untick it or upgrade, then save again." };
+    case "invalid_alert_mobile":
+      return { tone: "red", text: "Nothing was saved. Your mobile number should be 10 digits, like 519 555 0123." };
     case "invalid_reply_to":
       return { tone: "red", text: "Nothing was saved. The reply-to must be one email address, or left blank." };
     case "invalid_delay":

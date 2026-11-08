@@ -161,7 +161,7 @@ function noEmDash(s: string): string {
   return s.replace(/[‒–—―]/g, "-");
 }
 
-const OPT_OUT_LINE = "Reply STOP to opt out.";
+export const OPT_OUT_LINE = "Reply STOP to opt out.";
 
 export type SmsCopyInput = {
   org_name: string | null;

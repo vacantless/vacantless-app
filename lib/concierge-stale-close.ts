@@ -53,7 +53,7 @@ export type StaleCloseCandidate = {
  */
 export function shouldStaleCloseItem(item: StaleCloseCandidate): boolean {
   if (item.mode !== "concierge") return false;
-  if (item.transport === TAKEDOWN_TRANSPORT) return false;
+  if (item.transport === TAKEDOWN_TRANSPORT || item.transport === "edit") return false; // S762: an edit is upkeep too
   if (!item.publishStatus) return false;
   return CONCIERGE_OPEN_STATUSES.includes(item.publishStatus);
 }

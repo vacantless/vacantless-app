@@ -99,6 +99,31 @@ export function siteSigninHref(channel: SiteSigninChannel, propertyId?: string |
   return `/dashboard/site-signin/${channel}${id ? `?property=${id}` : ""}`;
 }
 
+/** S762: how long a sign-in window stays open once it is ready (worker WINDOW_MS). */
+export const SIGNIN_WINDOW_MINUTES = 25;
+
+/**
+ * S762: the one-tap link on the Today card, in the signed-out email and in
+ * the text. The page opens the window by itself, so the landlord lands on it
+ * starting, not on a page with another button to find.
+ */
+export function siteSigninOpenHref(channel: SiteSigninChannel, propertyId?: string | null): string {
+  return withQuery(siteSigninHref(channel, propertyId), "open", "1");
+}
+
+/**
+ * S762: open the window on arrival only from a one-tap link, only when a new
+ * window may start, and never right after a finished sign-in (a reload of the
+ * link must not open a second window over a done one). Pure.
+ */
+export function shouldAutoOpenSignin(input: {
+  openParam: string | null | undefined;
+  canStart: boolean;
+  recentStatus: string | null | undefined;
+}): boolean {
+  return input.openParam === "1" && input.canStart && input.recentStatus !== "done";
+}
+
 /** Add a query flag to a site-signin href that may already carry ?property=. */
 export function withQuery(href: string, key: string, value: string): string {
   return `${href}${href.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(value)}`;
@@ -188,7 +213,7 @@ export function siteSigninView(
       return {
         tone: "bad",
         title: "The window closed",
-        body: "It stays open for 10 minutes. Try again when you are ready.",
+        body: `It stays open for ${SIGNIN_WINDOW_MINUTES} minutes. Try again when you are ready.`,
       };
     case "cancelled":
       return { tone: "bad", title: "Stopped", body: "Your account stays as it was. Try again any time." };
