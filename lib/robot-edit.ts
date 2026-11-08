@@ -36,7 +36,17 @@ export async function queueRobotEdits(args: {
       .eq("status", "active")
       .limit(1)
       .maybeSingle();
-    const runId = (run?.id as string | undefined) ?? null;
+    let runId = (run?.id as string | undefined) ?? null;
+    // S762: a rental posted long ago can have no active run (Pillette 3);
+    // make one, as a takedown does (lib/robot-takedown).
+    if (!runId && (posts ?? []).length > 0) {
+      const { data: inserted } = await args.supabase
+        .from("distribution_runs")
+        .insert({ organization_id: args.organizationId, property_id: args.propertyId, status: "active" })
+        .select("id")
+        .maybeSingle();
+      runId = (inserted?.id as string | undefined) ?? null;
+    }
     if (!runId) return queued;
     const now = new Date().toISOString();
     for (const post of (posts ?? []) as { id: string; portal: string; url: string | null }[]) {

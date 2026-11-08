@@ -121,6 +121,7 @@ ok("saved notice shows the plan", /adUpdateNotice\(adUpdatePlanFromParam\(search
   ok("Kijiji edits sit behind the staff switch", act.includes('orgHasSwitch(createAdminClient(), "kijiji_edits", org.id)'));
   ok("Page post edited on a text change", act.includes("pagePostTextChanged(changed)") && act.includes("updateFacebookPagePosts({"));
   const re = readFileSync("lib/robot-edit.ts", "utf8");
+  ok("edit makes a run when the rental has none", re.includes('.from("distribution_runs")\n        .insert({ organization_id: args.organizationId, property_id: args.propertyId, status: "active" })'));
   ok("edit never takes over a row being worked on", re.includes('cur.transport !== EDIT_TRANSPORT && cur.publish_status !== "live"'));
   const sw = readFileSync("lib/platform-switches.ts", "utf8");
   ok("switch is off for everyone by default", /kijiji_edits: \{[\s\S]{0,500}builtIn: \[\]/.test(sw));
