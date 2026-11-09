@@ -121,10 +121,10 @@ const base: HealthInput = {
 const mail = buildHealthDigest(base);
 ok("email names the not-ok sweep", mail.body.includes("nurture failed in 1 of 1 runs"), mail.body);
 ok("email names the slow sweep", mail.body.includes("Close to the time limit (40 s or more): distribution-freshness"), mail.body);
-ok("email lists crashes", mail.body.includes("PAGE CRASHES") && mail.body.includes("/dashboard: 1 crash."), mail.body);
-ok("email says crashes are checked", mail.body.includes("page crashes. Not checked here: errors inside API calls"), mail.body);
+ok("email lists crashes", mail.body.includes("Page crashes:") && mail.body.includes("/dashboard: 1 crash."), mail.body);
+ok("email says crashes are checked", mail.body.includes("page crashes. Not checked: errors no page showed"), mail.body);
 const noRead = buildHealthDigest({ ...base, appErrors: null });
-ok("unread crash log keeps old wording", noRead.body.includes("Not checked here: app errors"));
+ok("unread crash log keeps old wording", noRead.body.includes("Not checked: app errors"));
 
 console.log(`\ns748 honest sweeps: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
