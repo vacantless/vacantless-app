@@ -48,6 +48,8 @@ import { isHiddenForOrg } from "@/lib/posting-lanes";
 import { needsYouNotices } from "@/lib/needs-you";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { NeedsYouCards } from "./needs-you-cards";
+import { ComingVacantCards } from "./coming-vacant-cards";
+import { deriveComingVacant, type ComingVacant } from "@/lib/coming-vacant";
 
 export const dynamic = "force-dynamic";
 
@@ -478,6 +480,55 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   for (const t of siteTiles) if (!isHiddenForOrg(t.channel, org.id)) siteStateByChannel[t.channel] = t.state;
   const onboardingHasConnectedSite = onboardingWizardEnabled ? orgHasConnectedSite(siteStateByChannel) : false;
   const robotAccess = await readRobotPostingAccess(supabase, org.id);
+  // S770 (REVIEW-S770 section 6): units a tenant is leaving. Two sources,
+  // both the tenant's own word: a recorded move-out date, or "leaving" on the
+  // renewal check-in. One pure rule (lib/coming-vacant) for the card and the
+  // click. Only active tenancies; the rule drops anything over 30 days past.
+  const { data: leavingRows } = await supabase
+    .from("tenancies")
+    .select(
+      "id, property_id, start_date, end_date, renewal_intent, move_out_date, property:properties(id, address, status, available_date, viewing_earliest_date, archived_at)",
+    )
+    .eq("organization_id", org.id)
+    .eq("status", "active")
+    .or("renewal_intent.eq.leaving,move_out_date.not.is.null");
+  const comingVacant: ComingVacant[] = [];
+  for (const r of (leavingRows ?? []) as unknown as {
+    id: string;
+    property_id: string;
+    start_date: string | null;
+    end_date: string | null;
+    renewal_intent: string | null;
+    move_out_date: string | null;
+    property: {
+      id: string;
+      address: string;
+      status: string | null;
+      available_date: string | null;
+      viewing_earliest_date: string | null;
+      archived_at: string | null;
+    } | null;
+  }[]) {
+    if (!r.property || r.property.archived_at) continue;
+    const cv = deriveComingVacant(
+      {
+        tenancyId: r.id,
+        propertyId: r.property.id,
+        address: r.property.address,
+        startDate: r.start_date,
+        endDate: r.end_date,
+        renewalIntent: (r.renewal_intent as "staying" | "leaving" | "unsure" | null) ?? null,
+        moveOutDate: r.move_out_date,
+        propertyStatus: r.property.status,
+        availableDate: r.property.available_date,
+        viewingEarliestDate: r.property.viewing_earliest_date,
+      },
+      today,
+    );
+    if (cv) comingVacant.push(cv);
+  }
+  comingVacant.sort((a, b) => a.daysUntilVacant - b.daysUntilVacant);
+
   const needsYou = needsYouNotices({
     postingAllowed: robotAccess.setup,
     tileStateByChannel: siteStateByChannel,
@@ -494,6 +545,10 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         // S734: the newest live rental is the one to post (null before Set Live,
         // so the step still opens the rental list until then).
         postRentalPropertyId:
+          (availablePropertyRows as { id: string }[] | null)?.[0]?.id ?? null,
+        // S770: "See it work" after Set Live; done on the first renter.
+        hasLead: allLeads.length > 0,
+        liveRentalId:
           (availablePropertyRows as { id: string }[] | null)?.[0]?.id ?? null,
         hasTenancy: (onboardingTenancyCount ?? 0) > 0,
         hasViewingTimes:
@@ -540,6 +595,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       )}
 
       <NeedsYouCards notices={needsYou} />
+      <ComingVacantCards items={comingVacant} />
 
       {presetNotice && (
         <div role="status" className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">

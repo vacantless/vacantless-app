@@ -298,6 +298,7 @@ export function DistributeTab({
   shownChannelKeys = null,
   marketplaceKit = null,
   brokerage = null,
+  renewDueKeys = [],
   robotPostingAllowed = false,
   capNotes = {},
   adPreview = null,
@@ -327,6 +328,8 @@ export function DistributeTab({
   shownChannelKeys?: readonly string[] | null;
   /** S712: Facebook Marketplace kit, passed straight through to PublishEverywhere. */
   marketplaceKit?: MarketplaceKitData | null;
+  /** S770: site keys whose live ad is due a renew, for the row's Renew button. */
+  renewDueKeys?: readonly string[];
   /** S735: Realtor.ca through a partner agent, passed through. */
   brokerage?: BrokerageRequestCardData | null;
   /** S713: the Posting add-on gate (canUseRobotPosting), passed through. */
@@ -438,6 +441,7 @@ export function DistributeTab({
         postingBlocker={publishEverywherePostingBlocker}
         shownChannelKeys={shownChannelKeys}
         marketplaceKit={marketplaceKit}
+        renewDueKeys={renewDueKeys}
         brokerage={brokerage}
         robotPostingAllowed={robotPostingAllowed}
         capNotes={capNotes}

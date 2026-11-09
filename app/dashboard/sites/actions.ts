@@ -59,3 +59,19 @@ export async function emailSitesComputerLink(formData: FormData) {
   if (!result.sent) console.warn(`[sites-phone] org ${org.id}: email not sent`);
   redirect(back(result.sent ? "1" : "0"));
 }
+
+// S770 (REVIEW-S770 section 3 item 3): "I don't have a Facebook Page". The
+// row leaves the sites list and the count, for this account only. "Add it
+// back" clears the stamp. A linked Page always wins (lib/sites-setup).
+export async function setFacebookPageSkipped(formData: FormData) {
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const skip = String(formData.get("skip") ?? "") === "1";
+  await supabase
+    .from("organizations")
+    .update({ facebook_page_skipped_at: skip ? new Date().toISOString() : null })
+    .eq("id", org.id);
+  const propertyId = cleanPropertyId(String(formData.get("property_id") ?? ""));
+  redirect(sitesComputerPath(propertyId));
+}

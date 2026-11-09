@@ -110,9 +110,12 @@ export function forYouRowState(input: ForYouRowStateInput): ForYouRowState {
           ? "Needs you"
           : preparing || working
             ? "Posting"
-            : input.alreadySignedIn === true && isRobotPostedChannel(input.rowKey)
+            : input.alreadySignedIn === true && isRobotPostedChannel(input.rowKey) && item != null
               ? "Posting"
               : "Needs you";
+  // S770 (REVIEW-S770 section 3 item 1): signed in but nothing queued means the
+  // row shows a "Post here" button, so the word is "Needs you", not "Posting".
+  // Before S770 Assumption 9 read "Posting" above a "Post here" button.
 
   return {
     isLive,

@@ -31,6 +31,7 @@ const base = {
 ok("live ad reads On", forYouRowState({ ...base, liveProofUrl: "https://www.kijiji.ca/v-x/1" }).word === "On");
 ok("pay at checkout reads Needs you", forYouRowState({ ...base, item: { mode: "concierge", publishStatus: "needs_payment", checkoutUrl: "https://www.kijiji.ca/p", externalUrl: null } }).word === "Needs you");
 ok("queued and signed in reads Posting", forYouRowState({ ...base, item: { mode: "concierge", publishStatus: "queued", externalUrl: null } }).word === "Posting");
+ok("S770: signed in with nothing queued reads Needs you (a Post here button waits)", forYouRowState({ ...base }).word === "Needs you");
 ok("never signed in reads Needs you", forYouRowState({ ...base, alreadySignedIn: false }).word === "Needs you");
 ok("no add-on reads the add-on chip", forYouRowState({ ...base, alreadySignedIn: false, addonLocked: true }).word === "addon");
 ok("signed out reads Needs you", forYouRowState({ ...base, item: { mode: "concierge", publishStatus: "needs_login", externalUrl: null } }).word === "Needs you");

@@ -3,6 +3,7 @@ export type OnboardingWizardStepKey =
   | "viewing_times"
   | "connect_sites"
   | "get_online"
+  | "see_it_work"
   | "tenancy"
   | "rent_rail";
 
@@ -68,6 +69,15 @@ export type OnboardingWizardInput = {
    * Set Live. Omitted = the step is not shown (back-compat).
    */
   hasConnectedSite?: boolean;
+  /**
+   * S770 (REVIEW-S770 section 3 item 4): the org has at least one renter.
+   * When the caller passes it, a "See it work" step follows Set Live: open the
+   * rental page, send yourself an inquiry, watch the reply and the viewing
+   * land on Today. Omitted = the step is not shown (back-compat).
+   */
+  hasLead?: boolean;
+  /** The live rental's public page for that step (/r/<id>); null before Set Live. */
+  liveRentalId?: string | null;
 };
 
 type StepDef = Omit<OnboardingWizardStep, "status">;
@@ -106,6 +116,14 @@ const STEP_DEFS: StepDef[] = [
     cta: "Post my rental",
   },
   {
+    key: "see_it_work",
+    label: "See it work",
+    description:
+      "Open your rental page and send yourself an inquiry. The reply with your booking link arrives in seconds. The renter lands on Today. Done when your first renter is in the list.",
+    href: "/dashboard/properties",
+    cta: "Open my rental page",
+  },
+  {
     key: "tenancy",
     label: "Add a tenancy and tenant",
     description:
@@ -136,6 +154,7 @@ export function computeOnboardingState(
     // A tenanted unit has nothing to advertise; do not resurrect the checklist
     // for every org that finished the old three steps (reviewer S691 #3).
     get_online: input.hasLiveListing || input.hasTenancy,
+    see_it_work: input.hasLead === true || input.hasTenancy,
     tenancy: input.hasTenancy,
     rent_rail: Boolean(input.railStepDoneAt),
   };
@@ -144,6 +163,7 @@ export function computeOnboardingState(
   const defs = STEP_DEFS.filter((def) => {
     if (def.key === "viewing_times" && input.hasViewingTimes === undefined) return false;
     if (def.key === "connect_sites" && input.hasConnectedSite === undefined) return false;
+    if (def.key === "see_it_work" && input.hasLead === undefined) return false;
     if (input.postLeaseEnabled === false && (def.key === "tenancy" || def.key === "rent_rail")) {
       return false;
     }
@@ -168,6 +188,9 @@ export function computeOnboardingState(
         href: `/dashboard/properties/${encodeURIComponent(input.postRentalPropertyId)}?tab=distribute#distribute-header`,
         status,
       };
+    }
+    if (def.key === "see_it_work" && input.liveRentalId) {
+      return { ...def, href: `/r/${encodeURIComponent(input.liveRentalId)}`, status };
     }
     if (def.key === "get_online" && input.wizardEnabled) {
       return { ...def, href: "/dashboard/link-portals", status };

@@ -28,6 +28,8 @@ export type SiteSetupRow = {
   action: { label: string; href: string; external?: boolean } | null;
   /** A short note under the action (Zumper's ID check, the helper's one rule). */
   note: string | null;
+  /** S770: a second, quieter choice on the row ("I don't have a Page"). */
+  secondary?: { label: string; kind: "skip_facebook_page" } | null;
 };
 
 export type SitesSetupInput = {
@@ -43,6 +45,8 @@ export type SitesSetupInput = {
   propertyId?: string | null;
   /** The Posting add-on's Billing anchor. */
   postingHref: string;
+  /** S770: the landlord said they have no Facebook Page (organizations.facebook_page_skipped_at). */
+  facebookPageSkipped?: boolean;
 };
 
 export type SitesSetup = {
@@ -57,6 +61,8 @@ export type SitesSetup = {
   done: boolean;
   /** The first robot site that still needs a sign-in, for the "Sign in to all" button. */
   nextSignin: SiteSigninChannel | null;
+  /** S770: true when the Facebook Page row was skipped and is out of the list. */
+  facebookPageSkipped: boolean;
 };
 
 const ROBOT_LABEL: Record<SiteSigninChannel, string> = {
@@ -81,7 +87,9 @@ export function buildSitesSetup(input: SitesSetupInput): SitesSetup {
 
   // 1. Facebook Page: one secure button, posts by API, free on every plan.
   const page = input.tileStateByChannel.facebook_feed;
-  if (!hidden("facebook_feed")) {
+  // S770: a linked Page always wins over the skip stamp.
+  const facebookPageSkipped = input.facebookPageSkipped === true && page !== "linked";
+  if (!hidden("facebook_feed") && !facebookPageSkipped) {
     if (page === "linked") {
       rows.push({
         key: "facebook_feed",
@@ -117,6 +125,8 @@ export function buildSitesSetup(input: SitesSetupInput): SitesSetup {
         line: "Free. One secure button, then we post every rental to your Page.",
         action: { label: "Connect", href: "/api/integrations/facebook/connect" },
         note: null,
+        // S770 (REVIEW-S770 section 3 item 3): no Page is a fine answer.
+        secondary: { label: "I don't have a Facebook Page", kind: "skip_facebook_page" },
       });
     }
   }
@@ -220,6 +230,7 @@ export function buildSitesSetup(input: SitesSetupInput): SitesSetup {
     summary,
     done: connectedCount > 0,
     nextSignin,
+    facebookPageSkipped,
   };
 }
 

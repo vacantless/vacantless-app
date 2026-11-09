@@ -121,5 +121,21 @@ ok("homepage names the T776 and the accountant zip", home.includes("T776 rental 
 ok("homepage names rent collection in the automations", home.includes("Rent in on the first"));
 ok("SITES_SETUP_HREF", SITES_SETUP_HREF === "/dashboard/sites");
 
+// --- S770 (REVIEW-S770 section 3 item 3): "I don't have a Facebook Page" ------
+const noPage = buildSitesSetup({ ...base, tileStateByChannel: {}, facebookPageSkipped: true });
+ok("S770: skipped Page leaves the list", noPage.rows.length === 4 && !noPage.rows.some((r) => r.key === "facebook_feed"));
+ok("S770: the count no longer waits on it", noPage.total === 4 && noPage.progress === "0 of 4 connected" && noPage.facebookPageSkipped);
+ok("S770: an unconnected Page row offers the skip", fresh.rows[0].secondary?.kind === "skip_facebook_page");
+const linkedSkipped = buildSitesSetup({ ...base, tileStateByChannel: { facebook_feed: "linked" }, facebookPageSkipped: true });
+ok("S770: a linked Page wins over the stamp", linkedSkipped.rows[0]?.key === "facebook_feed" && linkedSkipped.rows[0].state === "on" && !linkedSkipped.facebookPageSkipped);
+ok("S770: a connected Page row has no skip", linkedSkipped.rows[0].secondary == null);
+const allSet = buildSitesSetup({ ...base, tileStateByChannel: { kijiji: "linked", rentals_ca: "linked", zumper: "linked" }, helperInstalled: true, facebookPageSkipped: true });
+ok("S770: with the Page skipped, four connected reads every site connected", allSet.connectedCount === allSet.total && /Every site is connected/.test(allSet.summary));
+const rowsTsx = read("app/dashboard/sites/sites-rows.tsx");
+ok("S770: the row's skip posts the server action", rowsTsx.includes('row.secondary?.kind === "skip_facebook_page"') && rowsTsx.includes("action={setFacebookPageSkipped}"));
+ok("S770: Add it back when skipped", rowsTsx.includes("Facebook Page skipped.") && rowsTsx.includes("Add it back"));
+const propPage = read("app/dashboard/properties/[id]/page.tsx");
+ok("S770: the rental's site list drops the skipped Page", propPage.includes('(k) => k !== "facebook_feed"') && propPage.includes("org?.facebook_page_skipped_at"));
+
 console.log(`\nsites-setup: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -707,9 +707,12 @@ function SyndicationFirstCard({
   firstListingPacketMissingLabel,
   listingPacketMissingLabels = [],
   robotPostingAllowed = false,
+  renewDueKeys = [],
 }: {
   propertyId: string;
   robotPostingAllowed?: boolean;
+  /** S770: a "due a renew" header points at the one site row that renews. */
+  renewDueKeys?: readonly string[];
   linkIsLive: boolean;
   setupOutstanding: number;
   hasPhotos: boolean;
@@ -783,7 +786,17 @@ function SyndicationFirstCard({
             totalInquiryCount === 1 ? "inquiry is" : "inquiries are"
           } tied to this rental so far.`
         : "Rental sites still need posting. Each one counts as live once the link to your ad is saved.";
-  const actionHref = packetBlocked ? firstMissingHref : distributeHref;
+  // S770: "due a renew" sends the landlord to the site's own row, where the
+  // Renew button now is, not to the top of the tab.
+  const renewRowHref =
+    renewDueKeys.length === 1
+      ? `/dashboard/properties/${encodedPropertyId}?tab=distribute#for-you-${renewDueKeys[0]}`
+      : null;
+  const actionHref = packetBlocked
+    ? firstMissingHref
+    : renewRowHref && blockerSummary?.chip.includes("refresh")
+      ? renewRowHref
+      : distributeHref;
   const actionLabel = !linkIsLive
     ? packetBlocked
       ? packetActionLabel
@@ -930,6 +943,7 @@ export default async function PropertyDetailPage({
     // Relist-over-active-tenancy confirmation (S447 Codex P2).
     relist?: string;
     relisted?: string;
+    tenancy?: string;
     // Appliance plate/receipt scan (S364): outcome + extracted prefill fields.
     scan?: string;
     sc_type?: string;
@@ -2140,11 +2154,22 @@ export default async function PropertyDetailPage({
   // and the proof grid all keep working for every channel.
   // S702v: Marketplace is listed only for orgs that post it by hand today.
   // S704: Rentals.ca was hidden here too; S717 shows it to every org (home runner).
-  const shownChannelKeys = withoutHiddenChannels(
+  const shownChannelKeysBeforeSkip = withoutHiddenChannels(
     showOnlyProvenChannelsEnabled() ? await loadShownChannelKeys(distributeToday) : null,
     distributeChannelCards.map((card) => card.channel.key as string),
     org?.id,
   );
+  // S770 (REVIEW-S770 section 3 item 3): the landlord said they have no
+  // Facebook Page, so its row leaves this rental's site list too. A connected
+  // Page wins over the stamp, as on the sites page.
+  const facebookPageSkipped =
+    Boolean(org?.facebook_page_skipped_at) &&
+    channelAccountByKey.get("facebook_feed")?.status !== "connected";
+  const shownChannelKeys = facebookPageSkipped
+    ? (shownChannelKeysBeforeSkip ?? distributeChannelCards.map((card) => card.channel.key as string)).filter(
+        (k) => k !== "facebook_feed",
+      )
+    : shownChannelKeysBeforeSkip;
   // Slice 1 (S488): fold the where-posted grid's per-channel status into the
   // command center so a run row shows ONE merged status. computeChannelStatus
   // already derives needs_refresh (a live ad gone stale/expired) and problem (a
@@ -2418,6 +2443,24 @@ export default async function PropertyDetailPage({
       ]),
     ),
   });
+  // S770 (REVIEW-S770 section 3 item 2): the renew that used to live only
+  // under More. Computed once here; the Marketplace row and the header read it.
+  const keepFreshRowList = keepFreshRows(
+    distributeChannelCards.map((c) => ({
+      key: c.channel.key,
+      label: c.channel.label,
+      status: c.status.value,
+      lastPostedOn: c.status.lastPostedOn,
+      liveUrl: c.status.liveUrl,
+    })),
+    {
+      today: distributeToday,
+      rentalsRobotRenews:
+        robotPostingAccess.allowed &&
+        channelAccountByKey.get("rentals_ca")?.status === "connected",
+    },
+  );
+  const renewDueKeys = keepFreshRowList.filter((r) => r.renew).map((r) => r.key);
   const distributeRunNotice: DistributeRunNotice | null =
     // S713: a robot site was asked for without the Posting add-on.
     (searchParams.run === "postingaddon" || searchParams.dist === "posting_addon"
@@ -3030,12 +3073,32 @@ export default async function PropertyDetailPage({
         </div>
       )}
 
-      {searchParams.relisted && (
+      {searchParams.relisted === "vacant" ? (
+        // S770 (REVIEW-S770 section 6): the one click from Today's coming-vacant card.
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <p>
+            <strong>Relisted.</strong> Available {p.available_date ?? "on the move-out day"}; renters can
+            book viewings from {p.viewing_earliest_date ?? "today"}. Your sites post it the same way Set Live does.
+          </p>
+          {searchParams.tenancy ? (
+            <p className="mt-1">
+              Tell the tenant viewings are coming:{" "}
+              <Link
+                href={`/dashboard/tenancies/${encodeURIComponent(searchParams.tenancy)}#renewal`}
+                className="font-semibold underline"
+              >
+                email them from the Tenants page
+              </Link>
+              .
+            </p>
+          ) : null}
+        </div>
+      ) : searchParams.relisted ? (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           <strong>Relisted.</strong> This rental is Live again and open to
           renters.
         </p>
-      )}
+      ) : null}
 
       {/* From-scratch draft banner (M8): a quick-add lands as a private Draft,
           but only ?duplicated / ?imported got an explanatory banner. Explain the
@@ -3272,6 +3335,7 @@ export default async function PropertyDetailPage({
           postHistoryCount={postRows.length}
           totalInquiryCount={leadRows.length}
           blockerSummary={syndicationBlockerSummary}
+          renewDueKeys={renewDueKeys}
           listingPacketMissingCount={listingPacketReadiness.missingRequired.length}
           listingPacketReadyChannelCount={listingPacketReadiness.readyChannelCount}
           listingPacketChannelCount={listingPacketReadiness.channelCount}
@@ -4627,6 +4691,7 @@ export default async function PropertyDetailPage({
           wizardEnabled={distributionWizardEnabled()}
           shownChannelKeys={shownChannelKeys}
           marketplaceKit={marketplaceKit}
+          renewDueKeys={renewDueKeys}
           brokerage={brokerage}
           robotPostingAllowed={robotPostingAccess.allowed}
           capNotes={capNotes}
@@ -4647,21 +4712,7 @@ export default async function PropertyDetailPage({
                   posts switch shows only once the Page is connected (S705). */}
               <KeepFreshCard
                 propertyId={p.id}
-                rows={keepFreshRows(
-                  distributeChannelCards.map((c) => ({
-                    key: c.channel.key,
-                    label: c.channel.label,
-                    status: c.status.value,
-                    lastPostedOn: c.status.lastPostedOn,
-                    liveUrl: c.status.liveUrl,
-                  })),
-                  {
-                    today: distributeToday,
-                    rentalsRobotRenews:
-                      robotPostingAccess.allowed &&
-                      channelAccountByKey.get("rentals_ca")?.status === "connected",
-                  },
-                )}
+                rows={keepFreshRowList}
                 weekly={
                   facebookPageEnabled && channelAccountByKey.get("facebook_feed")?.status === "connected"
                     ? {

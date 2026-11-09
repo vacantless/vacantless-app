@@ -100,6 +100,19 @@ export default async function GettingStartedPage({
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  // S770: "See it work" is done on the first renter; it opens the live rental's page.
+  const [{ count: leadCount }, { data: liveRental }] = await Promise.all([
+    supabase.from("leads").select("id", { count: "exact", head: true }).eq("organization_id", org.id),
+    supabase
+      .from("properties")
+      .select("id")
+      .eq("organization_id", org.id)
+      .eq("status", "available")
+      .is("archived_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
   // S760: "Connect your rental sites" counts as done once a site is linked.
   const siteTiles = await listChannelTileStatuses(org.id);
   const tileStateByChannel: Record<string, string> = {};
@@ -112,6 +125,8 @@ export default async function GettingStartedPage({
     postRentalPropertyId: (newestRental?.id as string | undefined) ?? null,
     hasTenancy: (tenancyCount ?? 0) > 0,
     hasViewingTimes: (ruleCount ?? 0) > 0 || (overrideCount ?? 0) > 0,
+    hasLead: (leadCount ?? 0) > 0,
+    liveRentalId: (liveRental?.id as string | undefined) ?? null,
     postLeaseEnabled,
     addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED),
     dismissedAt: row?.dismissed_at ?? null,

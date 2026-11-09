@@ -149,6 +149,7 @@ export default async function SitesSetupPage({
                 postingAllowed: access.setup,
                 propertyId,
                 postingHref: POSTING_ADDON_HREF,
+                facebookPageSkipped: Boolean(org.facebook_page_skipped_at),
               }}
               signinAllHref={access.setup ? signinChainHref(propertyId) : null}
             />
@@ -162,6 +163,7 @@ export default async function SitesSetupPage({
               postingAllowed: access.setup,
               propertyId,
               postingHref: POSTING_ADDON_HREF,
+              facebookPageSkipped: Boolean(org.facebook_page_skipped_at),
             }}
             signinAllHref={access.setup ? signinChainHref(propertyId) : null}
           />

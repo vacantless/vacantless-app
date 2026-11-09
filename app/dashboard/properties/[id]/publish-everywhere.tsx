@@ -40,7 +40,7 @@ import type { AdPreview } from "@/lib/ad-preview";
 import { useState } from "react";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
-import { allowChannelAndPostNow, publishProperty, requestConciergePublish, startSitePost } from "../actions";
+import { allowChannelAndPostNow, markAdsRenewed, publishProperty, requestConciergePublish, startSitePost } from "../actions";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
 import { forYouRowState, needsYouSentence } from "@/lib/for-you-row-state";
 import { SITES_SETUP_HREF, SITE_WORD_CLASS } from "@/lib/sites-setup";
@@ -191,7 +191,13 @@ type ResolvedRow = {
   retiredProofUrls?: readonly string[];
   /** S702w: an authorized robot site; we already hold the sign-in. */
   alreadySignedIn?: boolean;
+  /** S770: the live ad is due a renew (lib/keep-fresh), so the row offers it. */
+  renewDue?: boolean;
 };
+
+// S770 (REVIEW-S770 section 3 item 2): Facebook keeps Renew inside each ad's
+// "..." menu on Your listings; the helper (1.2.0+) records the press.
+const FACEBOOK_YOUR_LISTINGS = "https://www.facebook.com/marketplace/you/selling";
 
 type InstantDestination = {
   key: string;
@@ -392,6 +398,7 @@ export function PublishEverywhere({
   shownChannelKeys = null,
   marketplaceKit = null,
   brokerage = null,
+  renewDueKeys = [],
   robotPostingAllowed = false,
   capNotes = {},
   adPreview = null,
@@ -425,6 +432,8 @@ export function PublishEverywhere({
   shownChannelKeys?: readonly string[] | null;
   /** S712: the Facebook Marketplace kit (every org posts it from its own team). */
   marketplaceKit?: MarketplaceKitData | null;
+  /** S770: site keys whose live ad is due a renew (from lib/keep-fresh). */
+  renewDueKeys?: readonly string[];
   /** S735: Realtor.ca through a partner agent (a request a person answers, never a tile). */
   brokerage?: BrokerageRequestCardData | null;
   /** S713: canUseRobotPosting. False = Kijiji, Rentals.ca and Zumper show the add-on note. */
@@ -469,6 +478,7 @@ export function PublishEverywhere({
       liveProofUrl: liveProofUrlFromPosts(card.posts),
       retiredProofUrls: retiredProofUrlsFromPosts(card.posts),
       alreadySignedIn: card.robotReady === true,
+      renewDue: renewDueKeys.includes(card.channel.key),
     };
   });
   const byBucket = (b: PublishBucket) => resolved.filter((r) => r.bucket === b);
@@ -1092,6 +1102,35 @@ function ForYouRow({
             <p className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-base leading-relaxed text-amber-950">
               {item.photoNote}
             </p>
+          ) : null}
+          {row.renewDue && row.key === "facebook" ? (
+            // S770: the header said "due a renew" while the row only said On,
+            // and the renew sat under More. Now it is on the row.
+            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-base leading-relaxed text-amber-950">
+                Facebook lets you renew this ad now. On your Marketplace ads, press ... on this ad, then Renew listing.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <a
+                  href={FACEBOOK_YOUR_LISTINGS}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto bg-indigo-600 px-4 py-2.5 text-base font-semibold text-white hover:bg-indigo-700"
+                >
+                  Renew on Marketplace ↗
+                </a>
+                <form action={markAdsRenewed}>
+                  <input type="hidden" name="property_id" value={propertyId} />
+                  <input type="hidden" name="portal" value="facebook" />
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    I already renewed it
+                  </button>
+                </form>
+              </div>
+            </div>
           ) : null}
         </>
       ) : marketplaceKit && linkIsLive ? (

@@ -168,5 +168,13 @@ const vtSet = computeOnboardingState({ ...vtBase, hasViewingTimes: true });
 ok("viewing times set -> posting is next", vtSet.nextIncompleteStep?.key === "get_online");
 ok("hasViewingTimes omitted -> no step", leasingOnly.steps.every((s) => s.key !== "viewing_times"));
 
+// S770 (REVIEW-S770 section 3 item 4): "See it work" after Set Live.
+const seeIt = computeOnboardingState({ ...freshInput, hasLiveListing: true, hasProperty: true, hasLead: false, liveRentalId: "abc-123" });
+ok("S770: hasLead passed -> a See it work step after Set Live", seeIt.steps.map((s) => s.key).join(",").includes("get_online,see_it_work"));
+ok("S770: it is the current step once the rental is live and no renter exists", seeIt.nextIncompleteStep?.key === "see_it_work");
+ok("S770: it opens the live rental's public page", seeIt.steps.find((s) => s.key === "see_it_work")?.href === "/r/abc-123");
+ok("S770: the first renter completes it", computeOnboardingState({ ...freshInput, hasLiveListing: true, hasProperty: true, hasLead: true }).steps.find((s) => s.key === "see_it_work")?.status === "complete");
+ok("S770: hasLead omitted -> no step (back-compat)", fresh.steps.every((s) => s.key !== "see_it_work"));
+
 console.log(`\nonboarding-wizard: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

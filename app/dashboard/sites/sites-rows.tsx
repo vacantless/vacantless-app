@@ -6,6 +6,7 @@ import {
   MARKETPLACE_HELPER_APP_SOURCE,
 } from "@/lib/marketplace-helper";
 import { buildSitesSetup, type SitesSetupInput } from "@/lib/sites-setup";
+import { setFacebookPageSkipped } from "./actions";
 
 // S760: the five site rows. The helper lives only in this browser, so the row
 // for Marketplace asks it (the same ping the dashboard sync uses) and reads
@@ -68,6 +69,17 @@ export function SitesRows({
         </a>
       ) : null}
 
+      {setup.facebookPageSkipped ? (
+        <form action={setFacebookPageSkipped} className="mt-3 text-xs text-gray-500">
+          <input type="hidden" name="skip" value="0" />
+          {input.propertyId ? <input type="hidden" name="property_id" value={input.propertyId} /> : null}
+          Facebook Page skipped.{" "}
+          <button type="submit" className="underline hover:text-gray-700">
+            Add it back
+          </button>
+        </form>
+      ) : null}
+
       <ul className="mt-4 space-y-3">
         {setup.rows.map((row) => {
           const chip = STATE_CHIP[row.state];
@@ -94,6 +106,16 @@ export function SitesRows({
                 </a>
               ) : null}
               {row.note ? <p className="mt-2 text-xs text-gray-500">{row.note}</p> : null}
+              {row.secondary?.kind === "skip_facebook_page" ? (
+                // S770: no Page is a fine answer; the row leaves the list.
+                <form action={setFacebookPageSkipped} className="mt-2">
+                  <input type="hidden" name="skip" value="1" />
+                  {input.propertyId ? <input type="hidden" name="property_id" value={input.propertyId} /> : null}
+                  <button type="submit" className="text-xs text-gray-500 underline hover:text-gray-700">
+                    {row.secondary.label}
+                  </button>
+                </form>
+              ) : null}
             </li>
           );
         })}

@@ -67,7 +67,7 @@ export default async function OnboardingPage({
     <AuthShell
       eyebrow="Step 1 of 2"
       title="Set up your business profile"
-      subtitle="Name your business and pick the brand color renters see on your pages and emails. You can change any of this later."
+      subtitle="Name your business and add the phone renters can call. Your first rental is next."
       footer={onboardingNextStep(searchParams.plan)}
     >
       {/* gradient step indicator */}

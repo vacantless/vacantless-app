@@ -1,22 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import {
-  brandGradientCss,
-  DEFAULT_BRAND_COLOR,
-  DEFAULT_BRAND_SECONDARY,
-} from "@/lib/brand-theme";
-import BrandColorField from "@/components/brand-color-field";
 import { AUTH_BUTTON_CLASS, AUTH_INPUT_CLASS } from "@/components/auth-shell";
 import { SubmitButton } from "@/components/submit-button";
 
 /**
- * Create-workspace form with a live renter-brand preview. The brand can be a
- * solid OR a two-stop ombre; BrandColorField owns the picker and posts the
- * `brand_color` + `brand_color_secondary` hidden inputs. The colors are run
- * through the legibility guard (brandGradientCss) so the preview header/button
- * match exactly what renters will see (a pale pick is darkened just enough to
- * keep white text readable).
+ * Create-workspace form: business name and the phone renters see. The brand
+ * colour picker lived here until S770; it is in Settings, Public page now,
+ * and a new account starts on the default green (createOrganization's
+ * defaults when the colour fields are absent).
  *
  * The server action is passed in as a prop so the page stays a server
  * component and the redirect-based createOrganization flow is unchanged.
@@ -33,13 +25,6 @@ export function OnboardingForm({
   planIntent?: string;
 }) {
   const [name, setName] = useState("");
-  // A brand-new org starts on the homepage forest-green ombre; the picker
-  // opens in Ombre mode seeded to match. The tenant can switch to a solid or
-  // any other ombre before creating the account.
-  const [primary, setPrimary] = useState(DEFAULT_BRAND_COLOR);
-  const [secondary, setSecondary] = useState<string | null>(DEFAULT_BRAND_SECONDARY);
-  const brandBg = brandGradientCss(primary, secondary);
-  const displayName = name.trim() || "Your business";
 
   return (
     <form action={action} className="mt-6 space-y-5">
@@ -88,48 +73,13 @@ export function OnboardingForm({
         </p>
       </div>
 
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">
-          Brand color
-        </label>
-        <p className="mb-2 text-sm text-gray-500">
-          Optional. Used on your renter pages and emails. Pick one color or a blend of two.
-        </p>
-        <BrandColorField
-          defaultPrimary={DEFAULT_BRAND_COLOR}
-          defaultSecondary={DEFAULT_BRAND_SECONDARY}
-          onChange={(p, s) => {
-            setPrimary(p);
-            setSecondary(s);
-          }}
-        />
-      </div>
-
-      {/* Live renter-brand preview */}
-      <div>
-        <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-gray-400">
-          Renter preview
-        </p>
-        <div className="overflow-hidden rounded-lg border border-gray-200 shadow-sm">
-          <div className="px-4 py-3" style={{ background: brandBg }}>
-            <span className="text-sm font-semibold text-white">
-              {displayName}
-            </span>
-          </div>
-          <div className="bg-white px-4 py-3">
-            <p className="text-sm font-medium text-gray-900">
-              2 bedroom apartment
-            </p>
-            <p className="text-xs text-gray-500">Book a viewing online</p>
-            <span
-              className="mt-2 inline-block rounded-md px-3 py-1.5 text-xs font-medium text-white"
-              style={{ background: brandBg }}
-            >
-              Book a viewing
-            </span>
-          </div>
-        </div>
-      </div>
+      {/* S770 (REVIEW-S770 section 3 item 5): the brand colour picker and its
+          preview left this screen. Two fields before the first rental; colours
+          and the logo wait in Settings, Public page. createOrganization keeps
+          its defaults when the fields are absent. */}
+      <p className="text-xs text-gray-500">
+        Your logo and colours can wait. Add them any time in Settings.
+      </p>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
