@@ -20,6 +20,7 @@ import {
 import { PageHeader, EmptyState } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { TriageQueue } from "./triage-queue";
+import { isChatPlaceholder } from "@/lib/chat-leads";
 import { answeredLeadIds } from "@/lib/lead-answered";
 import { ScreenshotLeadCard } from "./screenshot-lead-card";
 
@@ -32,6 +33,7 @@ type LeadRow = {
   phone: string | null;
   source: string | null;
   status: LeadStatus;
+  notes: string | null;
   created_at: string;
   next_action_at: string | null;
   qualified_out: boolean;
@@ -57,7 +59,7 @@ export default async function LeadsPage({
   const { data } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, status, created_at, next_action_at, qualified_out, property_id, property:properties(address)",
+      "id, name, email, phone, source, status, notes, created_at, next_action_at, qualified_out, property_id, property:properties(address)",
     )
     .eq("organization_id", org.id)
     .order("created_at", { ascending: false });
@@ -282,7 +284,7 @@ export default async function LeadsPage({
           />
         )
       ) : (
-        <TriageQueue rows={rows.map((l) => ({ ...l, answered: answered.has(l.id) }))} today={today} timeZone={timeZone} />
+        <TriageQueue rows={rows.map((l) => ({ ...l, answered: answered.has(l.id), chatOnly: isChatPlaceholder(l) }))} today={today} timeZone={timeZone} />
       )}
     </div>
   );

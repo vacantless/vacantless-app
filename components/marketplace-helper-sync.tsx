@@ -13,6 +13,7 @@ import {
   versionAtLeast,
   type HelperAdEntry,
 } from "@/lib/marketplace-helper";
+import { MARKETPLACE_HELPER_REPLIED_MIN_VERSION } from "@/lib/chat-leads";
 
 // S738: on any dashboard page, when the Vacantless helper (1.1.0+) answers,
 // hand it the list of live Marketplace ads (for "Fill booking reply" in
@@ -21,16 +22,20 @@ import {
 // S739: also saves the Facebook renewals the helper (1.2.0+) saw the landlord press.
 // S764: and marks down the Marketplace ads the helper (1.2.4+) saw Facebook
 // remove, with a banner that says which rental to post again.
+// S767: and saves the renters the helper (1.2.5+) filled a chat reply for, as
+// Replied renters with no email or phone yet (lib/chat-leads).
 export function MarketplaceHelperSync({
   loadAds,
   saveCaptured,
   saveRenewed,
   saveRejected,
+  saveReplied,
 }: {
   loadAds: () => Promise<HelperAdEntry[]>;
   saveCaptured: (items: unknown) => Promise<{ done: string[] }>;
   saveRenewed: (items: unknown) => Promise<{ done: string[] }>;
   saveRejected: (items: unknown) => Promise<{ done: string[]; rentals: { propertyId: string; rental: string }[] }>;
+  saveReplied: (items: unknown) => Promise<{ done: string[] }>;
 }) {
   const router = useRouter();
   const [removed, setRemoved] = useState<{ propertyId: string; rental: string }[]>([]);
@@ -52,6 +57,19 @@ export function MarketplaceHelperSync({
         post({ type: "get_captured" });
         if (versionAtLeast(data.version, MARKETPLACE_HELPER_RENEW_MIN_VERSION)) post({ type: "get_renewed" });
         if (versionAtLeast(data.version, MARKETPLACE_HELPER_REJECT_MIN_VERSION)) post({ type: "get_rejected" });
+        if (versionAtLeast(data.version, MARKETPLACE_HELPER_REPLIED_MIN_VERSION)) post({ type: "get_replied" });
+        return;
+      }
+      if (isHelperMessage(data, "replied_chats")) {
+        try {
+          const { done } = await saveReplied(data.items);
+          if (done.length > 0) {
+            post({ type: "replied_saved", keys: done });
+            router.refresh();
+          }
+        } catch {
+          /* kept by the helper; tried again on the next page */
+        }
         return;
       }
       if (isHelperMessage(data, "rejected_ads")) {
@@ -100,7 +118,7 @@ export function MarketplaceHelperSync({
       window.removeEventListener("message", onMessage);
       timers.forEach((t) => window.clearTimeout(t));
     };
-  }, [loadAds, saveCaptured, saveRenewed, saveRejected, router]);
+  }, [loadAds, saveCaptured, saveRenewed, saveRejected, saveReplied, router]);
   const banner = rejectedAdsBanner(removed.map((r) => r.rental));
   if (!banner) return null;
   return (

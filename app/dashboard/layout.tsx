@@ -12,7 +12,13 @@ import { planLabelOf, type PlanKey } from "@/lib/billing";
 import { AdConversionFire } from "@/components/ad-tags";
 import { recordAdConversions } from "./ad-conversion-actions";
 import { MarketplaceHelperSync } from "@/components/marketplace-helper-sync";
-import { helperAdList, helperSaveCapturedAds, helperSaveRejectedAds, helperSaveRenewedAds } from "./marketplace-helper-actions";
+import {
+  helperAdList,
+  helperSaveCapturedAds,
+  helperSaveRejectedAds,
+  helperSaveRenewedAds,
+  helperSaveRepliedChats,
+} from "./marketplace-helper-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -134,6 +140,7 @@ export default async function DashboardLayout({
         saveCaptured={helperSaveCapturedAds}
         saveRenewed={helperSaveRenewedAds}
         saveRejected={helperSaveRejectedAds}
+        saveReplied={helperSaveRepliedChats}
       />
     </div>
   );

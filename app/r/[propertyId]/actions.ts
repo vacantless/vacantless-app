@@ -34,6 +34,7 @@ import {
 } from "@/lib/lead-attribution";
 import type { NotifyMember } from "@/lib/incident-reports";
 import { publicLeadSubmitEffects } from "@/lib/public-lead-dedup";
+import { mergeChatPlaceholderInto } from "@/lib/chat-leads-server";
 import { autoAssignBookedShowing, notifyOperatorsOfViewingBooked } from "@/lib/showing-booked-server";
 import { answerRenterQuestion } from "@/lib/ai-enquiry-server";
 import {
@@ -493,6 +494,14 @@ export async function submitLead(formData: FormData) {
 
   const leadReused = payload.lead_reused === true;
   const leadHasShowing = payload.lead_has_showing === true;
+
+  // S767: a renter who first wrote in the Marketplace chat (saved by the
+  // helper or Quick replies, name only) and now books with the link: this new
+  // lead takes that place, so there is one renter, not two. Best effort.
+  if (!leadReused) {
+    const mergeAdmin = createAdminClient();
+    if (mergeAdmin) await mergeChatPlaceholderInto(mergeAdmin, { newLeadId: payload.lead_id, propertyId, name });
+  }
   let outcome: "submitted" | "booked" | "booking_failed" =
     leadReused && leadHasShowing ? "booked" : "submitted";
   const initialEffects = publicLeadSubmitEffects({

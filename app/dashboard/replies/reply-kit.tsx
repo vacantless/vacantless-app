@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { replyKitText, type ReplyKitCard } from "@/lib/reply-kit";
+import { addChatRenter } from "./actions";
 
 // S750: the phone reply kit. One name box for all cards, a site button per
 // live ad, then Copy (clipboard) or Share (the phone's share sheet, which
 // lists Messenger, Messages and WhatsApp). Nothing is sent from here.
+// S767: "Add this renter" saves the chat renter in Renters (name only).
 
 export function ReplyKit({ cards, phone }: { cards: ReplyKitCard[]; phone: string | null }) {
   const [name, setName] = useState("");
@@ -38,7 +40,7 @@ export function ReplyKit({ cards, phone }: { cards: ReplyKitCard[]; phone: strin
     <div className="mt-4 space-y-4">
       {saveBanner}
       <label className="block">
-        <span className="text-xs font-medium text-gray-600">Renter&apos;s first name, if you know it</span>
+        <span className="text-xs font-medium text-gray-600">Renter&apos;s name, as the chat shows it</span>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -58,7 +60,24 @@ export function ReplyKit({ cards, phone }: { cards: ReplyKitCard[]; phone: strin
 function ReplyCard({ card, phone, name }: { card: ReplyKitCard; phone: string | null; name: string }) {
   const [siteKey, setSiteKey] = useState(card.sites[0]?.key ?? "direct");
   const [done, setDone] = useState<string | null>(null);
+  const [added, setAdded] = useState<{ ok: boolean; message: string } | null>(null);
+  const [adding, setAdding] = useState(false);
   const site = card.sites.find((s) => s.key === siteKey) ?? card.sites[0];
+
+  async function addRenter() {
+    if (!name.trim()) {
+      setAdded({ ok: false, message: "Type the renter's name at the top first." });
+      return;
+    }
+    setAdding(true);
+    try {
+      setAdded(await addChatRenter({ propertyId: card.propertyId, siteKey: site.key, name }));
+    } catch {
+      setAdded({ ok: false, message: "We could not add the renter. Try again." });
+    } finally {
+      setAdding(false);
+    }
+  }
   const text = replyKitText({ card, site, phone, renterName: name });
 
   async function copy() {
@@ -147,6 +166,19 @@ function ReplyCard({ card, phone, name }: { card: ReplyKitCard; phone: string | 
         </button>
       </div>
       {done && <p className="mt-2 text-sm text-green-700">{done}</p>}
+      {card.available && (
+        <div className="mt-3 border-t border-gray-100 pt-3">
+          <button
+            type="button"
+            onClick={addRenter}
+            disabled={adding}
+            className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 disabled:opacity-60"
+          >
+            {adding ? "Adding..." : site.key === "direct" ? "Add this renter to Renters" : `Add this ${site.label} renter to Renters`}
+          </button>
+          {added && <p className={`mt-2 text-sm ${added.ok ? "text-green-700" : "text-red-700"}`}>{added.message}</p>}
+        </div>
+      )}
     </section>
   );
 }

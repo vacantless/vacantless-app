@@ -125,8 +125,9 @@ assert.equal(
   assert.match(fill, /res\.kit\.itemId !== PAGE_ITEM_ID/);
   assert.match(fill, /EDIT_SKIP = new Set\(\["saleOrRent", "propertyType", "address"\]\)/);
   assert.ok(manifest.content_scripts.some((c: { matches: string[] }) => c.matches.includes("https://www.facebook.com/marketplace/edit/*")));
-  assert.equal(manifest.version, MARKETPLACE_HELPER_EDIT_MIN_VERSION);
-  assert.ok(config.includes(`VERSION: "${MARKETPLACE_HELPER_EDIT_MIN_VERSION}"`));
+  // S767: 1.2.5 keeps the edit job; the shipped version is at least 1.2.4 and config agrees.
+  assert.ok(versionAtLeast(manifest.version, MARKETPLACE_HELPER_EDIT_MIN_VERSION));
+  assert.ok(config.includes(`VERSION: "${manifest.version}"`));
   }
 }
 

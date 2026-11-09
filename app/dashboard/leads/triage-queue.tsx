@@ -1,3 +1,4 @@
+import { CHAT_LEAD_LIST_LINE } from "@/lib/chat-leads";
 import Link from "next/link";
 import {
   followUpStatus,
@@ -31,6 +32,8 @@ export type QueueLead = {
   property: { address: string } | null;
   /** S740: an auto-reply or any outbound email or text already went out. */
   answered?: boolean;
+  /** S767: saved from a chat, name only (lib/chat-leads). */
+  chatOnly?: boolean;
 };
 
 // Reason-chip colour by urgency (needs-you rows only).
@@ -155,6 +158,7 @@ function QueueRow({
             {new Date(l.created_at).toLocaleDateString("en-CA", { timeZone })}
           </span>
         </p>
+        {l.chatOnly && <p className="mt-0.5 text-xs text-blue-700">{CHAT_LEAD_LIST_LINE}</p>}
       </div>
       <div className="flex items-center gap-2 sm:shrink-0">
         <Link

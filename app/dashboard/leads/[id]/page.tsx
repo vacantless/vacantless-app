@@ -39,6 +39,7 @@ import { createDocumentDownloadUrl } from "@/lib/documents-server";
 import { OutcomeSelect } from "../../showings/outcome-select";
 import { InquiryReplyPanel } from "../inquiry-reply-panel";
 import { TextBackPanel } from "../text-back-panel";
+import { CHAT_LEAD_LINE, isChatPlaceholder } from "@/lib/chat-leads";
 import { orgTextsRenters } from "@/lib/sms";
 import { displayCanadianNumber } from "@/lib/texting-setup-emails";
 import { buildAiReplyDraft } from "@/lib/ai-reply";
@@ -264,7 +265,9 @@ export default async function LeadDetailPage({
     canUseAiReply && org && l.property?.id
       ? await loadPropertyKnowledge(supabase, org.id, l.property.id)
       : [];
-  const aiReplyDraft = canUseAiReply
+  // S767: a renter saved from a chat (name only). The note is ours, not theirs.
+  const chatOnly = isChatPlaceholder(l);
+  const aiReplyDraft = canUseAiReply && !chatOnly
     ? buildAiReplyDraft({
         renterName: l.name,
         orgName,
@@ -567,6 +570,13 @@ export default async function LeadDetailPage({
         </div>
       )}
 
+      {chatOnly && (
+        <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <p className="font-medium">{CHAT_LEAD_LINE}</p>
+          <p className="mt-1 text-blue-800">{l.notes}</p>
+        </div>
+      )}
+
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field
           label="Email"
@@ -621,7 +631,7 @@ export default async function LeadDetailPage({
         ))}
       </div>
 
-      {l.notes && (
+      {l.notes && !chatOnly && (
         <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
             Inquiry message
@@ -723,6 +733,7 @@ export default async function LeadDetailPage({
         <TextBackPanel leadId={l.id} phoneLabel={displayCanadianNumber(l.phone)} flash={searchParams.text ?? null} />
       )}
 
+      {!chatOnly && (
       <InquiryReplyPanel
         leadId={l.id}
         propertyId={l.property?.id ?? null}
@@ -734,6 +745,7 @@ export default async function LeadDetailPage({
         suggestedQuestion={aiReplyDraft?.suggestedQuestion ?? null}
         canCapture={canUseAiReply}
       />
+      )}
 
       <div className="mt-8">
         <SectionHeading>Activity</SectionHeading>

@@ -10,6 +10,8 @@ import {
   saveHelperRejectedAds,
   saveHelperRenewedAds,
 } from "@/lib/marketplace-helper-server";
+import { cleanRepliedChats } from "@/lib/chat-leads";
+import { saveHelperRepliedChats } from "@/lib/chat-leads-server";
 
 // S738: the Vacantless helper's ad list and link capture, called by
 // components/marketplace-helper-sync.tsx on any dashboard page, under the
@@ -61,4 +63,15 @@ export async function helperSaveRejectedAds(
   const admin = createAdminClient();
   if (!orgIds || !admin) return { done: [], rentals: [] };
   return saveHelperRejectedAds(admin, orgIds, items);
+}
+
+// S767: renters the landlord pressed "Fill booking reply" for (helper 1.2.5).
+// Returns the itemId|renterName keys the helper may forget.
+export async function helperSaveRepliedChats(raw: unknown): Promise<{ done: string[] }> {
+  const items = cleanRepliedChats(raw);
+  if (items.length === 0) return { done: [] };
+  const orgIds = await signedInOrgIds();
+  const admin = createAdminClient();
+  if (!orgIds || !admin) return { done: [] };
+  return { done: await saveHelperRepliedChats(admin, orgIds, items) };
 }
