@@ -46,7 +46,53 @@ export type AccountCounts = {
   bookings: number;
   // S723: plain line from lib/signup-source describeSource ("Google ads (...)").
   source?: string;
+  // S767: organizations.first_live_at (0276), the first time a rental went live.
+  firstLiveAt?: string | null;
 };
+
+// S767 (PLAN-S766 item C): time to first live, measured.
+export const FIRST_LIVE_MEDIAN_DAYS = 30;
+
+/** Minutes from sign-up to the first live rental; null when not live yet. Never negative. */
+export function minutesToLive(createdAt: string, firstLiveAt: string | null | undefined): number | null {
+  if (!firstLiveAt) return null;
+  const a = new Date(createdAt).getTime();
+  const b = new Date(firstLiveAt).getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return Math.max(0, Math.round((b - a) / 60_000));
+}
+
+/** 12 -> "12 minutes", 95 -> "2 hours", 3000 -> "2 days". */
+export function durationWords(minutes: number): string {
+  if (minutes < 60) return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return hours === 1 ? "1 hour" : `${hours} hours`;
+  const days = Math.round(minutes / 1440);
+  return `${days} days`;
+}
+
+/** The middle value (the mean of the two middle ones for an even count); null when empty. */
+export function median(values: readonly number[]): number | null {
+  const v = values.filter((n) => Number.isFinite(n)).slice().sort((a, b) => a - b);
+  if (v.length === 0) return null;
+  const mid = Math.floor(v.length / 2);
+  return v.length % 2 ? v[mid] : Math.round((v[mid - 1] + v[mid]) / 2);
+}
+
+/**
+ * The footer line: median time to first live over accounts (not ours) that
+ * signed up in the last 30 days and went live. Null when none did.
+ */
+export function firstLiveFooter(accounts: readonly AccountCounts[], now: Date): string | null {
+  const mins = accounts
+    .filter((a) => daysSince(a.createdAt, now) <= FIRST_LIVE_MEDIAN_DAYS)
+    .map((a) => minutesToLive(a.createdAt, a.firstLiveAt))
+    .filter((m): m is number => m != null);
+  const m = median(mins);
+  if (m == null) return null;
+  const n = mins.length;
+  return `Time to first live rental, last ${FIRST_LIVE_MEDIAN_DAYS} days: median ${durationWords(m)}, across ${n} account${n === 1 ? "" : "s"} that went live.`;
+}
 
 export const STAGES = [
   "signed_up",
@@ -146,6 +192,8 @@ export function buildWatchRows(
     // S715: "First booking. It has a booking." said the same thing twice.
     else if (stage === "first_booking") line += "First booking. Nothing to do.";
     else line += `${STAGE_LABELS[stage]}. It ${NEXT_STEP[stage]}.`;
+    const live = minutesToLive(a.createdAt, a.firstLiveAt);
+    if (live != null) line += ` Live in ${durationWords(live)}.`;
     if (a.source) line += ` Came from: ${a.source}.`;
     if (stalled) line = `NEEDS A NUDGE. ${line}`;
     rows.push({ id: a.id, name, days, stage, stalled, paid, closed, line });
@@ -160,7 +208,7 @@ export function buildWatchRows(
   return rows;
 }
 
-export function buildWatchEmail(rows: WatchRow[]): { subject: string; body: string } | null {
+export function buildWatchEmail(rows: WatchRow[], footer?: string | null): { subject: string; body: string } | null {
   if (rows.length === 0) return null;
   const stalled = rows.filter((r) => r.stalled).length;
   const n = rows.length;
@@ -172,6 +220,6 @@ export function buildWatchEmail(rows: WatchRow[]): { subject: string; body: stri
     stalled > 0
       ? "These accounts signed up in the last two weeks. The ones marked NEEDS A NUDGE are stuck. Send them a short email today."
       : "These accounts signed up in the last two weeks. None of them are stuck.";
-  const body = [intro, rows.map((r) => r.line).join("\n")].join("\n\n");
+  const body = [intro, rows.map((r) => r.line).join("\n"), footer ?? ""].filter(Boolean).join("\n\n");
   return { subject, body };
 }

@@ -2,6 +2,10 @@
 import {
   buildWatchEmail,
   buildWatchRows,
+  durationWords,
+  firstLiveFooter,
+  median,
+  minutesToLive,
   isOwnAddress,
   isOwnTestAccount,
   isStalled,
@@ -90,6 +94,35 @@ ok("missing email -> customer", !isOwnTestAccount(["nmuscovitch+a@hotmail.com", 
   const r = buildWatchRows([{ ...base, id: "src", source: "Google ads (campaign x)" }, { ...base, id: "nosrc" }], new Date(), new Set());
   ok("source shown", r.find((x) => x.id === "src")?.line.endsWith("Came from: Google ads (campaign x).") === true);
   ok("no source, no line", r.find((x) => x.id === "nosrc")?.line.includes("Came from") === false);
+}
+
+// S767: time to first live.
+{
+  ok("minutes", minutesToLive("2026-11-09T10:00:00Z", "2026-11-09T10:12:00Z") === 12);
+  ok("not live -> null", minutesToLive("2026-11-09T10:00:00Z", null) === null);
+  ok("never negative", minutesToLive("2026-11-09T10:00:00Z", "2026-11-01T10:00:00Z") === 0);
+  ok("words minutes", durationWords(12) === "12 minutes" && durationWords(1) === "1 minute");
+  ok("words hours", durationWords(95) === "2 hours" && durationWords(60) === "1 hour");
+  ok("words days", durationWords(3000) === "2 days");
+  ok("median odd", median([30, 10, 20]) === 20);
+  ok("median even", median([10, 20, 30, 40]) === 25);
+  ok("median empty", median([]) === null);
+  const now = new Date("2026-11-20T00:00:00Z");
+  const base = { name: "L", plan: "free", subscriptionStatus: null, closedAt: null, rentals: 1, liveRentals: 1, viewingTimes: 1, enquiries: 0, bookings: 0 };
+  const accts: AccountCounts[] = [
+    { ...base, id: "a", createdAt: "2026-11-18T10:00:00Z", firstLiveAt: "2026-11-18T10:20:00Z" },
+    { ...base, id: "b", createdAt: "2026-11-15T10:00:00Z", firstLiveAt: "2026-11-15T12:00:00Z" },
+    { ...base, id: "c", createdAt: "2026-11-10T10:00:00Z", firstLiveAt: null },
+    { ...base, id: "old", createdAt: "2026-09-01T10:00:00Z", firstLiveAt: "2026-09-10T10:00:00Z" },
+  ];
+  ok("footer", firstLiveFooter(accts, now) === "Time to first live rental, last 30 days: median 1 hour, across 2 accounts that went live.");
+  ok("footer none", firstLiveFooter([accts[2]], now) === null);
+  const rows = buildWatchRows(accts, now, new Set());
+  ok("row says live in", rows.find((r) => r.id === "a")?.line.includes("Live in 20 minutes.") === true);
+  ok("row not live says nothing", rows.find((r) => r.id === "c")?.line.includes("Live in") === false);
+  const email = buildWatchEmail(rows, firstLiveFooter(accts, now));
+  ok("footer in body", email?.body.endsWith("across 2 accounts that went live.") === true);
+  ok("no footer, body unchanged", buildWatchEmail(rows)?.body.endsWith("\n\n") === false);
 }
 
 console.log(`\nnew-account-watch: ${pass} passed, ${fail} failed`);

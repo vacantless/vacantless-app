@@ -5,8 +5,9 @@ import { sendNotificationEmail } from "@/lib/email";
 import { adminEmails } from "@/lib/provisioning-server";
 import { QUIET_NOTIFICATION_ORGANIZATION_IDS } from "@/lib/quiet-orgs";
 import {
-  WATCH_WINDOW_DAYS,
+  FIRST_LIVE_MEDIAN_DAYS,
   buildWatchEmail,
+  firstLiveFooter,
   buildWatchRows,
   isOwnTestAccount,
   type AccountCounts,
@@ -41,11 +42,13 @@ export async function GET(req: NextRequest) {
   }
   const dry = req.nextUrl.searchParams.get("dry") === "1";
   const now = new Date();
-  const since = new Date(now.getTime() - (WATCH_WINDOW_DAYS + 1) * 86_400_000).toISOString();
+  // S767: 30 days back for the time-to-first-live median; the list itself
+  // still shows the last 14 (buildWatchRows).
+  const since = new Date(now.getTime() - (FIRST_LIVE_MEDIAN_DAYS + 1) * 86_400_000).toISOString();
 
   const { data: orgs, error } = await admin
     .from("organizations")
-    .select("id, name, plan, subscription_status, created_at, closed_at, signup_source")
+    .select("id, name, plan, subscription_status, created_at, closed_at, signup_source, first_live_at")
     .gte("created_at", since)
     .order("created_at", { ascending: false });
   if (error) {
@@ -105,11 +108,12 @@ export async function GET(req: NextRequest) {
       enquiries,
       bookings,
       source: describeSource(parseSourceValue(o.signup_source)),
+      firstLiveAt: o.first_live_at ?? null,
     });
   }
 
   const rows = buildWatchRows(accounts, now, exclude);
-  const email = buildWatchEmail(rows);
+  const email = buildWatchEmail(rows, firstLiveFooter(accounts, now));
   if (!email) {
     return NextResponse.json({ ok: true, sent: 0, accounts: 0, reason: "no_new_accounts" });
   }
