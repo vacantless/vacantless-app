@@ -2,8 +2,14 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { cleanCapturedAds, cleanRenewedAds, type HelperAdEntry } from "@/lib/marketplace-helper";
-import { helperOrgIds, loadHelperAdList, saveHelperCapturedAds, saveHelperRenewedAds } from "@/lib/marketplace-helper-server";
+import { cleanCapturedAds, cleanRejectedAds, cleanRenewedAds, type HelperAdEntry } from "@/lib/marketplace-helper";
+import {
+  helperOrgIds,
+  loadHelperAdList,
+  saveHelperCapturedAds,
+  saveHelperRejectedAds,
+  saveHelperRenewedAds,
+} from "@/lib/marketplace-helper-server";
 
 // S738: the Vacantless helper's ad list and link capture, called by
 // components/marketplace-helper-sync.tsx on any dashboard page, under the
@@ -43,4 +49,16 @@ export async function helperSaveRenewedAds(raw: unknown): Promise<{ done: string
   const admin = createAdminClient();
   if (!orgIds || !admin) return { done: [] };
   return { done: await saveHelperRenewedAds(admin, orgIds, items) };
+}
+
+// S764: Marketplace ads the helper saw Facebook remove.
+export async function helperSaveRejectedAds(
+  raw: unknown,
+): Promise<{ done: string[]; rentals: { propertyId: string; rental: string }[] }> {
+  const items = cleanRejectedAds(raw);
+  if (items.length === 0) return { done: [], rentals: [] };
+  const orgIds = await signedInOrgIds();
+  const admin = createAdminClient();
+  if (!orgIds || !admin) return { done: [], rentals: [] };
+  return saveHelperRejectedAds(admin, orgIds, items);
 }

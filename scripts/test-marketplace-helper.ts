@@ -7,6 +7,10 @@ import {
   MARKETPLACE_HELPER_INSTALL_URL,
   marketplaceEditUrl,
   marketplaceUpdateKit,
+  cleanRejectedAds,
+  rejectedAdNote,
+  rejectedAdsBanner,
+  MARKETPLACE_HELPER_REJECT_MIN_VERSION,
   versionAtLeast,
   marketplaceAirConditioning,
   marketplaceHeating,
@@ -120,6 +124,41 @@ assert.equal(
   assert.ok(manifest.content_scripts.some((c: { matches: string[] }) => c.matches.includes("https://www.facebook.com/marketplace/edit/*")));
   assert.equal(manifest.version, MARKETPLACE_HELPER_EDIT_MIN_VERSION);
   assert.ok(config.includes(`VERSION: "${MARKETPLACE_HELPER_EDIT_MIN_VERSION}"`));
+}
+
+// S764: ads Facebook removed (helper 1.2.4).
+{
+  const now = Date.UTC(2026, 10, 9, 1, 0, 0);
+  const got = cleanRejectedAds(
+    [
+      { itemId: "1122221810762451", at: now - 60_000 },
+      { itemId: "1122221810762451", at: now },
+      { itemId: "abc", at: now },
+      { itemId: "1465666292074489", at: now - 15 * 24 * 60 * 60_000 },
+      { itemId: "1469392998385509", at: now + 60 * 60_000 },
+    ],
+    now,
+  );
+  assert.deepEqual(got.map((g) => g.itemId), ["1122221810762451"]);
+  assert.deepEqual(cleanRejectedAds("x", now), []);
+  assert.match(rejectedAdNote("2026-11-08"), /^2026-11-08: Facebook removed this ad/);
+  assert.equal(rejectedAdsBanner([]), null);
+  assert.match(rejectedAdsBanner(["833 Pillette Rd, Unit 3"]) ?? "", /removed your Marketplace ad for 833 Pillette Rd, Unit 3\./);
+  assert.match(rejectedAdsBanner(["A", "B", "A"]) ?? "", /ads for A and B\./);
+  assert.ok(!/—/.test(rejectedAdsBanner(["A", "B"]) ?? ""));
+  assert.equal(MARKETPLACE_HELPER_REJECT_MIN_VERSION, "1.2.4");
+  const watch = readFileSync("../vacantless-extension/facebook-watch.js", "utf8");
+  const bridge = readFileSync("../vacantless-extension/app-bridge.js", "utf8");
+  // Matched by price only when one ad has it and no other card shows it.
+  assert.match(watch, /sameOnPage !== rejectedSame \|\| rejectedSame !== 1/);
+  assert.match(watch, /matches\.length !== 1/);
+  assert.match(bridge, /data\.type === "get_rejected"/);
+  assert.match(bridge, /const price = num\(a\.price\)/);
+  const server = readFileSync("lib/marketplace-helper-server.ts", "utf8");
+  assert.match(server, /\.eq\("status", "live"\)\s*\.ilike\("url", `%\/marketplace\/item\/\$\{item\.itemId\}%`\)/);
+  assert.match(server, /update\(\{ status: "removed"/);
+  const layout = readFileSync("app/dashboard/layout.tsx", "utf8");
+  assert.match(layout, /saveRejected=\{helperSaveRejectedAds\}/);
 }
 
 console.log("test-marketplace-helper: all passed");

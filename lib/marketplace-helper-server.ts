@@ -11,6 +11,8 @@ import {
   type HelperAdEntry,
   type HelperCapturedAd,
   type HelperRenewedAd,
+  type HelperRejectedAd,
+  rejectedAdNote,
   renewedPostedOn,
 } from "@/lib/marketplace-helper";
 
@@ -47,11 +49,19 @@ export async function loadHelperAdList(admin: SupabaseClient, orgIds: string[]):
   const propIds = Array.from(new Set(rows.map((r) => r.property_id as string)));
   const { data: props } = await admin
     .from("properties")
-    .select("id, address, status, archived_at")
+    .select("id, address, status, archived_at, rent_cents")
     .in("id", propIds);
   const { data: orgs } = await admin.from("organizations").select("id, public_contact_phone").in("id", orgIds);
   const propById = new Map(
-    ((props ?? []) as { id: string; address: string | null; status: string | null; archived_at: string | null }[]).map((p) => [p.id, p]),
+    (
+      (props ?? []) as {
+        id: string;
+        address: string | null;
+        status: string | null;
+        archived_at: string | null;
+        rent_cents: number | null;
+      }[]
+    ).map((p) => [p.id, p]),
   );
   const phoneByOrg = new Map(
     ((orgs ?? []) as { id: string; public_contact_phone: string | null }[]).map((o) => [o.id, o.public_contact_phone]),
@@ -83,6 +93,7 @@ export async function loadHelperAdList(admin: SupabaseClient, orgIds: string[]):
         hasViewingTimes: timesByProp.get(prop.id) ?? true,
         rentalName: shortRentalName(prop.address),
       }),
+      price: prop.rent_cents != null && prop.rent_cents > 0 ? Math.round(prop.rent_cents / 100) : null,
     });
   }
   return out;
@@ -173,3 +184,53 @@ export async function saveHelperRenewedAds(
   return done;
 }
 
+
+/**
+ * S764: mark down the Marketplace ads the helper saw Facebook remove. Only
+ * live ads in this person's accounts. Returns the ad ids the helper may
+ * forget and, for the banner, the rentals whose ad was marked down now.
+ */
+export async function saveHelperRejectedAds(
+  admin: SupabaseClient,
+  orgIds: string[],
+  items: HelperRejectedAd[],
+): Promise<{ done: string[]; rentals: { propertyId: string; rental: string }[] }> {
+  const done: string[] = [];
+  const rentals: { propertyId: string; rental: string }[] = [];
+  if (orgIds.length === 0) return { done, rentals };
+  const { data: orgs } = await admin.from("organizations").select("id, booking_timezone").in("id", orgIds);
+  const tzByOrg = new Map(
+    ((orgs ?? []) as { id: string; booking_timezone: string | null }[]).map((o) => [o.id, o.booking_timezone || "America/Toronto"]),
+  );
+  for (const item of items) {
+    const { data: rows, error } = await admin
+      .from("listing_posts")
+      .select("id, organization_id, property_id, notes")
+      .in("organization_id", orgIds)
+      .eq("portal", "facebook")
+      .eq("status", "live")
+      .ilike("url", `%/marketplace/item/${item.itemId}%`)
+      .limit(5);
+    if (error) continue; // kept by the helper, tried again on the next page
+    let failed = false;
+    for (const r of (rows ?? []) as { id: string; organization_id: string; property_id: string | null; notes: string | null }[]) {
+      const day = localDateString(item.at, tzByOrg.get(r.organization_id) ?? "America/Toronto");
+      const note = rejectedAdNote(day);
+      const { error: upErr } = await admin
+        .from("listing_posts")
+        .update({ status: "removed", notes: r.notes ? `${r.notes} | ${note}` : note })
+        .eq("id", r.id)
+        .eq("status", "live");
+      if (upErr) {
+        failed = true;
+        continue;
+      }
+      if (r.property_id) {
+        const { data: prop } = await admin.from("properties").select("address").eq("id", r.property_id).maybeSingle();
+        rentals.push({ propertyId: r.property_id, rental: shortRentalName((prop as { address?: string | null } | null)?.address) });
+      }
+    }
+    if (!failed) done.push(item.itemId);
+  }
+  return { done, rentals };
+}

@@ -64,7 +64,8 @@ ok("page's own message is not the helper", !isHelperMessage({ source: "vacantles
 
 // Wiring.
 const layout = readFileSync("app/dashboard/layout.tsx", "utf8");
-ok("every dashboard page syncs the helper", layout.includes("<MarketplaceHelperSync loadAds={helperAdList} saveCaptured={helperSaveCapturedAds}"));
+// S764: the sync tag spans lines now (saveRejected added); still guards that every dashboard page syncs.
+ok("every dashboard page syncs the helper", /<MarketplaceHelperSync\s+loadAds=\{helperAdList\}\s+saveCaptured=\{helperSaveCapturedAds\}/.test(layout));
 const actions = readFileSync("app/dashboard/marketplace-helper-actions.ts", "utf8");
 ok("actions check the signed-in person", actions.includes("auth.getUser()") && actions.includes("helperOrgIds("));
 ok("captured input is cleaned first", actions.indexOf("cleanCapturedAds(raw)") < actions.indexOf("signedInOrgIds()", actions.indexOf("helperSaveCapturedAds")));

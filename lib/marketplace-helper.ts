@@ -263,6 +263,8 @@ export type HelperAdEntry = {
   available: boolean;
   /** The reply with HELPER_REPLY_NAME where the renter's first name goes. */
   reply: string;
+  /** S764: the rent in dollars, so the helper can match a removed ad on Your listings by price. */
+  price?: number | null;
 };
 
 export type HelperCapturedAd = { itemId: string; propertyId: string };
@@ -392,6 +394,44 @@ export function marketplaceUpdateKit(kit: MarketplaceHelperKit, itemId: string |
   const id = String(itemId ?? "").trim();
   if (!/^\d{6,20}$/.test(id)) return null;
   return { ...kit, itemId: id };
+}
+
+// S764: Marketplace ads Facebook removed, as the helper saw them.
+export type HelperRejectedAd = { itemId: string; at: number };
+
+/** Helper 1.2.4 and up reports ads Facebook removed. */
+export const MARKETPLACE_HELPER_REJECT_MIN_VERSION = "1.2.4";
+
+/** Removal reports as the helper sent them, checked: a real ad id, seen in the last 14 days. */
+export function cleanRejectedAds(raw: unknown, now: number = Date.now()): HelperRejectedAd[] {
+  if (!Array.isArray(raw)) return [];
+  const out: HelperRejectedAd[] = [];
+  const seen = new Set<string>();
+  for (const r of raw.slice(0, 20)) {
+    if (!r || typeof r !== "object") continue;
+    const itemId = String((r as Record<string, unknown>).itemId ?? "");
+    const at = Number((r as Record<string, unknown>).at);
+    if (!/^\d{6,20}$/.test(itemId) || seen.has(itemId)) continue;
+    if (!Number.isFinite(at) || at > now + 5 * 60_000 || now - at > 14 * 24 * 60 * 60_000) continue;
+    seen.add(itemId);
+    out.push({ itemId, at });
+  }
+  return out;
+}
+
+/** The note on a Marketplace ad Vacantless marked down because Facebook removed it. */
+export function rejectedAdNote(day: string): string {
+  return `${day}: Facebook removed this ad (seen by the Vacantless helper). Post it again from the rental.`;
+}
+
+/** The banner line after the helper reported removed ads. */
+export function rejectedAdsBanner(rentals: string[]): string | null {
+  const names = Array.from(new Set(rentals.filter(Boolean)));
+  if (names.length === 0) return null;
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return names.length === 1
+    ? `Facebook removed your Marketplace ad for ${list}. Open the rental and press "Fill Marketplace for me" to post it again.`
+    : `Facebook removed your Marketplace ads for ${list}. Open each rental and press "Fill Marketplace for me" to post them again.`;
 }
 
 /** Helper 1.2.0 and up reports renewals. */
