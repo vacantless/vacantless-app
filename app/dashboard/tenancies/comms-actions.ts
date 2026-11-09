@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { deriveComingVacant, showingHeadsUp } from "@/lib/coming-vacant";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
@@ -191,6 +192,79 @@ export async function sendTenantMessage(formData: FormData) {
   redirect(
     `${tenancyPath(tenancyId)}?msg=${outcome}&s=${result.sent}&k=${result.skipped}&f=${result.failed}`,
   );
+}
+
+// S770 (REVIEW-S770 section 6): one click after a relist. The tenant hears
+// that viewings start on a date and that each one comes with 24 hours'
+// written notice (lib/coming-vacant showingHeadsUp). Goes to every tenant on
+// the tenancy by email, through the same dispatch as any tenant message, so
+// it shows in the tenancy's message history.
+export async function sendShowingHeadsUp(formData: FormData) {
+  const tenancyId = s(formData, "tenancy_id");
+  if (!tenancyId) redirect(BASE);
+  await requireCapability("manage_tenancies", `${tenancyPath(tenancyId)}?msg=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+
+  const { data } = await supabase
+    .from("tenancies")
+    .select("id, start_date, end_date, renewal_intent, move_out_date, property:properties(id, address, status, available_date, viewing_earliest_date), tenants(id)")
+    .eq("id", tenancyId)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  const t = data as {
+    id: string;
+    start_date: string | null;
+    end_date: string | null;
+    renewal_intent: string | null;
+    move_out_date: string | null;
+    property: { id: string; address: string; status: string | null; available_date: string | null; viewing_earliest_date: string | null } | null;
+    tenants: { id: string }[] | null;
+  } | null;
+  if (!t?.property) redirect(BASE);
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: org.booking_timezone ?? "America/Toronto" });
+  const cv = deriveComingVacant(
+    {
+      tenancyId: t.id,
+      propertyId: t.property.id,
+      address: t.property.address,
+      startDate: t.start_date,
+      endDate: t.end_date,
+      renewalIntent: (t.renewal_intent as "staying" | "leaving" | "unsure" | null) ?? null,
+      moveOutDate: t.move_out_date,
+      propertyStatus: t.property.status,
+      availableDate: t.property.available_date,
+      viewingEarliestDate: t.property.viewing_earliest_date,
+    },
+    today,
+  );
+  if (!cv) redirect(`${tenancyPath(tenancyId)}?msg=no_vacancy`);
+  const recipientIds = (t.tenants ?? []).map((x) => x.id);
+  if (recipientIds.length === 0) redirect(`${tenancyPath(tenancyId)}?msg=no_recipients`);
+
+  const { subject, body } = showingHeadsUp({
+    address: t.property.address,
+    viewingsFrom: cv.viewingsFrom,
+    vacantDate: cv.vacantDate,
+    orgName: org.name,
+  });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const result = await dispatchTenantMessage({
+    supabase,
+    org,
+    tenancyId,
+    channel: "email",
+    subject,
+    body,
+    recipientIds,
+    sentBy: user?.id ?? null,
+  });
+  revalidatePath(tenancyPath(tenancyId));
+  const outcome = outcomeFor(result);
+  redirect(`${tenancyPath(tenancyId)}?msg=${outcome}&s=${result.sent}&k=${result.skipped}&f=${result.failed}`);
 }
 
 export type TenantMessageUndoPayload = {

@@ -220,6 +220,9 @@ export function validateMessageInput(v: MessageInput): MessageValidation {
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
+  // S770: the showing heads-up (lib/coming-vacant) found nothing to say.
+  no_vacancy: "This unit is not coming vacant. Record a move-out date first, or the tenant answers \"leaving\" on the renewal check-in.",
+  no_recipients: "No tenant to email here. Add the tenant first.",
   name: "Give the template a name.",
   channel: "Pick how this message is sent.",
   subject: "Add a subject line for the email.",

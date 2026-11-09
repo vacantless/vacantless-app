@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { orgHasSwitch } from "@/lib/platform-switches";
 import { getCurrentOrg, type Org } from "@/lib/org";
+import { deriveComingVacant, relistPlan } from "@/lib/coming-vacant";
 import { localDateString } from "@/lib/leasing-snapshot";
 import { requireCapability, getRoleForOrg } from "@/lib/membership";
 import { roleCan } from "@/lib/roles";
@@ -1764,6 +1765,85 @@ export async function publishProperty(formData: FormData) {
   revalidatePath(`/dashboard/properties/${id}`);
   revalidatePath("/dashboard/properties");
   redirect(`/dashboard/properties/${id}?published=1`);
+}
+
+/**
+ * S770 (REVIEW-S770 section 6): the one click on Today's "coming vacant"
+ * card. The tenant is leaving (a recorded move-out date, or "leaving" on the
+ * renewal check-in), so the rental goes back on the market with the move-out
+ * day as its available date and viewings allowed from 21 days before it,
+ * then every connected site posts it (the same path as Set Live). Reads the
+ * same pure rule as the card (lib/coming-vacant), so what the card promised
+ * is what happens. Free cap applies as on any relist.
+ */
+export async function relistComingVacant(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  const tenancyId = String(formData.get("tenancy_id") ?? "");
+  if (!propertyId || !tenancyId) redirect("/dashboard");
+
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const { data: row } = await supabase
+    .from("tenancies")
+    .select(
+      "id, property_id, start_date, end_date, renewal_intent, move_out_date, property:properties(id, address, status, available_date, viewing_earliest_date)",
+    )
+    .eq("id", tenancyId)
+    .eq("organization_id", org.id)
+    .eq("property_id", propertyId)
+    .maybeSingle();
+  const t = row as {
+    id: string;
+    property_id: string;
+    start_date: string | null;
+    end_date: string | null;
+    renewal_intent: string | null;
+    move_out_date: string | null;
+    property: { id: string; address: string; status: string | null; available_date: string | null; viewing_earliest_date: string | null } | null;
+  } | null;
+  if (!t?.property) redirect("/dashboard");
+
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: org.booking_timezone ?? "America/Toronto" });
+  const cv = deriveComingVacant(
+    {
+      tenancyId: t.id,
+      propertyId: t.property.id,
+      address: t.property.address,
+      startDate: t.start_date,
+      endDate: t.end_date,
+      renewalIntent: (t.renewal_intent as "staying" | "leaving" | "unsure" | null) ?? null,
+      moveOutDate: t.move_out_date,
+      propertyStatus: t.property.status,
+      availableDate: t.property.available_date,
+      viewingEarliestDate: t.property.viewing_earliest_date,
+    },
+    today,
+  );
+  if (!cv) redirect("/dashboard");
+  if (cv.relisted) redirect(`/dashboard/properties/${propertyId}?tab=distribute#distribute-header`);
+
+  if (t.property.status !== "available" && (await liveRentalCapFull(supabase, org, propertyId))) {
+    redirect(`/dashboard/properties/${propertyId}?publish=plan`);
+  }
+
+  await supabase
+    .from("properties")
+    .update(relistPlan(cv))
+    .eq("id", propertyId)
+    .eq("organization_id", org.id);
+
+  await maybePrepareAvailableListing(supabase, org, propertyId);
+  await publishAuthorizedInstantChannelsAfterPageLive({ supabase, orgId: org.id, propertyId });
+  await postRobotSitesAfterPageLive({ supabase, org, propertyId });
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  revalidatePath("/dashboard/properties");
+  revalidatePath(`/dashboard/tenancies/${tenancyId}`);
+  redirect(`/dashboard/properties/${propertyId}?relisted=vacant&tenancy=${encodeURIComponent(tenancyId)}`);
 }
 
 /**

@@ -915,6 +915,39 @@ export async function setRenewalAutopilot(formData: FormData) {
   redirect(`/dashboard/tenancies/${id}?renewal=${on ? "on" : "off"}#renewal`);
 }
 
+// S770 (REVIEW-S770 section 6): the tenant gave notice. Record the day they
+// leave; Today then shows the coming-vacant card with its one-click relist
+// (lib/coming-vacant). Blank clears it. An N12 or N13 is not recorded here:
+// those end in the landlord's own use or repairs, not a relist.
+export async function recordMoveOut(formData: FormData) {
+  await requireCapability("manage_tenancies", FORBIDDEN);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+
+  const id = s(formData, "id");
+  if (!id) redirect("/dashboard/tenancies");
+  const raw = s(formData, "move_out_date");
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+  const sourceRaw = s(formData, "move_out_source");
+  const source = date ? (["tenant_notice", "renewal_checkin", "landlord"].includes(sourceRaw) ? sourceRaw : "tenant_notice") : null;
+
+  const supabase = createClient();
+  await supabase
+    .from("tenancies")
+    .update({
+      move_out_date: date,
+      move_out_source: source,
+      move_out_noted_at: date ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("organization_id", org.id);
+
+  revalidatePath(`/dashboard/tenancies/${id}`);
+  revalidatePath("/dashboard");
+  redirect(`/dashboard/tenancies/${id}?moveout=${date ? "set" : "cleared"}#renewal`);
+}
+
 export async function requestRenewalCheckin(formData: FormData) {
   await requireCapability("manage_tenancies", FORBIDDEN);
   const org = await getCurrentOrg();

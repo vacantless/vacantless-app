@@ -28,6 +28,7 @@ import {
   watchLease,
   setRenewalAutopilot,
   requestRenewalCheckin,
+  recordMoveOut,
   serveN1,
   fileN1Pdf,
 } from "../actions";
@@ -46,8 +47,10 @@ import {
   cancelScheduledTenantMessage,
   enqueueTenantMessageForUndo,
   flushScheduledTenantMessage,
+  sendShowingHeadsUp,
   sendTenantMessage,
 } from "../comms-actions";
+import { deriveComingVacant } from "@/lib/coming-vacant";
 import { updateStripeRentAmount } from "../stripe-rent-actions";
 import {
   WORK_ORDER_CATEGORIES,
@@ -227,6 +230,8 @@ type Tenancy = {
   renewal_intent_at: string | null;
   renewal_intent_requested_at: string | null;
   renewal_intent_token: string | null;
+  move_out_date: string | null;
+  move_out_source: string | null;
   n1_served_at: string | null;
   n1_served_method: string | null;
   n1_effective_date: string | null;
@@ -239,6 +244,9 @@ type Tenancy = {
     beds: number | null;
     rent_control_exempt: boolean | null;
     first_occupancy_date: string | null;
+    status: string | null;
+    available_date: string | null;
+    viewing_earliest_date: string | null;
   } | null;
   tenants: Tenant[];
 };
@@ -406,6 +414,7 @@ export default async function TenancyDetailPage({
     striperent?: string;
     serve?: string;
     renewal?: string;
+    moveout?: string;
     reason?: string;
     paid?: string;
     msg?: string;
@@ -440,7 +449,7 @@ export default async function TenancyDetailPage({
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_rent_amount_synced_cents, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, beds, rent_control_exempt, first_occupancy_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_rent_amount_synced_cents, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, move_out_date, move_out_source, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, beds, rent_control_exempt, first_occupancy_date, status, available_date, viewing_earliest_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -908,6 +917,32 @@ export default async function TenancyDetailPage({
           ? "Overdue"
           : "Scheduled"
     : undefined;
+
+  // S770 (REVIEW-S770 section 6): is this unit coming vacant? Same rule as Today.
+  const comingVacant =
+    t.status === "active" && t.property
+      ? deriveComingVacant(
+          {
+            tenancyId: t.id,
+            propertyId: t.property.id,
+            address: t.property.address,
+            startDate: t.start_date,
+            endDate: t.end_date,
+            renewalIntent: (t.renewal_intent as "staying" | "leaving" | "unsure" | null) ?? null,
+            moveOutDate: t.move_out_date,
+            propertyStatus: t.property.status,
+            availableDate: t.property.available_date,
+            viewingEarliestDate: t.property.viewing_earliest_date,
+          },
+          todayOntario,
+        )
+      : null;
+  const moveOutFlash =
+    searchParams.moveout === "set"
+      ? "Move-out date saved. Today shows the unit as coming vacant, with one click to relist."
+      : searchParams.moveout === "cleared"
+        ? "Move-out date cleared."
+        : null;
 
   const SERVE_FLASH: Record<string, string> = {
     emailed: "Notice emailed to the tenant and recorded as served.",
@@ -2106,7 +2141,7 @@ export default async function TenancyDetailPage({
                 </p>
                 <p className="mt-1 text-xs text-gray-600">
                   {renewalCheckin.branch === "handoff_turnover"
-                    ? "Start the turnover. List the unit and line up the next tenant."
+                    ? "Today shows this unit as coming vacant, with one click to relist it."
                     : "Next step: serve the rent increase in the section below."}
                 </p>
               </div>
@@ -2140,6 +2175,81 @@ export default async function TenancyDetailPage({
                 )}
               </div>
             )}
+          </div>
+
+          {/* S770 (REVIEW-S770 section 6): the tenant gave notice. Record the
+              day; Today gets the coming-vacant card and the one-click relist. */}
+          <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-gray-800">Tenant gave notice?</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Record the day they leave: an N9, a text, a conversation. Today then shows the unit
+              as coming vacant. One click relists it, with viewings allowed from three weeks before.
+              An N12 or N13 does not relist the unit. Those end in your own use or repairs. An N4,
+              N5 or N8 can end with the tenant leaving. Record the date here when it is set.
+            </p>
+            {moveOutFlash ? (
+              <p className="mt-2 text-xs font-medium text-emerald-700" role="status">
+                {moveOutFlash}
+              </p>
+            ) : null}
+            <form action={recordMoveOut} className="mt-3 flex flex-wrap items-end gap-2">
+              <input type="hidden" name="id" value={t.id} />
+              <input type="hidden" name="move_out_source" value="tenant_notice" />
+              <label className="block text-xs font-medium text-gray-600">
+                Move-out date
+                <input
+                  type="date"
+                  name="move_out_date"
+                  defaultValue={t.move_out_date ?? ""}
+                  className="mt-1 block rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <button
+                type="submit"
+                className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+              >
+                {t.move_out_date ? "Update" : "Save"}
+              </button>
+            </form>
+            {comingVacant ? (
+              <div className={`mt-4 rounded-xl p-3.5 ${comingVacant.relisted ? "bg-emerald-50" : "bg-amber-50"}`}>
+                <p className="text-sm font-medium text-gray-900">{comingVacant.title}</p>
+                <p className="mt-1 text-xs text-gray-700">
+                  {comingVacant.relisted
+                    ? comingVacant.line
+                    : "Relist it from Today, or open the rental. Viewings may open from " +
+                      comingVacant.viewingsFrom +
+                      "."}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link
+                    href={
+                      comingVacant.relisted
+                        ? `/dashboard/properties/${t.property?.id}?tab=distribute#distribute-header`
+                        : "/dashboard"
+                    }
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    {comingVacant.relisted ? "See the rental" : "Relist from Today"}
+                  </Link>
+                  {t.tenants.length > 0 ? (
+                    <form action={sendShowingHeadsUp}>
+                      <input type="hidden" name="tenancy_id" value={t.id} />
+                      <button
+                        type="submit"
+                        className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+                      >
+                        Email the tenant: viewings from {comingVacant.viewingsFrom}
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  The email says viewings are coming. Each one gets 24 hours&apos; written notice.
+                  It is saved in Messages below.
+                </p>
+              </div>
+            ) : null}
           </div>
         </CollapsibleSection>
       )}
