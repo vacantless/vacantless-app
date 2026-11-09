@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { PageHeader } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { getCurrentOrg } from "@/lib/org";
@@ -11,6 +12,14 @@ import { cleanPropertyId } from "@/lib/site-signin";
 import { signinChainHref } from "@/lib/sites-setup";
 import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
 import { SitesRows } from "./sites-rows";
+import { emailSitesComputerLink } from "./actions";
+import {
+  SITES_PHONE_BUTTON,
+  SITES_PHONE_LINE,
+  isPhoneUserAgent,
+  sitesPhoneMailedLine,
+  sitesPhoneMarketplaceHref,
+} from "@/lib/sites-phone";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +30,7 @@ export const dynamic = "force-dynamic";
 export default async function SitesSetupPage({
   searchParams,
 }: {
-  searchParams: { property?: string; from?: string };
+  searchParams: { property?: string; from?: string; mailed?: string };
 }) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
@@ -54,6 +63,17 @@ export default async function SitesSetupPage({
     if (isHiddenForOrg(k, org.id)) delete tileStateByChannel[k];
   }
 
+  // S768: on a phone, say the sign-ins need a computer and email the link.
+  // Only for accounts that can use the sign-ins; the others see the usual rows.
+  const onPhone = access.setup && isPhoneUserAgent(headers().get("user-agent"));
+  let mailedLine: string | null = null;
+  if (onPhone && searchParams.mailed) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    mailedLine = sitesPhoneMailedLine(searchParams.mailed, user?.email ?? null);
+  }
+
   const backHref = propertyId
     ? `/dashboard/properties/${propertyId}?tab=distribute#distribute-header`
     : searchParams.from === "getting-started"
@@ -81,17 +101,62 @@ export default async function SitesSetupPage({
           </Link>
         </p>
       ) : null}
-      <div className="mt-5">
-        <SitesRows
-          input={{
-            tileStateByChannel,
-            postingAllowed: access.setup,
-            propertyId,
-            postingHref: POSTING_ADDON_HREF,
-          }}
-          signinAllHref={access.setup ? signinChainHref(propertyId) : null}
-        />
-      </div>
+      {onPhone ? (
+        <div className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-base text-gray-900">{SITES_PHONE_LINE}</p>
+          <form action={emailSitesComputerLink} className="mt-4">
+            {propertyId ? <input type="hidden" name="property_id" value={propertyId} /> : null}
+            <button
+              type="submit"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-brand px-4 py-3 text-base font-medium text-white shadow-sm"
+            >
+              {SITES_PHONE_BUTTON}
+            </button>
+          </form>
+          {mailedLine ? (
+            <p
+              className={`mt-3 text-sm ${searchParams.mailed === "1" ? "text-green-700" : "text-amber-800"}`}
+              role="status"
+            >
+              {mailedLine}
+            </p>
+          ) : null}
+          <p className="mt-4 text-sm text-gray-600">
+            From your phone you can still post to Facebook Marketplace.{" "}
+            <Link href={sitesPhoneMarketplaceHref(propertyId)} className="font-semibold text-brand">
+              Post on Marketplace
+            </Link>
+          </p>
+        </div>
+      ) : null}
+      {onPhone ? (
+        <details className="mt-5">
+          <summary className="cursor-pointer text-sm text-gray-500">Show the sites anyway</summary>
+          <div className="mt-3">
+            <SitesRows
+              input={{
+                tileStateByChannel,
+                postingAllowed: access.setup,
+                propertyId,
+                postingHref: POSTING_ADDON_HREF,
+              }}
+              signinAllHref={access.setup ? signinChainHref(propertyId) : null}
+            />
+          </div>
+        </details>
+      ) : (
+        <div className="mt-5">
+          <SitesRows
+            input={{
+              tileStateByChannel,
+              postingAllowed: access.setup,
+              propertyId,
+              postingHref: POSTING_ADDON_HREF,
+            }}
+            signinAllHref={access.setup ? signinChainHref(propertyId) : null}
+          />
+        </div>
+      )}
       <p className="mt-6 text-xs text-gray-500">
         Account details, checks and &quot;forget this sign-in&quot; are on{" "}
         <Link href="/dashboard/link-portals" className="underline">
