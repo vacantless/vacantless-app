@@ -12,6 +12,7 @@ import { cleanPropertyId } from "@/lib/site-signin";
 import { signinChainHref } from "@/lib/sites-setup";
 import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
 import { SitesRows } from "./sites-rows";
+import { SubmitButton } from "@/components/submit-button";
 import { emailSitesComputerLink } from "./actions";
 import {
   SITES_PHONE_BUTTON,
@@ -104,23 +105,32 @@ export default async function SitesSetupPage({
       {onPhone ? (
         <div className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
           <p className="text-base text-gray-900">{SITES_PHONE_LINE}</p>
-          <form action={emailSitesComputerLink} className="mt-4">
-            {propertyId ? <input type="hidden" name="property_id" value={propertyId} /> : null}
-            <button
-              type="submit"
-              className="inline-flex w-full items-center justify-center rounded-lg bg-brand px-4 py-3 text-base font-medium text-white shadow-sm"
-            >
-              {SITES_PHONE_BUTTON}
-            </button>
-          </form>
-          {mailedLine ? (
-            <p
-              className={`mt-3 text-sm ${searchParams.mailed === "1" ? "text-green-700" : "text-amber-800"}`}
-              role="status"
-            >
-              {mailedLine}
-            </p>
-          ) : null}
+          {searchParams.mailed === "1" && mailedLine ? (
+            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3" role="status">
+              <p className="text-base font-semibold text-green-800">✓ {mailedLine}</p>
+              <form action={emailSitesComputerLink} className="mt-2">
+                {propertyId ? <input type="hidden" name="property_id" value={propertyId} /> : null}
+                <SubmitButton pendingLabel="Sending..." className="text-sm text-green-800 underline disabled:opacity-60">
+                  Send it again
+                </SubmitButton>
+              </form>
+            </div>
+          ) : (
+            <form action={emailSitesComputerLink} className="mt-4">
+              {propertyId ? <input type="hidden" name="property_id" value={propertyId} /> : null}
+              <SubmitButton
+                pendingLabel="Sending..."
+                className="inline-flex w-full items-center justify-center rounded-lg bg-brand px-4 py-3 text-base font-medium text-white shadow-sm active:opacity-80 disabled:opacity-60"
+              >
+                {SITES_PHONE_BUTTON}
+              </SubmitButton>
+              {mailedLine ? (
+                <p className="mt-3 text-sm text-amber-800" role="status">
+                  {mailedLine}
+                </p>
+              ) : null}
+            </form>
+          )}
           <p className="mt-4 text-sm text-gray-600">
             From your phone you can still post to Facebook Marketplace.{" "}
             <Link href={sitesPhoneMarketplaceHref(propertyId)} className="font-semibold text-brand">

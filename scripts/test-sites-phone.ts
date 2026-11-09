@@ -67,6 +67,8 @@ const page = readFileSync(`${root}/app/dashboard/sites/page.tsx`, "utf8");
 const actions = readFileSync(`${root}/app/dashboard/sites/actions.ts`, "utf8");
 ok("page reads the user agent", page.includes('headers().get("user-agent")') && page.includes("isPhoneUserAgent("));
 ok("page shows the phone line and the email button", page.includes("SITES_PHONE_LINE") && page.includes("emailSitesComputerLink"));
+ok("button shows Sending... while it sends", page.includes("<SubmitButton") && page.includes('pendingLabel="Sending..."'));
+ok("sent state replaces the button with a green box", page.includes("bg-green-50") && page.includes("Send it again"));
 ok("page keeps the full list behind a details", page.includes("<details") && page.includes("<SitesRows"));
 ok("action sends only to the signed-in user", actions.includes("auth.getUser()") && actions.includes("to_email: to"));
 ok("action checks the rental belongs to the account", actions.includes('.eq("organization_id", org.id)'));
