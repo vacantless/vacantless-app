@@ -6,7 +6,8 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { publishProperty } from "../actions";
+import { publishProperty, readSetLiveSiteNotes } from "../actions";
+import { setLiveSitesSentence, type SetLiveSiteNote } from "@/lib/set-live-cost-line";
 import { readInstantPublishDestinations } from "../distribution-actions";
 
 export type InstantDestination = { key: string; label: string };
@@ -54,18 +55,27 @@ export function ConfirmPublishButton({
     useState<InstantDestination[]>(destinations);
   const [loadingDestinations, setLoadingDestinations] = useState(false);
   const [destinationError, setDestinationError] = useState<string | null>(null);
+  // S771: the robot sites Set Live also posts to, each with its cost or free count.
+  const [siteNotes, setSiteNotes] = useState<SetLiveSiteNote[]>([]);
   const autoId = useId();
   const titleId = `${id ?? autoId}-publish-confirm-title`;
-  const hasFreshDestinations = freshDestinations.length > 0;
+  const hasFreshDestinations = freshDestinations.length > 0 || siteNotes.length > 0;
+  const sitesSentence = setLiveSitesSentence(siteNotes);
   const showingInstantCommitment = loadingDestinations || hasFreshDestinations;
 
   async function openConfirm() {
     setFreshDestinations(destinations);
+    setSiteNotes([]);
     setDestinationError(null);
     setOpen(true);
     setLoadingDestinations(true);
     try {
-      setFreshDestinations(await readInstantPublishDestinations(propertyId));
+      const [instant, notes] = await Promise.all([
+        readInstantPublishDestinations(propertyId),
+        readSetLiveSiteNotes(propertyId).catch(() => [] as SetLiveSiteNote[]),
+      ]);
+      setFreshDestinations(instant);
+      setSiteNotes(notes);
     } catch {
       setDestinationError(
         "We could not read your account list. Close this and try again.",
@@ -128,7 +138,8 @@ export function ConfirmPublishButton({
                     Refreshing connected accounts...
                   </li>
                 ) : hasFreshDestinations ? (
-                  freshDestinations.map((destination) => (
+                  <>
+                  {freshDestinations.map((destination) => (
                     <li
                       key={destination.key}
                       className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
@@ -140,7 +151,21 @@ export function ConfirmPublishButton({
                         Instant
                       </span>
                     </li>
-                  ))
+                  ))}
+                  {siteNotes.map((site) => (
+                    <li
+                      key={site.key}
+                      className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm"
+                    >
+                      <span className="font-medium text-gray-900">{site.label}</span>
+                      <span
+                        className={`text-right text-xs ${site.paid || site.capReached ? "font-semibold text-amber-800" : "text-gray-600"}`}
+                      >
+                        {site.note}
+                      </span>
+                    </li>
+                  ))}
+                  </>
                 ) : (
                   <li className="px-3 py-2.5 text-sm text-gray-600">
                     No site posts yet.
@@ -149,6 +174,9 @@ export function ConfirmPublishButton({
               </ul>
             </div>
             ) : null}
+            {!loadingDestinations && sitesSentence && (
+              <p className="mt-3 text-sm leading-relaxed text-gray-700">{sitesSentence}</p>
+            )}
             {destinationError && (
               <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 {destinationError}

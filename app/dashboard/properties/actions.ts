@@ -8,7 +8,9 @@ import { queueOnFirstClick } from "@/lib/posting-autopilot";
 import { robotSitesToPostAtSetLive, setLiveAudit } from "@/lib/set-live-posts";
 import { adDetailsChanged, adUpdatePlan, editableInPlace, editInPlaceAudit, updateRepostNote, updateTakedownAudit, type AdUpdatePlan, type LivePostRow } from "@/lib/ad-edits-follow";
 import { queueRobotEdits } from "@/lib/robot-edit";
-import { SITE_SIGNIN_LABEL } from "@/lib/site-signin";
+import { SITE_SIGNIN_LABEL, type SiteSigninChannel } from "@/lib/site-signin";
+import { setLiveSiteNote, type SetLiveSiteNote } from "@/lib/set-live-cost-line";
+import { EMPTY_COST_CAP } from "@/lib/distribution-channels";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -1385,6 +1387,83 @@ async function followPhotoChange(
 }
 
 /**
+ * S771: which robot sites Set Live would queue for this rental, with the tiles
+ * they were read from. Shared by postRobotSitesAfterPageLive (the queue) and
+ * readSetLiveSiteNotes (the confirm), so the confirm lists exactly what posts.
+ */
+async function setLiveRobotChannels({
+  supabase,
+  org,
+  propertyId,
+}: {
+  supabase: ReturnType<typeof createClient>;
+  org: Org;
+  propertyId: string;
+}): Promise<{ channels: SiteSigninChannel[]; tiles: ChannelTileStatusRow[] }> {
+  const access = await readRobotPostingAccess(supabase, org.id, { rental: propertyId });
+  if (!access.allowed || access.autopilot !== true) return { channels: [], tiles: [] };
+
+  const tiles = await listChannelTileStatuses(org.id);
+  const tileStateByChannel: Record<string, string> = {};
+  for (const t of tiles) tileStateByChannel[t.channel] = t.state;
+
+  const { data: run } = await supabase
+    .from("distribution_runs")
+    .select("id")
+    .eq("property_id", propertyId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  const existingRunId = (run?.id as string | undefined) ?? null;
+  const existingItemStatusByChannel: Record<string, string | null> = {};
+  if (existingRunId) {
+    const { data: items } = await supabase
+      .from("distribution_run_items")
+      .select("channel, publish_status")
+      .eq("run_id", existingRunId);
+    for (const it of (items ?? []) as { channel: string; publish_status: string | null }[]) {
+      existingItemStatusByChannel[it.channel] = it.publish_status;
+    }
+  }
+
+  const channels = robotSitesToPostAtSetLive({
+    postingAllowed: access.allowed,
+    autopilot: access.autopilot,
+    tileStateByChannel,
+    existingItemStatusByChannel,
+    hiddenFor: (c) => isHiddenForOrg(c, org.id),
+  });
+  return { channels, tiles };
+}
+
+/**
+ * S771 (REVIEW-S770 section 4): the cost and free-listing note for each robot
+ * site Set Live will post to, read when the confirm opens.
+ */
+export async function readSetLiveSiteNotes(propertyId: string): Promise<SetLiveSiteNote[]> {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(propertyId ?? "").trim();
+  if (!id) return [];
+  const org = await getCurrentOrg();
+  if (!org) return [];
+  const supabase = createClient();
+  const { data: prop } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  if (!prop) return [];
+  try {
+    const { channels, tiles } = await setLiveRobotChannels({ supabase, org, propertyId: id });
+    const byChannel = new Map(tiles.map((t) => [t.channel, t]));
+    return channels.map((c) => setLiveSiteNote(c, byChannel.get(c)?.costCap ?? EMPTY_COST_CAP));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * S761 (REVIEW-S761 item 1): after Set Live, queue the robot on every
  * connected site for this org. Pure decision in lib/set-live-posts; here only
  * the reads and the two existing writes (stage the run items, queue them).
@@ -1400,39 +1479,7 @@ async function postRobotSitesAfterPageLive({
   propertyId: string;
 }): Promise<number> {
   try {
-    const access = await readRobotPostingAccess(supabase, org.id, { rental: propertyId });
-    if (!access.allowed || access.autopilot !== true) return 0;
-
-    const tiles = await listChannelTileStatuses(org.id);
-    const tileStateByChannel: Record<string, string> = {};
-    for (const t of tiles) tileStateByChannel[t.channel] = t.state;
-
-    const { data: run } = await supabase
-      .from("distribution_runs")
-      .select("id")
-      .eq("property_id", propertyId)
-      .eq("status", "active")
-      .limit(1)
-      .maybeSingle();
-    const existingRunId = (run?.id as string | undefined) ?? null;
-    const existingItemStatusByChannel: Record<string, string | null> = {};
-    if (existingRunId) {
-      const { data: items } = await supabase
-        .from("distribution_run_items")
-        .select("channel, publish_status")
-        .eq("run_id", existingRunId);
-      for (const it of (items ?? []) as { channel: string; publish_status: string | null }[]) {
-        existingItemStatusByChannel[it.channel] = it.publish_status;
-      }
-    }
-
-    const channels = robotSitesToPostAtSetLive({
-      postingAllowed: access.allowed,
-      autopilot: access.autopilot,
-      tileStateByChannel,
-      existingItemStatusByChannel,
-      hiddenFor: (c) => isHiddenForOrg(c, org.id),
-    });
+    const { channels } = await setLiveRobotChannels({ supabase, org, propertyId });
     if (channels.length === 0) return 0;
 
     const staged = await stageDistributionRunForProperty({
