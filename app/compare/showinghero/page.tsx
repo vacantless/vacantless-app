@@ -58,7 +58,7 @@ const COMPARE_ROWS: Row[] = [
   },
   {
     topic: "Rental sites",
-    us: "Your Facebook Page, free. Kijiji, Rentals.ca and Zumper with the CA$49 a month Posting add-on, on your own accounts. Kijiji charges its own fee for each ad.",
+    us: "Your Facebook Page, free. On Free, we post your one rental to Kijiji, Rentals.ca and Zumper. Every rental with the CA$49 a month Posting add-on, on your own accounts. Kijiji charges its own fee for each ad.",
     them: "25+ listing sites, not named on their pricing page. None is named as Canadian (see the next row).",
   },
   {

@@ -39,7 +39,7 @@ const FOR_YOU: string[] = [
   "An email the moment a renter asks or books.",
   "Every renter for every listing in one list, with their answers and notes.",
   "Your name and colours on every page and email renters see.",
-  "With the CA$49 a month Posting add-on, we post to Kijiji, Rentals.ca and Zumper for you, on your own accounts. Kijiji charges its own fee for each ad.",
+  "We post to Kijiji, Rentals.ca and Zumper for you, on your own accounts. One rental on Free, every rental with the CA$49 a month Posting add-on. Kijiji charges its own fee for each ad.",
 ];
 
 export default function RealtorsPage() {

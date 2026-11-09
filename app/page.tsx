@@ -397,7 +397,7 @@ const HOW_STEPS: { title: string; body: string }[] = [
   },
   {
     title: "Press Set Live",
-    body: "Your rental goes up on your Facebook Page and Marketplace, and with Posting on Kijiji, Rentals.ca and Zumper. Every renter lands in the same place.",
+    body: "Your rental goes up on your Facebook Page and Marketplace. On Free, we post your one rental to Kijiji, Rentals.ca and Zumper too. With Posting, we post every rental. Every renter lands in the same place.",
   },
   {
     title: "Show up",
@@ -623,7 +623,7 @@ function Pricing() {
     <section id="pricing" className="py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
         <SectionHead title="Two plans. One add-on.">
-          Try it free on one rental. Move up when you have more than one. Add Posting when you want us to post your ads.
+          Try it free on one rental. Move up when you have more than one. Add Posting when you want us to post more than one rental.
         </SectionHead>
         <div className="grid gap-4 md:grid-cols-2">
           {PLANS.map((p) => (
@@ -701,6 +701,7 @@ const POSTING_ADDON_INCLUDES: string[] = [
   "We post your rental to Kijiji, Rentals.ca and Zumper for you",
   "On your own accounts. You sign in to each site once",
   "Ads go up as soon as they are ready, are kept up, and come down when the unit rents",
+  "Change the rent or photos, and we update your live ads",
   "Every renter from those sites lands in the same list",
 ];
 
