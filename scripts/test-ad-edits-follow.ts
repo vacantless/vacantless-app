@@ -14,6 +14,7 @@ import {
 } from "../lib/ad-edits-follow";
 import { SWEEP_PATHS } from "../lib/cron-sweeps";
 import { editableInPlace } from "../lib/ad-edits-follow";
+import { builtInSwitchOn } from "../lib/platform-switches";
 import { pagePostTextChanged } from "../lib/facebook-page-update";
 import { isAdUpkeepTransport, workerJobEligible } from "../lib/distribution-worker";
 
@@ -129,7 +130,10 @@ ok("saved notice offers the Marketplace update", /<MarketplaceUpdateButton kit=\
   ok("edit makes a run when the rental has none", re.includes('.from("distribution_runs")\n        .insert({ organization_id: args.organizationId, property_id: args.propertyId, status: "active" })'));
   ok("edit never takes over a row being worked on", re.includes('cur.transport !== EDIT_TRANSPORT && cur.publish_status !== "live"'));
   const sw = readFileSync("lib/platform-switches.ts", "utf8");
-  ok("switch is off for everyone by default", /kijiji_edits: \{[\s\S]{0,500}builtIn: \[\]/.test(sw));
+  // S764: Kijiji edits are on for every account now (proven twice on Agile); the
+  // guard keeps the other two switches per account.
+  ok("Kijiji edits on for every account", /kijiji_edits: \{[\s\S]{0,700}everyOrg: true/.test(sw) && builtInSwitchOn("kijiji_edits", "00000000-0000-0000-0000-000000000001"));
+  ok("other switches stay per account", !builtInSwitchOn("shared_sms_number", "00000000-0000-0000-0000-000000000001") && !builtInSwitchOn("answers_own_enquiries", "00000000-0000-0000-0000-000000000001"));
   const mig = readFileSync("supabase/migrations/0274_signin_lost_text_and_kijiji_edit.sql", "utf8");
   ok("migration allows the edit transport", mig.includes("'takedown',\n      'edit'"));
 }

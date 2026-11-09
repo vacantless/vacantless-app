@@ -13,6 +13,7 @@ export const PLATFORM_SWITCHES = {
     description:
       "Renter and tenant texts go out from the shared Vacantless number, and replies to it are filed to this account. Only for accounts the number's registration covers.",
     builtIn: ["921f7c08-98af-428f-a238-36f4a781b0de"], // Agile Real Estate Group
+    everyOrg: false,
   },
   answers_own_enquiries: {
     label: "Answers its own emailed-in renters",
@@ -23,15 +24,21 @@ export const PLATFORM_SWITCHES = {
     // lost with no message ever sent (30 days to 2026-10-20). Staff can turn
     // it back on in /dashboard/admin.
     builtIn: [],
+    everyOrg: false,
   },
   // S762 (REVIEW-S761 item 2): the robot edits the live Kijiji ad in place
-  // after an edit (no new $33.84). Off for everyone until the worker's
-  // KIJIJI_EDIT_LIVE run is proven on a real ad; staff turn it on per account.
+  // after an edit (no new $33.84).
+  // S764: on for every account. Proven twice on Agile's real Pillette 3 ad
+  // (S762 move-in date; S764 description, 2026-11-09 00:58Z: public ad shows
+  // the new line, expiry unchanged Nov 12, no new order). The edit still
+  // needs Posting, the standing "post for me" setting and a live Kijiji
+  // sign-in (adUpdatePlan), so it only reaches Posting accounts.
   kijiji_edits: {
     label: "Kijiji edits in place",
     description:
       "When the rental's rent, description, move-in date, beds, baths or parking change, the robot edits the live Kijiji ad on Kijiji's own edit page. It saves only when Kijiji's total reads $0.00.",
     builtIn: [],
+    everyOrg: true,
   },
 } as const;
 
@@ -44,7 +51,10 @@ export function isPlatformSwitchKey(v: string): v is PlatformSwitchKey {
 
 /** Built-in only (no database). Pure. */
 export function builtInSwitchOn(key: PlatformSwitchKey, orgId: string | null | undefined): boolean {
-  return !!orgId && (PLATFORM_SWITCHES[key].builtIn as readonly string[]).includes(orgId);
+  if (!orgId) return false;
+  // S764: a switch that is on for every account.
+  if ((PLATFORM_SWITCHES[key] as { everyOrg?: boolean }).everyOrg === true) return true;
+  return (PLATFORM_SWITCHES[key].builtIn as readonly string[]).includes(orgId);
 }
 
 type FromClient = { from: (table: string) => any };
