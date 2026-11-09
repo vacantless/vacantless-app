@@ -202,20 +202,18 @@ export async function GET(req: NextRequest) {
 
   // S754: available rentals missing from a site the account can post to.
   // Paying accounts only (Posting, or Agile), never Noam's quiet test accounts.
-  const coverageGaps: string[] = [];
-  let coverageGapRentals = 0;
+  const coverageGaps: { org: string; lines: string[] }[] = [];
   for (const o of orgs.values()) {
     if (!o.robot || isQuietNotificationOrg(o.id)) continue;
     try {
       const cov = await loadPostingCoverage(admin, o.id, true);
-      coverageGaps.push(...coverageHealthLines(o.name, cov));
-      coverageGapRentals += cov.gaps;
+      const lines = coverageHealthLines(cov);
+      if (lines.length) coverageGaps.push({ org: o.name, lines });
     } catch {
       // a read error leaves the section out; the sweep line above still reports
     }
   }
   input.coverageGaps = coverageGaps;
-  input.coverageGapRentals = coverageGapRentals;
 
   const email = buildHealthDigest({ ...input, serverNode: { version: process.version, fixed: nodeHasBrotliFix(process.version) } });
   if (dry) return NextResponse.json({ ok: true, dry: true, ...email });

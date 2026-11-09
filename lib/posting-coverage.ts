@@ -107,16 +107,26 @@ export function coverageLine(row: CoverageRow, shortAddress: (a: string | null) 
   return `${shortAddress(row.address)} is on ${row.live.length} of ${row.offered} sites. Missing: ${names}.`;
 }
 
-/** Health-email lines for one org: one per rental with a gap, capped. */
-export function coverageHealthLines(orgName: string, coverage: Coverage, cap = 6): string[] {
+/** "Kijiji", "Kijiji or Zumper", "Kijiji, Zumper or Rentals.ca". */
+export function joinOr(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
+}
+
+/**
+ * Health-email lines for one org: one short line per rental with a gap, capped.
+ * S769: no org name on each line (the email groups lines under the account)
+ * and the short address, so a daily repeat reads in one glance.
+ */
+export function coverageHealthLines(coverage: Coverage, cap = 6): string[] {
   const out: string[] = [];
   for (const row of coverage.rows) {
     if (row.missing.length === 0) continue;
     if (out.length >= cap) {
-      out.push(`${orgName}: ${coverage.gaps - cap} more rental${coverage.gaps - cap === 1 ? "" : "s"} with missing sites.`);
+      out.push(`${coverage.gaps - cap} more rental${coverage.gaps - cap === 1 ? "" : "s"} like this.`);
       break;
     }
-    out.push(`${orgName}: ${coverageLine(row)}`);
+    out.push(`${shortAddress(row.address)}: not on ${joinOr(row.missing.map(coverageLabel))}`);
   }
   return out;
 }

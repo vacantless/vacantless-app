@@ -31,9 +31,9 @@ const clean: HealthInput = {
   const d = buildHealthDigest(clean);
   ok("clean: subject says all clear", d.subject === "Vacantless health: all clear", d.subject);
   ok("clean: zero problems", d.problems === 0);
-  ok("clean: says nothing failed", d.body.startsWith("Nothing failed in the last 24 hours."));
-  ok("clean: names what was checked", d.body.includes("2 of 2 background sweeps clean"));
-  ok("clean: says what it does not check", d.body.includes("Not checked here: app errors"));
+  ok("clean: says all clear", d.body.startsWith("All clear for the last 24 hours."));
+  ok("clean: names what was checked", d.body.includes("Checked: 2 of 2 sweeps"));
+  ok("clean: says what it does not check", d.body.includes("Not checked: app errors"));
 }
 
 {
@@ -99,8 +99,8 @@ ok("portal: not_parsed is a problem", portalOutcomeIsProblem("not_parsed"));
     signIns: [{ org: "Agile Real Estate Group", channel: "rentals_ca", code: "needs_login" }],
   });
   const lines = s.flatMap((x) => x.lines).join("\n");
-  ok("robot: rejected post listed", lines.includes("S712 Test Rentals, zumper: rejected."), lines);
-  ok("robot: signed-out site listed", lines.includes("Agile Real Estate Group, rentals_ca: signed out (needs login)."), lines);
+  ok("robot: rejected post listed", lines.includes("S712 Test Rentals, Zumper: rejected."), lines);
+  ok("robot: signed-out site listed", lines.includes("Agile Real Estate Group, Rentals.ca: signed out (needs login)."), lines);
 }
 {
   // S728: a sweep a flag switched off is named once, from the newest run.
@@ -135,10 +135,10 @@ ok("toronto: 03:00Z is the previous local day", torontoDateHour(new Date("2026-1
 // S736: the server Node line (information, never a problem).
 {
   const waiting = buildHealthDigest({ ...clean, serverNode: { version: "v24.21.0", fixed: false } });
-  ok("node: unpatched line", waiting.body.includes("Server Node: v24.21.0. The security fix is not on the server yet."), waiting.body);
+  ok("node: unpatched line", waiting.body.includes("Server Node: v24.21.0. The security fix is not on the server."), waiting.body);
   ok("node: unpatched is not a problem", waiting.problems === 0 && waiting.subject.endsWith("all clear"));
   const fixed = buildHealthDigest({ ...clean, serverNode: { version: "v24.22.1", fixed: true } });
-  ok("node: patched says the Stripe key was rotated", fixed.body.includes("Stripe key was rotated") && !fixed.body.includes("Roll the Stripe key"), fixed.body);
+  ok("node: patched adds no line (S769)", !fixed.body.includes("Server Node"), fixed.body);
   ok("node: no line when not given", !buildHealthDigest(clean).body.includes("Server Node"));
   ok("node: route passes the server Node", readFileSync("app/api/cron/health-digest/route.ts", "utf8").includes("nodeHasBrotliFix(process.version)"));
   ok("node: the 15-minute log keeps it", readFileSync("app/api/cron/sweep-all/route.ts", "utf8").includes('"server-node": { status: null, reason: process.version }'));
@@ -157,21 +157,25 @@ ok("toronto: 03:00Z is the previous local day", torontoDateHour(new Date("2026-1
   ok("parked: closed_stale is not a problem", !robotRowIsProblem("closed_stale"));
   ok("parked: a real error is a problem", robotRowIsProblem("login_wall") && robotRowIsProblem(null));
   ok("parked: route filters with robotRowIsProblem", readFileSync("app/api/cron/health-digest/route.ts", "utf8").includes("robotRowIsProblem(r.error_code)"));
-  const gapsOnly = buildHealthDigest({ ...clean, coverageGaps: ["A: 1 Main St is on 2 of 4 sites. Missing: Kijiji."], coverageGapRentals: 1 });
+  const gapsOnly = buildHealthDigest({ ...clean, coverageGaps: [{ org: "A", lines: ["1 Main St: not on Kijiji"] }] });
   ok("gaps only: zero problems", gapsOnly.problems === 0, gapsOnly.problems);
-  ok("gaps only: subject all clear with the gap count", gapsOnly.subject === "Vacantless health: all clear (1 rental could be on more sites)", gapsOnly.subject);
-  ok("gaps only: head says nothing failed", gapsOnly.body.startsWith("Nothing failed in the last 24 hours."));
-  ok("gaps only: still lists the gap", gapsOnly.body.includes("RENTALS THAT COULD BE ON MORE SITES (NOT FAILURES)\n- A: 1 Main St"), gapsOnly.body);
+  ok("gaps only: subject is a plain all clear (S769)", gapsOnly.subject === "Vacantless health: all clear", gapsOnly.subject);
+  ok("gaps only: head says all clear", gapsOnly.body.startsWith("All clear for the last 24 hours."));
+  ok("gaps only: lists the gap under the account", gapsOnly.body.includes("Not failures, but could be on more sites:\nA\n- 1 Main St: not on Kijiji"), gapsOnly.body);
   const mixed = buildHealthDigest({
     ...clean,
     emails: { checked: true, problems: [{ event: "hard_bounce", email: "x@y.com", subject: "Hi", reason: null }] },
-    coverageGaps: ["A: one", "A: two", "A: three", "A: four"],
-    coverageGapRentals: 4,
+    coverageGaps: [{ org: "A", lines: ["one", "two"] }, { org: "B", lines: ["three"] }],
   });
-  ok("mixed: only the bounce counts", mixed.problems === 1 && mixed.subject === "Vacantless health: 1 problem (4 rentals could be on more sites)", mixed.subject);
-  ok("mixed: gaps come after the failures", mixed.body.indexOf("EMAILS") < mixed.body.indexOf("RENTALS THAT COULD"), mixed.body);
+  ok("mixed: only the bounce counts", mixed.problems === 1 && mixed.subject === "Vacantless health: 1 problem", mixed.subject);
+  ok("mixed: head counts the one thing", mixed.body.startsWith("1 thing needs a look from the last 24 hours:"), mixed.body);
+  ok("mixed: gaps come after the failures", mixed.body.indexOf("Emails:") < mixed.body.indexOf("could be on more sites"), mixed.body);
+  ok("mixed: each account named once", mixed.body.includes("\nA\n- one\n- two\n\nB\n- three"), mixed.body);
+  ok("no headings in capitals", !/\n[A-Z ]{6,}\n/.test(mixed.body), mixed.body);
   ok("no gaps: subject unchanged", buildHealthDigest(clean).subject === "Vacantless health: all clear");
-  ok("route passes the gap count", readFileSync("app/api/cron/health-digest/route.ts", "utf8").includes("coverageGapRentals += cov.gaps"));
+  ok("route groups gaps by account", readFileSync("app/api/cron/health-digest/route.ts", "utf8").includes("coverageGaps.push({ org: o.name, lines })"));
+  const robotDay = buildHealthDigest({ ...clean, robot: [{ org: "A", channel: "kijiji", status: "needs_payment", error: null }] });
+  ok("site names capitalized in problem lines", robotDay.body.includes("- A, Kijiji: needs payment."), robotDay.body);
   ok("no em dash in the new lines", !/\u2014/.test(gapsOnly.subject + gapsOnly.body + mixed.subject + mixed.body));
 }
 

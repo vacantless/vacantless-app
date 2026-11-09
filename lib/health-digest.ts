@@ -13,6 +13,7 @@ export const DIGEST_TIMEZONE = "America/Toronto";
 
 import { disabledSweeps } from "@/lib/cron-sweeps";
 import { appErrorLines } from "@/lib/app-errors";
+import { coverageLabel } from "@/lib/posting-coverage";
 
 export type SweepRunRow = {
   ran_at: string;
@@ -41,10 +42,8 @@ export type HealthInput = {
   serverNode?: { version: string; fixed: boolean } | null;
   /** S748: page crashes recorded by the error pages (app_errors), last 24 hours. Null = not read. */
   appErrors?: { path: string | null }[] | null;
-  /** S754: available rentals missing from a site the account can post to (lib/posting-coverage coverageHealthLines). */
-  coverageGaps?: string[] | null;
-  /** S758: how many rentals have a gap (coverage.gaps summed), for the subject line. */
-  coverageGapRentals?: number | null;
+  /** S754: available rentals missing from a site the account can post to, per account (lib/posting-coverage coverageHealthLines). */
+  coverageGaps?: { org: string; lines: string[] }[] | null;
 };
 
 // S758: run items closed on purpose, not failures. closed_stale is the
@@ -156,10 +155,10 @@ export function healthSections(input: HealthInput): HealthSection[] {
   for (const r of input.robot) {
     const status = (r.status ?? "error").replace(/_/g, " ");
     const err = r.error ? ` ${clip(r.error, 100)}` : "";
-    robotLines.push(`${r.org}, ${r.channel}: ${status}.${err}`);
+    robotLines.push(`${r.org}, ${coverageLabel(r.channel)}: ${status}.${err}`);
   }
   for (const s of input.signIns) {
-    robotLines.push(`${s.org}, ${s.channel}: signed out (${(s.code ?? "unknown").replace(/_/g, " ")}). Posting there stops until they sign in again.`);
+    robotLines.push(`${s.org}, ${coverageLabel(s.channel)}: signed out (${(s.code ?? "unknown").replace(/_/g, " ")}). Posting there stops until they sign in again.`);
   }
   if (robotLines.length) out.push({ title: "Posting to sites", lines: robotLines });
 
@@ -172,9 +171,14 @@ export function healthSections(input: HealthInput): HealthSection[] {
 // Rentals.ca's free slots full) repeats every day; counted as a problem it
 // turned the 2026-11-06 digest into "8 problems" with one real one, and a
 // daily false alarm teaches the reader to skip the email.
-export function coverageSection(input: HealthInput): HealthSection | null {
-  if (!input.coverageGaps || input.coverageGaps.length === 0) return null;
-  return { title: "Rentals that could be on more sites (not failures)", lines: input.coverageGaps };
+// S769: grouped under each account, short addresses, and out of the subject
+// line, so an all-clear day reads "all clear" (Noam asked for a clearer,
+// shorter email).
+export function coverageSection(input: HealthInput): string | null {
+  const groups = (input.coverageGaps ?? []).filter((g) => g.lines.length > 0);
+  if (groups.length === 0) return null;
+  const body = groups.map((g) => `${g.org}\n${g.lines.map((l) => `- ${l}`).join("\n")}`).join("\n\n");
+  return `Not failures, but could be on more sites:\n${body}`;
 }
 
 export function buildHealthDigest(input: HealthInput): { subject: string; body: string; problems: number } {
@@ -188,30 +192,24 @@ export function buildHealthDigest(input: HealthInput): { subject: string; body: 
       : `Vacantless health: ${problems} ${problems === 1 ? "problem" : "problems"}`;
   const head =
     problems === 0
-      ? "Nothing failed in the last 24 hours."
-      : "These failed or need a look from the last 24 hours.";
-  const gaps = coverageSection(input);
-  const gapRentals = input.coverageGapRentals ?? gaps?.lines.length ?? 0;
-  const subjectWithGaps =
-    gaps && gapRentals > 0
-      ? `${subject} (${gapRentals} ${gapRentals === 1 ? "rental" : "rentals"} could be on more sites)`
-      : subject;
+      ? "All clear for the last 24 hours."
+      : `${problems} ${problems === 1 ? "thing needs" : "things need"} a look from the last 24 hours:`;
   const parts = [head];
-  for (const s of gaps ? [...sections, gaps] : sections) {
-    parts.push(`${s.title.toUpperCase()}\n${s.lines.map((l) => `- ${l}`).join("\n")}`);
+  for (const s of sections) {
+    parts.push(`${s.title}:\n${s.lines.map((l) => `- ${l}`).join("\n")}`);
   }
+  const gaps = coverageSection(input);
+  if (gaps) parts.push(gaps);
   parts.push(
-    `Checked: ${okRuns} of ${runs} background sweeps clean, email delivery${input.emails.checked ? "" : " (not checked)"}, renter emails from sites, robot posts and site sign-ins${input.appErrors ? ", page crashes" : ""}${input.coverageGaps ? ", which sites each rental is on" : ""}. Not checked here: ${input.appErrors ? "errors inside API calls that no page showed" : "app errors in Vercel's logs"}.`,
+    `Checked: ${okRuns} of ${runs} sweeps, email delivery${input.emails.checked ? "" : " (not checked)"}, site inquiries, robot posts, sign-ins${input.appErrors ? ", page crashes" : ""}. Not checked: ${input.appErrors ? "errors no page showed" : "app errors in Vercel's logs"}.`,
   );
-  // S736: the Node2Shell watch (lib/image-url-import nodeHasBrotliFix). Information, not a problem.
-  if (input.serverNode) {
-    parts.push(
-      input.serverNode.fixed
-        ? `Server Node: ${input.serverNode.version}. The security fix is in; the Stripe key was rotated 2026-11-06.`
-        : `Server Node: ${input.serverNode.version}. The security fix is not on the server yet.`,
-    );
+  // S736: the Node2Shell watch (lib/image-url-import nodeHasBrotliFix). S769:
+  // the fix landed and the Stripe key was rotated 2026-11-06, so the email
+  // only speaks if the server ever runs an unpatched Node again.
+  if (input.serverNode && !input.serverNode.fixed) {
+    parts.push(`Server Node: ${input.serverNode.version}. The security fix is not on the server.`);
   }
-  return { subject: subjectWithGaps, body: parts.join("\n\n"), problems };
+  return { subject, body: parts.join("\n\n"), problems };
 }
 
 /** The Toronto calendar date and hour for `now`, for the once-a-day gate. */

@@ -1,7 +1,7 @@
 // S754: posting coverage, the rentals-by-sites rule behind the gap card and
 // the health email line. Pure.
 import assert from "node:assert/strict";
-import { postingCoverage, offeredSites, coverageLine, coverageHealthLines, shortAddress } from "../lib/posting-coverage";
+import { postingCoverage, offeredSites, coverageLine, coverageHealthLines, shortAddress, joinOr } from "../lib/posting-coverage";
 
 const sessions = [
   { channel: "kijiji", alive: true },
@@ -43,9 +43,12 @@ assert.equal(shortAddress("833 Pillette Rd, Unit 33, Windsor, ON N8Y 3B4"), "833
 assert.equal(shortAddress("1195 Bruce Ave, Windsor, ON"), "1195 Bruce Ave");
 assert.equal(shortAddress(null), "A rental");
 assert.equal(coverageLine(a, shortAddress), "833 Pillette Rd, Unit 33 is on 1 of 3 sites. Missing: Kijiji, Zumper.");
-const lines = coverageHealthLines("Agile", cov);
+const lines = coverageHealthLines(cov);
 assert.equal(lines.length, 1);
-assert.match(lines[0], /^Agile: 833 Pillette Rd, Unit 33, Windsor, ON N8Y 3B4 is on 1 of 3 sites/);
+// S769: short address, no account name, "not on X or Y".
+assert.equal(lines[0], "833 Pillette Rd, Unit 33: not on Kijiji or Zumper");
+assert.equal(joinOr(["Kijiji"]), "Kijiji");
+assert.equal(joinOr(["Kijiji", "Zumper", "Rentals.ca"]), "Kijiji, Zumper or Rentals.ca");
 
 // cap
 const many = postingCoverage({
@@ -54,8 +57,8 @@ const many = postingCoverage({
   sessions,
   postingAddon: true,
 });
-const capped = coverageHealthLines("Org", many, 6);
+const capped = coverageHealthLines(many, 6);
 assert.equal(capped.length, 7);
-assert.match(capped[6], /3 more rentals with missing sites/);
+assert.equal(capped[6], "3 more rentals like this.");
 assert.ok(!capped.join(" ").includes("—"), "no em dash");
-console.log("PASS test-posting-coverage (20 checks)");
+console.log("PASS test-posting-coverage (22 checks)");
