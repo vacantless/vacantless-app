@@ -846,7 +846,11 @@ export default async function PropertiesPage({
                       )}
                     </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
+                  <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-2 md:justify-end">
+                    {/* S772: price and status stay together, buttons stay
+                        together, so on a phone the row breaks into two clean
+                        lines instead of stranding Edit or More alone. */}
+                    <span className="inline-flex items-center gap-2 whitespace-nowrap">
                     <span className="mr-1 text-sm font-semibold tabular-nums text-gray-900">
                       {p.rent_cents ? `$${(p.rent_cents / 100).toLocaleString()}/mo` : "-"}
                     </span>
@@ -862,6 +866,8 @@ export default async function PropertiesPage({
                       )}
                       {v.statusLabel}
                     </span>
+                    </span>
+                    <span className="inline-flex items-center gap-2 whitespace-nowrap">
                     {archivedView ? (
                       <DeleteOrArchiveControl propertyId={p.id} hardDelete={v.canHardDelete} archived />
                     ) : (
@@ -896,6 +902,7 @@ export default async function PropertiesPage({
                         </RowMoreMenu>
                       </>
                     )}
+                    </span>
                   </div>
                 </div>
                 {v.renew.length > 0 && (
