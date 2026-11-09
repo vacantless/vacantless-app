@@ -52,6 +52,8 @@ export const SWEEP_PATHS = [
   "/api/cron/posted-results-email",
   // S761: posts an edited rental's new ad once the robot took the old one down.
   "/api/cron/ad-update-repost",
+  // S771: a "New" renter we already answered, quiet for 3 days, becomes "Contacted".
+  "/api/cron/quiet-new-leads",
 ] as const;
 
 export type SweepResult = {
