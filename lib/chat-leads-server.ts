@@ -182,23 +182,29 @@ export async function mergeChatPlaceholderInto(
   admin: SupabaseClient,
   input: { newLeadId: string; propertyId: string; name: string | null },
 ): Promise<boolean> {
+  // S767: every "no" says why in the logs (a silent false hid the first live miss).
+  const no = (why: string): false => {
+    console.warn(`[chat-merge] lead ${input.newLeadId}: ${why}`);
+    return false;
+  };
   try {
     const name = cleanRenterName(input.name);
-    if (!name) return false;
-    const { data: lead } = await admin
+    if (!name) return no("no name");
+    const { data: lead, error: leadErr } = await admin
       .from("leads")
       .select("id, organization_id")
       .eq("id", input.newLeadId)
       .maybeSingle();
     const nl = lead as { id: string; organization_id: string } | null;
-    if (!nl) return false;
+    if (!nl) return no(`new lead not found${leadErr ? `: ${leadErr.message}` : ""}`);
     const leads = await recentLeads(admin, nl.organization_id, input.propertyId);
-    if (!leads) return false;
+    if (!leads) return no("recent leads read failed");
     const ph = findChatPlaceholderToMerge(leads, { propertyId: input.propertyId, name, newLeadId: nl.id });
-    if (!ph) return false;
+    if (!ph) return no(`no single chat renter matched (${leads.length} recent)`);
     for (const table of ["showings", "messages", "rental_applications"]) {
       const { count, error } = await admin.from(table).select("id", { count: "exact", head: true }).eq("lead_id", ph.id);
-      if (error || (count ?? 0) > 0) return false;
+      if (error) return no(`${table} count failed: ${error.message}`);
+      if ((count ?? 0) > 0) return no(`chat renter has ${table}`);
     }
     const { data: org } = await admin.from("organizations").select("booking_timezone").eq("id", nl.organization_id).maybeSingle();
     const tz = (org as { booking_timezone?: string | null } | null)?.booking_timezone || "America/Toronto";
@@ -213,7 +219,7 @@ export async function mergeChatPlaceholderInto(
       body: line,
       created_at: new Date(ph.createdAt).toISOString(),
     });
-    if (noteErr) return false;
+    if (noteErr) return no(`note insert failed: ${noteErr.message}`);
     const { error: delErr } = await admin
       .from("leads")
       .delete()
@@ -221,8 +227,9 @@ export async function mergeChatPlaceholderInto(
       .eq("organization_id", nl.organization_id)
       .is("email", null)
       .is("phone", null);
-    return !delErr;
-  } catch {
-    return false;
+    if (delErr) return no(`placeholder delete failed: ${delErr.message}`);
+    return true;
+  } catch (e) {
+    return no(`threw: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
