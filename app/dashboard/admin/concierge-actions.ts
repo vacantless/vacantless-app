@@ -393,15 +393,17 @@ export async function approveConciergeSubmit(formData: FormData) {
   // monthly limits from Settings.
   const { data: capItem } = await admin
     .from("distribution_run_items")
-    .select("id, organization_id, channel")
+    .select("id, organization_id, channel, run:distribution_runs(property_id)")
     .eq("id", itemId)
     .maybeSingle();
+  const capProperty =
+    ((capItem as { run?: { property_id?: string | null } | null } | null)?.run?.property_id as string | null) ?? null;
   // S713: the desk cannot approve a robot post for an org without the
   // Posting add-on (the worker claim RPC would refuse it anyway).
   if (
     capItem?.channel &&
     isRobotPostedChannel(capItem.channel as string) &&
-    !(await readRobotPostingAccess(admin, capItem.organization_id as string)).allowed
+    !(await readRobotPostingAccess(admin, capItem.organization_id as string, { rental: capProperty })).allowed
   ) {
     redirect(`${DESK}?err=posting_addon`);
   }

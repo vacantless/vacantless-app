@@ -48,7 +48,7 @@ export default async function NewPropertyPage({
   // S733: without the Posting add-on, Kijiji, Rentals.ca and Zumper are not
   // something this landlord can post yet; the column says so instead of
   // listing their requirements as "Needs".
-  const robotPostingAccess = await readRobotPostingAccess(supabase, org.id);
+  const robotPostingAccess = await readRobotPostingAccess(supabase, org.id, { rental: "new" });
 
   const aiImageImportEnabled =
     !!process.env.LISTING_AI_IMPORT_ENABLED && canUseListingAiImport(org.plan);

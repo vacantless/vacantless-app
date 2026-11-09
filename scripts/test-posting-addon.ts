@@ -159,7 +159,7 @@ const actions = read("app/dashboard/properties/actions.ts");
 const sitePost = actions.slice(actions.indexOf("export async function startSitePost"), actions.indexOf("export async function cancelDistributionRun"));
 ok("startSitePost gates robot sites", sitePost.includes("isRobotPostedChannel(channel)") && sitePost.includes("readRobotPostingAccess") && sitePost.includes("run=postingaddon"));
 const concierge = actions.slice(actions.indexOf("export async function requestConciergePublish"));
-ok("requestConciergePublish gates on the RUN's org", concierge.includes("readRobotPostingAccess(supabase, runOrgId)") && concierge.includes("run=postingaddon"));
+ok("requestConciergePublish gates on the RUN's org", concierge.includes("readRobotPostingAccess(supabase, runOrgId, { rental: propertyId })") && concierge.includes("run=postingaddon"));
 
 const dist = read("app/dashboard/properties/distribution-actions.ts");
 const approve = dist.slice(dist.indexOf("export async function authorizeAutopilotSubmit"), dist.indexOf("export async function setRelistRadarStandingAutoRefresh"));
@@ -174,7 +174,7 @@ ok("desk approve gate before the approval write", deskApprove.indexOf("readRobot
 ok("desk shows the add-on error", read("app/dashboard/admin/concierge/page.tsx").includes('err === "posting_addon"'));
 
 const worker = read("app/api/cron/distribution-worker/route.ts");
-ok("worker cron skips robot jobs without the add-on", worker.includes("isRobotPostedChannel(c.channel)") && worker.includes("readRobotPostingAccess(admin, c.organization_id)"));
+ok("worker cron skips robot jobs without the add-on", worker.includes("isRobotPostedChannel(c.channel)") && worker.includes("readRobotPostingAccess(admin, c.organization_id, { rental: candProperty })"));
 ok("worker cron gate before the claim", worker.indexOf("readRobotPostingAccess(admin, c.organization_id)") < worker.indexOf("concierge_claimed_by: WORKER_CLAIM_ID"));
 
 const fresh = read("app/api/cron/distribution-freshness/route.ts");

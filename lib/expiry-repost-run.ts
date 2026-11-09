@@ -86,10 +86,12 @@ export async function queueExpiryReposts(
         .select("status, archived_at")
         .eq("id", row.property_id)
         .maybeSingle();
-      let access = accessByOrg.get(row.organization_id);
+      // S767: per rental (a Free account's one live rental may be re-posted).
+      const accessKey = `${row.organization_id}|${row.property_id}`;
+      let access = accessByOrg.get(accessKey);
       if (!access) {
-        access = await readRobotPostingAccess(admin, row.organization_id);
-        accessByOrg.set(row.organization_id, access);
+        access = await readRobotPostingAccess(admin, row.organization_id, { rental: row.property_id });
+        accessByOrg.set(accessKey, access);
       }
       let alive = aliveByOrg.get(row.organization_id);
       if (!alive) {

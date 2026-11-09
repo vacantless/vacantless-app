@@ -1183,20 +1183,20 @@ export default async function SettingsPage({
             <div id="site-accounts" className="rounded-2xl border border-gray-200 bg-white p-5">
               <h3 className="text-base font-semibold text-gray-900">Your rental site accounts</h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-600">
-                {robotPostingAccess.allowed
+                {robotPostingAccess.setup
                   ? "Sign in to each site once. After that we post your ads for you as soon as they are ready. We never see your password."
                   : "With the Posting add-on you sign in to Kijiji, Rentals.ca and Zumper once. Then we post your ads there for you. We never see your password."}
               </p>
               <Link
-                href={robotPostingAccess.allowed ? "/dashboard/link-portals" : POSTING_ADDON_HREF}
+                href={robotPostingAccess.setup ? "/dashboard/link-portals" : POSTING_ADDON_HREF}
                 className="mt-4 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm"
               >
-                {robotPostingAccess.allowed ? "Go to your site accounts →" : "See the Posting add-on →"}
+                {robotPostingAccess.setup ? "Go to your site accounts →" : "See the Posting add-on →"}
               </Link>
             </div>
           )}
           {!isPlatformAdmin &&
-            robotPostingAccess.allowed &&
+            robotPostingAccess.setup &&
             distributionChannels
               .filter(({ cap }) => {
                 const ch = channelByKey(cap.channel);

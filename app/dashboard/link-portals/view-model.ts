@@ -119,7 +119,7 @@ export async function buildLinkPortalsViewModel(
     // S704: Rentals.ca shows only for Agile (our robot cannot post it).
     if (isHiddenForOrg(row.channel, orgId)) return null;
 
-    const needsAddon = !robotAccess.allowed && isRobotPostedChannel(row.channel);
+    const needsAddon = !robotAccess.setup && isRobotPostedChannel(row.channel);
     // S732 walk-through: without the add-on a Kijiji, Rentals.ca or Zumper
     // tile read "Needs you - Sign in once. Then we post your ads on it" with no
     // sign-in button, under a header that promised posting. The tile now says
@@ -272,7 +272,7 @@ export async function buildLinkPortalsViewModel(
   // Page, Instagram, the Marketplace kit) come first and the group is not
   // headed "Ready to sign in" over three tiles that have no sign-in.
   const freeFirst = (vms: LinkPortalTileVM[]) =>
-    robotAccess.allowed
+    robotAccess.setup
       ? vms
       : [...vms].sort(
           (a, b) =>
@@ -281,7 +281,7 @@ export async function buildLinkPortalsViewModel(
   const groups = groupStage1ChannelRows(rows)
     .map((group) => ({
       id: group.id,
-      title: t(group.id === "ready" && !robotAccess.allowed ? "groupFreeFirst" : group.titleKey),
+      title: t(group.id === "ready" && !robotAccess.setup ? "groupFreeFirst" : group.titleKey),
       rows: freeFirst(group.rows.map(toVM).filter((vm): vm is LinkPortalTileVM => vm !== null)),
     }))
     // S702u: no "Not yet" list. Show only sites we can post to today.
@@ -291,6 +291,6 @@ export async function buildLinkPortalsViewModel(
     groups,
     probeEnabled,
     generatedAt: now.toISOString(),
-    postingAddon: robotAccess.allowed,
+    postingAddon: robotAccess.setup,
   };
 }

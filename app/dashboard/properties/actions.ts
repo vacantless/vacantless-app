@@ -1298,7 +1298,7 @@ async function queueAdUpdates({
 }): Promise<AdUpdatePlan> {
   const empty: AdUpdatePlan = { repost: [], byHand: [] };
   try {
-    const access = await readRobotPostingAccess(supabase, org.id);
+    const access = await readRobotPostingAccess(supabase, org.id, { rental: propertyId });
     const [{ data: posts }, { data: sessions }] = await Promise.all([
       supabase
         .from("listing_posts")
@@ -1399,7 +1399,7 @@ async function postRobotSitesAfterPageLive({
   propertyId: string;
 }): Promise<number> {
   try {
-    const access = await readRobotPostingAccess(supabase, org.id);
+    const access = await readRobotPostingAccess(supabase, org.id, { rental: propertyId });
     if (!access.allowed || access.autopilot !== true) return 0;
 
     const tiles = await listChannelTileStatuses(org.id);
@@ -3573,7 +3573,7 @@ export async function startSitePost(formData: FormData) {
   // paid Posting add-on. Marketplace (the kit) stays open to every org.
   let robotAccess: RobotPostingAccess | null = null;
   if (isRobotPostedChannel(channel)) {
-    robotAccess = await readRobotPostingAccess(supabase, org.id);
+    robotAccess = await readRobotPostingAccess(supabase, org.id, { rental: propertyId });
     if (!robotAccess.allowed) {
       redirect(`/dashboard/properties/${propertyId}?run=postingaddon#distribute-header`);
     }
@@ -5853,7 +5853,7 @@ export async function requestConciergePublish(formData: FormData) {
   const runOrgPlan = (runOrg as { plan: string | null }).plan;
   // S713: a robot-posted site needs the Posting add-on on the RUN'S org.
   if (isRobotPostedChannel(item.channel)) {
-    const access = await readRobotPostingAccess(supabase, runOrgId);
+    const access = await readRobotPostingAccess(supabase, runOrgId, { rental: propertyId });
     if (!access.allowed) {
       redirect(
         `/dashboard/properties/${propertyId}?run=postingaddon#distribute-header`,
@@ -6064,7 +6064,7 @@ export async function postToMissingSites(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
   const supabase = createClient();
-  const access = await readRobotPostingAccess(supabase, org.id);
+  const access = await readRobotPostingAccess(supabase, org.id, { rental: propertyId });
   if (!access.allowed) redirect("/dashboard/billing#posting-addon");
 
   const coverage = await loadPostingCoverage(supabase, org.id, access.allowed);

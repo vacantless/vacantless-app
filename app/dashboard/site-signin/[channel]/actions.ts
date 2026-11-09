@@ -67,7 +67,8 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
   // S713: signing in is for robot posting, which is the paid Posting add-on.
   // No window (and no worker run) without it.
   const access = await readRobotPostingAccess(createClient(), who.orgId);
-  if (!access.allowed) redirect(here(withQuery(siteSigninHref(channel, propertyId), "err", "addon")));
+  // S767: Free accounts sign in too (their one live rental is posted free).
+  if (!access.setup) redirect(here(withQuery(siteSigninHref(channel, propertyId), "err", "addon")));
 
   const admin = createAdminClient();
   if (!admin) redirect(here(withQuery(siteSigninHref(channel, propertyId), "err", "config")));

@@ -100,7 +100,7 @@ export default async function SiteSigninPage({
   // S713: no Posting add-on = no sign-in form, just the add-on note.
   const access = await readRobotPostingAccess(supabase, org.id);
   const canStart =
-    access.allowed && (!recent || !siteSigninIsOpen(recent.status as string));
+    access.setup && (!recent || !siteSigninIsOpen(recent.status as string));
   const autoOpen = shouldAutoOpenSignin({
     openParam: searchParams.open,
     canStart,
@@ -152,7 +152,7 @@ export default async function SiteSigninPage({
         </p>
       )}
 
-      {!access.allowed && (
+      {!access.setup && (
         <div className="rounded-2xl border border-gray-200 bg-white p-5 text-sm text-gray-700">
           <p className="font-semibold text-gray-900">{POSTING_ADDON_NOTE}</p>
           <p className="mt-1">We sign in and post to {name} for you with it.</p>

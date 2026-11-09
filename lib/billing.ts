@@ -635,6 +635,45 @@ export function canUseRobotPosting(org: RobotPostingOrg | null | undefined): boo
   return org.posting_addon_active === true;
 }
 
+// S767 (PLAN-S766 item F, Noam 2026-11-08): a Free account's one live rental
+// is posted by the robot at no charge (Rentals.ca and Zumper free; Kijiji at
+// the site's own fee, paid at checkout as today). The Posting add-on buys
+// robot posting from the second rental on. Two questions, one place:
+//  - may this account sign in to the robot sites at all?  canSetUpRobotSites
+//  - may the robot post THIS rental?                      robotPostingAllowedFor
+// The SQL twin is public.item_can_use_robot_posting (migration 0277), read by
+// the worker claim.
+export function isFreePlan(plan: string | null | undefined): boolean {
+  return !plan || plan === "free";
+}
+
+export function canSetUpRobotSites(org: RobotPostingOrg | null | undefined): boolean {
+  if (!org) return false;
+  return canUseRobotPosting(org) || isFreePlan(org.plan);
+}
+
+/**
+ * The robot may post this rental: the account has Posting, or it is on Free
+ * and no OTHER rental in it is live (this one is, or is about to be, its one
+ * live rental). `otherLiveRentals` counts available, unarchived rentals in the
+ * account other than this one.
+ */
+export function robotPostingAllowedFor(
+  org: RobotPostingOrg | null | undefined,
+  rental: { otherLiveRentals: number } | null,
+): boolean {
+  if (!org) return false;
+  if (canUseRobotPosting(org)) return true;
+  if (!isFreePlan(org.plan) || !rental) return false;
+  return rental.otherLiveRentals === 0;
+}
+
+// One wording for the free first rental, read by the sites setup, the
+// billing page and the homepage.
+export const FREE_RENTAL_POSTING_LINE =
+  "On Free, we post your one live rental to Rentals.ca and Zumper at no charge. Kijiji charges its own ad fee. Posting, $49 a month, covers every other rental.";
+export const FREE_RENTAL_POSTING_SHORT = "Free for your one live rental";
+
 // The landlord line shown on a robot site instead of its post / sign-in button.
 export const POSTING_ADDON_NOTE = "Part of the Posting add-on. $49 a month.";
 export const POSTING_ADDON_HREF = "/dashboard/billing#posting-addon";

@@ -438,7 +438,7 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
   // S713: approving a robot post (Kijiji, Rentals.ca, Zumper) needs the
   // Posting add-on. Checked before anything is approved or the robot is woken.
   if (pendingItem?.channel && isRobotPostedChannel(pendingItem.channel)) {
-    const access = await readRobotPostingAccess(supabase, org.id);
+    const access = await readRobotPostingAccess(supabase, org.id, { rental: propertyId || null });
     if (!access.allowed) {
       if (propertyId) backTo(propertyId, "posting_addon", pendingItem.channel);
       redirect("/dashboard/billing#posting-addon");

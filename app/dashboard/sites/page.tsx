@@ -5,7 +5,7 @@ import { Icons } from "@/components/icons";
 import { getCurrentOrg } from "@/lib/org";
 import { createClient } from "@/lib/supabase/server";
 import { isHiddenForOrg } from "@/lib/posting-lanes";
-import { POSTING_ADDON_HREF } from "@/lib/billing";
+import { POSTING_ADDON_HREF, FREE_RENTAL_POSTING_LINE } from "@/lib/billing";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { cleanPropertyId } from "@/lib/site-signin";
 import { signinChainHref } from "@/lib/sites-setup";
@@ -73,8 +73,9 @@ export default async function SitesSetupPage({
       />
       {!access.allowed ? (
         <p className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-          Your Facebook Page and Marketplace are free for every account. Kijiji, Rentals.ca and Zumper are posted for you
-          with Posting, $49 a month.{" "}
+          {access.setup
+            ? `Your Facebook Page and Marketplace are free for every account. ${FREE_RENTAL_POSTING_LINE}`
+            : "Your Facebook Page and Marketplace are free for every account. Kijiji, Rentals.ca and Zumper are posted for you with Posting, $49 a month."}{" "}
           <Link href={POSTING_ADDON_HREF} className="font-semibold text-brand">
             See Posting
           </Link>
@@ -84,11 +85,11 @@ export default async function SitesSetupPage({
         <SitesRows
           input={{
             tileStateByChannel,
-            postingAllowed: access.allowed,
+            postingAllowed: access.setup,
             propertyId,
             postingHref: POSTING_ADDON_HREF,
           }}
-          signinAllHref={access.allowed ? signinChainHref(propertyId) : null}
+          signinAllHref={access.setup ? signinChainHref(propertyId) : null}
         />
       </div>
       <p className="mt-6 text-xs text-gray-500">

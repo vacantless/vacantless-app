@@ -479,7 +479,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   const onboardingHasConnectedSite = onboardingWizardEnabled ? orgHasConnectedSite(siteStateByChannel) : false;
   const robotAccess = await readRobotPostingAccess(supabase, org.id);
   const needsYou = needsYouNotices({
-    postingAllowed: robotAccess.allowed,
+    postingAllowed: robotAccess.setup,
     tileStateByChannel: siteStateByChannel,
     hiddenFor: (c) => isHiddenForOrg(c, org.id),
   });

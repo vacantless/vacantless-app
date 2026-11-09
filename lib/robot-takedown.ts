@@ -49,7 +49,7 @@ export async function queueRobotTakedowns(args: {
   const out: RobotTakedownQueued[] = [];
   try {
     const { supabase, organizationId, propertyId } = args;
-    const access = await readRobotPostingAccess(supabase, organizationId);
+    const access = await readRobotPostingAccess(supabase, organizationId, { rental: propertyId });
     if (!access.allowed) return out;
     const [{ data: posts }, { data: sessions }] = await Promise.all([
       supabase

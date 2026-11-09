@@ -72,7 +72,7 @@ export default async function SiteSigninChainPage({
         <p className="mt-2 text-sm text-gray-600">{signinChainSummary(chain)}</p>
       </div>
 
-      {!access.allowed && (
+      {!access.setup && (
         <div className="rounded-2xl border border-gray-200 bg-white p-5 text-sm text-gray-700">
           <p className="font-semibold text-gray-900">{POSTING_ADDON_NOTE}</p>
           <p className="mt-1">We sign in and post to these sites for you with it.</p>
@@ -113,7 +113,7 @@ export default async function SiteSigninChainPage({
         ))}
       </ol>
 
-      {access.allowed && first && (
+      {access.setup && first && (
         <form action={startSiteSignin} className="rounded-2xl border border-gray-200 bg-white p-5">
           <input type="hidden" name="channel" value={first} />
           <input type="hidden" name="chain" value="1" />

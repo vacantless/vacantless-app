@@ -1138,7 +1138,7 @@ export default async function PropertyDetailPage({
   const showPostLease = org ? await orgShowsPostLease(supabase, org.id) : true;
   // S713: Kijiji, Rentals.ca and Zumper are the paid Posting add-on. Without
   // it their rows show the add-on note instead of a post or sign-in button.
-  const robotPostingAccess = await readRobotPostingAccess(supabase, org?.id);
+  const robotPostingAccess = await readRobotPostingAccess(supabase, org?.id, { rental: p.id });
   // S724 (V251-24): the account's viewing notice, for this rental's "blank =
   // account setting" hints.
   const { data: bookingCfg } = org

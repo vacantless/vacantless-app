@@ -62,6 +62,9 @@ import {
   storageUpsellNote,
   freeCapLine,
   FREE_CAP_BILLING_HREF,
+  canSetUpRobotSites,
+  robotPostingAllowedFor,
+  FREE_RENTAL_POSTING_LINE,
 } from "../lib/billing";
 import { MAX_PHOTOS_PER_PROPERTY } from "../lib/photos";
 
@@ -847,6 +850,28 @@ ok("photoCapForPlan managed -> premium cap", photoCapForPlan("managed") === PREM
   ok("old cap wording gone", !page.includes("live-rental limit is full") && !actions.includes("live-rental limit is full"));
   ok("rental page links Billing beside the cap line", page.includes("href={FREE_CAP_BILLING_HREF}"));
   ok("onboarding reads the same line", readFileSync("lib/onboarding.ts", "utf8").includes("freeCapLine()"));
+}
+
+// S767 (item F): a Free account's one live rental is robot-posted free.
+{
+  const free = { plan: "free", posting_addon_active: false };
+  const freeNull = { plan: null, posting_addon_active: false };
+  const growth = { plan: "growth", posting_addon_active: false };
+  const addon = { plan: "free", posting_addon_active: true };
+  ok("free, no other live rental -> robot posts", robotPostingAllowedFor(free, { otherLiveRentals: 0 }));
+  ok("free (null plan) counts as Free", robotPostingAllowedFor(freeNull, { otherLiveRentals: 0 }));
+  ok("free, another rental live -> Posting needed", !robotPostingAllowedFor(free, { otherLiveRentals: 1 }));
+  ok("free, no rental named -> not allowed", !robotPostingAllowedFor(free, null));
+  ok("growth without Posting -> not free", !robotPostingAllowedFor(growth, { otherLiveRentals: 0 }));
+  ok("add-on -> every rental", robotPostingAllowedFor(addon, { otherLiveRentals: 5 }));
+  ok("no org -> closed", !robotPostingAllowedFor(null, { otherLiveRentals: 0 }));
+  ok("setup: free yes", canSetUpRobotSites(free) && canSetUpRobotSites(freeNull));
+  ok("setup: growth without Posting no", !canSetUpRobotSites(growth));
+  ok("setup: add-on yes", canSetUpRobotSites(addon) && canSetUpRobotSites({ plan: "growth", posting_addon_active: true }));
+  ok("free line: no parentheses or em dash", !/[()\u2014]/.test(FREE_RENTAL_POSTING_LINE));
+  const mig = readFileSync("supabase/migrations/0277_free_rental_robot_posting.sql", "utf8");
+  ok("SQL twin swaps the claim gate per item", mig.includes("not public.item_can_use_robot_posting(p_item_id, p_organization_id)"));
+  ok("SQL twin: Free and no other live rental", mig.includes("coalesce(o.plan, 'free') = 'free'") && mig.includes("p.id <> r.property_id"));
 }
 
 console.log(`\nbilling: ${passed} passed, ${failed} failed`);

@@ -3,7 +3,7 @@ import { isQuietNotificationOrg } from "@/lib/quiet-orgs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { adminEmails } from "@/lib/provisioning-server";
-import { canUseRobotPosting } from "@/lib/billing";
+import { canSetUpRobotSites } from "@/lib/billing";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { coverageHealthLines } from "@/lib/posting-coverage";
 import { nodeHasBrotliFix } from "@/lib/image-url-import";
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
     plan: string | null;
     posting_addon_active: boolean | null;
   }[]) {
-    orgs.set(o.id, { id: o.id, name: o.name ?? "Unnamed account", robot: canUseRobotPosting(o) });
+    orgs.set(o.id, { id: o.id, name: o.name ?? "Unnamed account", robot: canSetUpRobotSites(o) });
   }
   const orgName = (id: string | null) => (id && orgs.get(id)?.name) || "Unknown account";
 

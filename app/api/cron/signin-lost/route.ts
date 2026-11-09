@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { canUseRobotPosting, canUseRenterSms } from "@/lib/billing";
+import { canSetUpRobotSites, canUseRenterSms } from "@/lib/billing";
 import { sendNotificationEmail } from "@/lib/email";
 import { sendSms, smsLive, isWithinQuietHours } from "@/lib/sms";
 import { getUserByIdCached } from "@/lib/auth-email-cache";
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
         .eq("organization_id", r.organization_id)
         .eq("channel", r.channel);
     }
-    if (textAction === "text" && org && !org.closed_at && canUseRobotPosting(org)) {
+    if (textAction === "text" && org && !org.closed_at && canSetUpRobotSites(org)) {
       report.push({ org: org.name ?? r.organization_id, channel: r.channel, action: "text" });
       if (!dry) {
         const claim = await claimNull(
@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
       continue;
     }
     // notify: only landlords the robot posts for, on an open account.
-    if (!org || org.closed_at || !canUseRobotPosting(org)) continue;
+    if (!org || org.closed_at || !canSetUpRobotSites(org)) continue;
     report.push({ org: org.name ?? r.organization_id, channel: r.channel, action });
     if (dry) continue;
 

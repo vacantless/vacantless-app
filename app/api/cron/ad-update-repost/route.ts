@@ -60,10 +60,12 @@ export async function GET(req: NextRequest) {
       propertyStatus = (prop as { status: string | null } | null)?.status ?? null;
       propertyArchived = Boolean((prop as { archived_at: string | null } | null)?.archived_at);
     }
-    let access = accessByOrg.get(r.organization_id);
+    // S767: per rental (a Free account's one live rental counts).
+    const accessKey = `${r.organization_id}|${propertyId ?? ""}`;
+    let access = accessByOrg.get(accessKey);
     if (!access) {
-      access = await readRobotPostingAccess(admin, r.organization_id);
-      accessByOrg.set(r.organization_id, access);
+      access = await readRobotPostingAccess(admin, r.organization_id, { rental: propertyId });
+      accessByOrg.set(accessKey, access);
     }
     const { data: session } = await admin
       .from("distribution_channel_session_status")

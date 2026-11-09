@@ -396,10 +396,18 @@ export async function GET(req: NextRequest) {
     let skippedForAddon = 0;
     for (const c of candidates) {
       if (isRobotPostedChannel(c.channel)) {
-        let access = robotAccessByOrg.get(c.organization_id);
+        // S767: per rental, so a Free account's one live rental is eligible.
+        const { data: candRun } = await admin
+          .from("distribution_runs")
+          .select("property_id")
+          .eq("id", c.run_id)
+          .maybeSingle();
+        const candProperty = (candRun?.property_id as string | null) ?? null;
+        const accessKey = `${c.organization_id}|${candProperty ?? ""}`;
+        let access = robotAccessByOrg.get(accessKey);
         if (access === undefined) {
-          access = await readRobotPostingAccess(admin, c.organization_id);
-          robotAccessByOrg.set(c.organization_id, access);
+          access = await readRobotPostingAccess(admin, c.organization_id, { rental: candProperty });
+          robotAccessByOrg.set(accessKey, access);
         }
         if (!access.allowed) {
           skippedForAddon += 1;
@@ -637,7 +645,7 @@ export async function GET(req: NextRequest) {
     // back to press "Approve and post". Guarded on the gate we just wrote and
     // on no approval yet; a paid ad parks at needs_payment and never passes.
     const robotAccess = isRobotPostedChannel(job.channel)
-      ? robotAccessByOrg.get(job.organization_id) ?? null
+      ? robotAccessByOrg.get(`${job.organization_id}|${propertyId ?? ""}`) ?? null
       : null;
     if (
       standingApprovalApplies({

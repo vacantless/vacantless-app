@@ -1409,10 +1409,12 @@ async function executeRelistRadarFreeRefreshes({
   for (const event of events) {
     try {
       if (isRobotPostedChannel(event.channel)) {
-        let allowed = robotAccessByOrg.get(event.organization_id);
+        // S767: per rental (a Free account's one live rental counts).
+        const accessKey = `${event.organization_id}|${event.property_id}`;
+        let allowed = robotAccessByOrg.get(accessKey);
         if (allowed === undefined) {
-          allowed = (await readRobotPostingAccess(admin, event.organization_id)).allowed;
-          robotAccessByOrg.set(event.organization_id, allowed);
+          allowed = (await readRobotPostingAccess(admin, event.organization_id, { rental: event.property_id })).allowed;
+          robotAccessByOrg.set(accessKey, allowed);
         }
         if (!allowed) {
           summary.skipped++;

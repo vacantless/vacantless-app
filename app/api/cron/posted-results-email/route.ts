@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { canUseRobotPosting } from "@/lib/billing";
+import { canSetUpRobotSites } from "@/lib/billing";
 import { sendNotificationEmail } from "@/lib/email";
 import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { postedResultsNextSteps, postedResultsSites } from "@/lib/posted-results";
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
       propertyId: p.id,
       liveKeys,
       facebookPageConnected: (fbPage as { account_status?: string } | null)?.account_status === "connected",
-      robotPostingAllowed: canUseRobotPosting(org),
+      robotPostingAllowed: canSetUpRobotSites(org),
       marketplaceKitAvailable: true,
     })[0] ?? null;
     const mail = resultsEmail({
