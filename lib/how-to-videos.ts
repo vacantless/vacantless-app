@@ -5,7 +5,7 @@ export const HOW_TO_VIDEOS: { n: number; title: string; line: string; seconds: n
   { n: 1, title: "Add a rental", line: "Copy an old ad or start fresh. Rent, photos and an AI draft.", seconds: 60 },
   { n: 2, title: "Set viewing times", line: "Weekly windows for all your rentals, days per building, and what renters see.", seconds: 38 },
   { n: 3, title: "Answer an inquiry", line: "Draft a reply with your booking link, send it, and ask renters a few questions.", seconds: 41 },
-  { n: 4, title: "Post to rental sites", line: "Connect your sites once. Then every rental posts itself: your Facebook Page, Marketplace in one click, and Kijiji, Rentals.ca and Zumper. Ads come down when it rents.", seconds: 60 },
+  { n: 4, title: "Post to rental sites", line: "Connect your sites once. Then every rental posts itself: your Facebook Page, Marketplace in one click, and Kijiji, Rentals.ca and Zumper. Ads come down when it rents.", seconds: 61 },
   { n: 5, title: "Showing agents", line: "Add the people who run viewings and let new bookings go to them.", seconds: 25 },
   { n: 6, title: "After the viewing", line: "Reminders, new times, follow-ups, feedback and the application link.", seconds: 63 },
   { n: 7, title: "Little things that save you time", line: "Texts from your own number, a daily email, and warnings before things slip.", seconds: 39 },
