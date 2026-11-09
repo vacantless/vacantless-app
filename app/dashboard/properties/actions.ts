@@ -179,6 +179,7 @@ import {
   canUseListingAiImport,
   hasEntitlement,
   conciergeMonthlyCap,
+  freeCapLine,
 } from "@/lib/billing";
 import { createHash } from "crypto";
 import {
@@ -2955,12 +2956,13 @@ async function stageDistributionRunForProperty({
       const { count: liveCount } = await supabase
         .from("properties")
         .select("id", { count: "exact", head: true })
+        .eq("organization_id", org.id)
         .eq("status", "available")
         .is("archived_at", null)
         .neq("id", propertyId);
       if ((liveCount ?? 0) >= cap) {
         publicPageBlockers.push(
-          "Your plan's live-rental limit is full. Pause another rental or upgrade before publishing.",
+          freeCapLine(),
         );
       }
     }

@@ -12,6 +12,7 @@
 // Re-exported from the single source of truth so existing importers of
 // `@/lib/onboarding` (and its test) keep working.
 import { DEFAULT_BRAND_COLOR } from "./brand-theme";
+import { freeCapLine } from "./billing";
 export { DEFAULT_BRAND_COLOR };
 
 import { revealCopy, type RevealKey } from "./landlord-campaign";
@@ -142,7 +143,7 @@ const STEP_DEFS: StepDef[] = [
     key: "golive",
     label: "Go live",
     description:
-      "Free covers one rental. Move to Growth when you have more.",
+      freeCapLine(),
     href: "/dashboard/billing",
     cta: "View billing",
   },

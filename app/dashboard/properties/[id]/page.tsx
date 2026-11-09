@@ -90,6 +90,8 @@ import { dropboxImportErrorMessage } from "@/lib/dropbox-import";
 import {
   photoCapForPlan,
   listingCapForPlan,
+  freeCapLine,
+  FREE_CAP_BILLING_HREF,
   hasEntitlement,
   storageUpsellNote,
   canUseListingMarketing,
@@ -1857,6 +1859,7 @@ export default async function PropertyDetailPage({
     const { count } = await supabase
       .from("properties")
       .select("id", { count: "exact", head: true })
+      .eq("organization_id", p.organization_id)
       .eq("status", "available")
       .is("archived_at", null)
       .neq("id", p.id);
@@ -1885,9 +1888,10 @@ export default async function PropertyDetailPage({
         : "This rental cannot be published from its current status.",
     );
   }
-  if (!linkIsLive && publishPlanCap != null && otherLiveListingCount >= publishPlanCap) {
+  const freeCapFull = !linkIsLive && publishPlanCap != null && otherLiveListingCount >= publishPlanCap;
+  if (freeCapFull) {
     publicPageBlockers.push(
-      "Your plan's live-rental limit is full. Pause another rental or upgrade before publishing.",
+      freeCapLine(),
     );
   }
 
@@ -2988,14 +2992,13 @@ export default async function PropertyDetailPage({
       )}
 
       {/* Publish blocked by the plan's live-listing allowance (Free = 1). */}
-      {searchParams.publish === "plan" && (
+      {/* S767: shown before Set Live too, not only after a refused publish. */}
+      {(searchParams.publish === "plan" || freeCapFull) && (
         <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          <strong>Free includes one live rental.</strong> Pause another rental to
-          free up the spot, or{" "}
-          <Link href="/dashboard/billing" className="font-semibold underline">
-            choose Growth
-          </Link>{" "}
-          for unlimited live listings.
+          {freeCapLine()}{" "}
+          <Link href={FREE_CAP_BILLING_HREF} className="font-semibold underline">
+            See Billing
+          </Link>
         </p>
       )}
 

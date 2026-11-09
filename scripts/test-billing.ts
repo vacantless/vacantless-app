@@ -60,6 +60,8 @@ import {
   PREMIUM_PHOTO_CAP,
   photoCapForPlan,
   storageUpsellNote,
+  freeCapLine,
+  FREE_CAP_BILLING_HREF,
 } from "../lib/billing";
 import { MAX_PHOTOS_PER_PROPERTY } from "../lib/photos";
 
@@ -832,6 +834,19 @@ ok("photoCapForPlan managed -> premium cap", photoCapForPlan("managed") === PREM
   );
   const billingPage = readFileSync("app/dashboard/billing/page.tsx", "utf8");
   ok("premium hidden unless current", billingPage.includes('key !== "premium" || org?.plan === "premium"'));
+}
+
+// S767 (item E): one Free-cap wording, naming the plan and the price.
+{
+  const line = freeCapLine();
+  ok("free cap names Free, Growth and the price", line.includes("Free covers one live rental") && line.includes("Growth is CA$99 a month"));
+  ok("free cap: no parentheses or em dash", !/[()\u2014]/.test(line));
+  ok("free cap links Billing", FREE_CAP_BILLING_HREF === "/dashboard/billing");
+  const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
+  const actions = readFileSync("app/dashboard/properties/actions.ts", "utf8");
+  ok("old cap wording gone", !page.includes("live-rental limit is full") && !actions.includes("live-rental limit is full"));
+  ok("rental page links Billing beside the cap line", page.includes("href={FREE_CAP_BILLING_HREF}"));
+  ok("onboarding reads the same line", readFileSync("lib/onboarding.ts", "utf8").includes("freeCapLine()"));
 }
 
 console.log(`\nbilling: ${passed} passed, ${failed} failed`);

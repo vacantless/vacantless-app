@@ -792,6 +792,16 @@ export function listingCapForPlan(plan: string | null | undefined): number | nul
   return TIERS.free.maxActiveListings; // free / trial / unknown
 }
 
+// S767 (PLAN-S766 item E): the one wording for the Free-cap moment, read by the
+// rental page, Set Live, the properties list, the distribution run's blocker
+// and the getting-started checklist. It names the plan and the price and comes
+// with a link to FREE_CAP_BILLING_HREF wherever a link can sit.
+export const FREE_CAP_BILLING_HREF = "/dashboard/billing";
+export function freeCapLine(): string {
+  const dollars = Math.round(TIERS.growth.priceCents / 100);
+  return `Free covers one live rental. Growth is CA$${dollars} a month for as many as you need. Or take the other rental off market.`;
+}
+
 // S712: after a downgrade to Free, rentals beyond the cap stay live (we never
 // auto-take ads down). Instead the dashboard and billing page show this plain
 // notice. Null when the plan has no cap or the org is within it.

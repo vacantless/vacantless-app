@@ -15,7 +15,7 @@ import {
 import { Icons } from "@/components/icons";
 import { rentalRowReadiness, type ReadinessSignal } from "@/lib/rental-readiness";
 import { getCurrentOrg } from "@/lib/org";
-import { canUseListingAiImport } from "@/lib/billing";
+import { canUseListingAiImport, freeCapLine } from "@/lib/billing";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { hardDeletable } from "@/lib/property-archive";
@@ -375,7 +375,7 @@ export default async function PropertiesPage({
         : searchParams.restored === "paused"
           ? {
               tone: "amber",
-              text: "Listing restored as Paused. Free includes one live rental.",
+              text: `Listing restored as Paused. ${freeCapLine()}`,
             }
           : searchParams.restored
           ? {
