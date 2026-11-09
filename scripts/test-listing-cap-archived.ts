@@ -93,7 +93,7 @@ sourceHas(
 sourceHas(
   "app/dashboard/properties/[id]/page.tsx",
   "property publish warning count excludes archived rows",
-  /\.select\("id", \{ count: "exact", head: true \}\)\s*\.eq\("status", "available"\)\s*\.is\("archived_at", null\)\s*\.neq\("id", p\.id\)/,
+  /\.select\("id", \{ count: "exact", head: true \}\)\s*(\.eq\("organization_id", p\.organization_id\)\s*)?\.eq\("status", "available"\)\s*\.is\("archived_at", null\)\s*\.neq\("id", p\.id\)/,
 );
 sourceHas(
   "app/dashboard/properties/[id]/page.tsx",

@@ -135,4 +135,15 @@ if (existsSync("../vacantless-extension/app-bridge.js")) {
   assert.ok(!/fetch\(|XMLHttpRequest/.test(watch + bridge));
 }
 
+// S767: the merge never reads rental_applications (no service-role SELECT);
+// an application request always leaves an activity row, which is checked.
+{
+  const server = readFileSync("lib/chat-leads-server.ts", "utf8");
+  assert.ok(server.includes('for (const table of ["showings", "messages"])'));
+  assert.ok(!/from\("rental_applications"\)|"rental_applications"\]/.test(server));
+  const actions = readFileSync("app/dashboard/leads/actions.ts", "utf8");
+  const req = actions.slice(actions.indexOf("export async function requestRentalApplication"));
+  assert.ok(req.slice(0, 6000).includes('from("messages").insert'), "an application request writes an activity row");
+}
+
 console.log("PASS test-chat-leads");

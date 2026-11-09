@@ -201,10 +201,14 @@ export async function mergeChatPlaceholderInto(
     if (!leads) return no("recent leads read failed");
     const ph = findChatPlaceholderToMerge(leads, { propertyId: input.propertyId, name, newLeadId: nl.id });
     if (!ph) return no(`no single chat renter matched (${leads.length} recent)`);
-    for (const table of ["showings", "messages", "rental_applications"]) {
-      const { count, error } = await admin.from(table).select("id", { count: "exact", head: true }).eq("lead_id", ph.id);
-      if (error) return no(`${table} count failed: ${error.message}`);
-      if ((count ?? 0) > 0) return no(`chat renter has ${table}`);
+    // Nothing attached: no viewing and no activity. rental_applications is not
+    // readable by the service role (locked down on purpose; the first live
+    // merge failed there, S767), and requesting an application always writes
+    // an activity row (requestRentalApplication), so "messages" covers it.
+    for (const table of ["showings", "messages"]) {
+      const { data: rows, error } = await admin.from(table).select("id").eq("lead_id", ph.id).limit(1);
+      if (error) return no(`${table} read failed: ${error.message || error.code || "unknown"}`);
+      if ((rows ?? []).length > 0) return no(`chat renter has ${table}`);
     }
     const { data: org } = await admin.from("organizations").select("booking_timezone").eq("id", nl.organization_id).maybeSingle();
     const tz = (org as { booking_timezone?: string | null } | null)?.booking_timezone || "America/Toronto";

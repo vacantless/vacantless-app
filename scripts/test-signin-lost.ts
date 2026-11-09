@@ -31,7 +31,8 @@ ok("no em dash", !/—/.test(mail.subject + mail.body));
 ok("without a name", signinLostEmail({ siteLabel: "Zumper", orgName: null }).body.includes("your account"));
 
 const route = readFileSync("app/api/cron/signin-lost/route.ts", "utf8");
-ok("only Posting accounts are emailed", route.includes("canUseRobotPosting(org)"));
+// S767: Free accounts sign in too (their one live rental is robot-posted free).
+ok("only accounts that can use the robot sites are emailed", route.includes("canSetUpRobotSites(org)"));
 ok("closed accounts are skipped", route.includes("org.closed_at"));
 ok("goes to owners", route.includes('.eq("role", "owner_admin")'));
 // S742c: the stamp is claimed before the send, so two runs never both email.
