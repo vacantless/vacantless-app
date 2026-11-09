@@ -2,7 +2,7 @@ import Link from "next/link";
 import { MarketingHeader } from "@/components/marketing-chrome";
 import { OPERATOR_LINE } from "@/lib/operator-line";
 import { LEASING_PROOF_STATS, POSTING_PROOF } from "@/lib/proof-stats";
-import { TIERS } from "@/lib/billing";
+import { TIERS, FREE_RENTAL_POSTING_LINE } from "@/lib/billing";
 import { HOW_TO_COUNT_WORD } from "@/lib/how-to-videos";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
@@ -730,7 +730,7 @@ function PostingAddonCard() {
           ))}
         </ul>
         <p className="text-[0.84rem] leading-snug text-[#59655f]">
-          Kijiji charges its own fee for each ad. Facebook Page posting and the Marketplace kit are free on every plan. On a computer, the free Vacantless helper for Chrome fills in the Marketplace form for you.
+          {FREE_RENTAL_POSTING_LINE} Facebook Page posting and the Marketplace kit are free on every plan. On a computer, the free Vacantless helper for Chrome fills in the Marketplace form for you.
         </p>
         {/* S737 (review item 12): what Posting did on real rentals. Figures
             live in lib/proof-stats.ts and must stay true. */}
@@ -771,8 +771,9 @@ const PLANS: {
     priceNote: "a month",
     body: TIERS.free.blurb,
     includes: TIERS.free.features,
-    // S734: Posting works on Free too (review item 5).
-    addon: "Add Posting for CA$49 a month. See below.",
+    // S734: Posting works on Free too (review item 5). S767: the one Free
+    // rental is robot-posted to Rentals.ca and Zumper free; Posting covers more.
+    addon: "Posting, CA$49 a month, posts every other rental for you. See below.",
     cta: "Start free",
     href: "/signup",
   },

@@ -526,6 +526,7 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "Self-booked viewings and email reminders",
       "Every renter in one list",
       "Posts to your Facebook Page, free",
+      "We post it to Kijiji, Rentals.ca and Zumper for you. Kijiji charges its own ad fee",
     ],
   },
   growth: {

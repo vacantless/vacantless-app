@@ -231,7 +231,8 @@ ok("no buy button when price unset (admin-only note)", billingPage.includes('add
 const home = read("app/page.tsx");
 ok("homepage names the add-on under Growth", home.includes('addon: "Add Posting for CA$49 a month. See below."')); // S722b: the add-on has its own card
 // S720: the homepage says Kijiji charges its own fee, as Billing does.
-ok("homepage says Kijiji charges its own fee", home.includes("Kijiji charges its own fee for each ad."));
+// S767: the Posting card reads the one free-rental line, which names the Kijiji fee.
+ok("homepage says Kijiji charges its own fee", home.includes("{FREE_RENTAL_POSTING_LINE}") && read("lib/billing.ts").includes("Kijiji charges its own ad fee"));
 ok("homepage renders the add-on line", home.includes("{p.addon}"));
 
 // S714: no second buy button while a purchase is still landing.
