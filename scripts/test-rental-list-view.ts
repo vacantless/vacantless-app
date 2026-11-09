@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   siteLights,
+  publicAdUrl,
   postMissingLabel,
   renewLine,
   listRank,
@@ -14,6 +15,29 @@ const check = (fn: () => void) => {
   fn();
   n++;
 };
+
+// S773: a Zumper light opens the public ad, not the owner's manage page.
+check(() => {
+  assert.equal(
+    publicAdUrl("zumper", "https://www.zumper.com/manage/properties/listing/65742610"),
+    "https://www.zumper.com/listings/65742610",
+  );
+  assert.equal(
+    publicAdUrl("zumper", "https://www.zumper.com/listings/65446440b"),
+    "https://www.zumper.com/listings/65446440b",
+  );
+  // A shape we cannot read is left as saved; other sites are untouched.
+  assert.equal(publicAdUrl("zumper", "https://zumper.com/x"), "https://zumper.com/x");
+  assert.equal(
+    publicAdUrl("kijiji", "https://www.kijiji.ca/v-apartments-condos/windsor-area-on/x/1744721877"),
+    "https://www.kijiji.ca/v-apartments-condos/windsor-area-on/x/1744721877",
+  );
+  const lights = siteLights(
+    { live: ["zumper"], missing: [] },
+    new Map([["zumper", "https://www.zumper.com/manage/properties/listing/65742753"]]),
+  );
+  assert.equal(lights[0].url, "https://www.zumper.com/listings/65742753");
+});
 
 // Site lights: live and missing merged in site order, live ads carry their link.
 check(() => {

@@ -5,6 +5,7 @@
 // lights, its old ads, its place in the list, and the counts at the top.
 
 import { COVERAGE_LABELS, coverageLabel, type CoverageRow } from "./posting-coverage";
+import { listingPostLiveCheckTarget } from "./listing-post-live-check";
 
 export type SiteLight = {
   key: string;
@@ -24,6 +25,17 @@ function siteIndex(key: string): number {
 }
 
 /**
+ * S773: the link a site light opens is the ad a renter sees. Zumper rows save
+ * the owner's manage link (zumper.com/manage/properties/listing/<id>), which
+ * asks for a Zumper sign-in, so a teammate or a second device hit a wall. The
+ * public page is derived here; the saved link is never rewritten.
+ */
+export function publicAdUrl(portal: string, url: string): string {
+  if (portal !== "zumper") return url;
+  return listingPostLiveCheckTarget("zumper", url)?.url ?? url;
+}
+
+/**
  * One light per site the rental is on or could be on today, in site order.
  * A site the rental is live on stays lit even when the account no longer
  * offers it (the ad is still up).
@@ -35,8 +47,12 @@ export function siteLights(row: Pick<CoverageRow, "live" | "missing">, adUrls: M
     key,
     label: coverageLabel(key),
     live: live.has(key),
-    url: live.has(key) ? adUrls.get(key) ?? null : null,
+    url: live.has(key) ? siteLightUrl(key, adUrls.get(key)) : null,
   }));
+}
+
+function siteLightUrl(key: string, url: string | undefined): string | null {
+  return url ? publicAdUrl(key, url) : null;
 }
 
 /** "Post to Kijiji", "Post to Kijiji and Zumper", "Post to 3 sites". */
