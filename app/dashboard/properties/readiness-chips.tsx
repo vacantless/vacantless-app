@@ -38,12 +38,29 @@ function visibleNeedLabel(signal: ReadinessSignal) {
 export function ReadinessChips({
   signals,
   skipNeeds = [],
+  needsOnly = false,
 }: {
   signals: ReadinessSignal[];
   /** S740: needs the row badge already says ("Needs viewings"), shown once. */
   skipNeeds?: ReadinessSignal["key"][];
+  /** S772: the rentals list shows only what needs fixing; the row's one
+   *  status already says live, rented or off market. */
+  needsOnly?: boolean;
 }) {
   const actionable = signals.filter((s) => s.tone === "warn" && !skipNeeds.includes(s.key));
+  if (needsOnly) {
+    if (actionable.length === 0) return null;
+    return (
+      <span
+        title={describeSignals(actionable)}
+        aria-label={`Needs ${actionable.map((s) => s.label.toLowerCase()).join(", ")}. ${describeSignals(actionable)}`}
+        className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS.warn}`}
+      >
+        <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${DOT_CLASS.warn}`} />
+        <span>Needs {compactList(actionable.map(visibleNeedLabel))}</span>
+      </span>
+    );
+  }
   const allReady = signals.every((s) => s.ok);
   const link = signals.find((s) => s.key === "link");
   const feed = signals.find((s) => s.key === "feed");

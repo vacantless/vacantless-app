@@ -2,11 +2,8 @@ import Link from "next/link";
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { propertyStatusLabel } from "@/lib/pipeline";
 import { isPubliclyVisible, isPublicBookable } from "@/lib/listing-state";
 import {
-  StatusChip,
-  propertyStatusTone,
   EmptyState,
   PageHeader,
   SectionHeading,
@@ -20,17 +17,35 @@ import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { hardDeletable } from "@/lib/property-archive";
 import { loadReservedListingPostIds } from "@/lib/listing-post-reservations";
-import { addProperty, importPropertyFromMls, importListingFromImages } from "./actions";
+import {
+  addProperty,
+  importPropertyFromMls,
+  importListingFromImages,
+  postToMissingSites,
+  markAdsRenewed,
+  markAllAdsRenewed,
+} from "./actions";
 import { CopyIntakeButton } from "./copy-intake-button";
 import { MlsPdfImport } from "./mls-pdf-import";
 import { ListingImageImport } from "./listing-image-import";
 import { ReadinessChips } from "./readiness-chips";
 import { DeleteOrArchiveControl } from "./row-actions";
-import { RenewListCard } from "./renew-list-card";
+import { RowMoreMenu } from "./row-more-menu";
 import { loadRenewItems } from "@/lib/renew-list-load";
-import { CoverageCard } from "./coverage-card";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { coverageLabel, shortAddress } from "@/lib/posting-coverage";
+import { sortPhotos } from "@/lib/photos";
+import {
+  siteLights,
+  postMissingLabel,
+  renewLine,
+  listRank,
+  sortForList,
+  listHeadline,
+  todoSummary,
+  type RowRenew,
+} from "@/lib/rental-list-view";
 
 export const dynamic = "force-dynamic";
 
@@ -48,9 +63,14 @@ type PropertyRow = {
 type ListingPostRef = {
   id: string;
   property_id: string | null;
+  portal: string | null;
   status: string | null;
   url: string | null;
 };
+
+// Facebook lists every Marketplace ad the person posted on one page, each
+// with its own Renew. Only the person can press it (no API for Marketplace).
+const FACEBOOK_YOUR_LISTINGS = "https://www.facebook.com/marketplace/you/selling";
 
 type RentalLaunchState = {
   label: string;
@@ -70,11 +90,18 @@ const POSTING_SAFETY_PROMISE =
   "We post on your own accounts and save the link to every ad. A site's fee always waits for you.";
 
 const LAUNCH_STATE_CLASS: Record<RentalLaunchState["tone"], string> = {
-  ready: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  active: "border-blue-200 bg-blue-50 text-blue-700",
+  ready: "border-sky-200 bg-sky-50 text-sky-700",
+  active: "border-emerald-200 bg-emerald-50 text-emerald-700",
   warn: "border-amber-200 bg-amber-50 text-amber-700",
   muted: "border-gray-200 bg-gray-50 text-gray-500",
 };
+
+const PRIMARY_ROW_BUTTON =
+  "inline-flex items-center justify-center rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-90";
+const GHOST_ROW_BUTTON =
+  "inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50";
+const MENU_ITEM =
+  "block rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50";
 
 function pluralize(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -262,7 +289,7 @@ export default async function PropertiesPage({
     supabase.rpc("property_rollups", { p_org: org.id }),
     supabase
       .from("listing_posts")
-      .select("id, property_id, status, url")
+      .select("id, property_id, portal, status, url")
       .eq("organization_id", org.id),
     // Org-wide weekly viewing windows — the same signal the property-detail
     // share-readiness check uses. One count for the selected org, so
@@ -349,9 +376,130 @@ export default async function PropertiesPage({
     }
   }
 
-  // Per-property photo counts — so a shareable-but-photo-poor rental can be
-  // labelled at the list level (Codex QA: don't offer a bare "Copy link" with no
-  // signal that the listing has no photos).
+  // S772: one row per rental. Each row carries its site lights (from the
+  // coverage rule), its old ads (from the renew rule) and its cover photo, so
+  // the page no longer repeats rentals in two panels above the list.
+  const adUrls = new Map<string, Map<string, string>>();
+  for (const r of postRefRows) {
+    const url = r.url?.trim();
+    if (!r.property_id || !r.portal || r.status !== "live" || !url) continue;
+    const byPortal = adUrls.get(r.property_id) ?? new Map<string, string>();
+    if (!byPortal.has(r.portal)) byPortal.set(r.portal, url);
+    adUrls.set(r.property_id, byPortal);
+  }
+  const coverageByProperty = new Map(coverage.rows.map((r) => [r.propertyId, r]));
+  const renewByProperty = new Map<string, RowRenew[]>();
+  for (const item of renewItems) {
+    const list = renewByProperty.get(item.propertyId) ?? [];
+    list.push({ portal: item.portal, label: item.label, days: item.days });
+    renewByProperty.set(item.propertyId, list);
+  }
+
+  const coverByProperty = new Map<string, string>();
+  const rowIds = rows.map((r) => r.id);
+  if (rowIds.length > 0) {
+    const { data: photoRows } = await supabase
+      .from("property_photos")
+      .select("id, property_id, url, sort_order, is_cover")
+      .in("property_id", rowIds)
+      .limit(2000);
+    const grouped = new Map<string, { id: string; url: string; sort_order: number; is_cover: boolean }[]>();
+    for (const r of (photoRows ?? []) as {
+      id: string;
+      property_id: string;
+      url: string;
+      sort_order: number;
+      is_cover: boolean;
+    }[]) {
+      const list = grouped.get(r.property_id) ?? [];
+      list.push(r);
+      grouped.set(r.property_id, list);
+    }
+    for (const [id, list] of Array.from(grouped.entries())) {
+      const first = sortPhotos(list).find((ph) => !!ph.url);
+      if (first) coverByProperty.set(id, first.url);
+    }
+  }
+
+  const viewRows = sortForList(
+    rows.map((p) => {
+      const leadCount = leadCounts.get(p.id) ?? 0;
+      const tenancyCount = tenancyCounts.get(p.id) ?? 0;
+      const postCount = postCounts.get(p.id) ?? 0;
+      const livePostCount = livePostCounts.get(p.id) ?? 0;
+      const photoCount = photoCounts.get(p.id) ?? 0;
+      const readiness = rentalRowReadiness({
+        status: p.status,
+        rentCents: p.rent_cents,
+        beds: p.beds,
+        baths: p.baths,
+        address: p.address,
+        description: p.description,
+        photoCount,
+        availabilityWindowCount: availabilityCount ?? 0,
+      });
+      const launch = rentalLaunchState({
+        row: p,
+        readiness,
+        livePostCount,
+        archived: archivedView,
+        wizardEnabled,
+      });
+      const bookable = !archivedView && isPublicBookable(p.status);
+      const cov = coverageByProperty.get(p.id);
+      const renew = archivedView ? [] : renewByProperty.get(p.id) ?? [];
+      const lights = !archivedView && cov ? siteLights(cov, adUrls.get(p.id) ?? new Map()) : [];
+      const missingRobot = bookable ? cov?.missingRobot ?? [] : [];
+      const statusLabel = archivedView
+        ? "Archived"
+        : p.status === "leased"
+          ? "Rented"
+          : bookable
+            ? "Live"
+            : launch.label;
+      const statusTone: RentalLaunchState["tone"] = archivedView
+        ? "muted"
+        : bookable
+          ? "active"
+          : launch.tone;
+      return {
+        p,
+        leadCount,
+        launch,
+        readiness,
+        bookable,
+        renew,
+        lights,
+        missingRobot,
+        statusLabel,
+        statusTone,
+        cover: coverByProperty.get(p.id) ?? null,
+        canHardDelete: hardDeletable(p.status, leadCount, tenancyCount, postCount),
+        needsYou:
+          (cov?.missing.length ?? 0) > 0 || renew.length > 0 || launch.tone === "warn",
+      };
+    }),
+    (v) => listRank(v.p.status, v.bookable),
+  );
+  const headline = listHeadline(
+    viewRows.map((v) => ({
+      status: v.p.status,
+      bookable: v.bookable,
+      inquiries: v.leadCount,
+      needsYou: v.needsYou,
+    })),
+  );
+  const todo = archivedView ? "" : todoSummary(coverage.gaps, renewItems.length);
+  const postedNotice = searchParams.posted
+    ? searchParams.posted === "0"
+      ? "Those sites need you first: a sign-in or a paid ad. Open the rental to do that."
+      : `Queued ${searchParams.posted} ad${searchParams.posted === "1" ? "" : "s"}. They post as soon as they are ready. The rental's page shows each one.`
+    : null;
+  const renewedNotice = searchParams.renewed
+    ? renewItems.length === 0
+      ? "All your ads are fresh. We will remind you when one gets old."
+      : "Saved. We will remind you when an ad gets old again."
+    : null;
 
   const h = headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
@@ -414,8 +562,101 @@ export default async function PropertiesPage({
         }
       />
 
-      <CoverageCard coverage={coverage} posted={searchParams.posted ?? null} />
-      <RenewListCard items={renewItems} renewed={!!searchParams.renewed} />
+      {/* S772: the portfolio at a glance. */}
+      {!archivedView && activeRows.length > 0 && (
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white px-4 py-3 shadow-sm">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+              {headline.live > 0 && (
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+              )}
+              Live
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{headline.live}</p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Inquiries</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">
+              {headline.inquiries.toLocaleString()}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Rented</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{headline.rented}</p>
+          </div>
+          <div
+            className={`rounded-2xl border px-4 py-3 shadow-sm ${
+              headline.needYou > 0 ? "border-amber-200 bg-gradient-to-br from-amber-50 to-white" : "border-gray-200 bg-white"
+            }`}
+          >
+            <p
+              className={`text-[11px] font-semibold uppercase tracking-wide ${
+                headline.needYou > 0 ? "text-amber-700" : "text-gray-500"
+              }`}
+            >
+              Need you
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">
+              {headline.needYou > 0 ? headline.needYou : "All set"}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* S772: one slim line replaces the two panels; each rental's gap or old
+          ad is on its own row below. The ids keep the action redirects
+          (#site-coverage, #renew-ads) landing here. */}
+      <div id="site-coverage" />
+      <div id="renew-ads" />
+      {(postedNotice || renewedNotice) && (
+        <p className="mb-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          {postedNotice ?? renewedNotice}
+        </p>
+      )}
+      {todo && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-2.5">
+          <p className="text-sm text-amber-900">
+            <span className="font-semibold">{todo}</span>
+            <span className="ml-2 text-xs text-amber-800">Each one is marked on its row.</span>
+          </p>
+          {renewItems.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {renewItems.some((i) => i.portal === "facebook") && (
+                <a
+                  href={FACEBOOK_YOUR_LISTINGS}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={PRIMARY_ROW_BUTTON}
+                >
+                  Open all my Marketplace ads
+                </a>
+              )}
+              {renewItems.length > 1 && (
+                <form action={markAllAdsRenewed}>
+                  {renewItems.map((i) => (
+                    <input key={`${i.propertyId}-${i.portal}`} type="hidden" name="pair" value={`${i.propertyId}|${i.portal}`} />
+                  ))}
+                  <button type="submit" className={GHOST_ROW_BUTTON}>
+                    I renewed them all
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {!archivedView && coverage.signInToAdd.length > 0 && activeRows.length > 0 && (
+        <p className="mb-4 text-xs text-gray-500">
+          Sign in once to add {coverage.signInToAdd.map(coverageLabel).join(" and ")}:{" "}
+          <Link href="/dashboard/settings#site-accounts" className="font-medium text-brand hover:underline">
+            your rental site accounts
+          </Link>
+          .
+        </p>
+      )}
 
       {searchParams.added && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
@@ -474,30 +715,6 @@ export default async function PropertiesPage({
         </p>
       )}
 
-      {/* Building standard policy entry point (S275 IA Step 3): the org-level
-          defaults every unit inherits live here, with the portfolio they
-          govern, relocated from Settings (G6/G7). Fresh-org audit P3: only
-          surface it once there's at least one unit to govern; a zero-property
-          org shouldn't be fronted with org-wide config before its first add. */}
-      {allRows.length > 0 && (
-        <Link
-          href="/dashboard/properties/standard-policy"
-          className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
-        >
-          <span className="flex items-center gap-2.5 text-gray-700">
-            <Icons.building className="h-4 w-4 text-gray-400" />
-            <span>
-              <span className="font-medium text-gray-900">
-                Building standard policy
-              </span>{" "}
-              . Set lease term, air conditioning, smoking and on-site
-              management once. Every unit inherits it.
-            </span>
-          </span>
-          <span className="shrink-0 font-medium text-brand">Manage →</span>
-        </Link>
-      )}
-
       {allRows.length > 0 && (
         <nav
           aria-label="Rental list view"
@@ -526,147 +743,210 @@ export default async function PropertiesPage({
         </nav>
       )}
 
-      {rows.length > 0 ? (
-        <ul className="mb-8 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {rows.map((p) => {
-            const leadCount = leadCounts.get(p.id) ?? 0;
-            const tenancyCount = tenancyCounts.get(p.id) ?? 0;
-            const postCount = postCounts.get(p.id) ?? 0;
-            const livePostCount = livePostCounts.get(p.id) ?? 0;
-            const canHardDelete = hardDeletable(
-              p.status,
-              leadCount,
-              tenancyCount,
-              postCount,
-            );
-            const photoCount = photoCounts.get(p.id) ?? 0;
-            const readiness = rentalRowReadiness({
-              status: p.status,
-              rentCents: p.rent_cents,
-              beds: p.beds,
-              baths: p.baths,
-              address: p.address,
-              description: p.description,
-              photoCount,
-              availabilityWindowCount: availabilityCount ?? 0,
-            });
-            const launch = rentalLaunchState({
-              row: p,
-              readiness,
-              livePostCount,
-              archived: archivedView,
-              wizardEnabled,
-            });
-            const statusLabel = propertyStatusLabel(p.status);
-            const showLaunchChip = launch.label !== statusLabel;
+      {viewRows.length > 0 ? (
+        <ul className="mb-4 divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white shadow-sm">
+          {viewRows.map((v) => {
+            const p = v.p;
+            const detailHref = `/dashboard/properties/${p.id}`;
+            const kitHref = `/dashboard/properties/${p.id}#distribute-header`;
+            const meta = [
+              p.beds != null ? `${p.beds} bd` : null,
+              p.baths != null ? `${p.baths} ba` : null,
+              v.leadCount > 0 ? `${v.leadCount} ${v.leadCount === 1 ? "inquiry" : "inquiries"}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            const primaryIsPostMissing = v.missingRobot.length > 0;
             return (
-            <li key={p.id} className="px-4 py-3">
-              {/* Stack through tablet widths so the launch/action cluster never
-                  crushes the address into awkward wrapped fragments. */}
-              <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-x-3 lg:gap-y-2">
-              <Link
-                href={`/dashboard/properties/${p.id}`}
-                className="min-w-0 lg:flex-1 hover:underline"
-              >
-                <span className="text-gray-900">{p.address}</span>
-                <span className="ml-2 text-xs text-gray-400">
-                  {[
-                    p.beds != null ? `${p.beds} bd` : null,
-                    p.baths != null ? `${p.baths} ba` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-                {leadCount > 0 && (
-                  <span className="ml-2 text-xs font-medium text-gray-500">
-                    · {leadCount} {leadCount === 1 ? "inquiry" : "inquiries"}
-                  </span>
-                )}
-              </Link>
-              <span className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
-                <span className="text-sm text-gray-500">
-                  {p.rent_cents
-                    ? `$${(p.rent_cents / 100).toLocaleString()}/mo`
-                    : "-"}
-                </span>
-                <StatusChip tone={propertyStatusTone(p.status)}>
-                  {statusLabel}
-                </StatusChip>
-                {showLaunchChip && (
-                  <span
-                    title={launch.detail}
-                    className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${LAUNCH_STATE_CLASS[launch.tone]}`}
-                  >
-                    {launch.label}
-                  </span>
-                )}
-                {/* S670: the safety promise the launch-queue redesign dropped.
-                    This row is the entry point into posting, so it is where the
-                    contract belongs. Exact copy is Noam's. */}
-                {isPubliclyVisible(p.status) && !isPublicBookable(p.status) ? (
-                  // Leased / Paused: the public /r page LOADS but tells renters
-                  // the unit is no longer available, so a bare "Copy inquiry
-                  // link" reads like a Live listing. Label the state instead of
-                  // offering an inquiry action (Codex QA re-review).
-                  <>
-                    <span className="text-xs text-gray-400">
-                      {p.status === "leased"
-                        ? "Rented - page shows unavailable"
-                        : p.status === "off_market"
-                          ? "Off market - link shows your open units"
-                          : "Paused - not accepting inquiries"}
-                    </span>
+              <li key={p.id} className="group px-4 py-3.5 first:rounded-t-2xl transition-colors hover:bg-gray-50/70">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                  <div className="flex min-w-0 flex-1 items-center gap-3.5">
                     <Link
-                      href={launch.href}
-                      className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                      title={`${launch.detail}. ${POSTING_SAFETY_PROMISE}`}
+                      href={detailHref}
+                      aria-hidden="true"
+                      tabIndex={-1}
+                      className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-emerald-100 via-teal-50 to-sky-100 ring-1 ring-black/5"
                     >
-                      {launch.action}
+                      {v.cover ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={v.cover}
+                          alt=""
+                          loading="lazy"
+                          className={`h-full w-full object-cover transition duration-300 group-hover:scale-105 ${
+                            p.status === "leased" || archivedView ? "opacity-70 grayscale-[35%]" : ""
+                          }`}
+                        />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-teal-700/70">
+                          <Icons.building className="h-5 w-5" />
+                        </span>
+                      )}
                     </Link>
-                  </>
-                ) : (
-                  <Link
-                    href={launch.href}
-                    className="inline-flex min-w-[5.75rem] justify-center rounded-lg border border-brand bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-brand/90"
-                    title={`${launch.detail}. ${POSTING_SAFETY_PROMISE}`}
-                  >
-                    {launch.action}
-                  </Link>
+                    <div className="min-w-0">
+                      <Link
+                        href={detailHref}
+                        className="block truncate font-semibold text-gray-900 hover:underline"
+                        title={p.address}
+                      >
+                        {shortAddress(p.address)}
+                      </Link>
+                      {meta && <p className="mt-0.5 text-xs text-gray-500">{meta}</p>}
+                      {(v.lights.length > 0 || !archivedView) && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          {v.lights.map((l) =>
+                            l.live ? (
+                              l.url ? (
+                                <a
+                                  key={l.key}
+                                  href={l.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={`Live on ${l.label}. Open the ad.`}
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                                >
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.18)]" />
+                                  {l.label}
+                                </a>
+                              ) : (
+                                <span
+                                  key={l.key}
+                                  title={`Live on ${l.label}`}
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
+                                >
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.18)]" />
+                                  {l.label}
+                                </span>
+                              )
+                            ) : l.key === "facebook" ? (
+                              <Link
+                                key={l.key}
+                                href={kitHref}
+                                title="Not on Marketplace yet. Open the Marketplace kit."
+                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[11px] font-medium text-gray-400 transition hover:border-gray-400 hover:text-gray-600"
+                              >
+                                + {l.label}
+                              </Link>
+                            ) : (
+                              <span
+                                key={l.key}
+                                title={`Not on ${l.label} yet`}
+                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[11px] font-medium text-gray-400"
+                              >
+                                {l.label}
+                              </span>
+                            ),
+                          )}
+                          <ReadinessChips
+                            signals={v.readiness}
+                            skipNeeds={v.launch.label === "Needs viewings" ? ["viewings"] : []}
+                            needsOnly
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
+                    <span className="mr-1 text-sm font-semibold tabular-nums text-gray-900">
+                      {p.rent_cents ? `$${(p.rent_cents / 100).toLocaleString()}/mo` : "-"}
+                    </span>
+                    <span
+                      title={v.bookable ? "Taking inquiries" : v.launch.detail}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${LAUNCH_STATE_CLASS[v.statusTone]}`}
+                    >
+                      {v.bookable && (
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                        </span>
+                      )}
+                      {v.statusLabel}
+                    </span>
+                    {archivedView ? (
+                      <DeleteOrArchiveControl propertyId={p.id} hardDelete={v.canHardDelete} archived />
+                    ) : (
+                      <>
+                        {primaryIsPostMissing ? (
+                          <form action={postToMissingSites}>
+                            <input type="hidden" name="property_id" value={p.id} />
+                            <button type="submit" className={PRIMARY_ROW_BUTTON} title={POSTING_SAFETY_PROMISE}>
+                              {postMissingLabel(v.missingRobot)}
+                            </button>
+                          </form>
+                        ) : (
+                          <Link
+                            href={v.launch.href}
+                            className={v.launch.tone === "muted" ? GHOST_ROW_BUTTON : PRIMARY_ROW_BUTTON}
+                            title={`${v.launch.detail}. ${POSTING_SAFETY_PROMISE}`}
+                          >
+                            {v.launch.action}
+                          </Link>
+                        )}
+                        <Link href={`/dashboard/properties/${p.id}?tab=setup#rental-details`} className={GHOST_ROW_BUTTON}>
+                          Edit
+                        </Link>
+                        <RowMoreMenu>
+                          {primaryIsPostMissing && (
+                            <Link href={v.launch.href} className={MENU_ITEM}>
+                              {v.launch.action}
+                            </Link>
+                          )}
+                          {v.bookable && <CopyIntakeButton url={intakeUrl(p.id)} className={MENU_ITEM} />}
+                          <DeleteOrArchiveControl propertyId={p.id} hardDelete={v.canHardDelete} />
+                        </RowMoreMenu>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {v.renew.length > 0 && (
+                  <div className="mt-2.5 space-y-1.5 md:pl-[4.375rem]">
+                    {v.renew.map((item) => (
+                      <div
+                        key={item.portal}
+                        className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-900 ring-1 ring-amber-200"
+                      >
+                        <span className="font-semibold">{renewLine(item)}</span>
+                        <span className="text-amber-700">Old ads sink lower on the site.</span>
+                        <span className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
+                          {item.portal === "facebook" ? (
+                            <a
+                              href={FACEBOOK_YOUR_LISTINGS}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={PRIMARY_ROW_BUTTON}
+                            >
+                              Open my Marketplace ads
+                            </a>
+                          ) : (
+                            <form action={markAdsRenewed}>
+                              <input type="hidden" name="property_id" value={p.id} />
+                              <input type="hidden" name="portal" value={item.portal} />
+                              <input type="hidden" name="then" value="open" />
+                              <button type="submit" className={PRIMARY_ROW_BUTTON}>
+                                Renew on {coverageLabel(item.portal)}
+                              </button>
+                            </form>
+                          )}
+                          <form action={markAdsRenewed}>
+                            <input type="hidden" name="property_id" value={p.id} />
+                            <input type="hidden" name="portal" value={item.portal} />
+                            <input type="hidden" name="back" value="list" />
+                            <button type="submit" className={GHOST_ROW_BUTTON}>
+                              I already renewed it
+                            </button>
+                          </form>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 )}
-                {isPublicBookable(p.status) && (
-                  // The photo-poor warning that used to sit here is now carried
-                  // by the compact readiness pill below (Codex design audit #5),
-                  // so this stays a clean Copy action.
-                  <CopyIntakeButton url={intakeUrl(p.id)} />
-                )}
-                <Link
-                  href={`/dashboard/properties/${p.id}?tab=setup#rental-details`}
-                  className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Edit
-                </Link>
-                <DeleteOrArchiveControl
-                  propertyId={p.id}
-                  hardDelete={canHardDelete}
-                  archived={archivedView}
-                />
-              </span>
-              </div>
-              {/* Readiness strip (Codex design audit #5): the four signals that
-                  decide whether a rental can actually pull inquiries, link,
-                  photos, viewings, feed, surfaced inline so an operator sees
-                  what's missing without opening the rental. */}
-              <ReadinessChips
-                signals={readiness}
-                skipNeeds={launch.label === "Needs viewings" ? ["viewings"] : []}
-              />
-            </li>
+              </li>
             );
           })}
           {/* S670: stated ONCE under the list rather than per row. A `title`
               tooltip never renders on touch, and this surface is aimed at
               iPad and phone, so the contract needs a visible home. */}
-          <li className="border-t border-gray-100 bg-gray-50/60 px-4 py-2.5 text-xs text-gray-500">
+          <li className="rounded-b-2xl bg-gray-50/60 px-4 py-2.5 text-xs text-gray-500">
             {POSTING_SAFETY_PROMISE}
           </li>
         </ul>
@@ -686,6 +966,17 @@ export default async function PropertiesPage({
             }}
           />
         </div>
+      )}
+
+      {/* Building standard policy (S275 IA Step 3): org-level defaults every
+          unit inherits. S772: a quiet line under the list, not above it. */}
+      {allRows.length > 0 && !archivedView && (
+        <p className="mb-8 text-xs text-gray-500">
+          <Link href="/dashboard/properties/standard-policy" className="font-medium text-brand hover:underline">
+            Building standard policy
+          </Link>
+          : set lease term, air conditioning, smoking and on-site management once. Every unit inherits it.
+        </p>
       )}
 
       {!addPropertyV2Enabled && (

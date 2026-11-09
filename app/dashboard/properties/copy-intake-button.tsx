@@ -7,7 +7,7 @@ import { useState } from "react";
  * clipboard behavior as the full CopyLink on the detail page, but a single
  * small button so it fits inline on a row without crowding it.
  */
-export function CopyIntakeButton({ url }: { url: string }) {
+export function CopyIntakeButton({ url, className }: { url: string; className?: string }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -24,7 +24,10 @@ export function CopyIntakeButton({ url }: { url: string }) {
     <button
       type="button"
       onClick={copy}
-      className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+      className={
+        className ??
+        "rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+      }
     >
       {copied ? "Copied!" : "Copy inquiry link"}
     </button>
