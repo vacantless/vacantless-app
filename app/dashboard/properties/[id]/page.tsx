@@ -278,7 +278,13 @@ import {
   marketplacePhoneKitPath,
 } from "@/lib/marketplace-kit";
 import { phoneKitSecret, signPhoneKitToken } from "@/lib/marketplace-phone-link";
-import { buildMarketplaceHelperKit } from "@/lib/marketplace-helper";
+import {
+  buildMarketplaceHelperKit,
+  marketplaceEditUrl,
+  marketplaceItemIdFrom,
+  marketplaceUpdateKit,
+} from "@/lib/marketplace-helper";
+import { MarketplaceUpdateButton } from "@/components/marketplace-update-button";
 import { brokerageCardEnabled, brokerageRouteFor } from "@/lib/brokerage-request";
 import type { BrokerageRequestCardData } from "./brokerage-request-card";
 import type { MarketplaceKitData } from "./marketplace-row";
@@ -2928,8 +2934,23 @@ export default async function PropertyDetailPage({
           Changes saved.
           {/* S761: what the edit does to the ads that are up. */}
           {(() => {
-            const notice = adUpdateNotice(adUpdatePlanFromParam(searchParams.adupdate));
-            return notice ? <> {notice}</> : null;
+            const plan = adUpdatePlanFromParam(searchParams.adupdate);
+            // S764: the live Marketplace ad gets the helper's update button
+            // (or its edit page link) instead of "Edit the ad there".
+            const fbPost = postRows.find((row) => row.portal === "facebook" && row.status === "live");
+            const fbItemId = marketplaceItemIdFrom(fbPost?.url);
+            const fbEditUrl = marketplaceEditUrl(fbItemId);
+            const fbUpdateKit =
+              marketplaceKit?.helperKit && fbItemId ? marketplaceUpdateKit(marketplaceKit.helperKit, fbItemId) : null;
+            const fbByHand = plan.byHand.some((b) => b.portal === "facebook");
+            const showFbUpdate = fbByHand && fbEditUrl != null && fbUpdateKit != null;
+            const notice = adUpdateNotice(plan, showFbUpdate ? ["facebook"] : []);
+            return (
+              <>
+                {notice ? <> {notice}</> : null}
+                {showFbUpdate ? <MarketplaceUpdateButton kit={fbUpdateKit!} editUrl={fbEditUrl!} /> : null}
+              </>
+            );
           })()}
         </p>
       )}

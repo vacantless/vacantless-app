@@ -74,6 +74,10 @@ ok("repost audit says updated", /updated Zumper ad/.test(updateRepostAudit("zump
 const notice = adUpdateNotice(plan);
 ok("notice names both kinds", /Rentals\.ca and Zumper: we are updating your ad\./.test(notice ?? "") && /Kijiji still shows the old details/.test(notice ?? ""));
 ok("no notice when nothing is up", adUpdateNotice({ repost: [], byHand: [] }) === null);
+// S764: Marketplace gets the helper's update button instead of the line.
+const fbPlan = { repost: [], byHand: [{ portal: "facebook", url: null }, { portal: "kijiji", url: null }] };
+ok("facebook left to the button", !/Facebook/.test(adUpdateNotice(fbPlan, ["facebook"]) ?? "") && /Kijiji still shows/.test(adUpdateNotice(fbPlan, ["facebook"]) ?? ""));
+ok("facebook alone, button only", adUpdateNotice({ repost: [], byHand: [{ portal: "facebook", url: null }] }, ["facebook"]) === null);
 ok("no dash, no mechanism", !/—|robot|worker/i.test(`${notice} ${updateTakedownAudit("zumper")} ${updateRepostAudit("zumper")}`));
 const round = adUpdatePlanFromParam("rentals_ca,zumper,hand:kijiji");
 ok("param round-trips", round.repost.join() === "rentals_ca,zumper" && round.byHand[0].portal === "kijiji");
@@ -87,7 +91,8 @@ ok("org read on a plain edit", /orgAfterSave \?\? \(await getCurrentOrg\(\)\)/.t
 ok("takedown carries the mark", /notes: updateRepostNote\(/.test(actions));
 ok("sweep in the 15-minute timer", (SWEEP_PATHS as readonly string[]).includes("/api/cron/ad-update-repost"));
 const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
-ok("saved notice shows the plan", /adUpdateNotice\(adUpdatePlanFromParam\(searchParams\.adupdate\)\)/.test(page));
+ok("saved notice shows the plan", /adUpdatePlanFromParam\(searchParams\.adupdate\)/.test(page) && /adUpdateNotice\(plan, showFbUpdate \? \["facebook"\] : \[\]\)/.test(page));
+ok("saved notice offers the Marketplace update", /<MarketplaceUpdateButton kit=\{fbUpdateKit!\} editUrl=\{fbEditUrl!\} \/>/.test(page));
 
 // S762: photos, the Facebook Page post and Kijiji in place.
 {

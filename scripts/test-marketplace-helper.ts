@@ -1,8 +1,13 @@
 // Unit tests for the Marketplace helper kit (S735).
 // Run: npx tsx scripts/test-marketplace-helper.ts
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
+  MARKETPLACE_HELPER_EDIT_MIN_VERSION,
   MARKETPLACE_HELPER_INSTALL_URL,
+  marketplaceEditUrl,
+  marketplaceUpdateKit,
+  versionAtLeast,
   marketplaceAirConditioning,
   marketplaceHeating,
   marketplaceLaundry,
@@ -90,5 +95,31 @@ assert.equal(
   MARKETPLACE_HELPER_INSTALL_URL,
   "https://chromewebstore.google.com/detail/vacantless-helper/mpohpdjmkpeillnmjbhnfhcgofdenepc",
 );
+
+// S764: updating a live Marketplace ad (helper 1.2.4).
+{
+  assert.equal(marketplaceEditUrl("1469392998385509"), "https://www.facebook.com/marketplace/edit/?listing_id=1469392998385509");
+  assert.equal(marketplaceEditUrl("abc"), null);
+  assert.equal(marketplaceEditUrl("12345"), null);
+  assert.equal(marketplaceEditUrl(null), null);
+  const up = marketplaceUpdateKit(kit, "1469392998385509");
+  assert.equal(up?.itemId, "1469392998385509");
+  assert.equal(up?.createUrl, kit.createUrl);
+  assert.equal(kit.itemId, undefined, "the rental's own kit is not changed");
+  assert.equal(marketplaceUpdateKit(kit, "x1"), null);
+  assert.equal(versionAtLeast("1.2.3", MARKETPLACE_HELPER_EDIT_MIN_VERSION), false);
+  assert.equal(versionAtLeast("1.2.4", MARKETPLACE_HELPER_EDIT_MIN_VERSION), true);
+  // The extension builds the edit page from the id and only on its own ad.
+  const bridge = readFileSync("../vacantless-extension/app-bridge.js", "utf8");
+  const fill = readFileSync("../vacantless-extension/marketplace-fill.js", "utf8");
+  const manifest = JSON.parse(readFileSync("../vacantless-extension/manifest.json", "utf8"));
+  const config = readFileSync("../vacantless-extension/config.js", "utf8");
+  assert.match(bridge, /marketplace\/edit\/\?listing_id=" \+ itemId/);
+  assert.match(fill, /res\.kit\.itemId !== PAGE_ITEM_ID/);
+  assert.match(fill, /EDIT_SKIP = new Set\(\["saleOrRent", "propertyType", "address"\]\)/);
+  assert.ok(manifest.content_scripts.some((c: { matches: string[] }) => c.matches.includes("https://www.facebook.com/marketplace/edit/*")));
+  assert.equal(manifest.version, MARKETPLACE_HELPER_EDIT_MIN_VERSION);
+  assert.ok(config.includes(`VERSION: "${MARKETPLACE_HELPER_EDIT_MIN_VERSION}"`));
+}
 
 console.log("test-marketplace-helper: all passed");

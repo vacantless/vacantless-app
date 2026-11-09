@@ -57,6 +57,8 @@ export type MarketplaceHelperKit = {
   photoUrls: string[];
   /** The rental's booking page, for the helper's own "paste the link back" note. */
   publicUrl: string;
+  /** S764: the live ad to update (Facebook's ad id). Set only on an update kit. */
+  itemId?: string;
 };
 
 const UNIT_TYPE_TO_MARKETPLACE: Record<string, MarketplaceHelperKit["propertyType"]> = {
@@ -371,6 +373,26 @@ export function isHelperMessage(data: unknown, type: string): data is Record<str
 // S739: Facebook renewals the helper saw the landlord press on Your listings
 // (the ad's own "..." menu, whose "View listing" link names the ad).
 export type HelperRenewedAd = { itemId: string; at: number };
+
+// S764: after an edit in Vacantless, helper 1.2.4 opens the live ad's own edit
+// page and changes only the fields that differ. The landlord presses
+// Facebook's Update button. Older helpers, or none, get the edit page link.
+
+/** Helper 1.2.4 and up updates a live Marketplace ad. */
+export const MARKETPLACE_HELPER_EDIT_MIN_VERSION = "1.2.4";
+
+/** Facebook's edit page for one of the landlord's own ads, or null for a bad id. */
+export function marketplaceEditUrl(itemId: string | null | undefined): string | null {
+  const id = String(itemId ?? "").trim();
+  return /^\d{6,20}$/.test(id) ? `https://www.facebook.com/marketplace/edit/?listing_id=${id}` : null;
+}
+
+/** The update kit: the rental's kit plus the ad it updates, or null for a bad id. */
+export function marketplaceUpdateKit(kit: MarketplaceHelperKit, itemId: string | null | undefined): MarketplaceHelperKit | null {
+  const id = String(itemId ?? "").trim();
+  if (!/^\d{6,20}$/.test(id)) return null;
+  return { ...kit, itemId: id };
+}
 
 /** Helper 1.2.0 and up reports renewals. */
 export const MARKETPLACE_HELPER_RENEW_MIN_VERSION = "1.2.0";

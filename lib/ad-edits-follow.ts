@@ -150,8 +150,12 @@ export function updateRepostDecision(input: {
   return "repost";
 }
 
-/** The saved notice after a save: what is updating on its own, what is the landlord's. */
-export function adUpdateNotice(plan: AdUpdatePlan): string | null {
+/**
+ * The saved notice after a save: what is updating on its own, what is the landlord's.
+ * S764: portals in `shownElsewhere` (Facebook Marketplace when the page shows
+ * the helper's update button) are left out of the text.
+ */
+export function adUpdateNotice(plan: AdUpdatePlan, shownElsewhere: readonly string[] = []): string | null {
   const parts: string[] = [];
   if (plan.page) parts.push("Facebook Page: we updated your post.");
   if (plan.edit?.length) parts.push(`${plan.edit.map(siteName).join(" and ")}: we are editing your ad. No new fee.`);
@@ -159,6 +163,7 @@ export function adUpdateNotice(plan: AdUpdatePlan): string | null {
     parts.push(`${plan.repost.map(siteName).join(" and ")}: we are updating your ad.`);
   }
   for (const b of plan.byHand) {
+    if (shownElsewhere.includes(b.portal)) continue;
     parts.push(`${siteName(b.portal)} still shows the old details. Edit the ad there.`);
   }
   return parts.length ? parts.join(" ") : null;
