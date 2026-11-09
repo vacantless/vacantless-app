@@ -70,8 +70,6 @@ const SURFACES: Surface[] = [
   // S736: the email when a site signs a landlord out.
   { file: "lib/signin-lost.ts", mode: "ui" },
   { file: "lib/posted-results-email.ts", mode: "ui" },
-  { file: "app/dashboard/properties/renew-list-card.tsx", mode: "ui" },
-  { file: "app/dashboard/properties/coverage-card.tsx", mode: "ui" },
   // S739: the "Keep it fresh" card (review item 10) and its wording.
   { file: "app/dashboard/properties/[id]/keep-fresh-card.tsx", mode: "ui" },
   { file: "lib/keep-fresh.ts", mode: "ui" },

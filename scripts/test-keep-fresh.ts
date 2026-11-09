@@ -55,8 +55,11 @@ ok("S740: facebook row tells where Renew is", due[0].line.includes("Renew listin
 const notif = readFileSync("lib/notifications.ts", "utf8");
 ok("S740: email no longer says the ad page has Renew", !notif.includes("Press Renew there") && notif.includes("then Renew listing"));
 
-const listCard = readFileSync("app/dashboard/properties/renew-list-card.tsx", "utf8");
-ok("S740f: rentals-list Renew box sends Facebook to Your listings, records nothing", listCard.includes('item.portal === "facebook"') && listCard.includes("Open my Marketplace ads"));
+// S773: the Renew box card is gone; since S772 each old ad sits on its own row
+// of the Rentals list (app/dashboard/properties/page.tsx), so the rule is read there.
+const listPage = readFileSync("app/dashboard/properties/page.tsx", "utf8");
+ok("S740f: rentals-list row sends Facebook to Your listings, records nothing", listPage.includes('item.portal === "facebook"') && listPage.includes("Open my Marketplace ads") && listPage.includes("https://www.facebook.com/marketplace/you/selling"));
+ok("S773: emailed #renew-ads links still land on the Rentals list", listPage.includes('<div id="renew-ads" />'));
 
 console.log(`keep-fresh: ${p} passed, ${f} failed`);
 if (f) process.exit(1);

@@ -241,7 +241,7 @@ function plural(count: number, one: string, many: string): string {
 }
 
 // S737: several units land on the Renew box at the top of the rentals list
-// (renew-list-card.tsx). Before, the button opened the plain list, which
+// (since S772, each old ad on its own row of app/dashboard/properties/page.tsx). Before, the button opened the plain list, which
 // showed no ads to renew (Noam, 2026-10-25: "then what?").
 const RENTALS_LIST_PATH = "/dashboard/properties#renew-ads";
 

@@ -1,5 +1,5 @@
 // S737: loads the old live ads for the Renew box on the rentals list
-// (app/dashboard/properties/renew-list-card.tsx). Same rule as the "ads need
+// (since S772, each old ad on its own row of app/dashboard/properties/page.tsx). Same rule as the "ads need
 // a refresh" email (lib/listing-health). Kept out of page.tsx so the page
 // holds no query text.
 import type { SupabaseClient } from "@supabase/supabase-js";
