@@ -56,6 +56,8 @@ import {
 import { ListingCopyCard } from "./listing-copy-card";
 import { MessageReplyCard } from "./message-reply-card";
 import { KeepFreshCard } from "./keep-fresh-card";
+import { CopyCheckCard } from "./copy-check-card";
+import { copyCheckLinks } from "@/lib/copy-check";
 import { keepFreshRows } from "@/lib/keep-fresh";
 import { MarketingKitCard } from "./marketing-kit-card";
 import { PostedResultsCard } from "./posted-results-card";
@@ -4796,6 +4798,15 @@ export default async function PropertyDetailPage({
                       }
                     : null
                 }
+              />
+              {/* S777 (PLAN-S775 Phase 5): searches the landlord opens; we never search the sites. */}
+              <CopyCheckCard
+                links={copyCheckLinks({
+                  address: p.address,
+                  rentCents: p.rent_cents,
+                  beds: p.beds,
+                  coverPhotoUrl: photoRows[0]?.url ?? null,
+                })}
               />
             </>
           }

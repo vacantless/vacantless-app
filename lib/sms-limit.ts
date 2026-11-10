@@ -31,23 +31,52 @@ export function overMonthlyTextLimit(sentThisMonth: number, limit = SMS_MONTHLY_
 
 type FromClient = { from: (table: string) => any };
 
-/** Outbound texts logged for the org this month. Never throws; 0 on error. */
+/** Count rows for the org since the start of the month. Never throws; 0 on error. */
+async function countSince(admin: FromClient, table: string, column: string, orgId: string, since: string, extra?: (q: any) => any): Promise<number> {
+  try {
+    let q = admin.from(table).select("id", { count: "exact", head: true }).eq("organization_id", orgId).gte(column, since);
+    if (extra) q = extra(q);
+    const { count, error } = await q;
+    return error ? 0 : (count ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Texts sent for the org this month. S777 (KI1549): sms_sends holds every text
+ * sendSms sent from the org's own number, including landlord alerts that never
+ * reach messages. The count is the larger of the two, so the month the table
+ * started (or a read that fails) still counts the renter texts in messages.
+ * Never throws; 0 when nothing can be read.
+ */
 export async function textsSentThisMonth(
   admin: FromClient | null | undefined,
   orgId: string | null | undefined,
   now = new Date(),
 ): Promise<number> {
   if (!admin || !orgId) return 0;
+  const since = torontoMonthStartIso(now);
+  const [logged, sends] = await Promise.all([
+    countSince(admin, "messages", "created_at", orgId, since, (q) => q.eq("channel", "sms").eq("direction", "outbound")),
+    countSince(admin, "sms_sends", "sent_at", orgId, since),
+  ]);
+  return monthlyTextCount(logged, sends);
+}
+
+/** The larger of the two counts; a bad number counts as 0. Pure. */
+export function monthlyTextCount(messagesCount: number, smsSendsCount: number): number {
+  const a = Number.isFinite(messagesCount) ? messagesCount : 0;
+  const b = Number.isFinite(smsSendsCount) ? smsSendsCount : 0;
+  return Math.max(a, b);
+}
+
+/** S777: record one text sent from the org's own number. Never throws. */
+export async function logTextSent(admin: FromClient | null | undefined, orgId: string | null | undefined): Promise<void> {
+  if (!admin || !orgId) return;
   try {
-    const { count, error } = await admin
-      .from("messages")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", orgId)
-      .eq("channel", "sms")
-      .eq("direction", "outbound")
-      .gte("created_at", torontoMonthStartIso(now));
-    return error ? 0 : (count ?? 0);
+    await admin.from("sms_sends").insert({ organization_id: orgId });
   } catch {
-    return 0;
+    // Counting must never block or fail a text.
   }
 }

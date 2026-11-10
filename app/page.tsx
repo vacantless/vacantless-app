@@ -636,6 +636,7 @@ const LITTLE_THINGS: { text: string; plan?: string }[] = [
   { text: "Not sure a renter is coming? One tap nudges them to confirm." },
   { text: "A 15-second video ad made from your photos, ready for Facebook or Instagram." },
   { text: "Each rental shows which site brings renters who actually book." },
+  { text: "Worried someone copied your ad to scam renters? One click opens a search of your cover photo, Kijiji and Marketplace near your price." },
   { text: "Missed a call from a renter? It shows on their record with a reminder to call back.", plan: "Growth with texting" },
 ];
 

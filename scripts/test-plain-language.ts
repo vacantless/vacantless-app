@@ -72,6 +72,7 @@ const SURFACES: Surface[] = [
   { file: "lib/posted-results-email.ts", mode: "ui" },
   // S739: the "Keep it fresh" card (review item 10) and its wording.
   { file: "app/dashboard/properties/[id]/keep-fresh-card.tsx", mode: "ui" },
+  { file: "app/dashboard/properties/[id]/copy-check-card.tsx", mode: "ui" },
   { file: "lib/keep-fresh.ts", mode: "ui" },
   { file: "lib/facebook-renew.ts", mode: "ui" },
   { file: "lib/group-viewing.ts", mode: "ui" },

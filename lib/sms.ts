@@ -740,7 +740,18 @@ export async function sendSms({ to, body, organizationId }: SendOrgSmsInput): Pr
     } catch {
       // Never block a text because the count could not be read.
     }
-    return sendViaTwilio({ to, body, from: route.from });
+    const result = await sendViaTwilio({ to, body, from: route.from });
+    // S777 (KI1549): every own-number text counts toward the month, alerts too.
+    if (result.sent) {
+      try {
+        const { createAdminClient } = await import("./supabase/admin");
+        const { logTextSent } = await import("./sms-limit");
+        await logTextSent(createAdminClient(), organizationId);
+      } catch {
+        // Counting must never fail a text that was sent.
+      }
+    }
+    return result;
   }
   const provider = selectSmsProvider();
   return provider === "none"
