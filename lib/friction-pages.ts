@@ -47,7 +47,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Free. Texts from your own number on Growth.",
     video: 6,
-    film: { seconds: 51, youtube: null },
+    film: { seconds: 51, youtube: "izl16rCOT6U" },
   },
   {
     slug: "is-this-still-available",
@@ -66,7 +66,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Free.",
     video: 3,
-    film: { seconds: 38, youtube: null },
+    film: { seconds: 38, youtube: "H1dE60PaHAg" },
   },
   {
     slug: "unqualified-renters",
@@ -84,7 +84,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Free. The waiting list is on Growth.",
     video: 3,
-    film: { seconds: 36, youtube: null },
+    film: { seconds: 36, youtube: "DANVe3KNRP0" },
   },
   {
     slug: "repairs-and-emergencies",
@@ -104,7 +104,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Growth.",
     video: 10,
-    film: { seconds: 45, youtube: null },
+    film: { seconds: 45, youtube: "PDfPr0GfgPw" },
   },
   {
     slug: "showing-trips",
@@ -140,7 +140,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Free for one rental. Every rental with Posting, CA$49 a month. Kijiji charges its own ad fee.",
     video: 4,
-    film: { seconds: 39, youtube: null },
+    film: { seconds: 39, youtube: "QAaUbTm_voM" },
   },
   {
     slug: "late-rent",

@@ -37,6 +37,7 @@ export default async function Home() {
       <MarketingHeader active="home" />
       <main>
         <Hero />
+        <StopDoing />
         <SeeItWork />
         <LeasingProof />
         <HowItWorks />
@@ -135,11 +136,11 @@ function Hero() {
         <div className="max-w-[590px]">
           <Eyebrow>For landlords and property managers</Eyebrow>
           <h1 className="mb-[16px] max-w-[19ch] text-[clamp(2.2rem,4.6vw,3.4rem)] font-extrabold leading-[1.04] tracking-tight">
-            <span className="block">Every renter answered.{" "}</span>
-            <span className="block">Every viewing booked.</span>
+            <span className="block">Fill the vacancy.{" "}</span>
+            <span className="block">Then the rental runs itself.</span>
           </h1>
           <p className="mb-[18px] max-w-[34rem] text-[clamp(1.1rem,1.8vw,1.32rem)] font-semibold leading-[1.4] text-[#203029]">
-            Posted everywhere. Then rent, repairs, notices and taxes run on their own.
+            Ads posted and kept up, every renter answered and booked, then rent, repairs, notices and taxes on Growth.
           </p>
           <p className="mb-[26px] max-w-[34rem] text-[clamp(1.02rem,1.6vw,1.16rem)] leading-[1.55] text-[#384a42]">
             Press Set Live and your ad goes up on the rental sites. Renters get a
@@ -159,6 +160,38 @@ function Hero() {
           </p>
         </div>
         <ProductPreview />
+      </div>
+    </section>
+  );
+}
+
+/* S779 (Noam approved 2026-11-10 17:10, doc claude.ai/artifact/LKQCTfbHkEJb9JaCNNbMr4):
+   lead with the vacancy, then the jobs a landlord stops doing. Each tile is a
+   shipped feature: posting (Posting add-on, Free rental), instant replies,
+   reminders + YES confirm + auto-release, rent-increase reminders with N1, the
+   N4 / N12 tools (app/tools), the T776 package (Books & Tax). */
+const STOP_DOING: string[] = [
+  "Typing the same ad on four sites",
+  "Answering \u201cis this still available?\u201d",
+  "Driving to showings nobody comes to",
+  "Missing the rent increase date",
+  "Paying for an N4 or N12",
+  "Shoeboxing receipts for the T776",
+];
+
+function StopDoing() {
+  return (
+    <section id="stop-doing" className="border-b border-[#d9e1dc] py-12 sm:py-14">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <h2 className="mb-6 text-[clamp(1.5rem,2.8vw,2.1rem)] font-extrabold leading-tight">What you stop doing</h2>
+        <ul className="grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3">
+          {STOP_DOING.map((t) => (
+            <li key={t} className="flex items-start gap-2 rounded-lg border border-[#d9e1dc] bg-[#f4f7f5] p-4 text-[0.98rem] font-semibold leading-snug text-[#273832]">
+              <CheckMark />
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );
@@ -655,14 +688,30 @@ const LITTLE_THINGS: { text: string; plan?: string }[] = [
   { text: "Keep each tenant's files in one place. Share them by a link that expires." },
   { text: "A rent receipt for your tenant in one click." },
   { text: "Add a teammate with their own login. No shared password.", plan: "Growth" },
+  // S779 (doc LKQCTfbHkEJb9JaCNNbMr4, approved 17:10), each read in code and on
+  // Agile first: lib/group-viewing + viewing_group_size; showing_instructions on
+  // /agent/[token]; arrival phone in confirmations (S754c); inquiry_require_phone
+  // on Questions for renters; lib/renewal (the landlord sends the check-in link,
+  // nothing is sent for them, so the line says so); RentIncreaseMarketNote
+  // (canUseMarketRent); tenancy-insurance (opt-in alert); compliance calendar
+  // (opt-in) + detector-eol; portal-lead-scam (scam_held).
+  { text: "Viewings at the same building get booked close together. One trip, not three." },
+  { text: "Whoever shows the unit sees the lockbox code, which buzzer to press and who to call." },
+  { text: "Renters get the number to call when they arrive, so nobody stands outside." },
+  { text: "Make a phone number required on your renter form, so you can always call back." },
+  { text: "90 days before a lease ends, you get a link to ask the tenant: staying or leaving?" },
+  { text: "At renewal, see the market rent next to the legal cap.", plan: "Growth" },
+  { text: "Log your tenant's insurance. Turn on the alert and you hear before it lapses." },
+  { text: "Smoke alarms, Vacant Home Tax and winterizing on your calendar, with reminders." },
+  { text: "Messages that look like scams are held, not filed as renters." },
 ];
 
 function LittleThings() {
   return (
     <section id="little-things" className="border-b border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="Little things you may not know.">
-          Small touches that save you a call, a trip or an hour.
+        <SectionHead title="Little things that save you time and money.">
+          Small touches that save you a call, a trip, an hour or a bill.
         </SectionHead>
         <ul className="grid list-none gap-3 p-0 md:grid-cols-2">
           {LITTLE_THINGS.map((t) => (

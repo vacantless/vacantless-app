@@ -10,7 +10,7 @@ import {
 // live product keeps (same wording as the home page and Billing). Every
 // ShowingHero line is from showinghero.com/pricing, read 2026-10-15. Re-read
 // their page before changing their column; never state what their page does not.
-const SHOWINGHERO_CHECKED = "October 20, 2026";
+const SHOWINGHERO_CHECKED = "November 10, 2026";
 
 export const metadata = {
   title: "Vacantless vs ShowingHero - for Canadian landlords of any size",
@@ -74,6 +74,34 @@ const COMPARE_ROWS: Row[] = [
     topic: "Texting renters",
     us: "On Growth: booking confirmations and reminders by text from your own local number, which we set up for you. Up to 500 texts a month.",
     them: "Yes. Alerts, email and SMS, plus a dedicated ShowingHero phone number for each client.",
+  },
+  // S779 (doc LKQCTfbHkEJb9JaCNNbMr4, approved 2026-11-10 17:10). Their side
+  // read on showinghero.com/pricing and /faq on 2026-11-10: neither page names
+  // group viewings, access notes, no-shows, legal forms or repairs.
+  {
+    topic: "Group viewings",
+    us: "Yes. Set how many renters can book each time, and viewings at the same building are booked close together.",
+    them: "Not named on their pricing or FAQ pages.",
+  },
+  {
+    topic: "Showing agents and access notes",
+    us: "Yes. Each agent gets bookings on their own phone page, with your lockbox, buzzer and parking notes, and renters get the number to call when they arrive.",
+    them: "Agents get their own calendars, their FAQ says, and self-tours use a smart box. Access notes are not named.",
+  },
+  {
+    topic: "No-shows",
+    us: "Renters confirm with one tap or a YES text, you see who has not confirmed and nudge them in one tap, and unconfirmed times open up again.",
+    them: "They \"schedule, confirm, remind, follow-up\", their FAQ says. No-shows are not named.",
+  },
+  {
+    topic: "Ontario forms",
+    us: "N4, N5, N8, N12, L1 and more, filled from the tenancy, plus the N1 with rent-increase reminders. On Growth.",
+    them: "Not named on their pricing or FAQ pages.",
+  },
+  {
+    topic: "Repairs and emergencies",
+    us: "On Growth. Tenants report from a link that asks first if it is an emergency, a real one alerts you at once, and your trade books the visit from a link.",
+    them: "Not named on their pricing or FAQ pages.",
   },
   {
     topic: "Contract",
