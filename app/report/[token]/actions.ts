@@ -7,6 +7,7 @@ import {
   validateReportSubmission,
   resolveIncidentNotifyEmails,
   incidentCategoryLabel,
+  isMessageCategory,
   type NotifyMember,
 } from "@/lib/incident-reports";
 import {
@@ -198,6 +199,7 @@ async function notifyOperatorsOfNewReport(
         description: r.description,
         reporter_name: r.reporter_name,
         emergency_kind: emergencyKind,
+        is_message: isMessageCategory(r.category),
       }),
     ),
   );

@@ -2171,6 +2171,8 @@ export type IncidentReportNotificationPayload = {
   reporter_name: string | null;
   /** S776: set when the tenant marked it an emergency (lib/tenant-emergency.ts). */
   emergency_kind?: string | null;
+  /** S776c: noise or "not a repair": a message, never a work order. */
+  is_message?: boolean;
 };
 
 function maintenanceInboxUrl(): string {
@@ -2204,7 +2206,10 @@ function incidentNotificationHtml(p: IncidentReportNotificationPayload): string 
         emergency
           ? `<p style="margin:0 0 16px;padding:12px 16px;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-size:16px;font-weight:700;">Emergency: ${escapeHtml(emergency)}</p>
       <p style="margin:0 0 16px;">${who} marked this an emergency at <strong>${addr}</strong>. Please contact them as soon as you can.</p>`
-          : `<p style="margin:0 0 16px;font-size:16px;">New maintenance report</p>
+          : p.is_message
+            ? `<p style="margin:0 0 16px;font-size:16px;">New message from a tenant</p>
+      <p style="margin:0 0 16px;">${who} sent a message about <strong>${addr}</strong>. It is not a repair, so it will not become a work order.</p>`
+            : `<p style="margin:0 0 16px;font-size:16px;">New maintenance report</p>
       <p style="margin:0 0 16px;">${who} reported an issue at <strong>${addr}</strong>.</p>`
       }
       <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
@@ -2214,7 +2219,7 @@ function incidentNotificationHtml(p: IncidentReportNotificationPayload): string 
       <p style="margin:0 0 24px;text-align:center;">
         <a href="${url}" style="display:inline-block;background:${escapeHtml(
           brand,
-        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">Review &amp; approve</a>
+        )};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">${p.is_message ? "Open it" : "Review &amp; approve"}</a>
       </p>
       <p style="margin:0 0 16px;font-size:13px;color:#71717a;">Or open it directly:<br/><span style="color:#52525b;">${url}</span></p>
       <p style="margin:24px 0 0;color:#52525b;">Vacantless</p>
@@ -2242,9 +2247,11 @@ export async function sendIncidentReportNotification(
   const kind = parseEmergencyKind(p.emergency_kind);
   const subject = kind
     ? emergencyEmailSubject(kind, p.property_address)
-    : p.property_address
-      ? `New maintenance report - ${p.property_address}`
-      : "New maintenance report from a tenant";
+    : p.is_message
+      ? `New message from a tenant${p.property_address ? ` - ${p.property_address}` : ""}`
+      : p.property_address
+        ? `New maintenance report - ${p.property_address}`
+        : "New maintenance report from a tenant";
 
   const body = {
     sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },

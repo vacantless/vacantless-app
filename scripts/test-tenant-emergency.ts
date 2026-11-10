@@ -72,5 +72,7 @@ ok("rental has the emergency info field", rental.includes('name="emergency_info"
 const m2 = readFileSync("supabase/migrations/0282_rental_emergency_phone.sql", "utf8");
 ok("0282 adds the rental phone and puts it first for the tenant", m2.includes("add column if not exists emergency_phone text") && m2.includes("coalesce(v_prop_phone,"));
 ok("rental form and action carry the phone, text uses it", rental.includes('name="emergency_phone"') && rental.includes("emergency_info, emergency_phone, viewing_earliest_date") && pactions.includes('formData.has("emergency_phone")') && action.includes("rental_emergency_phone: r.property?.emergency_phone"));
+const emailSrc = readFileSync("lib/email.ts", "utf8");
+ok("message email says message, not repair", emailSrc.includes("New message from a tenant") && emailSrc.includes('p.is_message ? "Open it" : "Review &amp; approve"') && action.includes("is_message: isMessageCategory(r.category)"));
 console.log(`tenant-emergency: ${p} passed, ${f} failed`);
 if (f) process.exit(1);
