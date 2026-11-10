@@ -627,7 +627,14 @@ function AfterTheLease() {
    rental, Quick replies "Next open", Suggest a new time and Nudge renter on
    Viewings, the video ad card and "brings you the most booked viewings" on a
    rental. The missed-call line follows app/api/sms/voice: a call to your
-   texting number from a renter you know lands on their record. */
+   texting number from a renter you know lands on their record.
+   S777 coverage audit (claude/_s777_audit): ten more, each checked in code
+   first: auto-release (organizations.auto_release_unconfirmed_*, lib/showing-
+   release), the move-in gate (screening_max_movein_days + screening_gate_booking),
+   coming vacant (lib/coming-vacant), sign-out email (app/api/cron/signin-lost),
+   city pages (app/rentals/[city]), equipment end of life (lib/equipment-eol),
+   inspections and receipts (tenancies/[id]), tenant files (documents-section),
+   teammates (Growth, lib/team teammateLimit). Noam approved 2026-11-10 14:32. */
 const LITTLE_THINGS: { text: string; plan?: string }[] = [
   { text: "Renter wrote in a chat? Upload the screenshot and they land in your list." },
   { text: "Have an old ad or a realtor's data sheet? Paste it or drop the PDF. The form fills itself." },
@@ -638,6 +645,16 @@ const LITTLE_THINGS: { text: string; plan?: string }[] = [
   { text: "Each rental shows which site brings renters who actually book." },
   { text: "Worried someone copied your ad to scam renters? One click opens a search of your cover photo, Kijiji and Marketplace near your price." },
   { text: "Missed a call from a renter? It shows on their record with a reminder to call back.", plan: "Growth with texting" },
+  { text: "Renter not confirming? The time opens up again after the hours you choose." },
+  { text: "Need someone in by a date? Renters who want to move in too late can't book themselves." },
+  { text: "Tenant moving out? One click relists the unit from their move-out date." },
+  { text: "Signed out of Kijiji, Rentals.ca or Zumper? We email you a one-tap way back in." },
+  { text: "Your open rentals can also show on vacantless.com, where renters search by city." },
+  { text: "Water heater or furnace near the end of its life? You get a reminder." },
+  { text: "Move-in, move-out and routine inspections on your calendar, with a reminder." },
+  { text: "Keep each tenant's files in one place. Share them by a link that expires." },
+  { text: "A rent receipt for your tenant in one click." },
+  { text: "Add a teammate with their own login. No shared password.", plan: "Growth" },
 ];
 
 function LittleThings() {

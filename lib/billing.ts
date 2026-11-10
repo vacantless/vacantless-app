@@ -615,6 +615,9 @@ export const POSTING_ADDON = {
     "We post to Kijiji, Rentals.ca and Zumper",
     "Set up with you, on your own Kijiji, Rentals.ca and Zumper accounts",
     "Ads go up as soon as they are ready",
+    "Change the rent, dates or photos and your live ads update",
+    "A site ended your ad early? We post it again",
+    "Rented? The ads come down",
     "Kijiji ad fees extra, at cost, inside your limits",
   ],
 };
