@@ -43,6 +43,7 @@ export default async function Home() {
         <WhatYouGet />
         <Automations />
         <AfterTheLease />
+        <LittleThings />
         <Pricing />
         <FounderBand />
         <ClosingCta />
@@ -452,6 +453,7 @@ const GET_GROUPS: { title: string; items: string[] }[] = [
       "An email the moment a renter asks or books",
       "Every renter in one list, with their answers and notes",
       "A follow-up list when a viewing is cancelled",
+      "Group viewings: several renters at one time, so a no-show costs you nothing",
       "A quick question after each viewing, so your list stays true",
       "Showing agents: hand viewings to the people who run them, each with a private phone page",
       "Your name and colours on every page and email renters see",
@@ -611,6 +613,48 @@ function AfterTheLease() {
             </article>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+/* S775: built features the site never named (claude/AUDIT-S775-HIDDEN-FEATURES.md).
+   Noam approved the wording 2026-11-10 08:17 ("these must be mentioned somewhere
+   on the site"). Each line was read live on Agile before shipping (S775): the
+   screenshot card on Renters, Paste listing text and Drop a document on Add a
+   rental, Quick replies "Next open", Suggest a new time and Nudge renter on
+   Viewings, the video ad card and "brings you the most booked viewings" on a
+   rental. The missed-call line follows app/api/sms/voice: a call to your
+   texting number from a renter you know lands on their record. */
+const LITTLE_THINGS: { text: string; plan?: string }[] = [
+  { text: "Renter wrote in a chat? Upload the screenshot and they land in your list." },
+  { text: "Have an old ad or a realtor's data sheet? Paste it or drop the PDF. The form fills itself." },
+  { text: "Quick replies on your phone. Each rental's booking link and next open times, ready to share." },
+  { text: "Time not working for a renter? Suggest up to three open times. They pick one." },
+  { text: "Not sure a renter is coming? One tap nudges them to confirm." },
+  { text: "A 15-second video ad made from your photos, ready for Facebook or Instagram." },
+  { text: "Each rental shows which site brings renters who actually book." },
+  { text: "Missed a call from a renter? It shows on their record with a reminder to call back.", plan: "Growth with texting" },
+];
+
+function LittleThings() {
+  return (
+    <section id="little-things" className="border-b border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="Little things you may not know.">
+          Small touches that save you a call, a trip or an hour.
+        </SectionHead>
+        <ul className="grid list-none gap-3 p-0 md:grid-cols-2">
+          {LITTLE_THINGS.map((t) => (
+            <li key={t.text} className="flex items-start gap-2 rounded-lg border border-[#d9e1dc] bg-white p-4 text-[0.92rem] leading-snug text-[#273832]">
+              <CheckMark />
+              <span>
+                {t.text}
+                {t.plan ? <span className="ml-1 text-xs text-[#5a6b64]">({t.plan})</span> : null}
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

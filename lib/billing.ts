@@ -524,6 +524,7 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "One live rental page",
       "Instant email replies with a booking link",
       "Self-booked viewings and email reminders",
+      "Group viewings: set how many renters can book each time",
       "Every renter in one list",
       "Posts to your Facebook Page, free",
       "We post it to Kijiji, Rentals.ca and Zumper for you. Kijiji charges its own ad fee",
