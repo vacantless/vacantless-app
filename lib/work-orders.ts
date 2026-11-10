@@ -233,6 +233,9 @@ export function validateTradeContactInput(v: TradeContactInput): TradeContactVal
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
+  // S776e (0284)
+  rate_invalid: "Pick 1 to 5 stars on a finished job that has a trade.",
+  rate_failed: "That rating did not save. Please try again.",
   title: "Give the work order a short title.",
   category: "Pick a valid category.",
   priority: "Pick a valid priority.",

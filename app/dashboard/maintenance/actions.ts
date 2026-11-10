@@ -53,6 +53,7 @@ import {
   MAX_PHOTOS_PER_WORK_ORDER,
 } from "@/lib/work-order-media";
 import { randomUUID, randomBytes } from "crypto";
+import { parseStars, parseHireAgain, canRateWorkOrder } from "@/lib/trade-ratings";
 import { timeStrToMinutes, minutesToLabel } from "@/lib/booking";
 import {
   validateDayWindow,
@@ -912,6 +913,8 @@ export async function addDirectoryTradeToRolodex(formData: FormData) {
     note: listing.service_area
       ? `From the Vacantless trade network · ${listing.service_area}`
       : "From the Vacantless trade network",
+    // S776e (0284): ratings of this trade count toward the listing.
+    directory_trade_id: id,
   });
 
   // Proof-loop flywheel (cross-org write via the SECURITY DEFINER fn from 0056;
@@ -1753,4 +1756,39 @@ export async function updateEmergencyPhone(formData: FormData) {
   if (error) redirect(`${BASE}?report=failed#reports`);
   revalidatePath(BASE);
   redirect(`${BASE}?report=emergency_phone#reports`);
+}
+
+// S776e (0284): rate the trade on a finished job (1 to 5 stars, would hire
+// again). One rating per job; saving again changes it. The insert policy only
+// accepts a completed work order done by that trade in this account.
+export async function rateTradeOnJob(formData: FormData) {
+  await requireCapability("manage_work_orders", `${BASE}?wo=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const id = s(formData, "work_order_id");
+  const stars = parseStars(formData.get("stars"));
+  if (!id || stars == null) redirect(`${BASE}?wo=rate_invalid`);
+  const supabase = createClient();
+  const { data: wo } = await supabase
+    .from("work_orders")
+    .select("id, status, trade_contact_id")
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  const w = wo as { id: string; status: string; trade_contact_id: string | null } | null;
+  if (!w || !canRateWorkOrder(w)) redirect(`${BASE}?wo=rate_invalid`);
+  const { error } = await supabase.from("trade_ratings").upsert(
+    {
+      organization_id: org.id,
+      work_order_id: w!.id,
+      trade_contact_id: w!.trade_contact_id,
+      stars,
+      hire_again: parseHireAgain(formData.get("hire_again")),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "work_order_id" },
+  );
+  if (error) redirect(`${BASE}?wo=rate_failed`);
+  revalidatePath(BASE);
+  redirect(`${BASE}?wo=rated`);
 }

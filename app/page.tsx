@@ -504,6 +504,7 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img: strin
       "They pick when they can be home. Your trade accepts, quotes and books from a link",
       "Vacantless finds the time that works for both, tells the tenant and reminds them the day before",
       "Mark it done and the cost goes on your books",
+      "Need a trade? See the ones other landlords near you used, with their rating out of 5",
     ],
     img: "/marketing/auto-repairs.png",
     alt: "A repair job with the tenant's free times, the technician's window and the time that works for both",

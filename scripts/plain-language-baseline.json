@@ -79,6 +79,7 @@
     "lib/site-signin.ts",
     "lib/sites-setup.ts",
     "lib/tenant-emergency.ts",
+    "lib/trade-ratings.ts",
     "messages/en.json",
     "messages/fr.json"
   ],
@@ -181,7 +182,7 @@
     "app/dashboard/properties/[id]/marketing-kit-card.tsx": 25,
     "app/dashboard/properties/[id]/marketplace-row.tsx": 29,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
-    "app/dashboard/properties/[id]/page.tsx": 427,
+    "app/dashboard/properties/[id]/page.tsx": 430,
     "app/dashboard/properties/[id]/posted-results-card.tsx": 8,
     "app/dashboard/properties/[id]/publish-everywhere.tsx": 114,
     "app/dashboard/properties/[id]/renter-sources-card.tsx": 3,
@@ -232,7 +233,8 @@
     "lib/signin-lost.ts": 9,
     "lib/site-signin.ts": 39,
     "lib/sites-setup.ts": 39,
-    "lib/tenant-emergency.ts": 21,
+    "lib/tenant-emergency.ts": 23,
+    "lib/trade-ratings.ts": 8,
     "messages/en.json": 211,
     "messages/fr.json": 211
   },

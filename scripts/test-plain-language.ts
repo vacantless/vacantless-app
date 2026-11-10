@@ -76,6 +76,7 @@ const SURFACES: Surface[] = [
   { file: "lib/facebook-renew.ts", mode: "ui" },
   { file: "lib/group-viewing.ts", mode: "ui" },
   { file: "lib/tenant-emergency.ts", mode: "ui" },
+  { file: "lib/trade-ratings.ts", mode: "ui" },
   { file: "app/dashboard/properties/[id]/next-action-card.tsx", mode: "ui" },
   { file: "app/dashboard/properties/[id]/ads-still-up-card.tsx", mode: "ui" },
   // S734: the results card after posting and the Posting offer text.

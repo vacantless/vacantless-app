@@ -114,10 +114,17 @@ import {
   provisionTenantLink,
   emailTenantLink,
   updateEmergencyPhone,
+  rateTradeOnJob,
 } from "./actions";
 import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 import { emergencyLabel, emergencyTextTarget } from "@/lib/tenant-emergency";
 import { normalizePhoneE164 } from "@/lib/sms";
+import {
+  STAR_VALUES,
+  canRateWorkOrder,
+  ratingLine,
+  yourRatingLine,
+} from "@/lib/trade-ratings";
 
 // Public app origin for the tenant pick-your-times link (matches lib/email.ts).
 const APP_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
@@ -273,6 +280,7 @@ const WO_SUCCESS: Record<string, string> = {
   saved: "Work order updated.",
   status: "Work order status updated.",
   deleted: "Work order deleted.",
+  rated: "Rating saved. Thanks: it helps other landlords near you.",
   photo_added: "Photo added to the work order.",
   photo_removed: "Photo removed.",
   receipt_added: "Receipt filed to the work order and property vault.",
@@ -1169,6 +1177,28 @@ export default async function MaintenancePage({
     new Set(browse.map((l) => l.city).filter((c): c is string => !!c)),
   ).sort((a, b) => a.localeCompare(b));
 
+  // S776e (0284): this account's ratings per job, and the network's averages.
+  const [{ data: myRatings }, { data: scoreRows }] = await Promise.all([
+    supabase
+      .from("trade_ratings")
+      .select("work_order_id, stars, hire_again")
+      .eq("organization_id", org.id),
+    supabase.rpc("directory_trade_scores"),
+  ]);
+  const ratingByWo = new Map(
+    ((myRatings ?? []) as { work_order_id: string; stars: number; hire_again: boolean | null }[]).map(
+      (r) => [r.work_order_id, r],
+    ),
+  );
+  const scoreByListing = new Map(
+    ((scoreRows ?? []) as {
+      directory_trade_id: string;
+      rating_avg: number | string | null;
+      rating_count: number;
+      landlord_count: number;
+    }[]).map((r) => [r.directory_trade_id, r]),
+  );
+
   const directoryCards = rankListings(
     browse.filter((l) => {
       if (dirType && (l.trade_type ?? "") !== dirType) return false;
@@ -1186,7 +1216,13 @@ export default async function MaintenancePage({
     const isOwn = !!orgId && l.contributed_by_org === orgId;
     const isAdded = rolodexNames.has(l.business_name.trim().toLowerCase());
     const view = publicListingView(l, isOwn || isAdded);
-    return { ...view, isOwn, isAdded, source_trade_contact_id: l.source_trade_contact_id };
+    return {
+      ...view,
+      isOwn,
+      isAdded,
+      source_trade_contact_id: l.source_trade_contact_id,
+      score: ratingLine(scoreByListing.get(l.id)),
+    };
   });
 
   const dirFlash = searchParams.dir
@@ -1659,6 +1695,37 @@ export default async function MaintenancePage({
                         </div>
                       )}
                     </dl>
+
+                    {/* S776e: rate the trade once the job is done. */}
+                    {canRateWorkOrder(o) ? (
+                      ratingByWo.get(o.id) ? (
+                        <p className="mt-2 text-xs font-medium text-amber-700">
+                          ★ {yourRatingLine(ratingByWo.get(o.id)!.stars, ratingByWo.get(o.id)!.hire_again)}
+                        </p>
+                      ) : (
+                        <form action={rateTradeOnJob} className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                          <input type="hidden" name="work_order_id" value={o.id} />
+                          <span className="font-medium">Rate the trade:</span>
+                          <select name="stars" defaultValue="" required className="rounded-md border border-gray-300 px-2 py-1">
+                            <option value="" disabled>Stars</option>
+                            {STAR_VALUES.map((n) => (
+                              <option key={n} value={n}>
+                                {n} out of 5
+                              </option>
+                            ))}
+                          </select>
+                          <select name="hire_again" defaultValue="" className="rounded-md border border-gray-300 px-2 py-1">
+                            <option value="">Hire again?</option>
+                            <option value="yes">Would hire again</option>
+                            <option value="no">Would not hire again</option>
+                          </select>
+                          <SubmitButton className={`${SECONDARY_ACTION_CLASS} py-1`} pendingLabel="Saving…">
+                            Save rating
+                          </SubmitButton>
+                          <span className="text-gray-400">Only the average is shared with other landlords.</span>
+                        </form>
+                      )
+                    ) : null}
 
                     {/* Operator photos (S328): what the dispatched trade will see */}
                     {(() => {
@@ -2574,6 +2641,9 @@ export default async function MaintenancePage({
                       {l.isOwn && <StatusChip tone="neutral">Your listing</StatusChip>}
                     </div>
                     <p className="mt-1 text-xs font-medium text-gray-500">{l.provenance}</p>
+                    {l.score && (
+                      <p className="mt-0.5 text-xs font-semibold text-amber-700">★ {l.score}</p>
+                    )}
                     {l.service_area && (
                       <p className="mt-0.5 text-xs text-gray-500">{l.service_area}</p>
                     )}
