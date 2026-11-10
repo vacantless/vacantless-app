@@ -47,6 +47,9 @@ import {
   incidentCategoryLabel,
   incidentReportStatusLabel,
   workOrderTitleFromReport,
+  isMessageCategory,
+  repeatReportLine,
+  REPEAT_WINDOW_DAYS,
 } from "@/lib/incident-reports";
 import {
   dispatchStatusLabel,
@@ -294,6 +297,7 @@ const DIR_INFO: Record<string, string> = {
 const REPORT_SUCCESS: Record<string, string> = {
   approved: "Report approved and converted to a work order. Assign a trade and cost below.",
   declined: "Report declined.",
+  handled: "Marked handled.",
   emergency_phone: "Emergency phone saved.",
 };
 const REPORT_INFO: Record<string, string> = {
@@ -304,6 +308,7 @@ const REPORT_ERROR: Record<string, string> = {
   notfound: "That report could not be found.",
   locked: "Tenant issue reporting is a Growth feature. Upgrade to enable it.",
   failed: "Something went wrong handling that report. Please try again.",
+  message: "That one is a message, not a repair. Mark it handled instead.",
 };
 // In-app trade dispatch (Slice 5) outcomes. Success codes show a green banner;
 // every other code maps through dispatchErrorMessage to a red banner.
@@ -824,6 +829,38 @@ export default async function MaintenancePage({
   const openReports = ((reportData ?? []) as unknown as IncidentReportRow[])
     .slice()
     .sort((a, b) => Number(!!b.emergency_kind) - Number(!!a.emergency_kind));
+
+  // S776c: how often each open report's unit reported the same kind of problem.
+  const repeatCount = new Map<string, number>();
+  if (canIntake && openReports.length > 0) {
+    const since = new Date(Date.now() - REPEAT_WINDOW_DAYS * 86400000).toISOString();
+    const { data: recent } = await supabase
+      .from("incident_reports")
+      .select("id, property_id, category, submitted_at")
+      .eq("organization_id", org.id)
+      .gte("submitted_at", since);
+    const rows = (recent ?? []) as {
+      id: string;
+      property_id: string | null;
+      category: string;
+      submitted_at: string;
+    }[];
+    const byId = new Map(rows.map((x) => [x.id, x]));
+    for (const r of openReports) {
+      const me = byId.get(r.id);
+      if (!me?.property_id) continue;
+      repeatCount.set(
+        r.id,
+        rows.filter(
+          (x) =>
+            x.id !== r.id &&
+            x.property_id === me.property_id &&
+            x.category === me.category &&
+            x.submitted_at <= me.submitted_at,
+        ).length,
+      );
+    }
+  }
 
   // S776: where emergency texts go (lib/tenant-emergency emergencyTextTarget).
   const { data: emergencyOrg } = canIntake
@@ -1348,6 +1385,11 @@ export default async function MaintenancePage({
                         ) : null}
                         <StatusChip tone="warn">{incidentReportStatusLabel(r.status)}</StatusChip>
                         <StatusChip tone="neutral">{incidentCategoryLabel(r.category)}</StatusChip>
+                        {repeatReportLine(repeatCount.get(r.id) ?? 0, incidentCategoryLabel(r.category)) ? (
+                          <StatusChip tone="danger">
+                            {repeatReportLine(repeatCount.get(r.id) ?? 0, incidentCategoryLabel(r.category))}
+                          </StatusChip>
+                        ) : null}
                         <span className="text-xs text-gray-500">{fmtDateTime(r.submitted_at)}</span>
                       </div>
                       <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-700">
@@ -1398,6 +1440,26 @@ export default async function MaintenancePage({
 
                     {/* Triage actions */}
                     <div className="flex shrink-0 flex-col items-stretch gap-2 sm:w-56">
+                      {isMessageCategory(r.category) ? (
+                      <>
+                      <p className="text-xs text-gray-500">
+                        A message, not a repair. Reply to the tenant, then mark it handled.
+                      </p>
+                      <form action={declineIncidentReport}>
+                        <input type="hidden" name="report_id" value={r.id} />
+                        <input type="hidden" name="handled" value="1" />
+                        <input type="hidden" name="decline_reason" value="Handled: a message, not a repair" />
+                        <SubmitButton
+                          className={`${PRIMARY_ACTION_CLASS} w-full justify-center`}
+                          style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+                          pendingLabel="Saving…"
+                        >
+                          Mark handled
+                        </SubmitButton>
+                      </form>
+                      </>
+                      ) : (
+                      <>
                       <form action={approveIncidentReport}>
                         <input type="hidden" name="report_id" value={r.id} />
                         <SubmitButton
@@ -1431,6 +1493,8 @@ export default async function MaintenancePage({
                           </SubmitButton>
                         </form>
                       </details>
+                      </>
+                      )}
                     </div>
                   </div>
                 </Card>

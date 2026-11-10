@@ -17,21 +17,30 @@ import { randomBytes } from "crypto";
 import { roleCan } from "./roles";
 
 // ---------------------------------------------------------------------------
-// Category whitelist — IDENTICAL to work_orders.category (migration 0054) so an
-// approved report converts straight into a work order with no remap. Kept here
-// (not imported from lib/work-orders) so this module stays free of any heavier
-// dependency; a test asserts the two lists match.
+// Category whitelist. Every repair category is also a work_orders.category
+// (migration 0054, widened by 0283) so an approved report converts with no
+// remap; the two message categories never convert. Kept here (not imported from
+// lib/work-orders) so this module stays free of any heavier dependency; a test
+// asserts the lists agree.
 // ---------------------------------------------------------------------------
 export const INCIDENT_CATEGORIES = [
+  // Picker order (S776c): the common repairs first, messages last.
   "plumbing",
   "electrical",
   "hvac",
   "appliance",
+  "doors_locks",
   "structural",
   "pest",
   "landscaping",
+  "parking",
   "cleaning",
   "general",
+  // S776c (0283), from Agile's tenant requests. doors_locks and parking become
+  // work orders; noise and not_repair are messages to the landlord, never a work
+  // order (MESSAGE_CATEGORIES; approve_incident_report refuses them).
+  "noise",
+  "not_repair",
 ] as const;
 export type IncidentCategory = (typeof INCIDENT_CATEGORIES)[number];
 
@@ -51,10 +60,33 @@ export const INCIDENT_CATEGORY_LABELS: Record<IncidentCategory, string> = {
   appliance: "Appliance",
   structural: "Structural / building",
   pest: "Pests",
-  landscaping: "Outdoor / landscaping",
+  landscaping: "Outdoor, snow and ice",
   cleaning: "Cleaning",
+  doors_locks: "Doors, locks and keys",
+  parking: "Parking",
+  noise: "Noise or neighbours",
   general: "Something else",
+  not_repair: "Not a repair (rent, notice, a question)",
 };
+
+/** S776c: categories that are a message to the landlord, never a work order. */
+export const MESSAGE_CATEGORIES = ["noise", "not_repair"] as const;
+export function isMessageCategory(category: string | null | undefined): boolean {
+  return (MESSAGE_CATEGORIES as readonly string[]).includes(String(category ?? ""));
+}
+
+/**
+ * S776c: how often this unit reported this kind of problem lately. counts are
+ * the other reports for the same rental and category in the window (any status).
+ * 0 = first time, nothing to say.
+ */
+export const REPEAT_WINDOW_DAYS = 90;
+export function repeatReportLine(earlier: number, categoryLabel: string): string | null {
+  if (earlier < 1) return null;
+  const nth = earlier + 1;
+  const ord = nth === 2 ? "2nd" : nth === 3 ? "3rd" : `${nth}th`;
+  return `${ord} ${categoryLabel.toLowerCase()} report from this unit in ${REPEAT_WINDOW_DAYS} days`;
+}
 
 export function incidentCategoryLabel(category: string): string {
   return isIncidentCategory(category)

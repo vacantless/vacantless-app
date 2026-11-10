@@ -13,7 +13,7 @@ import {
   reportThanksLine,
   showsEmergencyInfo,
 } from "@/lib/tenant-emergency";
-import { INCIDENT_CATEGORIES } from "@/lib/incident-reports";
+import { INCIDENT_CATEGORIES, isMessageCategory, repeatReportLine } from "@/lib/incident-reports";
 import { normalizePhoneE164 } from "@/lib/sms";
 let p = 0, f = 0;
 function ok(n: string, c: boolean, g?: unknown) { if (c) p++; else { f++; console.log("FAIL", n, JSON.stringify(g ?? "")); } }
@@ -43,8 +43,16 @@ ok("alert text under two segments", t.length <= 300, t.length);
 ok("email subject", emergencyEmailSubject("no_heat", "100 Lakeview Ave") === "Emergency: No heat - 100 Lakeview Ave");
 
 const mig = readFileSync("supabase/migrations/0281_tenant_emergencies.sql", "utf8");
+const m83 = readFileSync("supabase/migrations/0283_request_categories.sql", "utf8");
 const kindsSql = EMERGENCY_KINDS.map((k) => `'${k}'`).join(",");
-ok("0281 lists the same kinds twice (check + submit)", (mig.split(kindsSql).length - 1) === 2);
+ok("0283 lists the same kinds twice (check + submit)", (m83.split(kindsSql).length - 1) === 2);
+const catsSql = INCIDENT_CATEGORIES.slice().sort().join("|");
+const sqlCats = (m83.match(/category in \(([^)]*)\)/) || ["", ""])[1].replace(/'/g, "").split(",").sort().join("|");
+ok("0283 incident categories match lib", sqlCats === catsSql, sqlCats);
+ok("0283 approve refuses messages", m83.includes("if v_report.category in ('noise','not_repair') then") && m83.includes("'reason', 'message'"));
+ok("door emergency files under doors and locks", EMERGENCY_CATEGORY.door_unsecured === "doors_locks" && EMERGENCY_LABELS.door_unsecured === "Front door won't lock or close");
+ok("repeat line", repeatReportLine(0, "Plumbing") === null && repeatReportLine(2, "Plumbing") === "3rd plumbing report from this unit in 90 days");
+ok("messages", isMessageCategory("noise") && isMessageCategory("not_repair") && !isMessageCategory("parking"));
 ok("0281 drops the 6-arg submit and grants the 7-arg one", mig.includes("drop function if exists public.submit_incident_report(text, text, text, text, text, boolean);") && mig.includes("submit_incident_report(text, text, text, text, text, boolean, text)\n  to anon, authenticated"));
 ok("0281 approve makes emergencies urgent", mig.includes("when v_report.emergency_kind is not null then 'urgent'"));
 ok("0281 context returns info and call phone", mig.includes("'emergency_info',") && mig.includes("'emergency_call_phone'"));

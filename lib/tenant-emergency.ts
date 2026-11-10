@@ -14,6 +14,9 @@ export const EMERGENCY_KINDS = [
   "gas_smell",
   "fire_smoke",
   "locked_out",
+  // S776c: Agile's most common urgent request was a building door that would
+  // not lock or close (broken glass, broken lock, door left open).
+  "door_unsecured",
 ] as const;
 export type EmergencyKind = (typeof EMERGENCY_KINDS)[number];
 
@@ -35,6 +38,7 @@ export const EMERGENCY_LABELS: Record<EmergencyKind, string> = {
   gas_smell: "Gas smell",
   fire_smoke: "Fire or smoke",
   locked_out: "Locked out",
+  door_unsecured: "Front door won't lock or close",
 };
 
 export function emergencyLabel(kind: string | null | undefined): string | null {
@@ -49,7 +53,8 @@ export const EMERGENCY_CATEGORY: Record<EmergencyKind, IncidentCategory> = {
   no_power: "electrical",
   gas_smell: "general",
   fire_smoke: "general",
-  locked_out: "general",
+  locked_out: "doors_locks",
+  door_unsecured: "doors_locks",
 };
 
 /** Gas and fire: call 911 before anything else. */
@@ -70,6 +75,8 @@ export const EMERGENCY_DO_NOW: Record<EmergencyKind, string> = {
   no_power:
     "Check whether your neighbours have power too. If you see sparks or smell burning, call 911.",
   locked_out: "Stay somewhere safe and warm while you wait for us.",
+  door_unsecured:
+    "Do not prop the door open. If someone is inside who should not be, call 911.",
 };
 
 /** Show the rental's emergency info (shut-offs, breaker panel) for these kinds. */

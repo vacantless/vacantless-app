@@ -40,12 +40,12 @@ function ok(name: string, cond: boolean) {
 }
 
 // --- Category whitelist -----------------------------------------------------
-ok("9 incident categories", INCIDENT_CATEGORIES.length === 9);
+ok("13 incident categories (S776c)", INCIDENT_CATEGORIES.length === 13);
 ok(
-  "incident categories EXACTLY match work_orders categories",
-  INCIDENT_CATEGORIES.length === WORK_ORDER_CATEGORIES.length &&
+  "every repair category is a work_orders category; the two message categories are not",
+  INCIDENT_CATEGORIES.filter((c) => c !== "noise" && c !== "not_repair").length === WORK_ORDER_CATEGORIES.length &&
     INCIDENT_CATEGORIES.every((c) =>
-      (WORK_ORDER_CATEGORIES as readonly string[]).includes(c),
+      (c === "noise" || c === "not_repair") !== (WORK_ORDER_CATEGORIES as readonly string[]).includes(c),
     ),
 );
 ok("every category has a label", INCIDENT_CATEGORIES.every((c) => !!INCIDENT_CATEGORY_LABELS[c]));

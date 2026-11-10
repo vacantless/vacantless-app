@@ -91,6 +91,8 @@ const WORK_ORDER_REPAIR_CATEGORIES = new Set<string>([
   "landscaping",
   "cleaning",
   "general",
+  "doors_locks",
+  "parking",
   "roof",
   "roofing",
 ]);

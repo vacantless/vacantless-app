@@ -48,7 +48,7 @@ function ok(name: string, cond: boolean) {
 
 // --- Value sets -------------------------------------------------------------
 ok("statuses", WORK_ORDER_STATUSES.join(",") === "open,assigned,in_progress,completed,cancelled");
-ok("categories has 9", WORK_ORDER_CATEGORIES.length === 9);
+ok("categories has 11 (S776c doors_locks, parking)", WORK_ORDER_CATEGORIES.length === 11);
 ok("priorities", WORK_ORDER_PRIORITIES.join(",") === "low,normal,high,urgent");
 
 ok("isWorkOrderStatus accepts known", WORK_ORDER_STATUSES.every((s) => isWorkOrderStatus(s)));

@@ -620,7 +620,11 @@ export async function approveIncidentReport(formData: FormData) {
   const result = data as { ok?: boolean; reason?: string; work_order_id?: string } | null;
   if (error || !result?.ok) {
     // not_open = someone already approved/declined it (race or stale page).
-    redirect(`${BASE}?report=${result?.reason === "not_open" ? "notopen" : "failed"}#reports`);
+    redirect(
+      `${BASE}?report=${
+        result?.reason === "not_open" ? "notopen" : result?.reason === "message" ? "message" : "failed"
+      }#reports`,
+    );
   }
 
   revalidatePath(BASE);
@@ -654,7 +658,9 @@ export async function declineIncidentReport(formData: FormData) {
     .select("id");
 
   revalidatePath(BASE);
-  redirect(`${BASE}?report=${updated && updated.length > 0 ? "declined" : "notopen"}#reports`);
+  // S776c: a message (noise, not a repair) is closed as "handled", not declined.
+  const done = s(formData, "handled") === "1" ? "handled" : "declined";
+  redirect(`${BASE}?report=${updated && updated.length > 0 ? done : "notopen"}#reports`);
 }
 
 // --- Trade contacts (the owner's own vendor rolodex) ------------------------

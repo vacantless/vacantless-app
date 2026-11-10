@@ -38,6 +38,10 @@ export const WORK_ORDER_CATEGORIES = [
   "landscaping",
   "cleaning",
   "general",
+  // S776c (0283): from Agile's 138 tenant requests (doors and locks was the
+  // second-largest group; parking had no home).
+  "doors_locks",
+  "parking",
 ] as const;
 export type WorkOrderCategory = (typeof WORK_ORDER_CATEGORIES)[number];
 
@@ -59,9 +63,11 @@ const CATEGORY_LABELS: Record<WorkOrderCategory, string> = {
   appliance: "Appliance",
   structural: "Structural",
   pest: "Pest control",
-  landscaping: "Landscaping",
+  landscaping: "Outdoor, snow and ice",
   cleaning: "Cleaning",
   general: "General",
+  doors_locks: "Doors, locks and keys",
+  parking: "Parking",
 };
 
 const PRIORITY_LABELS: Record<WorkOrderPriority, string> = {
