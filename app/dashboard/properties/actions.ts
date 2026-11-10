@@ -1,5 +1,6 @@
 "use server";
 
+import { parseGroupSize } from "@/lib/group-viewing";
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { SITES_SETUP_HREF } from "@/lib/sites-setup";
 import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/posting-lanes";
@@ -1130,6 +1131,8 @@ export async function updateProperty(formData: FormData) {
             viewing_earliest_date: parseDateOrNull(String(formData.get("viewing_earliest_date") ?? "")),
             viewing_lead_hours: parseViewingLeadHours(formData.get("viewing_lead_hours")),
             viewing_requires_confirmation: parseTriBool(formData.get("viewing_requires_confirmation")),
+            // S775: group viewings per rental (blank = the account's rule).
+            viewing_group_size: parseGroupSize(formData.get("viewing_group_size")),
           }
         : {}),
       status: effectiveStatus,

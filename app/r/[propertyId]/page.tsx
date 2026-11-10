@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { groupViewingLine } from "@/lib/group-viewing";
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { cache } from "react";
@@ -860,6 +861,7 @@ export default async function PublicListingPage({
               timezone={av?.timezone}
               days={days}
               hasClustered={hasClustered}
+              groupLine={groupViewingLine(av?.group_size)}
               showError={Boolean(searchParams.error)}
               errorText={
                 searchParams.error === "limit"

@@ -1,3 +1,4 @@
+import { GROUP_SIZE_MAX, accountGroupRule } from "@/lib/group-viewing";
 import Link from "next/link";
 import { buildAdPreview } from "@/lib/ad-preview";
 import { showRelistButton } from "@/lib/relist-visibility";
@@ -352,6 +353,7 @@ type Property = {
   viewing_earliest_date: string | null;
   viewing_lead_hours: number | null;
   viewing_requires_confirmation: boolean | null;
+  viewing_group_size: number | null;
   status: string;
   available_since: string | null;
   price_drop_pending_cents: number | null;
@@ -965,7 +967,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -1158,12 +1160,13 @@ export default async function PropertyDetailPage({
   const { data: bookingCfg } = org
     ? await supabase
         .from("organizations")
-        .select("booking_lead_hours, booking_requires_confirmation")
+        .select("booking_lead_hours, booking_requires_confirmation, allow_double_booking")
         .eq("id", org.id)
         .maybeSingle()
     : { data: null };
   const accountLeadHours = (bookingCfg?.booking_lead_hours as number | null | undefined) ?? 0;
   const accountConfirms = bookingCfg?.booking_requires_confirmation === true;
+  const accountOpenHouse = (bookingCfg as { allow_double_booking?: boolean } | null)?.allow_double_booking === true;
   // Detector inventory (S359): this unit's logged smoke/CO detectors + each one's
   // computed end-of-life date + status (against the org-local "today"). Shaped
   // here so the section component stays presentational. RLS scopes the read.
@@ -3606,7 +3609,7 @@ export default async function PropertyDetailPage({
             24 hours' notice to the tenant, and often a later first date). */}
         <details
           className="rounded-2xl border border-gray-200 bg-white shadow-sm"
-          open={Boolean(p.viewing_earliest_date || p.viewing_lead_hours != null || p.viewing_requires_confirmation != null)}
+          open={Boolean(p.viewing_earliest_date || p.viewing_lead_hours != null || p.viewing_requires_confirmation != null || p.viewing_group_size != null)}
         >
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
             <div className="min-w-0">
@@ -3614,7 +3617,7 @@ export default async function PropertyDetailPage({
                 Viewing rules for this rental
               </h3>
               <p className="mt-1 text-xs text-gray-500">
-                Optional. Use these when a tenant still lives there.
+                Optional. Use these when a tenant still lives there, or for group viewings.
               </p>
             </div>
             <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
@@ -3660,6 +3663,22 @@ export default async function PropertyDetailPage({
                 <option value="false">No, booked times are final</option>
               </select>
               <span className="mt-1 block font-normal text-gray-400">Renters are told you will confirm.</span>
+            </label>
+            {/* S775: group viewings. Several renters at one time, so a no-show costs nothing. */}
+            <label className="block text-xs font-medium text-gray-600">
+              Renters per viewing time
+              <input
+                type="number"
+                name="viewing_group_size"
+                min={1}
+                max={GROUP_SIZE_MAX}
+                defaultValue={p.viewing_group_size ?? ""}
+                placeholder={accountOpenHouse ? "No limit" : "1"}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <span className="mt-1 block font-normal text-gray-400">
+                {accountGroupRule(accountOpenHouse)}. Set 4 for a group viewing: a no-show costs you nothing.
+              </span>
             </label>
           </div>
         </details>

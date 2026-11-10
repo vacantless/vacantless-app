@@ -871,7 +871,8 @@ export default async function AvailabilityPage({
           <p className="mb-4 text-sm text-gray-500">
             When on, a viewing time stays bookable even after someone books it,
             so several renters can book the same slot. When off (default), each
-            time can be booked once.
+            time can be booked once. Want a cap on one rental? Set Renters per
+            viewing time in its viewing rules.
           </p>
           <label className="flex items-start gap-3">
             <input

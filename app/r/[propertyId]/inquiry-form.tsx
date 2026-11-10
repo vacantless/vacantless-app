@@ -94,6 +94,8 @@ export type InquiryFormProps = {
   requirePhone: boolean;
   /** S728: true only when this account's renters really get texts. */
   textsRenters?: boolean;
+  /** S775: "These are group viewings..." when this rental takes several renters per time. */
+  groupLine?: string | null;
 };
 
 // Tap-first renter booking form (S409 BUILD 2). Core principle: tap choices
@@ -134,6 +136,7 @@ export function InquiryForm({
   petPolicySet = true,
   requirePhone,
   textsRenters = false,
+  groupLine = null,
 }: InquiryFormProps) {
   const hasSlots = days.length > 0;
 
@@ -366,6 +369,9 @@ export function InquiryForm({
               <p className="mb-1 mt-0.5 text-xs text-gray-400">
                 All times are {timezoneLabel(timezone)}.
               </p>
+            )}
+            {groupLine && (
+              <p className="mb-2 text-xs text-gray-500">{groupLine}</p>
             )}
             {hasClustered && (
               <p className="mb-2 text-xs text-gray-500">

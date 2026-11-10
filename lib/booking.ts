@@ -35,6 +35,9 @@ export type Availability = {
   horizon_days: number;
   rules: AvailabilityRule[];
   booked: string[]; // ISO timestamps already taken
+  // S775 (0280): renters per time at this rental. 1 = one, 0 = open house
+  // with no limit, N = a group viewing of up to N. Missing = 1.
+  group_size?: number;
   // Operator days off (date-specific blackouts), YYYY-MM-DD in the org tz. Any
   // calendar day whose key is in this set produces no slots — the recurring
   // weekly rules still stand, this just subtracts specific dates (e.g. a
