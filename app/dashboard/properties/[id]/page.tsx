@@ -350,6 +350,7 @@ type Property = {
   description: string | null;
   showing_instructions: string | null;
   showing_arrival_phone: string | null;
+  emergency_info?: string | null;
   viewing_earliest_date: string | null;
   viewing_lead_hours: number | null;
   viewing_requires_confirmation: boolean | null;
@@ -967,7 +968,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, emergency_info, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -3741,6 +3742,36 @@ export default async function PropertyDetailPage({
             arrival phone from Settings.
           </p>
         </div>
+        </details>
+
+        {/* S776 (0281): what a tenant needs in an emergency, on their repair link. */}
+        <details className="rounded-2xl border border-gray-200 bg-white shadow-sm scroll-mt-6" id="emergency-info">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-gray-900">Emergency info for tenants</h3>
+              <p className="mt-1 text-xs text-gray-500">
+                {p.emergency_info ? "Set" : "Optional: where the water shut-off and breaker panel are."}
+              </p>
+            </div>
+            <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
+              Open
+            </span>
+          </summary>
+          <div className="border-t border-gray-100 px-5 py-4">
+            <textarea
+              id="property-emergency-info"
+              name="emergency_info"
+              defaultValue={p.emergency_info ?? ""}
+              rows={3}
+              maxLength={1000}
+              placeholder="e.g. Water shut-off: basement, behind the furnace, red handle. Breaker panel: laundry room."
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Only this rental&apos;s tenants see it. It shows on their repair link in an
+              emergency.
+            </p>
+          </div>
         </details>
 
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">

@@ -10,6 +10,7 @@
 // Generate a v3 API key under SMTP & API → API Keys (NOT the SMTP login used by
 // Zapier) and set it in Vercel as BREVO_API_KEY (server-only, no NEXT_PUBLIC_).
 
+import { emergencyEmailSubject, emergencyLabel, parseEmergencyKind } from "./tenant-emergency";
 import { nurtureCopy, type NurtureCopy } from "@/lib/nurture";
 import { TEST_SAMPLE, TEST_SUBJECT_PREFIX } from "@/lib/test-email";
 import { DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
@@ -2168,6 +2169,8 @@ export type IncidentReportNotificationPayload = {
   category_label: string; // already humanized (incidentCategoryLabel)
   description: string;
   reporter_name: string | null;
+  /** S776: set when the tenant marked it an emergency (lib/tenant-emergency.ts). */
+  emergency_kind?: string | null;
 };
 
 function maintenanceInboxUrl(): string {
@@ -2184,6 +2187,7 @@ function incidentNotificationHtml(p: IncidentReportNotificationPayload): string 
   // Trim the description to a readable preview; the full text is in the inbox.
   const descRaw = (p.description ?? "").trim();
   const desc = escapeHtml(descRaw.length > 600 ? descRaw.slice(0, 600) + "…" : descRaw);
+  const emergency = emergencyLabel(p.emergency_kind);
 
   const logo = p.logo_url
     ? `<img src="${escapeHtml(
@@ -2196,8 +2200,13 @@ function incidentNotificationHtml(p: IncidentReportNotificationPayload): string 
     <div style="height:6px;background:${escapeHtml(brand)};"></div>
     <div style="padding:28px 28px 24px;">
       ${logo}
-      <p style="margin:0 0 16px;font-size:16px;">New maintenance report</p>
-      <p style="margin:0 0 16px;">${who} reported an issue at <strong>${addr}</strong>.</p>
+      ${
+        emergency
+          ? `<p style="margin:0 0 16px;padding:12px 16px;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-size:16px;font-weight:700;">Emergency: ${escapeHtml(emergency)}</p>
+      <p style="margin:0 0 16px;">${who} marked this an emergency at <strong>${addr}</strong>. Please contact them as soon as you can.</p>`
+          : `<p style="margin:0 0 16px;font-size:16px;">New maintenance report</p>
+      <p style="margin:0 0 16px;">${who} reported an issue at <strong>${addr}</strong>.</p>`
+      }
       <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
         <p style="margin:0 0 6px;"><span style="color:#71717a;">Category:</span> <strong>${cat}</strong></p>
         <p style="margin:0;white-space:pre-wrap;color:#3f3f46;">${desc || "(no description)"}</p>
@@ -2230,9 +2239,12 @@ export async function sendIncidentReportNotification(
   if (!apiKey) return { sent: false, reason: "no_api_key" };
   if (!p.to_email) return { sent: false, reason: "no_recipient" };
 
-  const subject = p.property_address
-    ? `New maintenance report - ${p.property_address}`
-    : "New maintenance report from a tenant";
+  const kind = parseEmergencyKind(p.emergency_kind);
+  const subject = kind
+    ? emergencyEmailSubject(kind, p.property_address)
+    : p.property_address
+      ? `New maintenance report - ${p.property_address}`
+      : "New maintenance report from a tenant";
 
   const body = {
     sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },

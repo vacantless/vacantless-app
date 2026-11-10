@@ -1730,3 +1730,21 @@ export async function emailTenantLink(formData: FormData) {
   revalidatePath(BASE);
   redirect(`${BASE}?sched=${sent > 0 ? "link_emailed" : "email_failed"}#sched-${workOrderId}`);
 }
+
+// S776 (0281): the account's Emergency phone, where emergency texts go and the
+// number tenants are told to call. Free text like the arrival phone; blank
+// falls back to the arrival phone, then the listing contact phone.
+export async function updateEmergencyPhone(formData: FormData) {
+  await requireCapability("manage_settings", `${BASE}?report=forbidden#reports`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const phone = String(formData.get("emergency_phone") ?? "").trim().slice(0, 40) || null;
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ emergency_phone: phone })
+    .eq("id", org.id);
+  if (error) redirect(`${BASE}?report=failed#reports`);
+  revalidatePath(BASE);
+  redirect(`${BASE}?report=emergency_phone#reports`);
+}

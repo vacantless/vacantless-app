@@ -110,8 +110,11 @@ import {
   clearAppointment,
   provisionTenantLink,
   emailTenantLink,
+  updateEmergencyPhone,
 } from "./actions";
 import { DEFAULT_TIME_ZONE } from "@/lib/dates";
+import { emergencyLabel, emergencyTextTarget } from "@/lib/tenant-emergency";
+import { normalizePhoneE164 } from "@/lib/sms";
 
 // Public app origin for the tenant pick-your-times link (matches lib/email.ts).
 const APP_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
@@ -206,6 +209,8 @@ type IncidentReportRow = {
   reporter_contact: string | null;
   status: string;
   submitted_at: string;
+  /** S776 (0281): set when the tenant marked it an emergency. */
+  emergency_kind: string | null;
   property: { address: string } | null;
   tenancy: { id: string; tenants: { name: string | null; is_primary: boolean }[] } | null;
 };
@@ -289,6 +294,7 @@ const DIR_INFO: Record<string, string> = {
 const REPORT_SUCCESS: Record<string, string> = {
   approved: "Report approved and converted to a work order. Assign a trade and cost below.",
   declined: "Report declined.",
+  emergency_phone: "Emergency phone saved.",
 };
 const REPORT_INFO: Record<string, string> = {
   notopen: "That report was already handled by you or a teammate.",
@@ -717,7 +723,7 @@ export default async function MaintenancePage({
     supabase
       .from("incident_reports")
       .select(
-        "id, category, description, reporter_name, reporter_contact, status, submitted_at, property:properties(address), tenancy:tenancies(id, tenants(name, is_primary))",
+        "id, category, description, reporter_name, reporter_contact, status, submitted_at, emergency_kind, property:properties(address), tenancy:tenancies(id, tenants(name, is_primary))",
       )
       .eq("organization_id", org.id)
       .in("status", ["submitted", "under_review"])
@@ -814,7 +820,36 @@ export default async function MaintenancePage({
     { ...org, featureFlags },
     { env: process.env },
   );
-  const openReports = (reportData ?? []) as unknown as IncidentReportRow[];
+  // S776: emergencies first, then oldest first.
+  const openReports = ((reportData ?? []) as unknown as IncidentReportRow[])
+    .slice()
+    .sort((a, b) => Number(!!b.emergency_kind) - Number(!!a.emergency_kind));
+
+  // S776: where emergency texts go (lib/tenant-emergency emergencyTextTarget).
+  const { data: emergencyOrg } = canIntake
+    ? await supabase
+        .from("organizations")
+        .select("emergency_phone, showing_arrival_phone, public_contact_phone")
+        .eq("id", org.id)
+        .maybeSingle()
+    : { data: null };
+  const eo = (emergencyOrg ?? {}) as {
+    emergency_phone?: string | null;
+    showing_arrival_phone?: string | null;
+    public_contact_phone?: string | null;
+  };
+  const { data: ownNumberRow } = canIntake
+    ? await supabase
+        .from("org_sms_numbers")
+        .select("phone_e164")
+        .eq("organization_id", org.id)
+        .maybeSingle()
+    : { data: null };
+  const emergencyTextTo = emergencyTextTarget(
+    eo,
+    (ownNumberRow as { phone_e164?: string | null } | null)?.phone_e164 ?? null,
+    normalizePhoneE164,
+  );
 
   // Map report id -> its media (with a freshly-signed preview URL per object).
   const reportMedia = new Map<string, { url: string; kind: string }[]>();
@@ -1245,7 +1280,52 @@ export default async function MaintenancePage({
               </Link>
             </div>
           </Card>
-        ) : openReports.length === 0 ? (
+        ) : null}
+
+        {canIntake ? (
+          <details className="mb-3 rounded-xl border border-gray-200 bg-white p-4 text-sm">
+            <summary className="cursor-pointer font-semibold text-gray-900">
+              Emergency alerts:{" "}
+              <span className="font-normal text-gray-600">
+                {emergencyTextTo
+                  ? `texts go to ${emergencyTextTo} and an email to your team`
+                  : "an email to your team (add a mobile number below for texts too)"}
+              </span>
+            </summary>
+            <p className="mt-2 text-gray-600">
+              When a tenant marks a report as an emergency (water leaking, no heat, gas smell, fire,
+              no power, locked out, sewage), you get it at once, at any hour. Tenants also see this
+              number to call. Each rental can show its own shut-off details: open the rental, then
+              Emergency info for tenants.
+            </p>
+            <form action={updateEmergencyPhone} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="block max-w-xs flex-1">
+                <span className="mb-1 block text-xs font-medium text-gray-600">Emergency phone (mobile)</span>
+                <input
+                  name="emergency_phone"
+                  type="tel"
+                  inputMode="tel"
+                  defaultValue={eo.emergency_phone ?? ""}
+                  placeholder="226-778-0014"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </label>
+              <SubmitButton
+                className={`${PRIMARY_ACTION_CLASS} justify-center`}
+                style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+                pendingLabel="Saving…"
+              >
+                Save
+              </SubmitButton>
+            </form>
+            <p className="mt-2 text-xs text-gray-500">
+              Blank uses your arrival phone, then your listing contact phone. A number with an
+              extension can be called but cannot get texts.
+            </p>
+          </details>
+        ) : null}
+
+        {!canIntake ? null : openReports.length === 0 ? (
           <EmptyState
             icon={<Icons.bolt className="h-5 w-5" />}
             title="No tenant reports waiting"
@@ -1261,6 +1341,11 @@ export default async function MaintenancePage({
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
+                        {r.emergency_kind ? (
+                          <StatusChip tone="danger">
+                            Emergency: {emergencyLabel(r.emergency_kind)}
+                          </StatusChip>
+                        ) : null}
                         <StatusChip tone="warn">{incidentReportStatusLabel(r.status)}</StatusChip>
                         <StatusChip tone="neutral">{incidentCategoryLabel(r.category)}</StatusChip>
                         <span className="text-xs text-gray-500">{fmtDateTime(r.submitted_at)}</span>

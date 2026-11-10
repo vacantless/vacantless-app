@@ -500,6 +500,7 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img: strin
     title: "Repairs without the back and forth.",
     points: [
       "Tenants report a problem from their own link, with photos",
+      "An emergency alerts you at once, day or night. The tenant sees the shut-off and who to call",
       "They pick when they can be home. Your trade accepts, quotes and books from a link",
       "Vacantless finds the time that works for both, tells the tenant and reminds them the day before",
       "Mark it done and the cost goes on your books",

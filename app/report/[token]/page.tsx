@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { ReportForm } from "./report-form";
+import { reportThanksLine } from "@/lib/tenant-emergency";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,9 @@ type Context = {
   brand_color: string | null;
   brand_color_secondary: string | null;
   logo_url: string | null;
+  /** S776 (0281): the rental's emergency info and the number to call. */
+  emergency_info?: string | null;
+  emergency_call_phone?: string | null;
 };
 
 export default async function ReportIncidentPage({
@@ -30,7 +34,7 @@ export default async function ReportIncidentPage({
   searchParams,
 }: {
   params: { token: string };
-  searchParams: { submitted?: string };
+  searchParams: { submitted?: string; emergency?: string };
 }) {
   const supabase = createClient();
   const { data } = await supabase.rpc("get_incident_report_context", {
@@ -42,6 +46,7 @@ export default async function ReportIncidentPage({
   const brand = accessibleBrand(c.brand_color || DEFAULT_BRAND_COLOR);
   const brandBg = brandGradientCss(c.brand_color, c.brand_color_secondary);
   const submitted = searchParams.submitted === "1";
+  const emergencySent = searchParams.emergency === "1";
 
   return (
     <div
@@ -66,9 +71,9 @@ export default async function ReportIncidentPage({
       <main className="mx-auto max-w-2xl px-6 py-10">
         {submitted ? (
           <div className="rounded-xl border border-gray-200 bg-white p-6 text-center shadow-sm">
-            <h1 className="text-xl font-bold text-gray-900">Thanks — we&apos;ve got your report.</h1>
+            <h1 className="text-xl font-bold text-gray-900">Thanks, we&apos;ve got your report.</h1>
             <p className="mt-2 text-sm text-gray-600">
-              {c.org_name} has received the details and will be in touch.
+              {reportThanksLine(c.org_name, emergencySent)}
               {c.property_address ? (
                 <>
                   {" "}
@@ -115,6 +120,9 @@ export default async function ReportIncidentPage({
               brandBg={brandBg}
               defaultName={c.reporter_name}
               defaultContact={c.reporter_contact}
+              orgName={c.org_name}
+              emergencyInfo={c.emergency_info ?? null}
+              callPhone={c.emergency_call_phone ?? null}
             />
           </>
         )}

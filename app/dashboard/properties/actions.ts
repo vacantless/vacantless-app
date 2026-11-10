@@ -1125,6 +1125,11 @@ export async function updateProperty(formData: FormData) {
       // S471: per-property override of the org showing arrival phone (the number
       // renters text/call on arrival). Blank clears -> falls back to the org default.
       showing_arrival_phone: String(formData.get("showing_arrival_phone") ?? "").trim() || null,
+      // S776 (0281): shut-offs and the like, shown on the tenant's repair link in an
+      // emergency. Only written when the field is on the form.
+      ...(formData.has("emergency_info")
+        ? { emergency_info: String(formData.get("emergency_info") ?? "").trim().slice(0, 1000) || null }
+        : {}),
       // S724 (V251-24): viewing rules for this rental. Blank = the account's.
       ...(formData.has("viewing_rules_present")
         ? {

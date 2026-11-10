@@ -21,6 +21,15 @@ import {
   loadOrganizationFeatureFlags,
 } from "@/lib/feature-entitlements";
 import { sendIncidentReportNotification } from "@/lib/email";
+import {
+  parseEmergencyKind,
+  emergencyAlertText,
+  emergencyTextTarget,
+  type EmergencyKind,
+} from "@/lib/tenant-emergency";
+import { normalizePhoneE164, sendSms } from "@/lib/sms";
+import { orgOwnSmsNumber } from "@/lib/org-sms-numbers";
+import { canUseRenterSms } from "@/lib/billing";
 
 // Public, UNAUTHENTICATED tenant incident-intake actions (Option B Slice 2).
 //
@@ -48,6 +57,8 @@ export async function createIncidentReport(input: {
   reporterName?: string | null;
   reporterContact?: string | null;
   mediaConsent?: boolean;
+  /** S776: blank = not an emergency (lib/tenant-emergency.ts). */
+  emergencyKind?: string | null;
 }): Promise<CreateReportResult> {
   const token = (input.token ?? "").trim();
   if (!token) return { ok: false, reason: "not_found" };
@@ -58,6 +69,7 @@ export async function createIncidentReport(input: {
     description: input.description,
   });
   if (!check.ok) return { ok: false, reason: check.reason };
+  const emergencyKind = parseEmergencyKind(input.emergencyKind);
 
   const supabase = createClient();
   // Slice 0 Block B: when the tenant attaches media and ticks the consent box,
@@ -69,6 +81,7 @@ export async function createIncidentReport(input: {
     p_reporter_name: input.reporterName ?? null,
     p_reporter_contact: input.reporterContact ?? null,
     p_media_consent: input.mediaConsent === true,
+    p_emergency_kind: emergencyKind,
   });
   const result = data as
     | { ok?: boolean; reason?: string; report_id?: string; organization_id?: string }
@@ -81,7 +94,7 @@ export async function createIncidentReport(input: {
   // runs before the action returns, but fully isolated — a notification failure
   // must NEVER fail the tenant's submission (the report is already saved).
   try {
-    await notifyOperatorsOfNewReport(result.organization_id, result.report_id);
+    await notifyOperatorsOfNewReport(result.organization_id, result.report_id, emergencyKind);
   } catch {
     // swallow — the report is saved; the team will still see it in the dashboard
   }
@@ -97,14 +110,15 @@ export async function createIncidentReport(input: {
 // The tenant is account-less (anon), so this uses the SERVICE-ROLE admin client
 // to read the org, the report, and the membership emails RLS hides from anon.
 // Recipients derive from org membership + manage_work_orders (NOT a subscription
-// table). Email only for now — operators have no stored phone, so the SMS leg
-// (gated behind the `sms` entitlement) is deferred until operator contact numbers
-// exist. Caps the fan-out defensively.
+// table). Caps the fan-out defensively. S776: an emergency also texts the
+// account's Emergency phone (lib/tenant-emergency emergencyTextTarget) from the
+// account's texting number, at any hour.
 const MAX_NOTIFY_RECIPIENTS = 10;
 
 async function notifyOperatorsOfNewReport(
   organizationId: string,
   reportId: string,
+  emergencyKind: EmergencyKind | null,
 ): Promise<void> {
   const admin = createAdminClient();
   if (!admin) return; // no service key -> can't read members; skip quietly
@@ -112,7 +126,9 @@ async function notifyOperatorsOfNewReport(
   // Org branding + fallback addresses + plan gate.
   const { data: org } = await admin
     .from("organizations")
-    .select("id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email, plan")
+    .select(
+      "id, name, brand_color, logo_url, mail_alias, reply_to_email, public_contact_email, plan, emergency_phone, showing_arrival_phone, public_contact_phone",
+    )
     .eq("id", organizationId)
     .maybeSingle();
   if (!org) return;
@@ -134,7 +150,7 @@ async function notifyOperatorsOfNewReport(
   // The report + its unit address (for the email subject/body).
   const { data: report } = await admin
     .from("incident_reports")
-    .select("category, description, reporter_name, property:properties(address)")
+    .select("category, description, reporter_name, reporter_contact, property:properties(address)")
     .eq("id", reportId)
     .maybeSingle();
   if (!report) return;
@@ -142,8 +158,14 @@ async function notifyOperatorsOfNewReport(
     category: string;
     description: string;
     reporter_name: string | null;
+    reporter_contact: string | null;
     property: { address: string } | null;
   };
+
+  // S776: the emergency text goes first; it does not wait on the emails.
+  const textSent = emergencyKind
+    ? textEmergency(admin, org, emergencyKind, r).catch(() => undefined)
+    : Promise.resolve(undefined);
 
   // Members of the org -> resolve each one's auth email.
   const { data: memberRows } = await admin
@@ -173,9 +195,44 @@ async function notifyOperatorsOfNewReport(
         category_label: incidentCategoryLabel(r.category),
         description: r.description,
         reporter_name: r.reporter_name,
+        emergency_kind: emergencyKind,
       }),
     ),
   );
+  await textSent;
+}
+
+// S776: text the landlord about an emergency from the account's texting number.
+// Needs a plan with texts and a number that can take one; otherwise the email
+// above is the alert. sendSms applies the live switch and the monthly limit.
+async function textEmergency(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  org: {
+    id: string;
+    plan?: string | null;
+    emergency_phone?: string | null;
+    showing_arrival_phone?: string | null;
+    public_contact_phone?: string | null;
+  },
+  kind: EmergencyKind,
+  r: { reporter_name: string | null; reporter_contact: string | null; property: { address: string } | null },
+): Promise<void> {
+  if (!canUseRenterSms(org.plan ?? null)) return;
+  const own = await orgOwnSmsNumber(admin, org.id).catch(() => null);
+  const to = emergencyTextTarget(org, own, normalizePhoneE164);
+  if (!to) return;
+  const base = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/$/, "");
+  await sendSms({
+    to,
+    organizationId: org.id,
+    body: emergencyAlertText({
+      kind,
+      address: r.property?.address ?? null,
+      reporterName: r.reporter_name,
+      reporterContact: r.reporter_contact,
+      inboxUrl: `${base}/dashboard/maintenance#reports`,
+    }),
+  });
 }
 
 export type PrepareUploadResult =

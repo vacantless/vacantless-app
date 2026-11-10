@@ -547,7 +547,7 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "Renter applications, questions before booking and a waiting list",
       "Ontario LTB notices filled for you: N4, N5, N8, N12, L1 and more",
       "Rent increase reminders with the N1 filled in",
-      "Repairs: tenants report and pick times; your trade accepts, quotes and books from a link; the tenant gets a reminder by email and text",
+      "Repairs: tenants report and pick times; emergencies alert you at once; your trade accepts, quotes and books from a link; the tenant gets a reminder by email and text",
       "Rent by pre-authorized debit through your own Stripe or Rotessa account",
       "Expenses from your bank or typed in, and an owner statement per building",
       "Books & Tax: your T776 summary, bank matching, an income statement and one zip for your accountant",

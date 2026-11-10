@@ -17,6 +17,16 @@ import {
   ALLOWED_INCIDENT_MEDIA_TYPES,
 } from "@/lib/incident-media";
 import {
+  EMERGENCY_KINDS,
+  EMERGENCY_LABELS,
+  EMERGENCY_CATEGORY,
+  EMERGENCY_DO_NOW,
+  callNineOneOneFirst,
+  showsEmergencyInfo,
+  type EmergencyKind,
+} from "@/lib/tenant-emergency";
+import { telDialString } from "@/lib/showing-contact";
+import {
   createIncidentReport,
   prepareIncidentUpload,
   confirmIncidentMedia,
@@ -38,13 +48,22 @@ export function ReportForm({
   brandBg,
   defaultName,
   defaultContact,
+  orgName,
+  emergencyInfo,
+  callPhone,
 }: {
   token: string;
   brandBg: string;
   defaultName: string | null;
   defaultContact: string | null;
+  orgName: string;
+  emergencyInfo: string | null;
+  callPhone: string | null;
 }) {
   const router = useRouter();
+  // S776: the first question. "" = not answered yet, "none" = it can wait.
+  const [urgency, setUrgency] = useState<EmergencyKind | "none" | "">("");
+  const emergency: EmergencyKind | null = urgency && urgency !== "none" ? urgency : null;
   const [category, setCategory] = useState<IncidentCategory | "">("");
   const [description, setDescription] = useState("");
   const [name, setName] = useState(defaultName ?? "");
@@ -61,6 +80,7 @@ export function ReportForm({
   // text-only report needs no consent.
   const hasMedia = files.length > 0;
   const ready =
+    urgency !== "" &&
     category !== "" &&
     description.trim().length >= 3 &&
     (!hasMedia || mediaConsent) &&
@@ -105,6 +125,7 @@ export function ReportForm({
       reporterName: name.trim() || null,
       reporterContact: contact.trim() || null,
       mediaConsent: hasMedia && mediaConsent,
+      emergencyKind: emergency,
     });
     if (!created.ok) {
       setSubmitting(false);
@@ -146,7 +167,9 @@ export function ReportForm({
     }
     void uploaded;
 
-    router.push(`/report/${encodeURIComponent(token)}?submitted=1`);
+    router.push(
+      `/report/${encodeURIComponent(token)}?submitted=1${emergency ? "&emergency=1" : ""}`,
+    );
   }
 
   return (
@@ -157,6 +180,78 @@ export function ReportForm({
         </div>
       ) : null}
 
+      {/* S776: Is this an emergency? Asked first. */}
+      <fieldset>
+        <legend className="block text-sm font-semibold text-gray-800">Is this an emergency?</legend>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {EMERGENCY_KINDS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => {
+                setUrgency(k);
+                setCategory(EMERGENCY_CATEGORY[k]);
+              }}
+              aria-pressed={urgency === k}
+              className={`rounded-lg border px-3 py-2.5 text-left text-sm font-medium ${
+                urgency === k
+                  ? "border-red-500 bg-red-50 text-red-800"
+                  : "border-gray-300 bg-white text-gray-800 hover:border-gray-400"
+              }`}
+            >
+              {EMERGENCY_LABELS[k]}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setUrgency("none")}
+            aria-pressed={urgency === "none"}
+            className={`rounded-lg border px-3 py-2.5 text-left text-sm font-medium ${
+              urgency === "none"
+                ? "border-[var(--brand-color)] bg-gray-50 text-gray-900"
+                : "border-gray-300 bg-white text-gray-800 hover:border-gray-400"
+            }`}
+          >
+            No, it can wait
+          </button>
+        </div>
+      </fieldset>
+
+      {emergency ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+          {callNineOneOneFirst(emergency) ? (
+            <a
+              href="tel:911"
+              className="mb-3 block rounded-lg bg-red-600 px-4 py-3 text-center text-base font-bold text-white"
+            >
+              Call 911
+            </a>
+          ) : null}
+          <p className="font-semibold">{EMERGENCY_DO_NOW[emergency]}</p>
+          {showsEmergencyInfo(emergency) && emergencyInfo ? (
+            <div className="mt-3 rounded-lg border border-red-100 bg-white p-3 text-gray-800">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                At your rental
+              </p>
+              <p className="mt-1 whitespace-pre-line">{emergencyInfo}</p>
+            </div>
+          ) : null}
+          {callPhone ? (
+            <p className="mt-3">
+              Call {orgName}:{" "}
+              <a href={`tel:${telDialString(callPhone)}`} className="font-bold underline">
+                {callPhone}
+              </a>
+            </p>
+          ) : null}
+          <p className="mt-3 text-red-800">
+            Send this report too. {orgName} is alerted the moment you send it.
+          </p>
+        </div>
+      ) : null}
+
+      {urgency === "" ? null : (
+      <>
       {/* Category */}
       <div>
         <label htmlFor="category" className="block text-sm font-semibold text-gray-800">
@@ -335,12 +430,14 @@ export function ReportForm({
           className="w-full rounded-lg px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           style={{ background: brandBg }}
         >
-          {submitting ? (progress ?? "Sending…") : "Send report"}
+          {submitting ? (progress ?? "Sending…") : emergency ? "Send emergency report" : "Send report"}
         </button>
         {submitting && progress ? (
           <p className="mt-2 text-center text-xs text-gray-500">{progress}</p>
         ) : null}
       </div>
+      </>
+      )}
     </form>
   );
 }
