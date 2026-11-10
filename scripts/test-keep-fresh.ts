@@ -22,16 +22,17 @@ const r = keepFreshRows(
   ],
   { today, rentalsRobotRenews: true },
 );
-ok("marketplace waits a day", row(r, "facebook")?.line === "Renew opens in 1 day." && !row(r, "facebook")?.renew, row(r, "facebook"));
+// S775: Facebook runs its own Renew clock; the app never counts down to it.
+ok("S775: marketplace day 8 gives its age, no countdown, no button", row(r, "facebook")?.line.startsWith("Posted 8 days ago. Facebook decides when Renew opens.") === true && !row(r, "facebook")?.line.includes("Renew opens in") && !row(r, "facebook")?.renew, row(r, "facebook"));
 ok("kijiji end date", row(r, "kijiji")?.line === "Ad ends Nov 12." && !row(r, "kijiji")?.renew, row(r, "kijiji"));
 ok("rentals.ca renews itself", row(r, "rentals_ca")?.line.startsWith("We renew this free ad") === true && !row(r, "rentals_ca")?.renew);
 ok("zumper stays up", row(r, "zumper")?.line === "Stays up while the rental is open." && !row(r, "zumper")?.renew);
 ok("page posted today", row(r, "facebook_feed")?.line === "Posted on your Page today." && !row(r, "facebook_feed")?.renew);
 ok("instagram age", row(r, "instagram")?.line === "Posted 7 days ago.");
 
-// Day 9 on Marketplace: renew now.
+// Day 9 on Marketplace: ask to check, never claim Renew is open (S775).
 const due = keepFreshRows([card("facebook", "Facebook Marketplace", "2026-10-18")], { today, rentalsRobotRenews: false });
-ok("marketplace day 9 offers Renew", due[0].renew && due[0].line.startsWith("Facebook lets you renew it now"), due);
+ok("S775: marketplace day 9 asks to check, claims nothing", due[0].renew && !/renew it now|renew now|lets you renew/i.test(due[0].line), due);
 // Stale even if the date says otherwise.
 ok("stale always offers Renew", keepFreshRows([card("facebook", "Facebook Marketplace", "2026-10-26", "needs_refresh")], { today, rentalsRobotRenews: false })[0].renew);
 // Rentals.ca without the robot.
@@ -51,14 +52,17 @@ ok("same actions as before", cardSrc.includes("markAdsRenewed") && cardSrc.inclu
 
 // S740: Facebook's button opens Your listings and records nothing; Kijiji keeps renew-and-open.
 ok("S740: facebook button is a link to Your listings", cardSrc.includes("https://www.facebook.com/marketplace/you/selling") && cardSrc.includes('r.key === "facebook"'));
-ok("S740: facebook row tells where Renew is", due[0].line.includes("Renew listing"), due);
+ok("S740/S775: facebook row tells where Renew is", due[0].line.includes("press ... on this ad"), due);
 const notif = readFileSync("lib/notifications.ts", "utf8");
-ok("S740: email no longer says the ad page has Renew", !notif.includes("Press Renew there") && notif.includes("then Renew listing"));
+ok("S740/S775: email says Facebook decides, not that Renew is open", !notif.includes("Press Renew there") && !notif.includes("then Renew listing") && notif.includes("Facebook decides when Renew opens"));
+ok("S775: card says check for Marketplace", cardSrc.includes("FACEBOOK_RENEW_CHECK") && !cardSrc.includes("Open my Marketplace ads"));
+const pe = readFileSync("app/dashboard/properties/[id]/publish-everywhere.tsx", "utf8");
+ok("S775: Get online row claims nothing", !pe.includes("Facebook lets you renew") && pe.includes("FACEBOOK_RENEW_HOW"));
 
 // S773: the Renew box card is gone; since S772 each old ad sits on its own row
 // of the Rentals list (app/dashboard/properties/page.tsx), so the rule is read there.
 const listPage = readFileSync("app/dashboard/properties/page.tsx", "utf8");
-ok("S740f: rentals-list row sends Facebook to Your listings, records nothing", listPage.includes('item.portal === "facebook"') && listPage.includes("Open my Marketplace ads") && listPage.includes("https://www.facebook.com/marketplace/you/selling"));
+ok("S740f: rentals-list row sends Facebook to Your listings, records nothing", listPage.includes('item.portal === "facebook"') && listPage.includes("FACEBOOK_RENEW_CHECK") && listPage.includes("https://www.facebook.com/marketplace/you/selling"));
 ok("S773: emailed #renew-ads links still land on the Rentals list", listPage.includes('<div id="renew-ads" />'));
 
 console.log(`keep-fresh: ${p} passed, ${f} failed`);

@@ -35,10 +35,11 @@ function finalBody(d: ReturnType<typeof buildListingHealthDigest>) {
 const two = buildListingHealthDigest([ch("p3", "833 Pillette Rd, Unit 3"), ch("p33", "833 Pillette Rd, Unit 33")], APP, "2026-10-15T12:00:00Z");
 const twoBody = finalBody(two);
 ok("two units: button opens the Renew box on the rentals list", two.actionUrl === `${APP}/dashboard/properties#renew-ads`, two.actionUrl);
-ok("two units: button label", two.actionLabel === "Renew your ads");
+ok("two units: button label", two.actionLabel === "See your old ads");
 ok("two units: Unit 3 link kept", twoBody.includes("/dashboard/properties/p3?tab=distribute#renew-ads"), twoBody);
 ok("two units: Unit 33 link kept", twoBody.includes("/dashboard/properties/p33?tab=distribute#renew-ads"), twoBody);
-ok("two units: each link sits under its ad", /Unit 3: Facebook Marketplace, posted 14 days ago\n\s+\S+p3\?/.test(twoBody), twoBody);
+ok("two units: each link sits under its ad", /Unit 3: Facebook Marketplace, posted 14 days ago[^\n]*\n\s+\S+p3\?/.test(twoBody), twoBody);
+ok("S775: email says Facebook decides, never that Renew is open", twoBody.includes("posted 14 days ago. Facebook decides when Renew opens.") && !/renew it now|lets you renew/i.test(twoBody), twoBody);
 
 // One unit (even with two ads): no per-ad links, the button opens that rental.
 const one = buildListingHealthDigest([ch("p9", "1551 Assumption St, Unit 9"), { ...ch("p9", "1551 Assumption St, Unit 9"), channelLabel: "Zumper" }], APP, "2026-10-15T12:00:00Z");

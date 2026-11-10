@@ -34,6 +34,7 @@
 // renders exactly as Slice 1.
 // ============================================================================
 
+import { FACEBOOK_RENEW_CHECK, FACEBOOK_RENEW_HOW } from "@/lib/facebook-renew";
 import { MarketplaceRow, type MarketplaceKitData } from "./marketplace-row";
 import { BrokerageRequestCard, type BrokerageRequestCardData } from "./brokerage-request-card";
 import type { AdPreview } from "@/lib/ad-preview";
@@ -1108,7 +1109,7 @@ function ForYouRow({
             // and the renew sat under More. Now it is on the row.
             <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
               <p className="text-base leading-relaxed text-amber-950">
-                Facebook lets you renew this ad now. On your Marketplace ads, press ... on this ad, then Renew listing.
+                {FACEBOOK_RENEW_HOW}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <a
@@ -1117,7 +1118,7 @@ function ForYouRow({
                   rel="noopener noreferrer"
                   className="inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto bg-indigo-600 px-4 py-2.5 text-base font-semibold text-white hover:bg-indigo-700"
                 >
-                  Renew on Marketplace ↗
+                  {FACEBOOK_RENEW_CHECK} ↗
                 </a>
                 <form action={markAdsRenewed}>
                   <input type="hidden" name="property_id" value={propertyId} />

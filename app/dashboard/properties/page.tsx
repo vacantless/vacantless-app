@@ -1,3 +1,4 @@
+import { FACEBOOK_RENEW_CHECK, FACEBOOK_RENEW_HOW } from "@/lib/facebook-renew";
 import Link from "next/link";
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { headers } from "next/headers";
@@ -489,7 +490,9 @@ export default async function PropertiesPage({
       needsYou: v.needsYou,
     })),
   );
-  const todo = archivedView ? "" : todoSummary(coverage.gaps, renewItems.length);
+  // S775: Marketplace ads are counted apart; Facebook decides when Renew opens.
+  const marketplaceOld = renewItems.filter((i) => i.portal === "facebook").length;
+  const todo = archivedView ? "" : todoSummary(coverage.gaps, renewItems.length - marketplaceOld, marketplaceOld);
   const postedNotice = searchParams.posted
     ? searchParams.posted === "0"
       ? "Those sites need you first: a sign-in or a paid ad. Open the rental to do that."
@@ -913,7 +916,9 @@ export default async function PropertiesPage({
                         className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-900 ring-1 ring-amber-200"
                       >
                         <span className="font-semibold">{renewLine(item)}</span>
-                        <span className="text-amber-700">Old ads sink lower on the site.</span>
+                        <span className="text-amber-700">
+                          {item.portal === "facebook" ? FACEBOOK_RENEW_HOW : "Old ads sink lower on the site."}
+                        </span>
                         <span className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
                           {item.portal === "facebook" ? (
                             <a
@@ -922,7 +927,7 @@ export default async function PropertiesPage({
                               rel="noopener noreferrer"
                               className={PRIMARY_ROW_BUTTON}
                             >
-                              Open my Marketplace ads
+                              {FACEBOOK_RENEW_CHECK}
                             </a>
                           ) : (
                             <form action={markAdsRenewed}>

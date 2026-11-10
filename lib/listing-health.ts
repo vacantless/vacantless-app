@@ -285,14 +285,16 @@ export function buildListingHealthDigest(
   const oneUnit = unitCount <= 1;
   const detailsText = channels
     .map((channel) => {
-      const line = `- ${channel.address}: ${channel.channelLabel}, ${adStateLabel(channel.reason, adAgeDays(channel.lastPostedOn, nowISO))}`;
+      // S775: Facebook decides when Renew opens; the email never says it is open.
+      const fb = channel.channel === "facebook" && channel.reason === "stale" ? ". Facebook decides when Renew opens." : "";
+      const line = `- ${channel.address}: ${channel.channelLabel}, ${adStateLabel(channel.reason, adAgeDays(channel.lastPostedOn, nowISO))}${fb}`;
       // One unit: the button opens it, so no per-ad link. Several units: each
       // ad keeps its own rental's link.
       return oneUnit ? line : [line, `  ${distributeUrl(appUrl, channel.propertyId)}`].join("\n");
     })
     .join("\n");
   const actionUrl = oneUnit ? firstDistributeUrl : appUrl.replace(/\/+$/, "") + RENTALS_LIST_PATH;
-  const actionLabel = oneUnit ? "Open the rental" : "Renew your ads";
+  const actionLabel = oneUnit ? "Open the rental" : "See your old ads";
   return { adCount, unitCount, firstDistributeUrl, summaryText, detailsText, actionUrl, actionLabel };
 }
 

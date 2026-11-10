@@ -4,6 +4,7 @@
 // its state three or four ways. This module decides, per rental: its site
 // lights, its old ads, its place in the list, and the counts at the top.
 
+import { facebookRenewLine, oldAdsCount } from "./facebook-renew";
 import { COVERAGE_LABELS, coverageLabel, type CoverageRow } from "./posting-coverage";
 import { listingPostLiveCheckTarget } from "./listing-post-live-check";
 
@@ -64,8 +65,9 @@ export function postMissingLabel(missingRobot: string[]): string {
   return `Post to ${names.length} sites`;
 }
 
-/** "Kijiji ad is 28 days old", "Marketplace ad needs a renew". */
+/** "Kijiji ad is 28 days old"; Marketplace never claims Renew is open (S775). */
 export function renewLine(item: RowRenew): string {
+  if (item.portal === "facebook") return facebookRenewLine(item.days);
   const name = coverageLabel(item.portal) || item.label;
   return item.days != null ? `${name} ad is ${item.days} days old` : `${name} ad needs a renew`;
 }
@@ -109,10 +111,11 @@ export function listHeadline(
   };
 }
 
-/** "4 rentals are missing a site", "3 ads to renew", joined with " · ". */
-export function todoSummary(gaps: number, renew: number): string {
+/** "4 rentals are missing a site", "3 ads to renew", "1 Marketplace ad to check", joined with " · ". */
+export function todoSummary(gaps: number, renew: number, marketplace = 0): string {
   const parts: string[] = [];
   if (gaps > 0) parts.push(gaps === 1 ? "1 rental is missing a site" : `${gaps} rentals are missing a site`);
-  if (renew > 0) parts.push(renew === 1 ? "1 ad to renew" : `${renew} ads to renew`);
+  const ads = oldAdsCount(renew, marketplace);
+  if (ads) parts.push(ads);
   return parts.join(" · ");
 }

@@ -65,7 +65,9 @@ check(() => assert.equal(postMissingLabel(["kijiji", "rentals_ca"]), "Post to Ki
 check(() => assert.equal(postMissingLabel(["kijiji", "rentals_ca", "zumper"]), "Post to 3 sites"));
 
 check(() => assert.equal(renewLine({ portal: "kijiji", label: "Kijiji", days: 28 }), "Kijiji ad is 28 days old"));
-check(() => assert.equal(renewLine({ portal: "facebook", label: "Facebook Marketplace", days: null }), "Marketplace ad needs a renew"));
+check(() => assert.equal(renewLine({ portal: "facebook", label: "Facebook Marketplace", days: null }), "Marketplace ad: Renew may be open"));
+// S775: Facebook decides when Renew opens; the row never says the ad needs one.
+check(() => assert.equal(renewLine({ portal: "facebook", label: "Facebook Marketplace", days: 12 }), "Marketplace ad is 12 days old, Renew may be open"));
 
 // Order: live, setting up, paused, off market, rented; ties keep input order.
 check(() => {
@@ -101,5 +103,7 @@ check(() => assert.equal(todoSummary(0, 0), ""));
 check(() => assert.equal(todoSummary(1, 0), "1 rental is missing a site"));
 check(() => assert.equal(todoSummary(4, 3), "4 rentals are missing a site · 3 ads to renew"));
 check(() => assert.equal(todoSummary(0, 1), "1 ad to renew"));
+check(() => assert.equal(todoSummary(0, 1, 2), "1 ad to renew · 2 Marketplace ads to check"));
+check(() => assert.equal(todoSummary(4, 0, 1), "4 rentals are missing a site · 1 Marketplace ad to check"));
 
 console.log(`PASS test-rental-list-view (${n} checks)`);

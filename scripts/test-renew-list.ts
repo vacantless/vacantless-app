@@ -38,7 +38,7 @@ ok("row has address, site and age", items[0].address === "Addr p3" && items[0].p
 
 const d = buildListingHealthDigest(channels, "https://app.vacantless.com", nowISO);
 ok("several units: button opens the Renew box on the list", d.actionUrl === "https://app.vacantless.com/dashboard/properties#renew-ads");
-ok("several units: button label", d.actionLabel === "Renew your ads");
+ok("several units: button label", d.actionLabel === "See your old ads");
 
 // S772: the old ads are marked on each rental's row (one row per rental);
 // the box above the list became one slim line. The anchor stays for the email.

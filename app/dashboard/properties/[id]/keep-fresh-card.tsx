@@ -1,5 +1,6 @@
 import { markAdsRenewed, setPageWeeklyPosts } from "../actions";
 import type { KeepFreshRow } from "@/lib/keep-fresh";
+import { FACEBOOK_RENEW_CHECK, oldAdsCount } from "@/lib/facebook-renew";
 
 const FACEBOOK_YOUR_LISTINGS = "https://www.facebook.com/marketplace/you/selling";
 
@@ -21,6 +22,8 @@ export function KeepFreshCard({
 }) {
   if (rows.length === 0 && !weekly) return null;
   const due = rows.filter((r) => r.renew).length;
+  // S775: a Marketplace row asks to check, not to renew (lib/facebook-renew).
+  const marketplaceDue = rows.filter((r) => r.renew && r.key === "facebook").length;
   const pageRow = rows.find((r) => r.key === "facebook_feed");
   const others = rows.filter((r) => r.key !== "facebook_feed");
   return (
@@ -32,7 +35,7 @@ export function KeepFreshCard({
         Keep it fresh
         {due > 0 && (
           <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-            {due === 1 ? "1 ad to renew" : `${due} ads to renew`}
+            {oldAdsCount(due - marketplaceDue, marketplaceDue)}
           </span>
         )}
       </p>
@@ -94,7 +97,7 @@ export function KeepFreshCard({
                     rel="noopener noreferrer"
                     className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
                   >
-                    Open my Marketplace ads
+                    {FACEBOOK_RENEW_CHECK}
                   </a>
                 ) : (
                 <form action={markAdsRenewed}>

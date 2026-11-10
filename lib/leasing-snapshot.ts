@@ -497,7 +497,7 @@ export function snapshotAction(
   adCount: number,
 ): { label: string; path: string } {
   if (health?.status === "black") return { label: "Add viewing times", path: "/dashboard/availability" };
-  if (b.newLeads.length === 0 && adCount > 0) return { label: "Renew your ads", path: "/dashboard/properties#renew-ads" };
+  if (b.newLeads.length === 0 && adCount > 0) return { label: "See your old ads", path: "/dashboard/properties#renew-ads" };
   return { label: "Open your inquiries", path: "/dashboard/leads" };
 }
 
