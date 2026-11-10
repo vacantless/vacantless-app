@@ -1,3 +1,4 @@
+import { FRICTION_PAGES } from "@/lib/friction-pages";
 import type { MetadataRoute } from "next";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -24,6 +25,9 @@ const MARKETING_PAGES: MetadataRoute.Sitemap = [
   { url: `${WWW}/tools/n8`, changeFrequency: "monthly", priority: 0.9 },
   { url: `${WWW}/tools/n12`, changeFrequency: "monthly", priority: 0.9 },
   { url: `${WWW}/tools`, changeFrequency: "monthly", priority: 0.8 },
+  // S777: the friction pages (lib/friction-pages.ts).
+  { url: `${WWW}/fix`, changeFrequency: "monthly", priority: 0.8 },
+  ...FRICTION_PAGES.map((f) => ({ url: `${WWW}/fix/${f.slug}`, changeFrequency: "monthly" as const, priority: 0.8 })),
   { url: `${WWW}/about`, changeFrequency: "monthly", priority: 0.5 },
   { url: `${WWW}/privacy`, changeFrequency: "yearly", priority: 0.2 },
   { url: `${WWW}/terms`, changeFrequency: "yearly", priority: 0.2 },

@@ -58,6 +58,8 @@ export function isMarketingPath(path: string | null | undefined): boolean {
   const p = (path ?? "").split("?")[0].replace(/\/+$/, "") || "/";
   if (MARKETING_EXACT.has(p)) return true;
   if (p === "/compare" || p.startsWith("/compare/")) return true;
+  // S777: the friction pages are landing pages too.
+  if (p === "/fix" || p.startsWith("/fix/")) return true;
   // S746: the free tool pages are the ad landing pages.
   return p === "/tools" || p.startsWith("/tools/");
 }

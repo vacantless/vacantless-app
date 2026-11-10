@@ -132,6 +132,9 @@ export function MarketingFooter() {
           <Link href="/compare/showinghero" className="hover:text-[#15211d]">
             Vacantless vs ShowingHero
           </Link>
+          <Link href="/fix" className="hover:text-[#15211d]">
+            Landlord problems, fixed
+          </Link>
           <Link href="/how-to" className="hover:text-[#15211d]">
             How-to videos
           </Link>
