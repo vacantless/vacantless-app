@@ -21,6 +21,10 @@ export type FrictionPage = {
   plan: string;
   /** How-to video number, or null when none shows it yet. */
   video: number | null;
+  /** S779: this friction's own video (public/videos/fix-<slug>.mp4 and .jpg),
+   * shown instead of the how-to. youtube = the video id on @getvacantless, or
+   * null until it is uploaded. */
+  film?: { seconds: number; youtube: string | null };
 };
 
 export const FIX_PATH = "/fix";
@@ -43,6 +47,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Free. Texts from your own number on Growth.",
     video: 6,
+    film: { seconds: 51, youtube: null },
   },
   {
     slug: "is-this-still-available",
@@ -61,6 +66,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Free.",
     video: 3,
+    film: { seconds: 38, youtube: null },
   },
   {
     slug: "unqualified-renters",
@@ -78,6 +84,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Free. The waiting list is on Growth.",
     video: 3,
+    film: { seconds: 36, youtube: null },
   },
   {
     slug: "repairs-and-emergencies",
@@ -97,6 +104,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Growth.",
     video: 10,
+    film: { seconds: 45, youtube: null },
   },
   {
     slug: "showing-trips",
@@ -132,6 +140,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Free for one rental. Every rental with Posting, CA$49 a month. Kijiji charges its own ad fee.",
     video: 4,
+    film: { seconds: 39, youtube: null },
   },
   {
     slug: "late-rent",

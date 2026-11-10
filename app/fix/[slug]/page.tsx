@@ -68,7 +68,36 @@ export default function FrictionPageView({ params }: { params: { slug: string } 
               </ul>
               <p className="mt-3 text-[0.92rem] font-semibold text-[#59655f]">{f.plan}</p>
             </div>
-            {video ? (
+            {f.film ? (
+              <div>
+                <h2 className="text-[1.35rem] font-extrabold tracking-tight">See it</h2>
+                <video
+                  className="mt-4 aspect-video w-full rounded-lg border border-[#d9e1dc] bg-[#edf5f0]"
+                  src={`/videos/fix-${f.slug}.mp4`}
+                  poster={`/videos/fix-${f.slug}.jpg`}
+                  controls
+                  preload="none"
+                  playsInline
+                />
+                <p className="mt-2 text-[0.92rem] text-[#59655f]">
+                  {f.film.seconds} s.{" "}
+                  {f.film.youtube ? (
+                    <>
+                      <a
+                        href={`https://www.youtube.com/watch?v=${f.film.youtube}`}
+                        className="font-semibold text-[#15211d] underline"
+                      >
+                        Watch on YouTube
+                      </a>
+                      {" · "}
+                    </>
+                  ) : null}
+                  <Link href={HOW_TO_PATH} className="font-semibold text-[#15211d] underline">
+                    All how-to videos
+                  </Link>
+                </p>
+              </div>
+            ) : video ? (
               <div>
                 <h2 className="text-[1.35rem] font-extrabold tracking-tight">See it</h2>
                 <video
