@@ -262,7 +262,7 @@ export default async function IncomeStatementPage({
         />
         <EmptyState
           icon={<Icons.chart className="h-5 w-5" />}
-          title="Part of Growth, $99 a month"
+          title="Part of Starter and up, from $29 a month"
           description="Growth adds a profit and loss for each property: net operating income, interest, net income, principal paid and a CSV export for your accountant."
           cta={{ href: "/dashboard/billing", label: "See Growth" }}
         />

@@ -70,7 +70,7 @@ for (const f of GATED) {
 }
 const lockPages = GATED.filter((f) => f.endsWith("page.tsx") && !f.endsWith("money/page.tsx") && !f.endsWith("statement/page.tsx"));
 for (const f of lockPages) {
-  ok(`${f} lock says Growth`, read(f).includes("Part of Growth, $99 a month"));
+  ok(`${f} lock names the paid plans (S779)`, read(f).includes("Part of Starter and up, from $29 a month"));
 }
 
 // --- 4. Nothing of the add-on is left ------------------------------------------
@@ -80,7 +80,7 @@ ok("no books-access module", !existsSync("lib/books-access.ts"));
 for (const f of ["lib/billing.ts", "lib/stripe.ts", "app/api/stripe/webhook/route.ts", "app/dashboard/billing/actions.ts", "app/dashboard/billing/page.tsx", "app/page.tsx"]) {
   ok(`${f} has no books add-on`, !/BOOKS_ADDON|booksAddon|books_addon|books-addon/.test(read(f)));
 }
-ok("dispatch lock line names Growth", read("lib/work-order-dispatch.ts").includes("Sending a job to a trade is part of Growth."));
+ok("dispatch lock line names the plans (S779)", read("lib/work-order-dispatch.ts").includes("Sending a job to a trade comes with Starter and up."));
 
 console.log(`\nbooks-growth: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

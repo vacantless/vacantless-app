@@ -10,6 +10,10 @@ import {
   priceIdForPlan,
   depositPriceId,
   postingAddonPriceId,
+  postingAddonPriceIds,
+  extraRentalPriceId,
+  extraRentalPriceIds,
+  priceMap,
 } from "@/lib/stripe";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import {
@@ -36,6 +40,9 @@ import {
   shouldEnableSmsOnPlanChange,
   itemForPrice,
   subscriptionGrantsPlan,
+  isBandPlan,
+  asInterval,
+  type BillingInterval,
 } from "@/lib/billing";
 
 // Start a 30-day, founder-led pilot ($0/month, refundable $200 setup deposit
@@ -123,6 +130,83 @@ async function ensureCustomer(
   return customer.id;
 }
 
+const MAX_EXTRA_RENTALS = 1000;
+function clampExtraRentals(v: FormDataEntryValue | null): number {
+  const n = Math.floor(Number(String(v ?? "0").trim() || 0));
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(n, MAX_EXTRA_RENTALS);
+}
+
+/**
+ * S779: move a paying account to another door band (or interval, or number of
+ * extra rentals) on its existing subscription, prorated. The plan item gets
+ * the new price; Posting follows the interval; the extra-rental item is set,
+ * changed or removed. The webhook then writes plan and rental_cap. Always
+ * redirects.
+ */
+async function switchSubscriptionPlan(
+  orgId: string,
+  subscriptionId: string,
+  plan: "starter" | "growth" | "portfolio",
+  interval: BillingInterval,
+  extraRentals: number,
+): Promise<never> {
+  const stripe = getStripe();
+  const priceId = priceIdForPlan(plan, interval);
+  if (!stripe || !priceId) redirect("/dashboard/billing?error=not_configured");
+  try {
+    const sub = await stripe!.subscriptions.retrieve(subscriptionId);
+    if (!subscriptionGrantsPlan(sub.status)) redirect("/dashboard/billing?error=checkout");
+    const plans = priceMap();
+    const postingIds = postingAddonPriceIds();
+    const extraIds = extraRentalPriceIds();
+    const items: { id?: string; price?: string; quantity?: number; deleted?: boolean }[] = [];
+    let planDone = false;
+    let extraDone = false;
+    for (const it of sub.items?.data ?? []) {
+      const pid = it.price?.id ?? "";
+      if (!planDone && Object.prototype.hasOwnProperty.call(plans, pid)) {
+        items.push({ id: it.id, price: priceId!, quantity: 1 });
+        planDone = true;
+      } else if (postingIds.includes(pid)) {
+        const p = postingAddonPriceId(interval);
+        if (!p) redirect("/dashboard/billing?error=addon_not_configured");
+        items.push({ id: it.id, price: p!, quantity: 1 });
+      } else if (extraIds.includes(pid)) {
+        if (extraRentals > 0) {
+          items.push({ id: it.id, price: extraRentalPriceId(interval)!, quantity: extraRentals });
+        } else {
+          items.push({ id: it.id, deleted: true });
+        }
+        extraDone = true;
+      } else {
+        // An item we do not know: keep it, but it must share the interval.
+        const iv = it.price?.recurring?.interval;
+        if (iv && iv !== interval) redirect("/dashboard/billing?error=interval_mismatch#plans");
+      }
+    }
+    if (!planDone) items.push({ price: priceId!, quantity: 1 });
+    if (!extraDone && extraRentals > 0) {
+      const extraId = extraRentalPriceId(interval);
+      if (!extraId) redirect("/dashboard/billing?error=not_configured");
+      items.push({ price: extraId!, quantity: extraRentals });
+    }
+    await stripe!.subscriptions.update(sub.id, {
+      items,
+      proration_behavior: "create_prorations",
+      metadata: { ...(sub.metadata ?? {}), org_id: orgId, plan, interval },
+    });
+  } catch (err) {
+    if (err && typeof err === "object" && "digest" in err) throw err;
+    console.error("switchSubscriptionPlan: Stripe call failed", {
+      organizationId: orgId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    redirect("/dashboard/billing?error=checkout#plans");
+  }
+  redirect("/dashboard/billing?plan=changed#plans");
+}
+
 // Start a Stripe Checkout session for a subscription to the chosen tier and
 // redirect the owner to Stripe's hosted page. Redirect-based (not
 // revalidate-only) — consistent with the rest of the owner forms and the S170
@@ -134,11 +218,20 @@ export async function startCheckout(formData: FormData) {
   // helpers can't start/cancel a subscription, pay the deposit, or open the portal.
   await requireCapability("manage_billing", "/dashboard/billing?forbidden=1");
 
+  // S779: door bands. Only Starter, Growth and Portfolio are sold, monthly or
+  // yearly (two months free); Portfolio can add rentals above 75.
   const plan = String(formData.get("plan") ?? "");
-  if (!isPaidPlan(plan)) redirect("/dashboard/billing?error=plan");
+  if (!isBandPlan(plan)) redirect("/dashboard/billing?error=plan");
+  const interval = asInterval(formData.get("interval"));
+  const extraRentals = plan === "portfolio" ? clampExtraRentals(formData.get("extra_rentals")) : 0;
+
+  // An account already on a paid plan changes plan on its own subscription.
+  if (isPaidPlan(org.plan) && org.stripe_subscription_id && subscriptionGrantsPlan(org.subscription_status)) {
+    await switchSubscriptionPlan(org.id, org.stripe_subscription_id, plan as "starter" | "growth" | "portfolio", interval, extraRentals);
+  }
 
   const stripe = getStripe();
-  const priceId = priceIdForPlan(plan);
+  const priceId = priceIdForPlan(plan as "starter" | "growth" | "portfolio", interval);
   if (!stripe || !priceId) redirect("/dashboard/billing?error=not_configured");
 
   const supabase = createClient();
@@ -160,6 +253,10 @@ export async function startCheckout(formData: FormData) {
     try {
       const sub = await stripe!.subscriptions.retrieve(org.stripe_subscription_id);
       if (subscriptionGrantsPlan(sub.status)) {
+        // S779: Stripe keeps one billing interval per subscription. Posting
+        // alone is monthly here, so the plan joins it monthly.
+        const subInterval = asInterval(sub.items?.data?.[0]?.price?.recurring?.interval);
+        if (subInterval !== interval) redirect("/dashboard/billing?error=interval_mismatch#plans");
         const items = (sub.items?.data ?? []).map((it) => ({ id: it.id, price: { id: it.price?.id ?? null } }));
         const alreadyGrowth = itemForPrice(items, priceId);
         if (!alreadyGrowth) {
@@ -185,18 +282,23 @@ export async function startCheckout(formData: FormData) {
   // S713: "Growth with Posting" from the Posting card sends with_posting=1.
   // Same checkout, one more line item. Only when the add-on price exists; the
   // webhook turns Posting on once Stripe says the subscription is paid for.
-  const addonPriceId = postingAddonPriceId();
+  const addonPriceId = postingAddonPriceId(interval);
   const withPosting = String(formData.get("with_posting") ?? "") === "1";
   if (withPosting && !addonPriceId) redirect("/dashboard/billing?error=addon_not_configured");
   const lineItems: { price: string; quantity: number }[] = [{ price: priceId!, quantity: 1 }];
   if (withPosting && addonPriceId) lineItems.push({ price: addonPriceId, quantity: 1 });
+  if (extraRentals > 0) {
+    const extraId = extraRentalPriceId(interval);
+    if (!extraId) redirect("/dashboard/billing?error=not_configured");
+    lineItems.push({ price: extraId!, quantity: extraRentals });
+  }
 
   const session = await stripe!.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
     line_items: lineItems,
     client_reference_id: org.id,
-    subscription_data: { metadata: { org_id: org.id } },
+    subscription_data: { metadata: { org_id: org.id, plan, interval } },
     // Lets you apply a founding-customer / promo coupon at checkout without a
     // code change if you decide to keep list price high and discount instead.
     allow_promotion_codes: true,
@@ -532,7 +634,7 @@ export async function addPostingAddon() {
   await requireCapability("manage_billing", "/dashboard/billing?forbidden=1");
 
   const stripe = getStripe();
-  const addonPriceId = postingAddonPriceId();
+  let addonPriceId = postingAddonPriceId();
   if (!stripe || !addonPriceId) redirect("/dashboard/billing?error=addon_not_configured");
   // Needs a paid plan with a live subscription. Anyone else buys Growth with
   // Posting together at checkout (startCheckout with_posting=1).
@@ -554,10 +656,12 @@ export async function addPostingAddon() {
     }
     // Idempotent: a double click (or a webhook still in flight) must not add
     // a second CA$49 item.
-    const already = itemForPrice(
-      (sub.items?.data ?? []).map((it) => ({ id: it.id, price: { id: it.price?.id ?? null } })),
-      addonPriceId,
-    );
+    // S779: a yearly plan takes the yearly Posting price (CA$490).
+    const subInterval = asInterval(sub.items?.data?.[0]?.price?.recurring?.interval);
+    addonPriceId = postingAddonPriceId(subInterval);
+    if (!addonPriceId) redirect("/dashboard/billing?error=addon_not_configured");
+    const subItems = (sub.items?.data ?? []).map((it) => ({ id: it.id, price: { id: it.price?.id ?? null } }));
+    const already = postingAddonPriceIds().some((id) => itemForPrice(subItems, id));
     if (!already) {
       await stripe!.subscriptionItems.create({
         subscription: sub.id,

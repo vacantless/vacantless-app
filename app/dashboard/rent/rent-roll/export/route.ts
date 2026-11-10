@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   if (!org) return NextResponse.redirect(new URL("/login", req.url));
 
   if (!canUseBooks(org)) {
-    return new NextResponse("Part of Growth.", { status: 403 });
+    return new NextResponse("Part of Starter and up.", { status: 403 });
   }
   if (!(await currentUserCan("view_reports"))) {
     return new NextResponse("Forbidden", { status: 403 });

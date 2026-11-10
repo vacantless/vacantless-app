@@ -27,7 +27,16 @@
 //                            amount/currency in the Stripe dashboard instead.
 
 import Stripe from "stripe";
-import { TIERS, PAID_PLAN_KEYS, POSTING_ADDON, type PaidPlanKey } from "@/lib/billing";
+import {
+  TIERS,
+  PAID_PLAN_KEYS,
+  POSTING_ADDON,
+  EXTRA_RENTAL,
+  LEGACY_GROWTH_PRICE_ENV,
+  isBandPlan,
+  type BillingInterval,
+  type PaidPlanKey,
+} from "@/lib/billing";
 
 let _stripe: Stripe | null | undefined;
 
@@ -41,9 +50,31 @@ export function getStripe(): Stripe | null {
 // The configured Stripe price id for a given paid plan (from env), or null if
 // that tier's price env var isn't set. Reads the price-id env name straight off
 // the live TIERS config (growth/premium/managed each carry their `priceEnv`).
-export function priceIdForPlan(plan: PaidPlanKey): string | null {
-  const env = TIERS[plan].priceEnv;
+export function priceIdForPlan(plan: PaidPlanKey, interval: BillingInterval = "month"): string | null {
+  const t = TIERS[plan];
+  const env = interval === "year" ? t.priceEnvYearly : t.priceEnv;
   return env ? process.env[env] || null : null;
+}
+
+// S779: the CA$99 Growth price every account bought before the door bands.
+// Still recognised (grandfathered subscriptions), never sold.
+export function legacyGrowthPriceId(): string | null {
+  return process.env[LEGACY_GROWTH_PRICE_ENV] || null;
+}
+
+/** S779: true when a price id is the grandfathered CA$99 Growth. */
+export function isLegacyGrowthPrice(priceId: string | null | undefined): boolean {
+  const legacy = legacyGrowthPriceId();
+  return !!priceId && !!legacy && priceId === legacy;
+}
+
+/** S779: the extra-rental price (above Portfolio's 75) for an interval. */
+export function extraRentalPriceId(interval: BillingInterval = "month"): string | null {
+  const env = interval === "year" ? EXTRA_RENTAL.priceEnvYearly : EXTRA_RENTAL.priceEnv;
+  return process.env[env] || null;
+}
+export function extraRentalPriceIds(): string[] {
+  return [extraRentalPriceId("month"), extraRentalPriceId("year")].filter((x): x is string => !!x);
 }
 
 // Reverse lookup: { [priceId]: planKey } built from the configured env vars.
@@ -52,10 +83,14 @@ export function priceIdForPlan(plan: PaidPlanKey): string | null {
 export function priceMap(): Record<string, PaidPlanKey> {
   const map: Record<string, PaidPlanKey> = {};
   PAID_PLAN_KEYS.forEach((plan) => {
-    const env = TIERS[plan].priceEnv;
-    const id = env ? process.env[env] : undefined;
-    if (id) map[id] = plan;
+    for (const env of [TIERS[plan].priceEnv, TIERS[plan].priceEnvYearly]) {
+      const id = env ? process.env[env] : undefined;
+      if (id) map[id] = plan;
+    }
   });
+  // S779: grandfathered CA$99 Growth subscriptions still read as Growth.
+  const legacy = legacyGrowthPriceId();
+  if (legacy) map[legacy] = "growth";
   return map;
 }
 
@@ -81,8 +116,18 @@ export function isDepositConfigured(): boolean {
 // The Posting add-on price id (CA$49/mo recurring), or null when unset. Kept
 // OUT of priceMap() on purpose: it is not a plan, so the webhook must never
 // read it as one. Null = the billing page shows no Posting buy button.
-export function postingAddonPriceId(): string | null {
+export function postingAddonPriceId(interval: BillingInterval = "month"): string | null {
+  if (interval === "year") return process.env[POSTING_ADDON.priceEnvYearly] || null;
   return process.env[POSTING_ADDON.priceEnv] || null;
+}
+/** S779: every configured Posting price (monthly CA$49, yearly CA$490). */
+export function postingAddonPriceIds(): string[] {
+  return [postingAddonPriceId("month"), postingAddonPriceId("year")].filter((x): x is string => !!x);
+}
+
+/** S779: is the plan on sale as a door band with a price for this interval? */
+export function bandPurchasable(plan: string, interval: BillingInterval): boolean {
+  return isBandPlan(plan) && !!priceIdForPlan(plan, interval);
 }
 
 // S724 (V251-16): Stripe's own preview of the next invoice for this

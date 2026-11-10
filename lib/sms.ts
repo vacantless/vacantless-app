@@ -733,8 +733,14 @@ export async function sendSms({ to, body, organizationId }: SendOrgSmsInput): Pr
     // text is skipped and the renter still gets the email.
     try {
       const { createAdminClient } = await import("./supabase/admin");
-      const { overMonthlyTextLimit, textsSentThisMonth } = await import("./sms-limit");
-      if (overMonthlyTextLimit(await textsSentThisMonth(createAdminClient(), organizationId))) {
+      const { overMonthlyTextLimit, textsSentThisMonth, textLimitForOrg } = await import("./sms-limit");
+      const smsAdmin = createAdminClient();
+      // S779: the limit follows the plan's door band.
+      const [sentThisMonth, monthlyLimit] = await Promise.all([
+        textsSentThisMonth(smsAdmin, organizationId),
+        textLimitForOrg(smsAdmin, organizationId),
+      ]);
+      if (overMonthlyTextLimit(sentThisMonth, monthlyLimit)) {
         return { sent: false, reason: "monthly_text_limit" };
       }
     } catch {

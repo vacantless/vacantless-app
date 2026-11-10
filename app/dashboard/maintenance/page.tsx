@@ -1341,7 +1341,7 @@ export default async function MaintenancePage({
                 <p className="mt-1 text-sm text-gray-600">
                   Give each tenancy a private link to report a maintenance problem with photos or a
                   short video. Reports land here for you to approve into a work order. No tenant
-                  account needed. Available on Growth and up.
+                  account needed. Available on Starter and up.
                 </p>
               </div>
               <Link

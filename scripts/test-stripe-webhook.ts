@@ -223,6 +223,11 @@ function loadRoute(event: FakeEvent, admin: unknown, subscriptions: Record<strin
           getStripe: () => stripe,
           priceMap: () => ({ price_growth: "growth", price_premium: "premium" }),
           postingAddonPriceId: () => process.env.STRIPE_PRICE_POSTING_ADDON || null,
+          // S779: the webhook reads every Posting price and the door-band extras.
+          postingAddonPriceIds: () => (process.env.STRIPE_PRICE_POSTING_ADDON ? [process.env.STRIPE_PRICE_POSTING_ADDON] : []),
+          extraRentalPriceIds: () => [],
+          // price_growth plays the grandfathered CA$99 Growth (no rental limit).
+          isLegacyGrowthPrice: (id: string | null | undefined) => id === "price_growth",
         };
       }
       if (id === "@/lib/supabase/admin") {

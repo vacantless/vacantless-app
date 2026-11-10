@@ -175,7 +175,7 @@ const spendPage = file("app/dashboard/money/spend/page.tsx");
 const moneyHub = file("app/dashboard/money/page.tsx");
 ok("spend route checks the books gate", spendPage.includes("canUseBooks(org)"));
 ok("spend loader rejects locked org", spendPage.includes('return { ok: false, reason: "locked" }'));
-ok("spend route renders locked upsell", spendPage.includes("Part of Growth, $99 a month"));
+ok("spend route renders locked upsell", spendPage.includes("Part of Starter and up, from $29 a month"));
 ok("money hub links spend card", moneyHub.includes("/dashboard/money/spend"));
 
 if (failed > 0) {

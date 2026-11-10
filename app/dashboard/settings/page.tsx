@@ -12,7 +12,8 @@ import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { isOwnNumberSmsConfigured, isSmsConfigured } from "@/lib/sms";
 import { orgHasSwitch } from "@/lib/platform-switches";
 import { orgOwnSmsNumber } from "@/lib/org-sms-numbers";
-import { SMS_MONTHLY_LIMIT, textsSentThisMonth } from "@/lib/sms-limit";
+import { textsSentThisMonth } from "@/lib/sms-limit";
+import { textCapForPlan } from "@/lib/billing";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_BRAND_COLOR } from "@/lib/branding";
 import {
@@ -1973,7 +1974,7 @@ export default async function SettingsPage({
                       booking confirmation and a reminder on the day. If they have not confirmed,
                       they also get one the day before. They can reply to you, and can turn texts
                       off. We set up a local number for your account in about a minute.
-                      Included in Growth, up to {SMS_MONTHLY_LIMIT} texts a month.
+                      Included from Starter up, {textCapForPlan(org.plan)} texts a month for your account.
                     </p>
                     <button
                       type="submit"
@@ -1985,7 +1986,7 @@ export default async function SettingsPage({
                   </>
                 ) : (
                   <>
-                    Texting renters comes with Growth. Renters on your account get every message
+                    Texting renters comes with Starter and up. Renters on your account get every message
                     by email.{" "}
                     <Link href="/dashboard/billing" className="font-medium underline">
                       See Growth
@@ -2024,7 +2025,7 @@ export default async function SettingsPage({
             )}
             {!canRenterSms && smsFlash !== "upgrade" && (
               <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-500">
-                Texting renters comes with Growth. On your current plan we send
+                Texting renters comes with Starter and up. On your current plan we send
                 confirmations and reminders by email.
               </div>
             )}
@@ -2099,7 +2100,7 @@ export default async function SettingsPage({
             )}
             {ownSmsNumber && (
               <p className="mt-3 text-xs text-gray-500">
-                Texts come from {displayCanadianNumber(ownSmsNumber)}. {textsThisMonth} of {SMS_MONTHLY_LIMIT} texts used
+                Texts come from {displayCanadianNumber(ownSmsNumber)}. {textsThisMonth} of {textCapForPlan(org.plan)} texts used
                 this month. Past that, renters get email only until the 1st.
               </p>
             )}

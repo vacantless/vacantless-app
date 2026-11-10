@@ -60,7 +60,7 @@ export default async function InvestmentPackagePage({
         />
         <div className="mt-6">
           <EmptyState
-            title="Part of Growth, $99 a month"
+            title="Part of Starter and up, from $29 a month"
             description="It turns what you already record into the document you hand to the market."
             cta={{ href: "/dashboard/billing", label: "See Growth" }}
           />

@@ -250,7 +250,7 @@ export default async function ReconcilePage({
           icon={<Icons.card />}
         />
         <FeatureLockedNotice
-          title="Part of Growth, $99 a month"
+          title="Part of Starter and up, from $29 a month"
           description="Growth matches your bank transactions to rent and expenses, so nothing is left unexplained at year end."
           ctaLabel="See Growth"
           ctaHref="/dashboard/billing"

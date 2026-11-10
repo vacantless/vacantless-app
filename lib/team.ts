@@ -27,7 +27,9 @@ export const INVITABLE_ROLES: readonly OrgRole[] = ["operator"] as const;
 const TEAMMATE_LIMITS: Record<string, number> = {
   free: 0,
   trial: 0,
+  starter: 2,
   growth: 2,
+  portfolio: 5,
   core: 2,
   premium: 5,
   managed: 5,

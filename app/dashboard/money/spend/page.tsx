@@ -192,7 +192,7 @@ function LockedSpend() {
       />
       <EmptyState
         icon={<Icons.chart className="h-5 w-5" />}
-        title="Part of Growth, $99 a month"
+        title="Part of Starter and up, from $29 a month"
         description="Growth shows where your money goes: spend by category, the monthly trend and charges that repeat."
         cta={{ href: "/dashboard/billing", label: "See Growth" }}
       />

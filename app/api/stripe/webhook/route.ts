@@ -1,7 +1,13 @@
 import { foundingStampMetadata } from "@/lib/founding-price";
 import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
-import { getStripe, postingAddonPriceId, priceMap } from "@/lib/stripe";
+import {
+  extraRentalPriceIds,
+  getStripe,
+  isLegacyGrowthPrice,
+  postingAddonPriceIds,
+  priceMap,
+} from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { grantReferralCredit } from "@/lib/referral-credit-server";
 import { claimStripeEvent, releaseStripeEvent } from "@/lib/stripe-event-claim";
@@ -11,6 +17,7 @@ import {
   planPriceIdOfItems,
   postingAddonForSubscriptionEvent,
   subscriptionPeriodEndSeconds,
+  bandRentalCap,
   subscriptionCancelAtSeconds,
   shouldApplyStatus,
   shouldEnableSmsOnPlanChange,
@@ -72,8 +79,8 @@ async function applyPostingAddon(
   sub: Stripe.Subscription,
   opts: { ended: boolean; statusApplies: boolean },
 ): Promise<{ active: boolean; itemId: string | null } | null> {
-  const addonPriceId = postingAddonPriceId();
-  if (!addonPriceId) return null;
+  const addonPriceId = postingAddonPriceIds();
+  if (addonPriceId.length === 0) return null;
   const existing = await readAddonItemId(admin, orgId);
   if (!existing.ok) return null;
   const next = postingAddonForSubscriptionEvent({
@@ -128,6 +135,8 @@ async function applySubscription(
         stripe_subscription_id: null,
         current_period_end: null,
         subscription_cancel_at: null,
+        // S779: Free has its own one-live-rental rule.
+        rental_cap: null,
       })
       .eq("id", orgId);
     await applyPostingAddon(admin, orgId, sub, { ended: true, statusApplies: true });
@@ -196,6 +205,17 @@ async function applySubscription(
     existingSubscriptionId: existing.stripe_subscription_id,
   });
   if (nextPlan) update.plan = nextPlan;
+  // S779: door bands. The rental limit follows the plan price: the
+  // grandfathered CA$99 Growth (and Premium, Managed) has none; a band price
+  // covers its rentals plus any extra rentals bought on Portfolio. Written only
+  // when the plan is written, so a stale event never changes it.
+  if (nextPlan) {
+    const extraIds = extraRentalPriceIds();
+    const extra = (sub.items?.data ?? [])
+      .filter((it) => !!it.price?.id && extraIds.includes(it.price.id))
+      .reduce((n, it) => n + (it.quantity ?? 0), 0);
+    update.rental_cap = isLegacyGrowthPrice(priceId) ? null : bandRentalCap(nextPlan, extra);
+  }
   // S702j/S712: moving onto a plan with renter texts switches texts on, on
   // every subscription path (not only checkout). Only on the transition, so a
   // renewal never re-enables texts the owner turned off in Settings.

@@ -125,7 +125,7 @@ export async function TeamSection({
           <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">Add a teammate</h3>
           {limit === 0 ? (
             <p className="mt-2 text-sm text-gray-600">
-              Teammates come with Growth. Right now only you can sign in.{" "}
+              Teammates come with Starter and up. Right now only you can sign in.{" "}
               <Link href="/dashboard/billing" className="font-medium text-brand underline">
                 See Growth
               </Link>

@@ -216,7 +216,7 @@ export default async function ImportHistoryPage({
           icon={<Icons.page />}
         />
         <FeatureLockedNotice
-          title="Part of Growth, $99 a month"
+          title="Part of Starter and up, from $29 a month"
           description="Growth lets you bring in your old bookkeeping, match it to bank transactions and set rules for future expenses."
           ctaLabel="See Growth"
           ctaHref="/dashboard/billing"

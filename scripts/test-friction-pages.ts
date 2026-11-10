@@ -56,7 +56,7 @@ ok("lookup, paths, sitemap and ad tags", () => {
   assert.ok(isMarketingPath("/fix") && isMarketingPath("/fix/no-shows"));
   assert.ok(readFileSync("app/sitemap.ts", "utf8").includes("FRICTION_PAGES.map"));
 });
-ok("emergencies and repairs are marked Growth", () => {
-  assert.equal(frictionPage("repairs-and-emergencies")?.plan, "Growth.");
+ok("emergencies and repairs are marked as a paid plan (S779 door bands)", () => {
+  assert.equal(frictionPage("repairs-and-emergencies")?.plan, "Any paid plan, from CA$29 a month.");
 });
 console.log(`friction-pages: ${n} passed`);

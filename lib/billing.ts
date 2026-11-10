@@ -17,20 +17,32 @@ export type PlanKey =
   | "premium"
   | "managed"
   | "core"
-  | "plus";
+  | "plus"
+  | "starter"
+  | "portfolio";
 
 // The purchasable paid plans. As of S541 these are the live Free/Growth/Premium/Managed
 // ladder's paid tiers — they are exactly the paid keys of TIERS, so the
 // Stripe price layer (lib/stripe.ts) reads each plan's `priceEnv` straight off
 // TIERS. Core/Plus are NO LONGER part of this union (they are retired legacy).
-export type PaidPlanKey = "growth" | "premium" | "managed";
+// S779: door bands (Noam approved 2026-11-10 17:10). Starter, Growth and
+// Portfolio are the sold plans; every paid plan gets every feature and they
+// differ only in how many rentals and texts they cover. Premium and Managed
+// stay recognised for any org on them but are not sold.
+export type PaidPlanKey = "starter" | "growth" | "portfolio" | "premium" | "managed";
 
-export const PAID_PLAN_KEYS: PaidPlanKey[] = ["growth", "premium", "managed"];
+export const PAID_PLAN_KEYS: PaidPlanKey[] = ["starter", "growth", "portfolio", "premium", "managed"];
 
 // True for a LIVE purchasable paid plan (growth/premium/managed). This narrows the type,
 // so checkout/price-lookup callers can pass the result straight to TIERS[plan].
 export function isPaidPlan(plan: string | null | undefined): plan is PaidPlanKey {
-  return plan === "growth" || plan === "premium" || plan === "managed";
+  return (
+    plan === "starter" ||
+    plan === "growth" ||
+    plan === "portfolio" ||
+    plan === "premium" ||
+    plan === "managed"
+  );
 }
 
 // True for ANY paid subscription plan — the live ones (growth/premium/managed) PLUS the
@@ -40,9 +52,7 @@ export function isPaidPlan(plan: string | null | undefined): plan is PaidPlanKey
 // defensive belt-and-suspenders for the migration.)
 export function isAnyPaidPlan(plan: string | null | undefined): boolean {
   return (
-    plan === "growth" ||
-    plan === "premium" ||
-    plan === "managed" ||
+    isPaidPlan(plan) ||
     plan === "core" ||
     plan === "plus"
   );
@@ -193,8 +203,19 @@ function noEntitlements(): PlanEntitlements {
 // Free funnel, matching how Avail/TurboTenant convert), so the ladder is one
 // free tier + two paid tiers. Tier keys are distinct from the legacy plan keys
 // so both can coexist through the Stripe-product migration.
-export type TierKey = "free" | "growth" | "premium" | "managed";
-export const TIER_KEYS: TierKey[] = ["free", "growth", "premium", "managed"];
+export type TierKey = "free" | "starter" | "growth" | "portfolio" | "premium" | "managed";
+export const TIER_KEYS: TierKey[] = ["free", "starter", "growth", "portfolio", "premium", "managed"];
+/** S779: the plans on sale, in order. Premium and Managed are not sold. */
+export const SOLD_TIER_KEYS = ["free", "starter", "growth", "portfolio"] as const;
+export type BandKey = "starter" | "growth" | "portfolio";
+export const BAND_KEYS: BandKey[] = ["starter", "growth", "portfolio"];
+export function isBandPlan(plan: string | null | undefined): plan is BandKey {
+  return plan === "starter" || plan === "growth" || plan === "portfolio";
+}
+export type BillingInterval = "month" | "year";
+export function asInterval(v: unknown): BillingInterval {
+  return String(v ?? "") === "year" ? "year" : "month";
+}
 
 // Any stored plan string we recognize: the new ladder + the legacy plans.
 export type AnyPlanKey = PlanKey | TierKey;
@@ -221,6 +242,9 @@ export const PLAN_ENTITLEMENTS: Record<AnyPlanKey, PlanEntitlements> = {
   growth: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: false, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Plaid feed; tenant intake (Slices 1-4); email-in capture; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
   premium: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Flinks feed; + in-app trade dispatch (Slices 5-7); email-in + text-in capture; appointment-reminder SMS; listing-marketing kit; lease-OCR prefill; AI listing import; market-rent guidance
   managed: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: true, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: true, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true }, // Premium feature set plus the larger concierge allowance.
+  // S779: the door bands. Every paid plan gets every feature Growth has.
+  starter: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: false, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true },
+  portfolio: { serve_notice: true, applications: true, sms: true, renter_sms: true, rent_collection: true, tax_export: true, bank_feed: true, accounting: false, incident_intake: true, incident_dispatch: true, capture_email_in: true, capture_text_in: false, repair_sms: true, listing_marketing: true, lease_ocr: true, listing_ai_import: true, waitlist: true, market_rent: true },
 };
 
 const TRIAL_ENTITLEMENTS: PlanEntitlements = PLAN_ENTITLEMENTS.trial;
@@ -504,6 +528,13 @@ export type TierInfo = {
   priceCents: number; // CAD / month — 0 for Free; platform fee for paid tiers
   priceEnv: string | null; // Stripe price-id env var (null until the product exists; Free is never purchasable)
   maxActiveListings: number | null; // published-listing allowance; null = unlimited
+  /** S779: yearly price (two months free) and its Stripe price-id env. */
+  yearlyCents?: number;
+  priceEnvYearly?: string | null;
+  /** S779: rentals in the account this plan covers (null = no limit). */
+  rentalCap?: number | null;
+  /** S779: texts a month from the account's own number. */
+  textCap?: number;
   blurb: string;
   features: string[]; // customer-facing bullets ("Everything in X, plus…")
   highlight?: boolean; // the recommended/most-popular tier
@@ -530,29 +561,47 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "We post it to Kijiji, Rentals.ca and Zumper for you. Kijiji charges its own ad fee",
     ],
   },
+  // S779: door bands. Every paid plan gets every feature (PAID_FEATURE_GROUPS);
+  // they differ in rentals covered and texts a month. Yearly = two months free.
+  starter: {
+    key: "starter",
+    name: "Starter",
+    priceCents: 2900,
+    yearlyCents: 29000,
+    priceEnv: "STRIPE_PRICE_STARTER",
+    priceEnvYearly: "STRIPE_PRICE_STARTER_YEARLY",
+    maxActiveListings: null,
+    rentalCap: 5,
+    textCap: 200,
+    blurb: "Up to 5 rentals, with everything.",
+    features: [] as string[],
+  },
   growth: {
     key: "growth",
     name: "Growth",
-    priceCents: 9900,
-    priceEnv: "STRIPE_PRICE_GROWTH",
+    priceCents: 7900,
+    yearlyCents: 79000,
+    priceEnv: "STRIPE_PRICE_GROWTH_BAND",
+    priceEnvYearly: "STRIPE_PRICE_GROWTH_BAND_YEARLY",
     maxActiveListings: null,
-    blurb: "As many rentals as you have.",
+    rentalCap: 25,
+    textCap: 500,
+    blurb: "Up to 25 rentals, with everything.",
     highlight: true,
-    // S728: one wording for the homepage and the billing page; app/page.tsx
-    // reads these bullets, so edit them here only.
-    features: [
-      "Unlimited live rentals",
-      "Everything in Free",
-      "Text renters their confirmations and reminders from your own local number; they reply YES to confirm",
-      "Renter applications, questions before booking and a waiting list",
-      "Ontario LTB notices filled for you: N4, N5, N8, N12, L1 and more",
-      "Rent increase reminders with the N1 filled in",
-      "Repairs: tenants report and pick times; emergencies alert you at once; find trades other landlords rated; your trade accepts, quotes and books from a link; the tenant gets a reminder by email and text",
-      "Rent by pre-authorized debit through your own Stripe or Rotessa account",
-      "Expenses from your bank or typed in, and an owner statement per building",
-      "Books & Tax: your T776 summary, bank matching, an income statement and one zip for your accountant",
-      "Email help from us within one business day",
-    ],
+    features: [] as string[],
+  },
+  portfolio: {
+    key: "portfolio",
+    name: "Portfolio",
+    priceCents: 14900,
+    yearlyCents: 149000,
+    priceEnv: "STRIPE_PRICE_PORTFOLIO",
+    priceEnvYearly: "STRIPE_PRICE_PORTFOLIO_YEARLY",
+    maxActiveListings: null,
+    rentalCap: 75,
+    textCap: 1000,
+    blurb: "Up to 75 rentals, then CA$2 a rental.",
+    features: [] as string[],
   },
   premium: {
     key: "premium",
@@ -586,6 +635,106 @@ export const TIERS: Record<TierKey, TierInfo> = {
   },
 };
 
+// S779: one feature list for every paid plan, grouped for the homepage card
+// (Lease it, Run it, Year-end). app/page.tsx and the billing page read these,
+// so edit them here only. Each line is a shipped feature (S728 wording).
+export const PAID_FEATURE_GROUPS: { head: string; items: string[] }[] = [
+  {
+    head: "Lease it",
+    items: [
+      "Booking pages, instant replies and reminders for every rental",
+      "Text renters their confirmations and reminders from your own local number; they reply YES to confirm",
+      "Renter applications, questions before booking and a waiting list",
+    ],
+  },
+  {
+    head: "Run it",
+    items: [
+      "Rent by pre-authorized debit through your own Stripe or Rotessa account",
+      "Repairs: tenants report and pick times; emergencies alert you at once; find trades other landlords rated; your trade accepts, quotes and books from a link",
+      "Ontario LTB notices filled for you: N4, N5, N8, N12, L1 and more",
+      "Rent increase reminders with the N1 filled in",
+    ],
+  },
+  {
+    head: "Year-end",
+    items: [
+      "Expenses from your bank or typed in, and an owner statement per building",
+      "Books & Tax: your T776 summary, bank matching, an income statement and one zip for your accountant",
+    ],
+  },
+];
+export const PAID_SUPPORT_LINE = "Email help from us within one business day";
+
+function bandRentalLine(t: TierInfo): string {
+  return t.rentalCap ? `Up to ${t.rentalCap} rentals` : "Unlimited rentals";
+}
+for (const k of BAND_KEYS) {
+  const t = TIERS[k];
+  t.features = [
+    bandRentalLine(t),
+    `Up to ${t.textCap} texts a month`,
+    ...PAID_FEATURE_GROUPS.flatMap((g) => g.items),
+    PAID_SUPPORT_LINE,
+  ];
+}
+
+// S779: the CA$99 Growth price every account bought before the door bands.
+// Subscriptions on it keep Growth with no rental limit (grandfathered: Agile,
+// FRIENDS12, the first Founding 20 sign-ups). Never sold again.
+export const LEGACY_GROWTH_PRICE_ENV = "STRIPE_PRICE_GROWTH";
+
+// S779: above Portfolio's 75 rentals, CA$2 a rental a month (CA$20 a year).
+export const EXTRA_RENTAL = {
+  priceCents: 200,
+  yearlyCents: 2000,
+  priceEnv: "STRIPE_PRICE_EXTRA_RENTAL",
+  priceEnvYearly: "STRIPE_PRICE_EXTRA_RENTAL_YEARLY",
+} as const;
+
+/** Rentals a band covers, with any extra rentals bought on Portfolio. */
+export function bandRentalCap(plan: string | null | undefined, extraRentals = 0): number | null {
+  if (!isBandPlan(plan)) return null;
+  const base = TIERS[plan].rentalCap ?? null;
+  if (base == null) return null;
+  return base + (plan === "portfolio" ? Math.max(0, Math.floor(extraRentals || 0)) : 0);
+}
+
+/** Texts a month from the account's own number (lib/sms-limit). */
+export function textCapForPlan(plan: string | null | undefined): number {
+  if (plan === "starter") return TIERS.starter.textCap ?? 200;
+  if (plan === "portfolio") return TIERS.portfolio.textCap ?? 1000;
+  return TIERS.growth.textCap ?? 500;
+}
+
+/** The cheapest band that covers `rentals`, for upgrade prompts. */
+export function bandForRentals(rentals: number): BandKey {
+  if (rentals <= (TIERS.starter.rentalCap ?? 5)) return "starter";
+  if (rentals <= (TIERS.growth.rentalCap ?? 25)) return "growth";
+  return "portfolio";
+}
+
+/**
+ * S779: true when adding one more rental would go over the account's paid
+ * rental limit. `rentalCap` is organizations.rental_cap (written by the Stripe
+ * webhook; null = no limit, which is every grandfathered account). Free keeps
+ * its one-live-rental rule (listingCapForPlan), so it is never "full" here.
+ */
+export function paidRentalLimitReached(input: {
+  plan: string | null | undefined;
+  rentalCap: number | null | undefined;
+  rentals: number;
+}): boolean {
+  if (!isAnyPaidPlan(input.plan)) return false;
+  if (input.rentalCap == null) return false;
+  return input.rentals >= input.rentalCap;
+}
+
+export function bandFullLine(plan: string | null | undefined, rentalCap: number): string {
+  const name = isBandPlan(plan) ? TIERS[plan].name : "Your plan";
+  return `${name} covers ${rentalCap} rentals. Move up a plan on Billing to add more, or archive a rental you no longer manage.`;
+}
+
 // Config-shape check: the tier is set up to be SOLD — it has a price and a
 // price-id env name. True for the paid tiers (growth/premium/managed), false for Free
 // ($0, never purchasable). NOTE: this does not read the env VALUE, so it does
@@ -610,6 +759,9 @@ export const POSTING_ADDON = {
   name: "Posting",
   priceCents: 4900,
   priceEnv: "STRIPE_PRICE_POSTING_ADDON",
+  // S779: CA$490 a year for accounts on a yearly plan (Noam 2026-11-10).
+  yearlyCents: 49000,
+  priceEnvYearly: "STRIPE_PRICE_POSTING_ADDON_YEARLY",
   blurb: "We post your rentals to Kijiji, Rentals.ca and Zumper for you.",
   features: [
     "We post to Kijiji, Rentals.ca and Zumper",
@@ -688,7 +840,7 @@ export const POSTING_OFFER = {
   title: "Add 3 more sites, posted for you",
   body:
     "We post this ad on Kijiji, Rentals.ca and Zumper + PadMapper for you. You sign in to each site once, about three minutes. We never see your password. Ads go up as soon as they are ready; you can switch to approving each one first.",
-  price: "$49 a month, on Free or Growth.",
+  price: "$49 a month, on any plan.",
   fees: "Site fees: Kijiji gives one free ad per account, then $33.84 each. Rentals.ca and Zumper are free.",
   action: "Post on 3 more sites",
 } as const;
@@ -731,16 +883,22 @@ export function planPriceIdOfItems(
 //     its plain Growth subscription's events. The plan gate still applies.
 //   - the add-on item is on a sub whose status grants a plan -> on + its id.
 export function postingAddonForSubscriptionEvent(input: {
-  addonPriceId: string | null | undefined;
+  /** S779: the monthly and yearly Posting prices (a single id still works). */
+  addonPriceId: string | readonly string[] | null | undefined;
   items: readonly SubscriptionItemShape[] | null | undefined;
   status: string | null | undefined;
   statusApplies: boolean;
   ended: boolean;
   existingItemId: string | null | undefined;
 }): { active: boolean; itemId: string | null } | null {
-  if (!input.addonPriceId) return null;
+  const addonIds = (Array.isArray(input.addonPriceId) ? input.addonPriceId : [input.addonPriceId]).filter(
+    (x): x is string => typeof x === "string" && x.length > 0,
+  );
+  if (addonIds.length === 0) return null;
   if (!input.ended && !input.statusApplies) return null;
-  const item = input.ended ? null : itemForPrice(input.items, input.addonPriceId);
+  const item = input.ended
+    ? null
+    : addonIds.map((id) => itemForPrice(input.items, id)).find((it) => !!it) ?? null;
   if (item?.id && subscriptionGrantsPlan(input.status)) {
     return { active: true, itemId: item.id };
   }
@@ -823,7 +981,7 @@ export function postingAddonPending(
 export type BooksOrg = { plan: string | null | undefined };
 export function canUseBooks(org: BooksOrg | null | undefined): boolean {
   if (!org) return false;
-  return org.plan === "growth" || hasEntitlement(org.plan, "accounting");
+  return isBandPlan(org.plan) || hasEntitlement(org.plan, "accounting");
 }
 
 // The published-listing allowance for a stored plan (the Free funnel cap; null =
@@ -842,8 +1000,8 @@ export function listingCapForPlan(plan: string | null | undefined): number | nul
 // with a link to FREE_CAP_BILLING_HREF wherever a link can sit.
 export const FREE_CAP_BILLING_HREF = "/dashboard/billing";
 export function freeCapLine(): string {
-  const dollars = Math.round(TIERS.growth.priceCents / 100);
-  return `Free covers one live rental. Growth is CA$${dollars} a month for as many as you need. Or take the other rental off market.`;
+  const dollars = Math.round(TIERS.starter.priceCents / 100);
+  return `Free covers one live rental. Paid plans start at CA$${dollars} a month for up to ${TIERS.starter.rentalCap} rentals. Or take the other rental off market.`;
 }
 
 // S712: after a downgrade to Free, rentals beyond the cap stay live (we never
@@ -1172,6 +1330,8 @@ export type BillingInput = {
 
 /** S728: exported so the dashboard header prints "Growth", not the raw key. */
 export function planLabelOf(plan: PlanKey): string {
+  if (plan === "starter") return "Starter";
+  if (plan === "portfolio") return "Portfolio";
   if (plan === "growth") return "Growth";
   if (plan === "premium") return "Premium";
   if (plan === "managed") return "Managed";

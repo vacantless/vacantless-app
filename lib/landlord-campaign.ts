@@ -437,9 +437,9 @@ export function revealCopy(key: RevealKey, ctx: RevealContext = {}): RevealCopy 
       return {
         subject: "Ready to get more out of Vacantless?",
         body:
-          "You have the essentials on the free plan, including automatic rent collection. Growth adds your year-end tax package, listing marketing, renter screening, and unlimited live listings for $99 a month.\n\n" +
+          "You have the essentials on the free plan, including automatic rent collection. A paid plan adds your year-end tax package, listing marketing, renter applications and more live rentals, from $29 a month.\n\n" +
           "Take a look whenever you are ready.",
-        ctaLabel: "Move to Growth",
+        ctaLabel: "See the plans",
         ctaPath: BILLING,
       };
   }

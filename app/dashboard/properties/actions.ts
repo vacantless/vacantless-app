@@ -180,6 +180,8 @@ import {
 import {
   photoCapForPlan,
   listingCapForPlan,
+  isAnyPaidPlan,
+  paidRentalLimitReached,
   canUseListingAiImport,
   hasEntitlement,
   conciergeMonthlyCap,
@@ -421,6 +423,37 @@ export type AddPropertyV2DescriptionResult =
     }
   | { ok: false; message: string };
 
+/**
+ * S779: door bands. A paid plan covers a number of rentals
+ * (organizations.rental_cap, written by the Stripe webhook; null = no limit,
+ * every grandfathered account). Adding, importing, duplicating or unarchiving
+ * a rental past it goes to Billing with the move-up line instead. Counts every
+ * unarchived rental, occupied or not (Noam 2026-11-10: "every rental").
+ * Free keeps its one-live-rental rule at Set Live.
+ */
+async function guardPaidRentalCap(orgId: string, plan: string | null | undefined): Promise<void> {
+  if (!isAnyPaidPlan(plan)) return;
+  const supabase = createClient();
+  const { data: capRow, error: capErr } = await supabase
+    .from("organizations")
+    .select("rental_cap")
+    .eq("id", orgId)
+    .maybeSingle();
+  // Fail open: never block a landlord because the limit could not be read.
+  if (capErr) return;
+  const rentalCap = (capRow as { rental_cap?: number | null } | null)?.rental_cap ?? null;
+  if (rentalCap == null) return;
+  const { count, error } = await supabase
+    .from("properties")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", orgId)
+    .is("archived_at", null);
+  if (error) return;
+  if (paidRentalLimitReached({ plan, rentalCap, rentals: count ?? 0 })) {
+    redirect("/dashboard/billing?error=band_full#plans");
+  }
+}
+
 export async function addProperty(formData: FormData) {
   // Property management is admin/operator only (locked seat model): a showing
   // helper can't create/edit/delete units, listing posts, or photos.
@@ -430,6 +463,7 @@ export async function addProperty(formData: FormData) {
 
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
+  await guardPaidRentalCap(org.id, org.plan);
 
   const supabase = createClient();
   // organization_id is taken from the caller's own org; RLS WITH CHECK also
@@ -512,6 +546,7 @@ export async function importPropertyFromMls(formData: FormData) {
 
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
+  await guardPaidRentalCap(org.id, org.plan);
 
   // Deterministic parse first (conservative, proven, no network) - always the
   // base. It fills whatever the MLS / realtor.ca label + column formats expose.
@@ -851,6 +886,7 @@ export async function createPropertyV2(formData: FormData) {
 
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
+  await guardPaidRentalCap(org.id, org.plan);
 
   const petsCats = parseTriStateBool(formData, "pets_cats");
   const petsDogs = parseTriStateBool(formData, "pets_dogs");
@@ -1957,6 +1993,7 @@ export async function duplicateProperty(formData: FormData) {
 
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
+  await guardPaidRentalCap(org.id, org.plan);
 
   const supabase = createClient();
 
@@ -2249,6 +2286,7 @@ export async function unarchiveProperty(formData: FormData) {
 
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
+  await guardPaidRentalCap(org.id, org.plan);
 
   const supabase = createClient();
   const { data: property } = await supabase

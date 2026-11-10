@@ -2,7 +2,7 @@ import Link from "next/link";
 import { MarketingHeader } from "@/components/marketing-chrome";
 import { OPERATOR_LINE } from "@/lib/operator-line";
 import { LEASING_PROOF_STATS, POSTING_PROOF } from "@/lib/proof-stats";
-import { TIERS, FREE_RENTAL_POSTING_LINE } from "@/lib/billing";
+import { TIERS, FREE_RENTAL_POSTING_LINE, PAID_FEATURE_GROUPS, PAID_SUPPORT_LINE, POSTING_ADDON, EXTRA_RENTAL } from "@/lib/billing";
 import { HOW_TO_COUNT_WORD } from "@/lib/how-to-videos";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
@@ -12,7 +12,7 @@ import { VacantlessMark } from "../components/vacantless-mark";
 export const metadata = {
   title: "Vacantless - Every renter answered, every viewing booked",
   description:
-    "Share one link in your rental ads. Renters get an instant reply, book their own viewing time and get reminders. You see every renter in one list. Free for one rental, CA$99 a month after that.",
+    "Share one link in your rental ads. Renters get an instant reply, book their own viewing time and get reminders. You see every renter in one list. Free for one rental, paid plans from CA$29 a month.",
 };
 
 export const dynamic = "force-dynamic";
@@ -140,7 +140,7 @@ function Hero() {
             <span className="block">Then the rental runs itself.</span>
           </h1>
           <p className="mb-[18px] max-w-[34rem] text-[clamp(1.1rem,1.8vw,1.32rem)] font-semibold leading-[1.4] text-[#203029]">
-            Ads posted and kept up, every renter answered and booked, then rent, repairs, notices and taxes on Growth.
+            Ads posted and kept up, every renter answered and booked, then rent, repairs, notices and taxes on any paid plan.
           </p>
           <p className="mb-[26px] max-w-[34rem] text-[clamp(1.02rem,1.6vw,1.16rem)] leading-[1.55] text-[#384a42]">
             Press Set Live and your ad goes up on the rental sites. Renters get a
@@ -156,7 +156,7 @@ function Hero() {
           </div>
           <p className="max-w-[34rem] text-[0.86rem] font-semibold leading-snug text-[#59655f]">
             <span className="text-[var(--color-accent-strong)]">Free for one rental.</span>{" "}
-            CA$99 a month for as many as you need. No card to start.
+            Paid plans from CA$29 a month. No card to start.
           </p>
         </div>
         <ProductPreview />
@@ -237,7 +237,7 @@ function ProductPreview() {
           <div className="rounded-lg border border-[#d9e1dc] bg-[#f8faf8] p-3">
             <div className="flex items-center gap-2 text-[0.78rem] font-semibold text-[#31584d]">
               <span className="inline-block h-[15px] w-[15px] rounded bg-[#1f8a5b]" />
-              Reminders go out on their own before each viewing, by email, and by text on Growth
+              Reminders go out on their own before each viewing, by email, and by text on paid plans
             </div>
           </div>
         </div>
@@ -561,7 +561,7 @@ function Automations() {
     <section id="automations" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
         <SectionHead title="Then it runs the rest.">
-          Ads posted and kept up. Renters answered and booked. Once the unit is rented: rent collected, rent increases served, repairs booked, and the books and tax papers done, on Growth.
+          Ads posted and kept up. Renters answered and booked. Once the unit is rented: rent collected, rent increases served, repairs booked, and the books and tax papers done, on any paid plan.
         </SectionHead>
         <div className="grid gap-12 sm:gap-16">
           {AUTOMATIONS.map((a, i) => (
@@ -677,7 +677,7 @@ const LITTLE_THINGS: { text: string; plan?: string }[] = [
   { text: "A 15-second video ad made from your photos, ready for Facebook or Instagram." },
   { text: "Each rental shows which site brings renters who actually book." },
   { text: "Worried someone copied your ad to scam renters? One click opens a search of your cover photo, Kijiji and Marketplace near your price." },
-  { text: "Missed a call from a renter? It shows on their record with a reminder to call back.", plan: "Growth with texting" },
+  { text: "Missed a call from a renter? It shows on their record with a reminder to call back.", plan: "paid plans, with texting on" },
   { text: "Renter not confirming? The time opens up again after the hours you choose." },
   { text: "Need someone in by a date? Renters who want to move in too late can't book themselves." },
   { text: "Tenant moving out? One click relists the unit from their move-out date." },
@@ -687,7 +687,7 @@ const LITTLE_THINGS: { text: string; plan?: string }[] = [
   { text: "Move-in, move-out and routine inspections on your calendar, with a reminder." },
   { text: "Keep each tenant's files in one place. Share them by a link that expires." },
   { text: "A rent receipt for your tenant in one click." },
-  { text: "Add a teammate with their own login. No shared password.", plan: "Growth" },
+  { text: "Add a teammate with their own login. No shared password.", plan: "paid plans" },
   // S779 (doc LKQCTfbHkEJb9JaCNNbMr4, approved 17:10), each read in code and on
   // Agile first: lib/group-viewing + viewing_group_size; showing_instructions on
   // /agent/[token]; arrival phone in confirmations (S754c); inquiry_require_phone
@@ -700,7 +700,7 @@ const LITTLE_THINGS: { text: string; plan?: string }[] = [
   { text: "Renters get the number to call when they arrive, so nobody stands outside." },
   { text: "Make a phone number required on your renter form, so you can always call back." },
   { text: "90 days before a lease ends, you get a link to ask the tenant: staying or leaving?" },
-  { text: "At renewal, see the market rent next to the legal cap.", plan: "Growth" },
+  { text: "At renewal, see the market rent next to the legal cap.", plan: "paid plans" },
   { text: "Log your tenant's insurance. Turn on the alert and you hear before it lapses." },
   { text: "Smoke alarms, Vacant Home Tax and winterizing on your calendar, with reminders." },
   { text: "Messages that look like scams are held, not filed as renters." },
@@ -735,14 +735,14 @@ function Pricing() {
   return (
     <section id="pricing" className="py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="Two plans. One add-on.">
-          Try it free on one rental. Move up when you have more than one. Add Posting when you want us to post more than one rental.
+        <SectionHead title="Priced by how many rentals you have.">
+          Free for one rental. Every paid plan has every feature. Pay yearly and get two months free.
         </SectionHead>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {PLANS.map((p) => (
             <article
               key={p.name}
-              className={`flex min-h-[250px] flex-col rounded-lg border bg-white p-[22px] ${
+              className={`flex flex-col rounded-lg border bg-white p-[22px] ${
                 p.featured
                   ? "border-[#6ca58d] shadow-[0_12px_32px_rgba(32,92,66,0.12)]"
                   : "border-[#d9e1dc]"
@@ -758,6 +758,9 @@ function Pricing() {
                   </small>
                 ) : null}
               </span>
+              {p.yearly ? (
+                <p className="mb-2 text-[0.82rem] font-semibold text-[var(--color-accent-strong)]">{p.yearly}</p>
+              ) : null}
               <p className="mb-4 text-[0.92rem] leading-relaxed text-[#59655f]">
                 {p.body}
               </p>
@@ -784,6 +787,31 @@ function Pricing() {
               )}
             </article>
           ))}
+        </div>
+        {/* S779: one feature list for every paid plan, grouped (Noam approved
+            2026-11-10 17:10: Lease it, Run it, Year-end). lib/billing.ts. */}
+        <div id="paid-plans" className="mt-4 rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
+          <h3 className="mb-4 text-[1.08rem] font-semibold">Every paid plan includes</h3>
+          <div className="grid gap-6 md:grid-cols-3">
+            {PAID_FEATURE_GROUPS.map((g) => (
+              <div key={g.head}>
+                <p className="mb-2 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">
+                  {g.head}
+                </p>
+                <ul className="grid list-none gap-2 p-0">
+                  {g.items.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-[0.86rem] leading-snug text-[#273832]">
+                      <CheckMark />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-[0.84rem] text-[#59655f]">
+            {PAID_SUPPORT_LINE}. More than 75 rentals? Portfolio adds CA${Math.round(EXTRA_RENTAL.priceCents / 100)} a rental a month.
+          </p>
         </div>
         <PostingAddonCard />
         <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-[#6ca58d] bg-[#f4f7f5] p-[18px] sm:flex-row sm:items-center">
@@ -826,7 +854,7 @@ function PostingAddonCard() {
     >
       <div>
         <p className="mb-1 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">
-          Add-on, Free or Growth
+          Add-on, any plan
         </p>
         <h3 className="mb-1 text-[1.08rem] font-semibold">Posting</h3>
         <span className="block text-[1.9rem] font-extrabold leading-tight">
@@ -871,6 +899,8 @@ const PLANS: {
   name: string;
   price: string;
   priceNote?: string;
+  /** S779: the yearly price line (two months free). */
+  yearly?: string;
   body: string;
   includes: string[];
   /** S713: an optional paid add-on line under the plan's list. */
@@ -891,18 +921,27 @@ const PLANS: {
     cta: "Start free",
     href: "/signup",
   },
-  {
-    name: "Growth",
-    price: "CA$99",
-    priceNote: "a month",
-    body: TIERS.growth.blurb,
-    // S728: the same bullets as the billing page, from one place (lib/billing.ts).
-    includes: TIERS.growth.features,
-    addon: "Add Posting for CA$49 a month. See below.",
-    cta: "Choose Growth",
-    href: "/signup?plan=growth",
-    featured: true,
-  },
+  // S779: door bands (Noam approved 2026-11-10 17:10). Prices and limits come
+  // from lib/billing.ts TIERS, the same source as the billing page.
+  ...(["starter", "growth", "portfolio"] as const).map((k) => {
+    const t = TIERS[k];
+    return {
+      name: t.name,
+      price: `CA$${Math.round(t.priceCents / 100)}`,
+      priceNote: "a month",
+      yearly: t.yearlyCents ? `or CA$${Math.round(t.yearlyCents / 100).toLocaleString("en-CA")} a year, two months free` : undefined,
+      body: t.blurb,
+      includes: [
+        t.rentalCap ? `Up to ${t.rentalCap} rentals` : "Unlimited rentals",
+        `Up to ${(t.textCap ?? 0).toLocaleString("en-CA")} texts a month from your own number`,
+        "Every feature listed below",
+      ],
+      addon: `Add Posting for CA$${Math.round(POSTING_ADDON.priceCents / 100)} a month. See below.`,
+      cta: `Choose ${t.name}`,
+      href: `/signup?plan=${k}`,
+      featured: k === "growth",
+    };
+  }),
 ];
 
 /* ---------------------------------------------------------------- Founder band */

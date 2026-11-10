@@ -12,9 +12,13 @@
 // while every page said $49). The first coupon, FOUNDING20-50X12, was made
 // once on 2026-10-22 during the test checkout and is never used again; it is
 // still recognised so nothing made with it is missed.
-export const FOUNDING20_COUPON_ID = "FOUNDING20-49X12";
-export const FOUNDING20_COUPON_IDS = [FOUNDING20_COUPON_ID, "FOUNDING20-50X12"] as const;
-export const FOUNDING20_AMOUNT_OFF_CENTS = 5000;
+// S779: door bands. New founding sign-ups get the new Growth (CA$79, 25
+// rentals) with $30 off, so they still pay the $49 the outreach promised; after
+// the first year Growth is $79. No founding subscription existed on the old
+// coupon (checked 2026-11-10), and any that did would keep it.
+export const FOUNDING20_COUPON_ID = "FOUNDING20-30X12";
+export const FOUNDING20_COUPON_IDS = [FOUNDING20_COUPON_ID, "FOUNDING20-49X12", "FOUNDING20-50X12"] as const;
+export const FOUNDING20_AMOUNT_OFF_CENTS = 3000;
 /** Shown on Stripe checkout and invoices; Stripe allows at most 40 characters. */
 export const FOUNDING20_COUPON_NAME = "Founding 20: $49/month, first year";
 export const FOUNDING20_CURRENCY = "cad";
@@ -102,14 +106,14 @@ export function foundingTrialEnd(input: {
 
 /** The checkout page line under the button, so the free time is never a surprise. */
 export const FOUNDING20_CHECKOUT_NOTE =
-  "Your free time ends 30 days after Vacantless books your first viewing, or after 90 days, whichever comes first. Then $49 a month until a year from today, then $99 a month. We email you the date before the first charge.";
+  "Your free time ends 30 days after Vacantless books your first viewing, or after 90 days, whichever comes first. Then $49 a month until a year from today, then $79 a month. We email you the date before the first charge.";
 
 // S732: the founding offer with the Posting add-on in the same checkout. The
 // $50 coupon comes off the invoice total, so Growth $99 + Posting $49 - $50 =
 // $98 in the first year, then $148. Posting is free during the free time too,
 // since posting is what brings the first viewing (Noam's call, S732).
 export const FOUNDING20_WITH_POSTING_CHECKOUT_NOTE =
-  "Your free time ends 30 days after Vacantless books your first viewing, or after 90 days, whichever comes first. Then $98 a month (Growth $49 plus Posting $49) until a year from today, then $148 a month. We email you the date before the first charge.";
+  "Your free time ends 30 days after Vacantless books your first viewing, or after 90 days, whichever comes first. Then $98 a month (Growth $49 plus Posting $49) until a year from today, then $128 a month. We email you the date before the first charge.";
 
 /** The founding monthly price in cents for the first year, with or without
  * Posting. Pure, so the Billing card and the checkout note cannot drift. */
@@ -123,11 +127,11 @@ export function foundingMonthlyCents(input: {
 }
 
 /** The price sentence in the founding emails. S732: with Posting the first
- * year is $98 and after it $148. */
+ * year is $98 and after it $128 (S779). */
 export function foundingPriceLine(withPosting: boolean | undefined, tense: "is" | "is now"): string {
   return withPosting
-    ? `Growth with Posting ${tense} $98 a month until a year from when you started, then $148 a month.`
-    : `Growth ${tense} $49 a month until a year from when you started, then $99 a month.`;
+    ? `Growth with Posting ${tense} $98 a month until a year from when you started, then $128 a month.`
+    : `Growth ${tense} $49 a month until a year from when you started, then $79 a month.`;
 }
 
 /** The email sent when the first booking sets the end of the free time. */

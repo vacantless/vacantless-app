@@ -107,7 +107,7 @@ export function MarketingKitCard({
       {locked ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-xs text-gray-600">
           <p className="mb-2 font-medium text-gray-800">
-            The marketing kit is on Growth.
+            The marketing kit comes with Starter and up.
           </p>
           <p className="mb-3">
             Turn your listing into one link and a printable QR code. Every

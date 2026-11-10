@@ -80,3 +80,23 @@ export async function logTextSent(admin: FromClient | null | undefined, orgId: s
     // Counting must never block or fail a text.
   }
 }
+
+/**
+ * S779: the account's monthly text limit from its plan (door bands: Starter
+ * 200, Growth 500, Portfolio 1,000; every other plan 500). Never throws;
+ * SMS_MONTHLY_LIMIT when the plan cannot be read.
+ */
+export async function textLimitForOrg(
+  admin: FromClient | null | undefined,
+  orgId: string | null | undefined,
+): Promise<number> {
+  if (!admin || !orgId) return SMS_MONTHLY_LIMIT;
+  try {
+    const { textCapForPlan } = await import("./billing");
+    const { data, error } = await admin.from("organizations").select("plan").eq("id", orgId).maybeSingle();
+    if (error) return SMS_MONTHLY_LIMIT;
+    return textCapForPlan((data as { plan?: string | null } | null)?.plan ?? null);
+  } catch {
+    return SMS_MONTHLY_LIMIT;
+  }
+}

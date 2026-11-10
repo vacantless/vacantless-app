@@ -12,14 +12,16 @@
 // ============================================================================
 
 export function signupEyebrow(plan: string | null | undefined): string {
+  if (plan === "starter") return "Starter plan";
   if (plan === "growth") return "Growth plan";
+  if (plan === "portfolio") return "Portfolio plan";
   if (plan === "premium") return "Premium plan";
   if (plan === "posting") return "Start free, add Posting";
   return "Start free";
 }
 
 export function signupSubtitle(plan: string | null | undefined): string {
-  if (plan === "growth" || plan === "premium") {
+  if (plan === "starter" || plan === "growth" || plan === "portfolio" || plan === "premium") {
     return "First, set up your sign-in details. Next you'll name your business, then pick how to pay.";
   }
   if (plan === "posting") {
@@ -47,6 +49,6 @@ export function signupHitExistingAccount(input: {
 
 /** S714d: the business-setup page names the real next step for a paid pick. */
 export function onboardingNextStep(plan: string | null | undefined): string {
-  if (plan === "growth" || plan === "premium") return "Next: choose how to pay, then add your first rental.";
+  if (plan === "starter" || plan === "growth" || plan === "portfolio" || plan === "premium") return "Next: choose how to pay, then add your first rental.";
   return "Next: add your first rental.";
 }

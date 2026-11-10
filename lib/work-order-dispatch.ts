@@ -298,7 +298,7 @@ export function dispatchErrorMessage(code: string | undefined): string | null {
     case "forbidden":
       return "You don't have permission to dispatch work.";
     case "locked":
-      return "Sending a job to a trade is part of Growth.";
+      return "Sending a job to a trade comes with Starter and up.";
     case "terms_required":
       return "Enable trade dispatch (review and accept the one-time terms) before sending a job.";
     case "notfound":

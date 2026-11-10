@@ -97,7 +97,7 @@ export default async function AccountantPackagePage({
         />
         <EmptyState
           icon={<Icons.page className="h-5 w-5" />}
-          title="Part of Growth, $99 a month"
+          title="Part of Starter and up, from $29 a month"
           description="Growth puts the ledger, T776 summary, income statement, owner statement, rent roll and QuickBooks or Xero files into one zip your accountant can work from."
           cta={{ href: "/dashboard/billing", label: "See Growth" }}
         />

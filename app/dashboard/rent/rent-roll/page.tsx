@@ -116,7 +116,7 @@ export default async function RentRollPage({
         />
         <EmptyState
           icon={<Icons.chart className="h-5 w-5" />}
-          title="Part of Growth, $99 a month"
+          title="Part of Starter and up, from $29 a month"
           description="Growth adds a rent roll for each building with occupancy, net operating income before financing, cap rate and gross rent multiplier. Download it as a CSV or a PDF for a buyer, lender or your accountant."
           cta={{ href: "/dashboard/billing", label: "See Growth" }}
         />

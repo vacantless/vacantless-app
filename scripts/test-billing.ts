@@ -81,7 +81,7 @@ function ok(name: string, cond: boolean) {
 }
 
 // --- Plan catalog (S299/S541: live paid plans = growth/premium/managed) -----
-ok("growth price env name", TIERS.growth.priceEnv === "STRIPE_PRICE_GROWTH");
+ok("growth price env name (S779 band price; the CA$99 one is LEGACY_GROWTH_PRICE_ENV)", TIERS.growth.priceEnv === "STRIPE_PRICE_GROWTH_BAND");
 ok("premium price env name", TIERS.premium.priceEnv === "STRIPE_PRICE_PREMIUM");
 ok("managed price env name", TIERS.managed.priceEnv === "STRIPE_PRICE_MANAGED");
 ok("growth carries a price env (config-shape purchasable)", isTierPurchasable(TIERS.growth));
@@ -720,9 +720,11 @@ ok("canUseIncidentDispatch: managed true", canUseIncidentDispatch("managed") ===
 ok("canUseIncidentDispatch: growth true (S759)", canUseIncidentDispatch("growth") === true);
 
 // --- Live tier ladder shape (Free $0 < Growth $99 < Premium $249 < Managed $399) -----------
-ok("TIER_KEYS order", JSON.stringify(TIER_KEYS) === '["free","growth","premium","managed"]');
+ok("TIER_KEYS order", JSON.stringify(TIER_KEYS) === '["free","starter","growth","portfolio","premium","managed"]');
 ok("Free $0", TIERS.free.priceCents === 0);
-ok("Growth $99", TIERS.growth.priceCents === 9900);
+ok("S779 bands: Starter $29, Growth $79, Portfolio $149", TIERS.starter.priceCents === 2900 && TIERS.growth.priceCents === 7900 && TIERS.portfolio.priceCents === 14900);
+ok("S779 yearly = ten months", ["starter", "growth", "portfolio"].every((k) => TIERS[k as "growth"].yearlyCents === TIERS[k as "growth"].priceCents * 10));
+ok("S779 caps 5/25/75 and texts 200/500/1000", TIERS.starter.rentalCap === 5 && TIERS.growth.rentalCap === 25 && TIERS.portfolio.rentalCap === 75 && TIERS.starter.textCap === 200 && TIERS.growth.textCap === 500 && TIERS.portfolio.textCap === 1000);
 ok("Premium $249", TIERS.premium.priceCents === 24900);
 ok("Managed $399", TIERS.managed.priceCents === 39900);
 ok(
@@ -842,7 +844,7 @@ ok("photoCapForPlan managed -> premium cap", photoCapForPlan("managed") === PREM
 // S767 (item E): one Free-cap wording, naming the plan and the price.
 {
   const line = freeCapLine();
-  ok("free cap names Free, Growth and the price", line.includes("Free covers one live rental") && line.includes("Growth is CA$99 a month"));
+  ok("free cap names Free and the lowest paid price (S779)", line.includes("Free covers one live rental") && line.includes("CA$29 a month"));
   ok("free cap: no parentheses or em dash", !/[()\u2014]/.test(line));
   ok("free cap links Billing", FREE_CAP_BILLING_HREF === "/dashboard/billing");
   const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");

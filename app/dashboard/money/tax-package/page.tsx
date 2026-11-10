@@ -183,7 +183,7 @@ export default async function TaxPackagePage({
         />
         <EmptyState
           icon={<Icons.chart className="h-5 w-5" />}
-          title="Part of Growth, $99 a month"
+          title="Part of Starter and up, from $29 a month"
           description="Growth adds a T776 summary by property for your accountant: gross rents, deductible expenses, principal paid and a CSV export."
           cta={{ href: "/dashboard/billing", label: "See Growth" }}
         />

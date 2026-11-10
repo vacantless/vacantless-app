@@ -15,6 +15,9 @@ import {
   postingAddonPending,
   currentPlanTitle,
   nextBillLine,
+  EXTRA_RENTAL,
+  isBandPlan,
+  bandForRentals,
 } from "@/lib/billing";
 import {
   getStripe,
@@ -100,6 +103,20 @@ export default async function BillingPage({
     .eq("status", "available")
     .is("archived_at", null);
   const overCapNotice = overListingCapNotice(org.plan, liveRentalCount ?? 0);
+  // S779: door bands. Every unarchived rental counts toward a paid plan's
+  // limit (organizations.rental_cap; null = no limit, grandfathered).
+  const [{ count: rentalCountRaw }, { data: capRow }] = await Promise.all([
+    createClient()
+      .from("properties")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
+      .is("archived_at", null),
+    createClient().from("organizations").select("rental_cap").eq("id", org.id).maybeSingle(),
+  ]);
+  const rentalCount = rentalCountRaw ?? 0;
+  const rentalCap = (capRow as { rental_cap?: number | null } | null)?.rental_cap ?? null;
+  const grandfatheredGrowth = org.plan === "growth" && rentalCap == null && Boolean(org.stripe_subscription_id);
+  const suggestedBand = bandForRentals(Math.max(1, rentalCount));
   // S724 (V251-16): what Stripe will actually charge next, discount included.
   const nextBill =
     view.isPaid && !view.cancelsOnLabel && isBillingConfigured()
@@ -173,7 +190,11 @@ export default async function BillingPage({
     not_configured:
       "Card payments are not switched on yet. Free covers one rental until they are.",
     plan:
-      "That plan isn't recognized. Please choose Growth and try again.",
+      "That plan isn't recognized. Please choose a plan below and try again.",
+    band_full:
+      "Your plan covers the rentals you have now. Move up a plan below to add more, or archive a rental you no longer manage.",
+    interval_mismatch:
+      "Posting is billed monthly on your account, so the plan has to be monthly too. Choose monthly, or email us and we will switch both to yearly.",
     checkout: "Couldn't start checkout. Please try again.",
     portal:
       "No billing account yet. Subscribe to a plan first, then you can manage it here.",
@@ -188,7 +209,7 @@ export default async function BillingPage({
       "Posting could not be added that way. Use the Posting button below.",
     addon: "We could not change Posting. Please try again.",
     founding_link: "The founding offer needs the link from your founding invite.",
-    founding_full: "All 20 founding spots are taken. Growth is still $99 a month.",
+    founding_full: "All 20 founding spots are taken. Growth is still $79 a month.",
   };
 
   // S731: the Founding 20 card, only for an account with a founding link
@@ -246,7 +267,7 @@ export default async function BillingPage({
         icon={<Icons.card />}
         eyebrow="Account"
         title="Billing"
-        subtitle="Your plan. Billed monthly - change or cancel anytime, no contract."
+        subtitle="Your plan. Billed monthly or yearly - change or cancel anytime, no contract."
       />
 
       {(!canManageBilling || searchParams.forbidden === "1") && (
@@ -311,6 +332,11 @@ export default async function BillingPage({
           {addonNotice[searchParams.addon]}
         </div>
       )}
+      {searchParams.plan === "changed" && (
+        <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Your plan is changing. It can take a few seconds to show here. You pay only the difference for the days left.
+        </div>
+      )}
       {error && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {errorCopy[error] ?? "Something went wrong. Please try again."}
@@ -323,11 +349,11 @@ export default async function BillingPage({
             <>
               <p className="mt-2 text-sm text-gray-800">
                 Pay nothing until Vacantless books your first viewing. Then you get 30 more days
-                free, then Growth is $49 a month for the rest of your first year. It is normally $99.
+                free, then Growth is $49 a month for the rest of your first year. It is normally $79.
               </p>
               <p className="mt-2 text-sm text-gray-700">
                 We ask for a card now. You are not charged during the free time, which is 90 days at
-                most. After your first year, Growth is $99 a month. Cancel anytime.{" "}
+                most. After your first year, Growth is $79 a month. Cancel anytime.{" "}
                 {foundingSpots} of 20 spots left.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -363,7 +389,7 @@ export default async function BillingPage({
             </>
           ) : (
             <p className="mt-2 text-sm text-gray-800">
-              All 20 founding spots are taken. Growth is still $99 a month below.
+              All 20 founding spots are taken. Growth is still $79 a month below.
             </p>
           )}
         </section>
@@ -401,7 +427,7 @@ export default async function BillingPage({
               ) : view.pilotExpired ? (
                 "Your 30-day pilot has ended. Choose a plan below to keep going."
               ) : (
-                "Free covers one live rental. Choose Growth below for more rentals."
+                "Free covers one live rental. Choose a plan below for more rentals."
               )}
             </p>
             {nextBill && (
@@ -609,6 +635,15 @@ export default async function BillingPage({
               ? "Or subscribe now and go live"
               : "Plans"}
       </h3>
+      <p id="plans" className="mt-1 text-sm text-gray-600">
+        You have {rentalCount} {rentalCount === 1 ? "rental" : "rentals"}.{" "}
+        {grandfatheredGrowth
+          ? "You keep Growth at the price you signed up for, with no limit on rentals."
+          : rentalCap != null
+            ? `Your plan covers ${rentalCap}.`
+            : `${TIERS[suggestedBand].name} covers that.`}{" "}
+        Every paid plan has every feature. Pay yearly and get two months free.
+      </p>
       {showPilotOffer && (
         <p className="mt-1 text-sm text-gray-500">
           Prefer to start on your own? Subscribe with a card and go live right
@@ -633,7 +668,8 @@ export default async function BillingPage({
           const isCurrent = isFree
             ? view.planKey === "free" ||
               (!view.isPaid && !view.isPilot && view.planKey === "trial")
-            : view.planKey === key && view.isPaid && !subscriptionEnded;
+            : view.planKey === key && view.isPaid && !subscriptionEnded && !(key === "growth" && grandfatheredGrowth);
+          const isGrandfatheredCard = key === "growth" && grandfatheredGrowth;
           return (
             <div
               key={key}
@@ -659,6 +695,11 @@ export default async function BillingPage({
                   {formatPlanPrice(tier.priceCents)}
                 </span>
               </p>
+              {tier.yearlyCents ? (
+                <p className="text-xs text-gray-500">
+                  or {formatAmount(tier.yearlyCents)} a year (two months free)
+                </p>
+              ) : null}
               <p className="mt-1 text-sm text-gray-500">{tier.blurb}</p>
               <ul className="mt-4 flex-1 space-y-2 text-sm text-gray-700">
                 {tier.features.map((f) => (
@@ -669,7 +710,11 @@ export default async function BillingPage({
                 ))}
               </ul>
               <div className="mt-6">
-                {isCurrent ? (
+                {isGrandfatheredCard ? (
+                  <div className="rounded-lg bg-gray-100 px-4 py-2 text-center text-sm font-medium text-gray-500">
+                    Current plan, at your original price
+                  </div>
+                ) : isCurrent ? (
                   <div className="rounded-lg bg-gray-100 px-4 py-2 text-center text-sm font-medium text-gray-500">
                     Current plan
                   </div>
@@ -678,8 +723,32 @@ export default async function BillingPage({
                     Free forever
                   </div>
                 ) : (
-                  <form action={startCheckout}>
+                  <form action={startCheckout} className="space-y-2">
                     <input type="hidden" name="plan" value={key} />
+                    {isBandPlan(key) && tier.yearlyCents ? (
+                      <select
+                        name="interval"
+                        defaultValue="month"
+                        aria-label={`${tier.name} billing`}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                      >
+                        <option value="month">Billed monthly</option>
+                        <option value="year">Billed yearly, two months free</option>
+                      </select>
+                    ) : null}
+                    {key === "portfolio" ? (
+                      <label className="block text-xs text-gray-600">
+                        Rentals above 75 ({formatAmount(EXTRA_RENTAL.priceCents)} each a month)
+                        <input
+                          type="number"
+                          name="extra_rentals"
+                          min={0}
+                          max={1000}
+                          defaultValue={Math.max(0, rentalCount - 75)}
+                          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        />
+                      </label>
+                    ) : null}
                     <button
                       disabled={!tierConfigured}
                       className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
@@ -809,7 +878,7 @@ export default async function BillingPage({
               // S734 (review item 5): Posting on its own for a Free account.
               <form action={startPostingOnlyCheckout}>
                 <p className="mb-3 text-sm text-gray-700">
-                  Works with your free rental. Add Growth later if you want more rentals live at once.
+                  Works with your free rental. Add a paid plan later if you want more rentals live at once.
                 </p>
                 <button className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white sm:w-auto sm:px-8">
                   Add Posting for {formatAmount(POSTING_ADDON.priceCents)} a month
@@ -858,7 +927,7 @@ export default async function BillingPage({
 
       <div className="mt-6 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
         <p>
-          Billed monthly, plus applicable taxes. Cancel anytime from the
+          Billed monthly or yearly, plus applicable taxes. On a yearly plan, Posting is {formatAmount(POSTING_ADDON.yearlyCents)} a year. Cancel anytime from the
           billing portal, with no contract and no cancellation fee.
         </p>
       </div>

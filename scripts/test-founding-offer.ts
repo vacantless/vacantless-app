@@ -90,9 +90,9 @@ eq("no trial end: leave", foundingTrialEnd({ createdSec: T0, trialEndSec: null, 
   eq("reminder subject", r.subject, "Your founding free time ends Monday, November 30");
 }
 // S732: founding with Posting
-eq("founding alone: $49 then $99", foundingMonthlyCents({ growthCents: 9900, postingCents: 4900, withPosting: false }), { firstYear: 4900, after: 9900 });
-eq("founding with Posting: $98 then $148", foundingMonthlyCents({ growthCents: 9900, postingCents: 4900, withPosting: true }), { firstYear: 9800, after: 14800 });
-eq("with-posting note names $98 and $148", FOUNDING20_WITH_POSTING_CHECKOUT_NOTE.includes("$98 a month") && FOUNDING20_WITH_POSTING_CHECKOUT_NOTE.includes("$148 a month"), true);
+eq("founding alone: $49 then $79", foundingMonthlyCents({ growthCents: 7900, postingCents: 4900, withPosting: false }), { firstYear: 4900, after: 7900 });
+eq("founding with Posting: $98 then $128", foundingMonthlyCents({ growthCents: 7900, postingCents: 4900, withPosting: true }), { firstYear: 9800, after: 12800 });
+eq("with-posting note names $98 and $128", FOUNDING20_WITH_POSTING_CHECKOUT_NOTE.includes("$98 a month") && FOUNDING20_WITH_POSTING_CHECKOUT_NOTE.includes("$128 a month"), true);
 eq("with-posting note has no em dash", FOUNDING20_WITH_POSTING_CHECKOUT_NOTE.includes("\u2014"), false);
 
 eq("trial email with Posting says $98", foundingTrialEmail({ endSec: 1_800_000_000, nowSec: 1_790_000_000, withPosting: true }).body.includes("Growth with Posting is $98 a month"), true);

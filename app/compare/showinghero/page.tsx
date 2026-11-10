@@ -15,7 +15,7 @@ const SHOWINGHERO_CHECKED = "November 10, 2026";
 export const metadata = {
   title: "Vacantless vs ShowingHero - for Canadian landlords of any size",
   description:
-    "ShowingHero's published pricing starts at US$450 a month (300 units or 25 listings). Vacantless is free for one rental and CA$99 a month for as many as you have, built in Canada for Kijiji, Rentals.ca and Zumper.",
+    "ShowingHero's published pricing starts at US$450 a month (300 units or 25 listings). Vacantless is free for one rental and from CA$29 a month after that, built in Canada for Kijiji, Rentals.ca and Zumper.",
 };
 
 type Row = { topic: string; us: string; them: string };
@@ -28,7 +28,7 @@ const COMPARE_ROWS: Row[] = [
   },
   {
     topic: "Price",
-    us: "Free for one rental. CA$99 a month for as many rentals as you have.",
+    us: "Free for one rental. CA$29 a month for up to 5 rentals, CA$79 for up to 25, CA$149 for up to 75, then CA$2 a rental. Every feature on every paid plan. Two months free yearly.",
     them: "US$1.50 per unit a month with a 300-unit minimum (US$450 a month), or US$20 per active listing a month with a 25-listing minimum (US$500 a month).",
   },
   {
@@ -72,7 +72,7 @@ const COMPARE_ROWS: Row[] = [
   // "Turn on texting" and we set up a local number (lib/sms-limit.ts limit).
   {
     topic: "Texting renters",
-    us: "On Growth: booking confirmations and reminders by text from your own local number, which we set up for you. Up to 500 texts a month.",
+    us: "On every paid plan: booking confirmations and reminders by text from your own local number, which we set up for you. 200 to 1,000 texts a month by plan.",
     them: "Yes. Alerts, email and SMS, plus a dedicated ShowingHero phone number for each client.",
   },
   // S779 (doc LKQCTfbHkEJb9JaCNNbMr4, approved 2026-11-10 17:10). Their side
@@ -95,12 +95,12 @@ const COMPARE_ROWS: Row[] = [
   },
   {
     topic: "Ontario forms",
-    us: "N4, N5, N8, N12, L1 and more, filled from the tenancy, plus the N1 with rent-increase reminders. On Growth.",
+    us: "N4, N5, N8, N12, L1 and more, filled from the tenancy, plus the N1 with rent-increase reminders. On every paid plan.",
     them: "Not named on their pricing or FAQ pages.",
   },
   {
     topic: "Repairs and emergencies",
-    us: "On Growth. Tenants report from a link that asks first if it is an emergency, a real one alerts you at once, and your trade books the visit from a link.",
+    us: "On every paid plan. Tenants report from a link that asks first if it is an emergency, a real one alerts you at once, and your trade books the visit from a link.",
     them: "Not named on their pricing or FAQ pages.",
   },
   {
@@ -125,8 +125,8 @@ export default function CompareShowingHeroPage() {
             </h1>
             <p className="max-w-[56ch] text-[clamp(1.04rem,1.6vw,1.2rem)] leading-relaxed text-[#384a42]">
               ShowingHero&apos;s published pricing starts at US$450 a month, for 300 units or 25
-              listings. Vacantless starts with one rental, free, and is CA$99 a month for as many
-              as you have. It is built in Canada, for the sites Canadian renters use.
+              listings. Vacantless starts with one rental, free, then CA$29 a month for up to 5
+              rentals and CA$79 for up to 25. It is built in Canada, for the sites Canadian renters use.
             </p>
           </div>
         </section>
@@ -203,7 +203,7 @@ export default function CompareShowingHeroPage() {
 
         <MarketingCta
           title="See it on your own rental."
-          body="Free for one rental. CA$99 a month for as many as you need. No card to start."
+          body="Free for one rental. Paid plans from CA$29 a month. No card to start."
         />
       </main>
       <MarketingFooter />

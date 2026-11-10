@@ -116,7 +116,7 @@ ok("Today passes the input", read("app/dashboard/page.tsx").includes("hasConnect
 ok("Marketplace row introduces Quick replies", read("app/dashboard/properties/[id]/marketplace-row.tsx").includes('href="/dashboard/replies"'));
 const home = read("app/page.tsx");
 ok("homepage step 3 is Set Live, not paste", home.includes('title: "Press Set Live"') && !home.includes("Paste it into Facebook Marketplace, Kijiji or any ad"));
-ok("homepage hero names the arc", home.includes("Posted everywhere. Then rent, repairs, notices and taxes run on their own."));
+ok("homepage hero names the arc (S779 wording)", home.includes("Ads posted and kept up, every renter answered and booked, then rent, repairs, notices and taxes on any paid plan."));
 ok("homepage names the T776 and the accountant zip", home.includes("T776 rental tax summary") && home.includes("One zip for your accountant"));
 ok("homepage names rent collection in the automations", home.includes("Rent in on the first"));
 ok("SITES_SETUP_HREF", SITES_SETUP_HREF === "/dashboard/sites");
