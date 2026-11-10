@@ -33,6 +33,8 @@ ok("target: emergency phone first", emergencyTextTarget({ emergency_phone: "519-
 ok("target: arrival phone next (Agile shape)", emergencyTextTarget({ showing_arrival_phone: "226-778-0014", public_contact_phone: "519-915-8865 ext 103" }, null, normalizePhoneE164) === "+12267780014");
 ok("target: a number with an extension is skipped", emergencyTextTarget({ public_contact_phone: "519-915-8865 ext 103" }, null, normalizePhoneE164) === null);
 ok("target: never the account's own texting number", emergencyTextTarget({ emergency_phone: "249-209-9019", public_contact_phone: "519-555-0142" }, own, normalizePhoneE164) === "+15195550142");
+ok("target: the rental's phone beats the account's (S776b)", emergencyTextTarget({ rental_emergency_phone: "519-555-0177", emergency_phone: "519-555-0100" }, own, normalizePhoneE164) === "+15195550177");
+ok("target: a rental phone with an extension falls back", emergencyTextTarget({ rental_emergency_phone: "519-555-0177 ext 2", emergency_phone: "519-555-0100" }, own, normalizePhoneE164) === "+15195550100");
 ok("target: nothing set = no text", emergencyTextTarget({}, null, normalizePhoneE164) === null);
 
 const t = emergencyAlertText({ kind: "water_leak", address: "100 Lakeview Ave", reporterName: "Sam", reporterContact: "519-555-0199", inboxUrl: "https://app.vacantless.com/dashboard/maintenance#reports" });
@@ -57,7 +59,10 @@ const maint = readFileSync("app/dashboard/maintenance/page.tsx", "utf8");
 ok("inbox shows the chip and emergency phone form", maint.includes("Emergency: {emergencyLabel(r.emergency_kind)}") && maint.includes('name="emergency_phone"'));
 const rental = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
 const pactions = readFileSync("app/dashboard/properties/actions.ts", "utf8");
-ok("rental has the emergency info field", rental.includes('name="emergency_info"') && rental.includes("emergency_info, viewing_earliest_date") && pactions.includes('formData.has("emergency_info")'));
+ok("rental has the emergency info field", rental.includes('name="emergency_info"') && rental.includes("showing_arrival_phone, emergency_info,") && pactions.includes('formData.has("emergency_info")'));
 
+const m2 = readFileSync("supabase/migrations/0282_rental_emergency_phone.sql", "utf8");
+ok("0282 adds the rental phone and puts it first for the tenant", m2.includes("add column if not exists emergency_phone text") && m2.includes("coalesce(v_prop_phone,"));
+ok("rental form and action carry the phone, text uses it", rental.includes('name="emergency_phone"') && rental.includes("emergency_info, emergency_phone, viewing_earliest_date") && pactions.includes('formData.has("emergency_phone")') && action.includes("rental_emergency_phone: r.property?.emergency_phone"));
 console.log(`tenant-emergency: ${p} passed, ${f} failed`);
 if (f) process.exit(1);

@@ -1295,8 +1295,8 @@ export default async function MaintenancePage({
             <p className="mt-2 text-gray-600">
               When a tenant marks a report as an emergency (water leaking, no heat, gas smell, fire,
               no power, locked out, sewage), you get it at once, at any hour. Tenants also see this
-              number to call. Each rental can show its own shut-off details: open the rental, then
-              Emergency info for tenants.
+              number to call. Each rental can name its own phone, like the super for that
+              building, and its shut-off details: open the rental, then Emergency info for tenants.
             </p>
             <form action={updateEmergencyPhone} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
               <label className="block max-w-xs flex-1">

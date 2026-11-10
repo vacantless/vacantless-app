@@ -86,13 +86,15 @@ export function reportThanksLine(orgName: string, emergency: boolean): string {
 
 /**
  * Where the emergency text goes: the first number that can take a text, in this
- * order: the Emergency phone, the arrival phone (the number renters already
- * text), the listing contact phone. A number with an extension cannot take a
+ * order: the rental's own Emergency phone (S776b, the super or manager for that
+ * building), the account's Emergency phone, the arrival phone (the number
+ * renters already text), the listing contact phone. A number with an extension cannot take a
  * text, so it is skipped. Never the account's own texting number.
  * normalize is lib/sms normalizePhoneE164, passed in to keep this file pure.
  */
 export function emergencyTextTarget(
   org: {
+    rental_emergency_phone?: string | null;
     emergency_phone?: string | null;
     showing_arrival_phone?: string | null;
     public_contact_phone?: string | null;
@@ -100,7 +102,12 @@ export function emergencyTextTarget(
   ownTextingNumber: string | null,
   normalize: (raw: string | null | undefined) => string | null,
 ): string | null {
-  for (const raw of [org.emergency_phone, org.showing_arrival_phone, org.public_contact_phone]) {
+  for (const raw of [
+    org.rental_emergency_phone,
+    org.emergency_phone,
+    org.showing_arrival_phone,
+    org.public_contact_phone,
+  ]) {
     const s = String(raw ?? "").trim();
     if (!s || /ext|x\s*\d|#/i.test(s)) continue;
     const e164 = normalize(s);

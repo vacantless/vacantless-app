@@ -351,6 +351,7 @@ type Property = {
   showing_instructions: string | null;
   showing_arrival_phone: string | null;
   emergency_info?: string | null;
+  emergency_phone?: string | null;
   viewing_earliest_date: string | null;
   viewing_lead_hours: number | null;
   viewing_requires_confirmation: boolean | null;
@@ -968,7 +969,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, emergency_info, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, emergency_info, emergency_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -3750,7 +3751,9 @@ export default async function PropertyDetailPage({
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-gray-900">Emergency info for tenants</h3>
               <p className="mt-1 text-xs text-gray-500">
-                {p.emergency_info ? "Set" : "Optional: where the water shut-off and breaker panel are."}
+                {p.emergency_info || p.emergency_phone
+                  ? "Set"
+                  : "Optional: shut-offs, and who gets the emergency call."}
               </p>
             </div>
             <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
@@ -3770,6 +3773,26 @@ export default async function PropertyDetailPage({
             <p className="mt-1 text-xs text-gray-500">
               Only this rental&apos;s tenants see it. It shows on their repair link in an
               emergency.
+            </p>
+            <label
+              htmlFor="property-emergency-phone"
+              className="mb-1 mt-4 block text-xs font-medium text-gray-600"
+            >
+              Emergency phone for this rental
+            </label>
+            <input
+              id="property-emergency-phone"
+              name="emergency_phone"
+              type="tel"
+              inputMode="tel"
+              maxLength={40}
+              defaultValue={p.emergency_phone ?? ""}
+              placeholder="e.g. the super's mobile, 226-778-0014"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Emergency texts for this rental go here. Tenants see it as the number to call. Leave
+              blank to use your Emergency phone on Maintenance.
             </p>
           </div>
         </details>

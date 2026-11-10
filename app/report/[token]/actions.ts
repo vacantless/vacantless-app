@@ -150,7 +150,9 @@ async function notifyOperatorsOfNewReport(
   // The report + its unit address (for the email subject/body).
   const { data: report } = await admin
     .from("incident_reports")
-    .select("category, description, reporter_name, reporter_contact, property:properties(address)")
+    .select(
+      "category, description, reporter_name, reporter_contact, property:properties(address, emergency_phone)",
+    )
     .eq("id", reportId)
     .maybeSingle();
   if (!report) return;
@@ -159,7 +161,7 @@ async function notifyOperatorsOfNewReport(
     description: string;
     reporter_name: string | null;
     reporter_contact: string | null;
-    property: { address: string } | null;
+    property: { address: string; emergency_phone?: string | null } | null;
   };
 
   // S776: the emergency text goes first; it does not wait on the emails.
@@ -215,11 +217,19 @@ async function textEmergency(
     public_contact_phone?: string | null;
   },
   kind: EmergencyKind,
-  r: { reporter_name: string | null; reporter_contact: string | null; property: { address: string } | null },
+  r: {
+    reporter_name: string | null;
+    reporter_contact: string | null;
+    property: { address: string; emergency_phone?: string | null } | null;
+  },
 ): Promise<void> {
   if (!canUseRenterSms(org.plan ?? null)) return;
   const own = await orgOwnSmsNumber(admin, org.id).catch(() => null);
-  const to = emergencyTextTarget(org, own, normalizePhoneE164);
+  const to = emergencyTextTarget(
+    { ...org, rental_emergency_phone: r.property?.emergency_phone ?? null },
+    own,
+    normalizePhoneE164,
+  );
   if (!to) return;
   const base = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/$/, "");
   await sendSms({

@@ -1130,6 +1130,11 @@ export async function updateProperty(formData: FormData) {
       ...(formData.has("emergency_info")
         ? { emergency_info: String(formData.get("emergency_info") ?? "").trim().slice(0, 1000) || null }
         : {}),
+      // S776b (0282): this rental's emergency phone (the super or manager); blank =
+      // the account's Emergency phone.
+      ...(formData.has("emergency_phone")
+        ? { emergency_phone: String(formData.get("emergency_phone") ?? "").trim().slice(0, 40) || null }
+        : {}),
       // S724 (V251-24): viewing rules for this rental. Blank = the account's.
       ...(formData.has("viewing_rules_present")
         ? {
