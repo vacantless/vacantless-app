@@ -23,8 +23,26 @@ export type CopyCheckLinks = {
   priceLabel: string | null;
   kijiji: string | null;
   marketplace: string | null;
+  /** The city the Marketplace search is pinned to, or null when it uses the landlord's own Marketplace location. */
+  marketplaceCity: string | null;
   lens: string | null;
 };
+
+/**
+ * Marketplace city paths proven on 2026-11-10 (each opened "<City>, <Province>
+ * Within 65 km"). A name shared with another place is NOT safe: "london" opens
+ * London, United Kingdom, and an unknown name falls back to the viewer's own
+ * location. Add a city only after opening its link and reading the filter.
+ */
+export const MARKETPLACE_CITY_SLUGS: ReadonlySet<string> = new Set([
+  "windsor",
+  "toronto",
+  "ottawa",
+  "hamilton",
+  "calgary",
+  "edmonton",
+  "vancouver",
+]);
 
 const PROVINCE = /^(on|ontario|bc|ab|mb|sk|qc|ns|nb|nl|pe|pei|yt|nt|nu)\b/i;
 
@@ -58,10 +76,15 @@ export function copyCheckLinks(input: CopyCheckInput): CopyCheckLinks {
   }
 
   let marketplace: string | null = null;
+  let marketplaceCity: string | null = null;
   if (price) {
     const q = new URLSearchParams({ minPrice: String(price.low), maxPrice: String(price.high) });
     if (typeof input.beds === "number" && input.beds > 0) q.set("minBedrooms", String(Math.floor(input.beds)));
-    marketplace = `https://www.facebook.com/marketplace/category/propertyrentals?${q.toString()}`;
+    const pinned = slug && MARKETPLACE_CITY_SLUGS.has(slug);
+    marketplace = pinned
+      ? `https://www.facebook.com/marketplace/${slug}/propertyrentals?${q.toString()}`
+      : `https://www.facebook.com/marketplace/category/propertyrentals?${q.toString()}`;
+    marketplaceCity = pinned ? city : null;
   }
 
   let lens: string | null = null;
@@ -74,6 +97,7 @@ export function copyCheckLinks(input: CopyCheckInput): CopyCheckLinks {
     priceLabel: price ? `$${price.low.toLocaleString("en-CA")} to $${price.high.toLocaleString("en-CA")}` : null,
     kijiji,
     marketplace,
+    marketplaceCity,
     lens,
   };
 }

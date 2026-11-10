@@ -27,7 +27,7 @@ ok("all three links for a full rental", () => {
     coverPhotoUrl: "https://x.supabase.co/storage/v1/object/public/property-photos/a/b.jpg",
   });
   assert.equal(l.kijiji, "https://www.kijiji.ca/b-apartments-condos/canada/windsor/k0c37l0?price=1000__1600");
-  assert.equal(l.marketplace, "https://www.facebook.com/marketplace/category/propertyrentals?minPrice=1000&maxPrice=1600&minBedrooms=2");
+  assert.equal(l.marketplace, "https://www.facebook.com/marketplace/windsor/propertyrentals?minPrice=1000&maxPrice=1600&minBedrooms=2");
   assert.ok(l.lens?.startsWith("https://lens.google.com/uploadbyurl?url=https%3A%2F%2Fx.supabase.co"));
   assert.equal(l.priceLabel, "$1,000 to $1,600");
 });
@@ -36,6 +36,13 @@ ok("no rent, no price searches; bachelor has no bedroom filter", () => {
   assert.equal(a.kijiji, null); assert.equal(a.marketplace, null); assert.equal(a.lens, null);
   const b = copyCheckLinks({ address: "1 A St, Windsor, ON", rentCents: 90000, beds: 0, coverPhotoUrl: "http://plain/x.jpg" });
   assert.ok(!b.marketplace!.includes("minBedrooms")); assert.equal(b.lens, null);
+});
+ok("Marketplace pins only proven cities", () => {
+  const a = copyCheckLinks({ address: "1 A St, London, ON N6A 1A1", rentCents: 150000, beds: 2, coverPhotoUrl: null });
+  assert.ok(a.marketplace!.startsWith("https://www.facebook.com/marketplace/category/propertyrentals?"));
+  assert.equal(a.marketplaceCity, null);
+  const b = copyCheckLinks({ address: "1 A St, Windsor, ON", rentCents: 150000, beds: 2, coverPhotoUrl: null });
+  assert.equal(b.marketplaceCity, "Windsor");
 });
 ok("card copy: no em dashes, says we do not search for you", () => {
   const src = readFileSync("app/dashboard/properties/[id]/copy-check-card.tsx", "utf8");

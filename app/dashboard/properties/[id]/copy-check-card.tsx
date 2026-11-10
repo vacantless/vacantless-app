@@ -9,7 +9,7 @@ export function CopyCheckCard({ links }: { links: CopyCheckLinks }) {
   const buttons = [
     { href: links.lens, label: "Search my cover photo", note: "with Google Lens" },
     { href: links.kijiji, label: "Kijiji near my price", note: links.city ? `in ${links.city}` : undefined },
-    { href: links.marketplace, label: "Marketplace near my price", note: "near you" },
+    { href: links.marketplace, label: "Marketplace near my price", note: links.marketplaceCity ? `in ${links.marketplaceCity}` : "where your Marketplace is set" },
   ].filter((b): b is { href: string; label: string; note: string | undefined } => Boolean(b.href));
   if (buttons.length === 0) return null;
   return (
