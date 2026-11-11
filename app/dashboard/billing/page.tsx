@@ -191,6 +191,8 @@ export default async function BillingPage({
       "Card payments are not switched on yet. Free covers one rental until they are.",
     plan:
       "That plan isn't recognized. Please choose a plan below and try again.",
+    band_too_small:
+      "That plan covers fewer rentals than you have. Choose a bigger plan, or archive rentals you no longer manage first.",
     band_full:
       "Your plan covers the rentals you have now. Move up a plan below to add more, or archive a rental you no longer manage.",
     interval_mismatch:
@@ -670,6 +672,8 @@ export default async function BillingPage({
               (!view.isPaid && !view.isPilot && view.planKey === "trial")
             : view.planKey === key && view.isPaid && !subscriptionEnded && !(key === "growth" && grandfatheredGrowth);
           const isGrandfatheredCard = key === "growth" && grandfatheredGrowth;
+          // S779: a plan that covers fewer rentals than the account has is shown, not offered.
+          const tooSmall = Boolean(tier.rentalCap && key !== "portfolio" && rentalCount > tier.rentalCap);
           return (
             <div
               key={key}
@@ -721,6 +725,10 @@ export default async function BillingPage({
                 ) : isFree ? (
                   <div className="rounded-lg bg-gray-50 px-4 py-2 text-center text-sm font-medium text-gray-400">
                     Free forever
+                  </div>
+                ) : tooSmall ? (
+                  <div className="rounded-lg bg-gray-50 px-4 py-2 text-center text-sm font-medium text-gray-500">
+                    Covers {tier.rentalCap} rentals. You have {rentalCount}.
                   </div>
                 ) : (
                   <form action={startCheckout} className="space-y-2">

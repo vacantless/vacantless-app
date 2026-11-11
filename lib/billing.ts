@@ -673,7 +673,7 @@ for (const k of BAND_KEYS) {
   const t = TIERS[k];
   t.features = [
     bandRentalLine(t),
-    `Up to ${t.textCap} texts a month`,
+    `Up to ${(t.textCap ?? 0).toLocaleString("en-CA")} texts a month`,
     ...PAID_FEATURE_GROUPS.flatMap((g) => g.items),
     PAID_SUPPORT_LINE,
   ];

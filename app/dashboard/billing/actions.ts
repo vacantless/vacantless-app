@@ -41,6 +41,7 @@ import {
   itemForPrice,
   subscriptionGrantsPlan,
   isBandPlan,
+  bandRentalCap,
   asInterval,
   type BillingInterval,
 } from "@/lib/billing";
@@ -224,6 +225,18 @@ export async function startCheckout(formData: FormData) {
   if (!isBandPlan(plan)) redirect("/dashboard/billing?error=plan");
   const interval = asInterval(formData.get("interval"));
   const extraRentals = plan === "portfolio" ? clampExtraRentals(formData.get("extra_rentals")) : 0;
+
+  // S779: never move an account onto a plan that covers fewer rentals than it
+  // has (a grandfathered CA$99 Growth with 7 rentals pressing Starter).
+  {
+    const { count: rentalsNow } = await createClient()
+      .from("properties")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
+      .is("archived_at", null);
+    const cap = bandRentalCap(plan, extraRentals);
+    if (cap != null && (rentalsNow ?? 0) > cap) redirect("/dashboard/billing?error=band_too_small#plans");
+  }
 
   // An account already on a paid plan changes plan on its own subscription.
   if (isPaidPlan(org.plan) && org.stripe_subscription_id && subscriptionGrantsPlan(org.subscription_status)) {
