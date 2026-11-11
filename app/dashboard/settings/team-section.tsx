@@ -127,7 +127,7 @@ export async function TeamSection({
             <p className="mt-2 text-sm text-gray-600">
               Teammates come with Starter and up. Right now only you can sign in.{" "}
               <Link href="/dashboard/billing" className="font-medium text-brand underline">
-                See Growth
+                See prices
               </Link>
             </p>
           ) : left === 0 ? (

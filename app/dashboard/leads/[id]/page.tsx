@@ -1025,7 +1025,7 @@ const APPLY_BANNERS: Record<string, { tone: "ok" | "warn" | "err"; text: string 
   sent: { tone: "ok", text: "Application link sent to the applicant." },
   exists: { tone: "warn", text: "An application is already open for this lead." },
   error: { tone: "err", text: "Couldn't create the application. Please try again." },
-  upgrade: { tone: "warn", text: "Rental applications are a Growth feature. Upgrade to request one." },
+  upgrade: { tone: "warn", text: "Rental applications come with Starter and up. Upgrade to request one." },
   filed: { tone: "ok", text: "Application summary filed to the document vault." },
   filenone: { tone: "err", text: "No PDF was selected. Print the summary, save it as a PDF, then choose that file." },
   filetype: { tone: "err", text: "That file wasn't a PDF. Use Print → Save as PDF, then upload the PDF." },
@@ -1236,7 +1236,7 @@ function ApplicationCard({
           {SCREENING_LIVE
             ? "Rental applications with built-in credit & background screening are part of "
             : "Rental applications are part of "}
-          <span className="font-medium text-gray-700">Growth</span>.{" "}
+          <span className="font-medium text-gray-700">Starter and up</span>.{" "}
           <Link href="/dashboard/billing" className="font-medium text-brand hover:underline">
             Upgrade to request one
           </Link>

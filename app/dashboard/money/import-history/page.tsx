@@ -217,8 +217,8 @@ export default async function ImportHistoryPage({
         />
         <FeatureLockedNotice
           title="Part of Starter and up, from $29 a month"
-          description="Growth lets you bring in your old bookkeeping, match it to bank transactions and set rules for future expenses."
-          ctaLabel="See Growth"
+          description="Lets you bring in your old bookkeeping, match it to bank transactions and set rules for future expenses."
+          ctaLabel="See prices"
           ctaHref="/dashboard/billing"
         />
       </div>

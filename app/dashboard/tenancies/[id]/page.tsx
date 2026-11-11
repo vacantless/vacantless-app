@@ -951,7 +951,7 @@ export default async function TenancyDetailPage({
     sendfail: "Could not email the notice. Check email is configured. Nothing was recorded as served.",
     noconsent: "Emailing needs the tenant's consent to electronic service. Tick the consent box, or serve by hand/mail.",
     noemail: "No tenant email on file. Add one, or serve by hand/mail.",
-    upgrade: "Serving the notice for you is a Growth feature.",
+    upgrade: "Serving the notice for you comes with Starter and up.",
     notoken: "Could not build the tenant link. Try again.",
     badmethod: "Pick how the notice was served.",
     noamount:
@@ -2957,7 +2957,7 @@ export default async function TenancyDetailPage({
           </div>
           {searchParams.report === "locked" ? (
             <p className="mt-2 text-xs text-amber-700">
-              Tenant reporting is available on the Growth plan and up.
+              Tenant reporting comes with Starter and up.
             </p>
           ) : searchParams.report === "ready" && t.report_token ? (
             <p className="mt-2 text-xs text-green-700">

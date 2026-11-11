@@ -75,7 +75,7 @@ function flashMessage(flash: string | undefined): { text: string; ok: boolean } 
     case "needcontact":
       return { text: "Add an email or phone so they can be reached.", ok: false };
     case "locked":
-      return { text: "Notifying the waiting list is a Growth feature.", ok: false };
+      return { text: "Notifying the waiting list comes with Starter and up.", ok: false };
     case "forbidden":
       return { text: "You don't have permission to manage the waiting list.", ok: false };
     default:
@@ -176,7 +176,7 @@ export function WaitlistCard({
               : "Capture renters who want this unit when it opens."}
           </p>
           <p className="mt-1 text-sm text-gray-600">
-            Upgrade to <strong>Growth</strong> to add renters yourself and email the waiting list
+            Upgrade to <strong>Starter or above</strong> to add renters yourself and email the waiting list
             the moment the unit is available again.
           </p>
         </div>

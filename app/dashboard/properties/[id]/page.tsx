@@ -2589,9 +2589,9 @@ export default async function PropertyDetailPage({
       : searchParams.run === "conciergeupgrade"
         ? {
             tone: "warning",
-            title: "Done-for-you posting is a Growth feature.",
+            title: "Done-for-you posting comes with Starter and up.",
             body:
-              "Choose Growth, Premium, or Managed to hand posting work to the Vacantless desk.",
+              "Pick Starter or above on Billing to hand posting to our desk.",
           }
         : searchParams.run === "conciergeineligible"
           ? {

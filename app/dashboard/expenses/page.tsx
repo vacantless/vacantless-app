@@ -230,7 +230,7 @@ export default async function ExpensesPage({
         <div className="mt-6">
           <EmptyState
             icon={<Icons.card />}
-            title="Bank sync is a Growth feature"
+            title="Bank sync comes with Starter and up"
             description="Connect your bank and cards, and forward Interac e-Transfer notices for rent or trade payments, then sort everything by unit and building. Upgrade to turn it on."
             cta={{ href: "/dashboard/billing", label: "See plans" }}
           />

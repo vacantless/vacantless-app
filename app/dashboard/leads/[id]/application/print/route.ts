@@ -32,7 +32,7 @@ export async function GET(
   }
   // Server-side entitlement gate (never UI-only) — mirrors requestRentalApplication.
   if (!canUseRentalApplications(org.plan)) {
-    return new NextResponse("Rental applications are a Growth feature.", { status: 403 });
+    return new NextResponse("Rental applications come with Starter and up.", { status: 403 });
   }
 
   const supabase = createClient();

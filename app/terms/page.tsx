@@ -79,7 +79,7 @@ export default function TermsPage() {
         <H2>Subscriptions, billing, and cancellation</H2>
         <List
           items={[
-            "Vacantless offers a Free plan, a paid Growth plan and a paid Posting add-on. Paid subscription fees are separate from any fees a rental site or payment processor charges.",
+            "Vacantless offers a Free plan, paid Starter, Growth and Portfolio plans and a paid Posting add-on. Paid subscription fees are separate from any fees a rental site or payment processor charges.",
             "Paid plans are billed in advance on a recurring monthly basis until cancelled. Prices are in CAD unless stated otherwise and do not include sales tax. Where we are required to charge GST/HST or another sales tax, it is added to the price and shown on your invoice.",
             "You can cancel at any time. Cancellation stops future billing; your paid access continues until the end of the current billing period.",
             "Except where required by law, subscription fees already paid are non-refundable, including for partial periods.",

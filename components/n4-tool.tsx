@@ -320,7 +320,7 @@ export function N4Tool({ today }: Props) {
         <div className="mt-6 rounded-xl bg-[#15211d] p-4 text-white">
           <p className="text-[0.98rem] font-bold">Keep the rent and the paperwork in one place.</p>
           <p className="mt-1 text-[0.88rem] text-white/80">
-            On the Growth plan, Vacantless fills the N4 from the tenancy and the payments you
+            On any paid plan, Vacantless fills the N4 from the tenancy and the payments you
             record, along with the N5, N12, L1 and other Board forms. Start free with one rental.
           </p>
           <Link

@@ -1989,7 +1989,7 @@ export default async function SettingsPage({
                     Texting renters comes with Starter and up. Renters on your account get every message
                     by email.{" "}
                     <Link href="/dashboard/billing" className="font-medium underline">
-                      See Growth
+                      See prices
                     </Link>
                   </>
                 )}
@@ -2016,7 +2016,7 @@ export default async function SettingsPage({
             )}
             {smsFlash === "upgrade" && (
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-                Texting renters is a Growth feature.{" "}
+                Texting renters comes with Starter and up.{" "}
                 <Link href="/dashboard/billing" className="font-medium underline">
                   Upgrade to turn it on
                 </Link>

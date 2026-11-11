@@ -476,7 +476,7 @@ const GET_GROUPS: { title: string; items: string[] }[] = [
       "A reply by email within seconds, with a link to book",
       "Viewing times they pick themselves, whenever suits them",
       "An email confirmation and a reminder email the day before",
-      "On Growth, a text the day before from your own local number. They reply YES to confirm",
+      "On any paid plan, a text the day before from your own local number. They reply YES to confirm",
       "A cancel link, so you hear about it instead of a no show",
     ],
   },

@@ -86,7 +86,7 @@ export function MarketingKitCard({
               Marketing kit
             </h3>
             <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
-              Growth
+              Starter and up
             </span>
           </div>
           <p className="text-xs text-gray-500">

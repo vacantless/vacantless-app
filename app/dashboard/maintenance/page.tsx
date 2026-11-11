@@ -314,7 +314,7 @@ const REPORT_INFO: Record<string, string> = {
 const REPORT_ERROR: Record<string, string> = {
   forbidden: "You don't have permission to triage tenant reports.",
   notfound: "That report could not be found.",
-  locked: "Tenant issue reporting is a Growth feature. Upgrade to enable it.",
+  locked: "Tenant issue reporting comes with Starter and up. Upgrade to turn it on.",
   failed: "Something went wrong handling that report. Please try again.",
   message: "That one is a message, not a repair. Mark it handled instead.",
 };

@@ -1,8 +1,8 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-11-10",
-  "checksum": "7102488fcb36487dd114e11e571968b9ed142a564de754e816029c0e7ad4733e",
+  "generated": "2026-11-11",
+  "checksum": "86a9625cfb0f662428fa9ac61b53701016954135368108a408a74d6dd4b1181a",
   "surfaces": [
     "app/agent/[token]/marketplace/[propertyId]/page.tsx",
     "app/dashboard/(wizard)/getting-started/page.tsx",
@@ -96,7 +96,7 @@
     "app/dashboard/properties/[id]/lifecycle-rail.tsx\u0000banned_word": 1,
     "app/dashboard/properties/[id]/page.tsx\u0000all_caps": 2,
     "app/dashboard/properties/[id]/page.tsx\u0000ampersand_or_slash": 7,
-    "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 66,
+    "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 65,
     "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 19,
     "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 28,
     "app/dashboard/properties/new/add-property-form.tsx\u0000ampersand_or_slash": 2,
@@ -176,7 +176,7 @@
     "app/dashboard/properties/[id]/ads-still-up-card.tsx": 14,
     "app/dashboard/properties/[id]/brokerage-request-card.tsx": 13,
     "app/dashboard/properties/[id]/confirm-publish-button.tsx": 13,
-    "app/dashboard/properties/[id]/copy-check-card.tsx": 9,
+    "app/dashboard/properties/[id]/copy-check-card.tsx": 11,
     "app/dashboard/properties/[id]/distribute-tab.tsx": 81,
     "app/dashboard/properties/[id]/keep-fresh-card.tsx": 14,
     "app/dashboard/properties/[id]/lifecycle-rail.tsx": 4,
@@ -430,12 +430,6 @@
     {
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Choose Growth, Premium, or Managed to hand posting work to the Vacantless desk.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Concierge pack checkout will appear when the desk is enabled.",
       "count": 1
     },
@@ -444,12 +438,6 @@
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Connect and authorize the Kijiji worker account before turning on hands-off refreshes.",
       "count": 3
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Done-for-you posting is a Growth feature.",
-      "count": 1
     },
     {
       "rule": "banned_word",
@@ -1445,12 +1433,6 @@
       "rule": "banned_word",
       "file": "app/dashboard/settings/page.tsx",
       "text": "Tenant notes still draft for approval, landlord reminders still respect Automations settings, and the global master switch remains the final kill-switch.",
-      "count": 1
-    },
-    {
-      "rule": "banned_word",
-      "file": "app/dashboard/settings/page.tsx",
-      "text": "Texting renters comes with Growth. On your current plan we send confirmations and reminders by email.",
       "count": 1
     },
     {

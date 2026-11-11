@@ -139,8 +139,8 @@ export function LeaseUploadPrefill({
       <div className="mb-5 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
         <p className="text-sm font-semibold text-gray-700">Pre-fill a tenancy from the signed lease</p>
         <p className="mt-0.5 text-xs text-gray-500">
-          Upload the lease and we read the key terms into this form for you. Available on the Growth and
-          Premium plans.
+          Upload the lease and we read the key terms into this form for you. Comes with Starter and
+          up.
         </p>
       </div>
     );
@@ -272,7 +272,7 @@ export function LeaseUploadPrefill({
         if (result.reason === "empty") {
           setStatus({ kind: "empty" });
         } else if (result.reason === "locked") {
-          setStatus({ kind: "error", message: "Lease import is available on the Growth and Premium plans. Fill the form manually below." });
+          setStatus({ kind: "error", message: "Lease import comes with Starter and up. Fill the form manually below." });
         } else if (result.reason === "limit") {
           setStatus({ kind: "error", message: "You've reached this month's lease-import limit. Fill the form manually below, or try again next month." });
         } else {

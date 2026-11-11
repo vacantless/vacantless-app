@@ -81,11 +81,11 @@ export default async function CapturesPage({
       <div className="mx-auto max-w-3xl space-y-6 py-6">
         <Header />
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-5">
-          <h2 className="text-sm font-semibold text-amber-900">Email-in capture is a Growth feature</h2>
+          <h2 className="text-sm font-semibold text-amber-900">Email-in capture comes with Starter and up</h2>
           <p className="mt-1 text-sm text-amber-800">
             Forward a photo of an appliance plate or a store receipt to your own
             private address and Vacantless files it into the unit for you. Upgrade
-            to Growth to turn it on.
+            to Starter or above to turn it on.
           </p>
           <Link
             href="/dashboard/billing"
@@ -441,7 +441,7 @@ function flash(sp: Record<string, string | undefined>): string | null {
   if (sp.review === "gone") return "That capture was already filed or removed.";
   if (sp.review === "error") return "Sorry, that didn't work. Please try again.";
   if (sp.error === "provision" || sp.error === "rotate") return "Sorry, that didn't work. Please try again.";
-  if (sp.locked === "1") return "Email-in capture needs the Growth plan.";
+  if (sp.locked === "1") return "Email-in capture comes with Starter and up.";
   if (sp.forbidden === "1") return "You don't have permission to manage capture settings.";
   return null;
 }

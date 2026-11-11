@@ -290,7 +290,7 @@ export function N12Tool({ today }: { today: string }) {
         <div className="mt-6 rounded-xl bg-[#15211d] p-4 text-white">
           <p className="text-[0.98rem] font-bold">Keep the tenancy and the paperwork in one place.</p>
           <p className="mt-1 text-[0.88rem] text-white/80">
-            On the Growth plan, Vacantless fills the N12 from the tenancy, along with the N4, N5, N8, L1 and other Board forms. Start free with one rental.
+            On any paid plan, Vacantless fills the N12 from the tenancy, along with the N4, N5, N8, L1 and other Board forms. Start free with one rental.
           </p>
           <Link href={N12_TOOL_SIGNUP_HREF} className={`${button} mt-3 bg-white text-[#15211d] hover:bg-[#edf5f0]`}>
             Start free

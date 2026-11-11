@@ -251,8 +251,8 @@ export default async function ReconcilePage({
         />
         <FeatureLockedNotice
           title="Part of Starter and up, from $29 a month"
-          description="Growth matches your bank transactions to rent and expenses, so nothing is left unexplained at year end."
-          ctaLabel="See Growth"
+          description="Matches your bank transactions to rent and expenses, so nothing is left unexplained at year end."
+          ctaLabel="See prices"
           ctaHref="/dashboard/billing"
         />
       </div>
