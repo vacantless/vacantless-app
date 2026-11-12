@@ -135,6 +135,9 @@ export function MarketingFooter() {
           <Link href="/fix" className="hover:text-[#15211d]">
             Landlord problems, fixed
           </Link>
+          <Link href="/ask" className="hover:text-[#15211d]">
+            Landlord questions
+          </Link>
           <Link href="/how-to" className="hover:text-[#15211d]">
             How-to videos
           </Link>

@@ -60,6 +60,8 @@ export function isMarketingPath(path: string | null | undefined): boolean {
   if (p === "/compare" || p.startsWith("/compare/")) return true;
   // S777: the friction pages are landing pages too.
   if (p === "/fix" || p.startsWith("/fix/")) return true;
+  // S783: the landlord question pages are landing pages too.
+  if (p === "/ask" || p.startsWith("/ask/")) return true;
   // S746: the free tool pages are the ad landing pages.
   return p === "/tools" || p.startsWith("/tools/");
 }
