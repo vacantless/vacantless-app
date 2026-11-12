@@ -4,6 +4,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
 import { adTagConfig, adTagsOn } from "@/lib/ad-conversions";
 import { MarketingTags } from "@/components/ad-tags";
+import { SiteAnalytics } from "@/components/site-analytics";
 
 export const metadata: Metadata = {
   title: "Vacantless",
@@ -27,6 +28,7 @@ export default async function RootLayout({
           {children}
         </NextIntlClientProvider>
         {adTagsOn(adCfg) && <MarketingTags cfg={adCfg} />}
+        <SiteAnalytics />
       </body>
     </html>
   );

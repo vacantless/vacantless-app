@@ -33,6 +33,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
+    "@vercel/analytics": "^1.6.1",
     "next": "14.2.35",
     "next-intl": "^4.13.4",
     "pdf-lib": "^1.17.1",

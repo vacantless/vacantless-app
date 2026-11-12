@@ -160,7 +160,10 @@ export default function PrivacyPage() {
           phone number.{" "}
           {AD_TAGS_ON
             ? "On our own website and sign-up pages we also use Google and Meta advertising cookies to measure our ads. Renter pages never carry them."
-            : "We do not use advertising or cross-site tracking cookies."}
+            : "We do not use advertising or cross-site tracking cookies."}{" "}
+          We count visits to our public pages with Vercel Web Analytics, which
+          sets no cookies and does not identify you. Renter and tenant pages are
+          not counted.
         </P>
 
         <H2>Children</H2>
