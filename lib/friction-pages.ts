@@ -47,7 +47,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Free. Texts from your own number on any paid plan.",
     video: 6,
-    film: { seconds: 51, youtube: "izl16rCOT6U" },
+    film: { seconds: 51, youtube: "60u389nYmjE" },
   },
   {
     slug: "is-this-still-available",
@@ -66,7 +66,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Free.",
     video: 3,
-    film: { seconds: 38, youtube: "H1dE60PaHAg" },
+    film: { seconds: 38, youtube: "KLXuBpDyggw" },
   },
   {
     slug: "unqualified-renters",
@@ -104,7 +104,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Any paid plan, from CA$29 a month.",
     video: 10,
-    film: { seconds: 45, youtube: "PDfPr0GfgPw" },
+    film: { seconds: 45, youtube: "jEIfxcyiOU4" },
   },
   {
     slug: "showing-trips",
