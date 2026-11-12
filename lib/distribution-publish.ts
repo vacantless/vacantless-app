@@ -236,6 +236,20 @@ export function siteSetupNotice(
   errorCode: string | null | undefined,
   errorMessage?: string | null,
 ): SiteSetupNotice | null {
+  // S784: a post held by the landlord's own fee limit. The row used to say
+  // "Your ad is ready. Approve it to post" and the header "needs payment",
+  // hiding the real stop. The cron writes the plain message with the limit.
+  if (errorCode === "spend_period_cap" || errorCode === "spend_per_ad_cap") {
+    if (publishStatus !== "needs_payment" && publishStatus !== "needs_operator") return null;
+    return {
+      message:
+        errorMessage && errorMessage.trim()
+          ? errorMessage.trim()
+          : "This post would go over a fee limit you set. Raise it in Settings, then approve again.",
+      href: "/dashboard/settings?tab=distribution#site-accounts",
+      action: "Change the limit",
+    };
+  }
   if (publishStatus !== "needs_operator") return null;
   // S724 (V251-38): the saved Rentals.ca ad did not keep an answer we chose.
   // The robot names which ones in error_message.

@@ -56,6 +56,7 @@ eq(r({ sessionAlive: false }), "signed_out", "signed out of the site");
 const audit = expiryRepostAudit("kijiji");
 assert.match(audit, /Kijiji ad ended/); n++;
 assert.doesNotMatch(audit, /—/, "no em dash"); n++;
+assert.match(audit, /paid site still waits for you to pay/, "S784: says payment is not automatic"); n++;
 assert.match(expiryRepostNoteLine("2026-11-13T14:35:00Z", "abc"), /^2026-11-13 expiry re-post: queued run item abc/); n++;
 assert.ok(expiryRepostNoteLine("2026-11-13T14:35:00Z", null).includes(EXPIRY_REPOST_MARK), "the skip line also marks the row"); n++;
 // The note line itself must read as handled on the next run.

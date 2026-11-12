@@ -102,7 +102,7 @@ export function expiryRepostDecision(input: ExpiryRepostInput): { repost: boolea
 
 /** Audit line on the re-queued run item (shown on the rental's Get online tab). */
 export function expiryRepostAudit(portal: string): string {
-  return `The ${siteName(portal)} ad ended on the site and the rental is still available, so we are posting it again (your Posting setting: post without asking each time). Press Stop on the rental to hold it.`;
+  return `The ${siteName(portal)} ad ended on the site and the rental is still available, so we are posting it again (your Posting setting: post without asking each time). Free sites go up on their own. A paid site still waits for you to pay at its checkout, and never goes over your monthly fee limit. Press Stop on the rental to hold it.`;
 }
 
 /** Note line appended to the removed listing_posts row once it is handled. */

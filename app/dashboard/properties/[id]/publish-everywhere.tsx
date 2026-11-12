@@ -1244,7 +1244,8 @@ function ForYouRow({
       ) : preparing ? (
         <p className="mt-2 text-base text-amber-800">
           We&apos;re filling in the ad. Free sites post when it is ready. A
-          paid site waits for you here. Reload this page in a few minutes.
+          paid site waits for you here. Most sites take up to 15 minutes;
+          Rentals.ca can take up to 3 hours. Reload this page to check.
         </p>
       ) : working ? (
         <div className="mt-2">

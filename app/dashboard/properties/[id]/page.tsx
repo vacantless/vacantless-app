@@ -559,6 +559,8 @@ function buildSyndicationBlockerSummary({
     channelCards.map((card) => [card.channel.key as string, card.channel.label]),
   );
   const payment = new Map<string, string>();
+  // S784: held by the landlord's own monthly or per-ad fee limit, not by a site fee.
+  const feeLimit = new Map<string, string>();
   const login = new Map<string, string>();
   const proof = new Map<string, string>();
   const refresh = new Map<string, string>();
@@ -584,7 +586,9 @@ function buildSyndicationBlockerSummary({
 
   for (const item of runItems) {
     const label = labelFor(item.channel, item.channelLabel);
-    if (item.publishStatus === "needs_payment") payment.set(item.channel, label);
+    if (item.errorCode === "spend_period_cap" || item.errorCode === "spend_per_ad_cap") {
+      feeLimit.set(item.channel, label);
+    } else if (item.publishStatus === "needs_payment") payment.set(item.channel, label);
     // S710 audit: a run item left at needs_login from before the site was
     // signed in again kept saying "Sign in to Kijiji" on Agile's Bruce 303
     // while the account read connected. The account is the truth for sign-in.
@@ -615,7 +619,16 @@ function buildSyndicationBlockerSummary({
               : bodyMany(channelList(labels)),
         };
 
+  for (const key of feeLimit.keys()) payment.delete(key);
+
   return (
+    summary(
+      [...feeLimit.values()],
+      "over your fee limit",
+      "over your fee limit",
+      (label) => `${label} would go over a fee limit you set. Raise it in Settings to post it.`,
+      (list) => `${list} would go over fee limits you set. Raise them in Settings to post them.`,
+    ) ??
     summary(
       [...payment.values()],
       "needs payment",
@@ -2582,9 +2595,9 @@ export default async function PropertyDetailPage({
         : searchParams.run === "concierge"
       ? {
           tone: "success",
-          title: "Handed to the desk.",
+          title: "We'll post this for you.",
           body:
-            "Vacantless will post this site and keep the checklist updated.",
+            "Vacantless posts this site for you and updates this page when it is done.",
         }
       : searchParams.run === "conciergeupgrade"
         ? {
@@ -2639,7 +2652,7 @@ export default async function PropertyDetailPage({
                           tone: "danger",
                           title: "Desk handoff failed.",
                           body:
-                            "Something went wrong handing this to the desk - try again.",
+                            "Something went wrong asking us to post this. Try again.",
                         }
                       : null);
   const replyInputs: ReplyInputs = {
