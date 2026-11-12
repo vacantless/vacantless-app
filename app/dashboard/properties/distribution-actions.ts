@@ -423,7 +423,7 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
 
   const { data: pending } = await supabase
     .from("distribution_run_items")
-    .select("id, publish_status, channel")
+    .select("id, publish_status, channel, operator_action_url")
     .eq("id", itemId)
     .eq("organization_id", org.id)
     .eq("mode", "concierge")
@@ -433,8 +433,15 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
     .maybeSingle();
 
   const pendingItem = pending as
-    | { id: string; publish_status: string | null; channel: string | null }
+    | { id: string; publish_status: string | null; channel: string | null; operator_action_url?: string | null }
     | null;
+  // S784: a paid post parked at needs_payment BEFORE the robot built it (the
+  // fee limit held it, so there is no checkout link yet) goes back to the
+  // robot's queue on approval. The robot only picks up needs_operator; without
+  // this the approval sat at needs_payment forever. A post the robot already
+  // built to the checkout (operator_action_url set) is unchanged.
+  const releaseToRobot =
+    pendingItem?.publish_status === "needs_payment" && !pendingItem.operator_action_url;
   // S713: approving a robot post (Kijiji, Rentals.ca, Zumper) needs the
   // Posting add-on. Checked before anything is approved or the robot is woken.
   if (pendingItem?.channel && isRobotPostedChannel(pendingItem.channel)) {
@@ -523,6 +530,7 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
         .update({
           operator_submit_approved_at: now,
           operator_submit_approved_by: uid,
+          ...(releaseToRobot ? { publish_status: "needs_operator" } : {}),
           // S713d: a fresh approval clears the robot's last named blocker (for
           // example a Zumper renter account the landlord has since upgraded).
           error_code: null,

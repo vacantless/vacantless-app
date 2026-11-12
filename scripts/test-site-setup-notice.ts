@@ -21,7 +21,9 @@ ok("notice has no em dash", !/—/.test(n?.message ?? ""));
 ok("code matches the worker's", ZUMPER_LANDLORD_SETUP_CODE === "zumper_landlord_setup");
 ok("no notice once live", siteSetupNotice("live", ZUMPER_LANDLORD_SETUP_CODE) == null);
 ok("no notice while posting", siteSetupNotice("submitting", ZUMPER_LANDLORD_SETUP_CODE) == null);
-ok("no notice for other codes", siteSetupNotice("needs_operator", "spend_period_cap") == null);
+ok("no notice for other codes", siteSetupNotice("needs_operator", "some_other_code") == null);
+// S784: the fee limit now names itself on the row (see test-s724-posting-stop).
+ok("fee limit gets a notice", siteSetupNotice("needs_operator", "spend_period_cap") != null);
 ok("no notice without a code", siteSetupNotice("needs_operator", null) == null);
 
 const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");

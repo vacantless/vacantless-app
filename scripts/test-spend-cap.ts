@@ -129,6 +129,7 @@ ok("settings explains the month", settings.includes("Resets on the 1st of each m
     countNewPaidAds({ items: [{ id: "a", listing_post_id: "lpNew" }, { id: "b", listing_post_id: "lpNew" }], newPostIds: new Set(["lpNew"]), ledgerItemIds: new Set(["a"]) }) === 0);
   ok("S784 Agile case: 3 free runs + a repost fit under one $33.84 ad",
     periodSpendCheck({ spentThisPeriodCents: countNewPaidAds({ items: old, newPostIds: none, ledgerItemIds: none }) * 3384, nextChargeCents: 3384, periodMaxCents: 3384, perAdMaxCents: 3384 }).ok === true);
+  ok("approve releases a fee-limit hold back to the robot", userPath.includes('publish_status === "needs_payment" && !pendingItem.operator_action_url') && userPath.includes('publish_status: "needs_operator"'));
   const sql0287 = require("node:fs").readFileSync("supabase/migrations/0287_spend_counts_new_ads_only.sql", "utf8") as string;
   ok("SQL counts new listing records only", sql0287.includes("lp.created_at >= start_ts") && sql0287.includes("count(distinct p.listing_post_id)"));
 }
