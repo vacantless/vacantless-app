@@ -109,5 +109,29 @@ ok("settings explains the month", settings.includes("Resets on the 1st of each m
   ok("SQL list price matches the app", sql.includes("'kijiji' then 3384") && CHANNEL_COST_CENTS_KIJIJI === 3384);
 }
 
+// S784: only NEW ads count. Edits/takedowns of an older ad are free; many runs on one new ad count once.
+{
+  const { countNewPaidAds } = require("../lib/spend-cap") as typeof import("../lib/spend-cap");
+  const none = new Set<string>();
+  const old = [
+    { id: "e1", listing_post_id: "lpOld" },
+    { id: "e2", listing_post_id: "lpOld" },
+    { id: "t1", listing_post_id: "lpOld" },
+  ];
+  ok("edits and takedowns of an older ad are free", countNewPaidAds({ items: old, newPostIds: none, ledgerItemIds: none }) === 0);
+  ok("a new ad counts once however many runs touch it",
+    countNewPaidAds({ items: [{ id: "a", listing_post_id: "lpNew" }, { id: "b", listing_post_id: "lpNew" }], newPostIds: new Set(["lpNew"]), ledgerItemIds: none }) === 1);
+  ok("an item with no listing record still counts (errs high)",
+    countNewPaidAds({ items: [{ id: "x", listing_post_id: null }], newPostIds: none, ledgerItemIds: none }) === 1);
+  ok("the item being checked is left out",
+    countNewPaidAds({ items: [{ id: "x", listing_post_id: null }], newPostIds: none, ledgerItemIds: none, excludeItemId: "x" }) === 0);
+  ok("a new ad already in the ledger is not counted twice",
+    countNewPaidAds({ items: [{ id: "a", listing_post_id: "lpNew" }, { id: "b", listing_post_id: "lpNew" }], newPostIds: new Set(["lpNew"]), ledgerItemIds: new Set(["a"]) }) === 0);
+  ok("S784 Agile case: 3 free runs + a repost fit under one $33.84 ad",
+    periodSpendCheck({ spentThisPeriodCents: countNewPaidAds({ items: old, newPostIds: none, ledgerItemIds: none }) * 3384, nextChargeCents: 3384, periodMaxCents: 3384, perAdMaxCents: 3384 }).ok === true);
+  const sql0287 = require("node:fs").readFileSync("supabase/migrations/0287_spend_counts_new_ads_only.sql", "utf8") as string;
+  ok("SQL counts new listing records only", sql0287.includes("lp.created_at >= start_ts") && sql0287.includes("count(distinct p.listing_post_id)"));
+}
+
 console.log(`\ntest-spend-cap: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

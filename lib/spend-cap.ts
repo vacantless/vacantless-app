@@ -8,12 +8,15 @@
 // What counts as spend this month (sumPeriodSpendCents):
 //   1. Every row in public.distribution_channel_spend (the 0217 charge ledger)
 //      for this org + channel with charged_at in the month, at amount_cents.
-//   2. PLUS every robot-posted distribution_run_items row for this org +
-//      channel (external_url set, last_attempted_at in the month) that has NO
-//      ledger row, at the site's list price (CHANNEL_COST_CENTS, Kijiji
-//      $33.84). As of 2026-10-13 nothing writes the ledger yet, so this
-//      fallback is what actually counts today. It errs high: a free Kijiji slot
-//      still counts as one paid ad.
+//   2. PLUS one list price (CHANNEL_COST_CENTS, Kijiji $33.84) for every NEW
+//      ad the robot put up this month that has no ledger row. A new ad is a
+//      listing_posts row created this month (the worker makes a fresh row for
+//      every new ad and reuses the live row for edits). Edits, takedowns and
+//      re-checks of an ad first posted in an earlier month never count, and
+//      several robot runs on the same ad count once (S784: three free edits
+//      and a takedown were blocking a real repost). A robot-posted item with
+//      no listing record still counts once, so this errs high, never low.
+//      As of 2026-11-12 nothing writes the ledger yet.
 //
 // The pure check (periodSpendCheck) is what the posting worker cron and the
 // approve paths call before a paid post can move toward the fee wall.
@@ -99,6 +102,38 @@ export function spendCapBlockMessage(input: {
   return `This would go over your monthly limit of ${formatChannelMoney(max ?? 0)} for ${label}. Raise it in Settings.`;
 }
 
+export type RobotPostedItem = { id: string; listing_post_id: string | null };
+
+/**
+ * Pure: how many new paid ads the robot put up this month with no ledger row.
+ * items are robot-posted run items this month; newPostIds are the listing
+ * records created this month. One ad per new listing record, however many
+ * runs touched it. Items on an older listing record (edits, takedowns) are
+ * free. Items with no listing record count one each (errs high).
+ */
+export function countNewPaidAds(input: {
+  items: RobotPostedItem[];
+  newPostIds: Set<string>;
+  ledgerItemIds: Set<string>;
+  excludeItemId?: string | null;
+}): number {
+  const ads = new Set<string>();
+  const ledgerPosts = new Set<string>();
+  for (const r of input.items) {
+    if (input.ledgerItemIds.has(r.id) && r.listing_post_id) ledgerPosts.add(r.listing_post_id);
+  }
+  let orphans = 0;
+  for (const r of input.items) {
+    if (r.id === input.excludeItemId) continue;
+    if (input.ledgerItemIds.has(r.id)) continue;
+    if (!r.listing_post_id) { orphans += 1; continue; }
+    if (!input.newPostIds.has(r.listing_post_id)) continue;
+    if (ledgerPosts.has(r.listing_post_id)) continue;
+    ads.add(r.listing_post_id);
+  }
+  return ads.size + orphans;
+}
+
 /**
  * Server: paid spend for this org + channel since the start of the Toronto
  * calendar month. See the file header for exactly what is summed.
@@ -128,16 +163,23 @@ export async function sumPeriodSpendCents(
   if (listPrice > 0) {
     const { data: posted } = await client
       .from("distribution_run_items")
-      .select("id")
+      .select("id, listing_post_id")
       .eq("organization_id", input.organizationId)
       .eq("channel", input.channel)
       .not("external_url", "is", null)
       .gte("last_attempted_at", startISO);
-    for (const r of (posted ?? []) as { id: string }[]) {
-      if (r.id === input.excludeItemId) continue;
-      if (ledgerItemIds.has(r.id)) continue;
-      total += listPrice;
+    const items = (posted ?? []) as RobotPostedItem[];
+    const postIds = Array.from(new Set(items.map((r) => r.listing_post_id).filter((v): v is string => !!v)));
+    const newThisMonth = new Set<string>();
+    if (postIds.length > 0) {
+      const { data: posts } = await client
+        .from("listing_posts")
+        .select("id")
+        .in("id", postIds)
+        .gte("created_at", startISO);
+      for (const p of (posts ?? []) as { id: string }[]) newThisMonth.add(p.id);
     }
+    total += countNewPaidAds({ items, newPostIds: newThisMonth, ledgerItemIds, excludeItemId: input.excludeItemId }) * listPrice;
   }
   return total;
 }
