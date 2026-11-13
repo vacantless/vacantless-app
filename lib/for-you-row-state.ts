@@ -35,9 +35,11 @@ export type ForYouRowStateInput = {
   addonLocked: boolean;
   postingBlocked: boolean;
   hasMarketplaceKit: boolean;
+  /** S786: this rental gave its slot on this site to another (Rentals.ca switch). */
+  madeRoom?: boolean;
 };
 
-export type ForYouRowWord = "On" | "Posting" | "Needs you" | "addon";
+export type ForYouRowWord = "On" | "Posting" | "Needs you" | "Off" | "addon";
 
 export type ForYouRowState = {
   isLive: boolean;
@@ -108,6 +110,8 @@ export function forYouRowState(input: ForYouRowStateInput): ForYouRowState {
   // S760 (REVIEW-S760 section 4): one of four words.
   const word: ForYouRowWord = isLive
     ? "On"
+    : input.madeRoom === true
+      ? "Off"
     : locked
       ? "addon"
       : postingBlocked

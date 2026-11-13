@@ -52,6 +52,7 @@ const base = { rowKey: "kijiji", liveProofUrl: null, retiredUrls: [], alreadySig
 const pay = { mode: "concierge", publishStatus: "needs_payment", checkoutUrl: "https://www.kijiji.ca/m-my-ads/inactive/1", externalUrl: null };
 ok("pay is Needs you", forYouRowState({ ...base, item: pay }).word === "Needs you");
 ok("I paid is Posting", forYouRowState({ ...base, item: { ...pay, paidPressed: true } }).word === "Posting");
+ok("made room reads Off", forYouRowState({ ...base, rowKey: "rentals_ca", item: null, madeRoom: true }).word === "Off");
 ok("note is Needs you", forYouRowState({ ...base, item: { ...pay, paidPressed: true, captureNote: "x" } }).word === "Needs you");
 
 // 4. slot switch

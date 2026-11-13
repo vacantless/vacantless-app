@@ -576,6 +576,7 @@ export function PublishEverywhere({
         addonLocked: !robotPostingAllowed && isRobotPostedChannel(row.key),
         postingBlocked: Boolean(postingBlocker),
         hasMarketplaceKit: row.key === "facebook" && Boolean(marketplaceKit),
+        madeRoom: Boolean(roomNotes[row.key]),
       }).word === "Needs you",
   );
   const firstNeedsYou = needsYouRows[0] ?? null;
@@ -1073,6 +1074,7 @@ function ForYouRow({
     addonLocked,
     postingBlocked: Boolean(postingBlockedProp),
     hasMarketplaceKit: Boolean(marketplaceKit),
+    madeRoom: Boolean(roomNote),
   });
   const paid = row.mode === "paid_optin";
   const stateChip =
@@ -1199,7 +1201,11 @@ function ForYouRow({
             <input type="hidden" name="channel" value={row.key} />
             <button
               type="submit"
-              className="inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto bg-indigo-600 px-4 py-2.5 text-base font-semibold text-white hover:bg-indigo-700"
+              className={
+                roomNote
+                  ? "inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto border border-gray-300 bg-white px-4 py-2.5 text-base font-semibold text-gray-700 hover:bg-gray-50"
+                  : "inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto bg-indigo-600 px-4 py-2.5 text-base font-semibold text-white hover:bg-indigo-700"
+              }
             >
               {repostable ? "Post it again →" : "Post here →"}
             </button>
