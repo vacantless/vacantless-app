@@ -55,6 +55,16 @@ import("../lib/for-you-row-state").then(({ forYouRowState }) => {
     liveProofUrl: null, retiredUrls: [], alreadySignedIn: true, addonLocked: false, postingBlocked: false, hasMarketplaceKit: false,
   });
   ok("waiting row reads Posting, not Needs you", st.word === "Posting");
+  return import("../lib/rentals-slots").then(({ slotIsStuck, slotTakedownId }) => {
+  ok("stuck reads the worker prefix", slotIsStuck("The switch stopped: the Rentals.ca sign-in has expired.") && !slotIsStuck("Switching x off"));
+  ok("takedown id from note", slotTakedownId("slot_after:3f1c2d4e-1111-4abc-8def-0123456789ab slot_by:x") === "3f1c2d4e-1111-4abc-8def-0123456789ab");
+  const st = siteSetupNotice("needs_operator", "waiting_for_free_slot", "The switch stopped: the Rentals.ca sign-in has expired. Sign in again, then press Try the switch again.");
+  ok("stuck notice links to sign-in", st?.href === "/dashboard/site-signin/rentals_ca");
+  const retry = act.slice(act.indexOf("export async function retryRentalsSlot"));
+  ok("retry requeues only that takedown", retry.includes('.eq("transport", "takedown")') && retry.includes('publish_status: "queued"') && retry.includes("triggerRentalsTakedown()"));
+  ok("retry button shows only when stuck", pe.includes("item?.slotStuck ? (") && pe.includes("<form action={retryRentalsSlot}>"));
+  });
+}).then(() => {
   done();
 });
 function done() {

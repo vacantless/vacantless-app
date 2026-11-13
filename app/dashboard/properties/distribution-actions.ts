@@ -15,7 +15,7 @@
 
 import { triggerPostNow, triggerRentalsTakedown } from "@/lib/post-now";
 import { queueRobotTakedowns } from "@/lib/robot-takedown";
-import { SLOT_WAIT_CODE, slotWaitMessage, slotWaitNote } from "@/lib/rentals-slots";
+import { SLOT_WAIT_CODE, slotTakedownId, slotWaitMessage, slotWaitNote } from "@/lib/rentals-slots";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { checkPeriodSpend, spendCapBlockMessage } from "@/lib/spend-cap";
@@ -1921,6 +1921,69 @@ export async function switchRentalsSlot(formData: FormData) {
   // at its daily time. Best-effort: the daily run is the fallback.
   await triggerRentalsTakedown();
 
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  backTo(propertyId, "slot_switch_queued", "rentals_ca");
+}
+
+/**
+ * S785d: the switch's takedown stopped (usually an expired Rentals.ca
+ * sign-in). After signing in again, this puts the same takedown back in the
+ * robot's queue and wakes the home runner. The rental keeps waiting.
+ */
+export async function retryRentalsSlot(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyId = String(formData.get("property_id") ?? "");
+  const itemId = String(formData.get("item_id") ?? "");
+  if (!propertyId || !itemId) redirect("/dashboard/properties");
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+
+  const { data: item } = await supabase
+    .from("distribution_run_items")
+    .select("id, notes")
+    .eq("id", itemId)
+    .eq("organization_id", org.id)
+    .eq("channel", "rentals_ca")
+    .eq("error_code", SLOT_WAIT_CODE)
+    .maybeSingle();
+  const takedownId = slotTakedownId((item as { notes: string | null } | null)?.notes);
+  if (!item || !takedownId) backTo(propertyId, "slot_switch_stale", "rentals_ca");
+
+  const now = new Date().toISOString();
+  const { data: requeued } = await supabase
+    .from("distribution_run_items")
+    .update({
+      publish_status: "queued",
+      status: "pending",
+      concierge_claimed_by: null,
+      concierge_claimed_at: null,
+      error_code: null,
+      error_message: null,
+      audit_message: "Trying the switch again: taking this Rentals.ca ad off to free a slot for another rental you chose.",
+      updated_at: now,
+    })
+    .eq("id", takedownId!)
+    .eq("organization_id", org.id)
+    .eq("channel", "rentals_ca")
+    .eq("transport", "takedown")
+    .in("publish_status", ["needs_operator", "queued"])
+    .select("id")
+    .maybeSingle();
+  if (!requeued) backTo(propertyId, "slot_switch_failed", "rentals_ca");
+
+  await supabase
+    .from("distribution_run_items")
+    .update({
+      error_message: "Trying the switch again. This ad posts by itself once the other one is off.",
+      audit_message: "Trying the switch again. This ad posts by itself once the other one is off.",
+      updated_at: now,
+    })
+    .eq("id", itemId)
+    .eq("organization_id", org.id)
+    .eq("error_code", SLOT_WAIT_CODE);
+
+  await triggerRentalsTakedown();
   revalidatePath(`/dashboard/properties/${propertyId}`);
   backTo(propertyId, "slot_switch_queued", "rentals_ca");
 }

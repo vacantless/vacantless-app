@@ -13,7 +13,7 @@
 // gone; Connect / Disconnect Facebook Page lives in Settings. What remains below
 // Publish Everywhere is the live-ad-link list.
 
-import type { RentalsSlotChoice } from "@/lib/rentals-slots";
+import { slotIsStuck, type RentalsSlotChoice } from "@/lib/rentals-slots";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
 import {
@@ -450,6 +450,7 @@ export function DistributeTab({
               ? rentalsSlotChoice
               : null,
           waitingForSlot: it.channel === "rentals_ca" && it.errorCode === "waiting_for_free_slot",
+          slotStuck: it.channel === "rentals_ca" && it.errorCode === "waiting_for_free_slot" && slotIsStuck(it.errorMessage),
         }))}
         postingBlocker={publishEverywherePostingBlocker}
         shownChannelKeys={shownChannelKeys}

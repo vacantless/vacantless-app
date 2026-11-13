@@ -44,7 +44,7 @@ import { CopyLink } from "./copy-link";
 import { allowChannelAndPostNow, markAdsRenewed, publishProperty, requestConciergePublish, startSitePost } from "../actions";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
 import { rentersWord, shortAddress, type RentalsSlotChoice } from "@/lib/rentals-slots";
-import { switchRentalsSlot } from "../distribution-actions";
+import { retryRentalsSlot, switchRentalsSlot } from "../distribution-actions";
 import { forYouRowState, needsYouSentence } from "@/lib/for-you-row-state";
 import { SITES_SETUP_HREF, SITE_WORD_CLASS } from "@/lib/sites-setup";
 import {
@@ -102,6 +102,8 @@ export type PublishEverywhereRunItem = {
   slotChoice?: RentalsSlotChoice | null;
   /** S785: a chosen ad is being switched off; this one posts after. */
   waitingForSlot?: boolean;
+  /** S785d: that switch stopped (sign-in expired); offer to try again. */
+  slotStuck?: boolean;
 };
 
 export type PublishEverywherePostingBlocker = {
@@ -1221,6 +1223,18 @@ function ForYouRow({
             {paid ? " and cover the fee" : ""}.
           </p>
           )}
+          {item?.slotStuck ? (
+            <form action={retryRentalsSlot}>
+              <input type="hidden" name="property_id" value={propertyId} />
+              <input type="hidden" name="item_id" value={item.id} />
+              <button
+                type="submit"
+                className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
+              >
+                Try the switch again
+              </button>
+            </form>
+          ) : null}
           {item?.slotChoice || item?.waitingForSlot ? null : (
           <button
             type="button"

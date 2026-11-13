@@ -275,6 +275,9 @@ export function siteSetupNotice(
   }
   // S785: the landlord chose an ad to switch off; this one posts once it is off.
   if (errorCode === "waiting_for_free_slot") {
+    if ((errorMessage ?? "").trim().startsWith("The switch stopped:")) {
+      return { message: errorMessage!.trim(), href: "/dashboard/site-signin/rentals_ca", action: "Sign in to Rentals.ca" };
+    }
     return {
       message:
         errorMessage && errorMessage.trim()

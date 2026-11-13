@@ -107,3 +107,16 @@ export async function loadRentalsSlotChoice(
     return { ads: [], otherUsed: 0 };
   }
 }
+
+/** Matches the worker's SLOT_STUCK_PREFIX (tracker.ts): the switch's takedown failed. */
+export const SLOT_STUCK_PREFIX = "The switch stopped:";
+
+export function slotIsStuck(errorMessage: string | null | undefined): boolean {
+  return (errorMessage ?? "").trim().startsWith(SLOT_STUCK_PREFIX);
+}
+
+/** Pure: the takedown item a waiting rental is tied to. */
+export function slotTakedownId(notes: string | null | undefined): string | null {
+  const m = (notes ?? "").match(/slot_after:([0-9a-f-]{36})/i);
+  return m ? m[1] : null;
+}
