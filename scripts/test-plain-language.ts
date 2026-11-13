@@ -57,6 +57,10 @@ const SURFACES: Surface[] = [
   { file: "app/dashboard/properties/[id]/marketplace-row.tsx", mode: "ui" },
   { file: "components/marketplace-kit-steps.tsx", mode: "ui" },
   { file: "app/agent/[token]/marketplace/[propertyId]/page.tsx", mode: "ui" },
+  // S788b: unit progress, the landlord page and the crew link pages.
+  { file: "app/dashboard/crew/page.tsx", mode: "ui" },
+  { file: "app/crew/[token]/page.tsx", mode: "ui" },
+  { file: "app/crew/invalid/page.tsx", mode: "ui" },
   // S736: the Marketplace kit on the landlord's phone (review item 9).
   { file: "app/kit/[token]/page.tsx", mode: "ui" },
   // S750: Quick replies, the phone reply kit.
