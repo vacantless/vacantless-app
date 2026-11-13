@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { MAX_PHOTO_BYTES, extForType, nextSortOrder, photoStoragePath, type PhotoLike } from "@/lib/photos";
 import { sniffImageType } from "@/lib/image-url-import";
 import { photoCapForPlan } from "@/lib/billing";
+import { touchUpPhoto } from "@/lib/photo-touchup";
 import {
   driveImages,
   driveSourceRef,
@@ -108,6 +109,8 @@ export async function pullDrivePhotos(args: {
   organizationId: string;
   propertyId: string;
   folderUrl: string;
+  /** S789e: touch the photos up (crew shots), keeping each original. Pro photos skip it. */
+  touchUp?: boolean;
 }): Promise<DrivePullResult> {
   const { admin, organizationId, propertyId } = args;
   const ref = parseDriveFolderUrl(args.folderUrl);
@@ -167,10 +170,27 @@ export async function pullDrivePhotos(args: {
       continue;
     }
     const photoId = crypto.randomUUID();
-    const path = photoStoragePath(organizationId, propertyId, photoId, extForType(img.type));
-    const { error: upErr } = await admin.storage.from(PHOTO_BUCKET).upload(path, img.bytes, { contentType: img.type, upsert: false });
+    // S789e: the touched-up copy is what the rental shows; the original is kept beside it.
+    const edited = args.touchUp ? await touchUpPhoto(img.bytes) : null;
+    const path = photoStoragePath(organizationId, propertyId, photoId, edited ? "jpg" : extForType(img.type));
+    let originalPath: string | null = null;
+    let originalUrl: string | null = null;
+    if (edited) {
+      originalPath = photoStoragePath(organizationId, propertyId, `${photoId}-original`, extForType(img.type));
+      const { error: origErr } = await admin.storage.from(PHOTO_BUCKET).upload(originalPath, img.bytes, { contentType: img.type, upsert: false });
+      if (origErr) {
+        if (misses.length < 10) misses.push(`storage ${origErr.message}`);
+        skipped++;
+        continue;
+      }
+      originalUrl = admin.storage.from(PHOTO_BUCKET).getPublicUrl(originalPath).data.publicUrl;
+    }
+    const { error: upErr } = await admin.storage
+      .from(PHOTO_BUCKET)
+      .upload(path, edited ?? img.bytes, { contentType: edited ? "image/jpeg" : img.type, upsert: false });
     if (upErr) {
       if (misses.length < 10) misses.push(`storage ${upErr.message}`);
+      if (originalPath) await admin.storage.from(PHOTO_BUCKET).remove([originalPath]);
       skipped++;
       continue;
     }
@@ -184,10 +204,13 @@ export async function pullDrivePhotos(args: {
       sort_order: order,
       is_cover: firstEver,
       source_ref: driveSourceRef(entry.id),
+      touched_up: !!edited,
+      original_storage_path: originalPath,
+      original_url: originalUrl,
     });
     if (insErr) {
       if (misses.length < 10) misses.push(`insert ${insErr.message}`);
-      await admin.storage.from(PHOTO_BUCKET).remove([path]);
+      await admin.storage.from(PHOTO_BUCKET).remove(originalPath ? [path, originalPath] : [path]);
       skipped++;
       continue;
     }

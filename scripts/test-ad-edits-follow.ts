@@ -122,7 +122,7 @@ ok("saved notice offers the Marketplace update", /<MarketplaceUpdateButton kit=\
   ok("edit is upkeep, not a post", isAdUpkeepTransport("edit") && isAdUpkeepTransport("takedown") && !isAdUpkeepTransport(null));
   ok("posting worker skips an edit item", !workerJobEligible({ mode: "concierge", transport: "edit", publishStatus: "queued", automationAuthorized: true, claimedBy: null } as Parameters<typeof workerJobEligible>[0]));
   const act = readFileSync("app/dashboard/properties/actions.ts", "utf8");
-  ok("every photo change follows", (act.match(/await followPhotoChange\(supabase, propertyId\)/g) ?? []).length === 8);
+  ok("every photo change follows", (act.match(/await followPhotoChange\(supabase, propertyId\)/g) ?? []).length === 9);
   ok("a refresh on its way is not re-queued", act.includes("robotTakedownPending({ supabase, organizationId: org.id, propertyId })"));
   ok("Kijiji edits sit behind the staff switch", act.includes('orgHasSwitch(createAdminClient(), "kijiji_edits", org.id)'));
   ok("Page post edited on a text change", act.includes("pagePostTextChanged(changed)") && act.includes("updateFacebookPagePosts({"));

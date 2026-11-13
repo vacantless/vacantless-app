@@ -97,7 +97,24 @@ export async function recordCrewTap(args: {
     }
     if (photoFolder && photoSourceOf(photoFolder) === "gdrive") {
       try {
-        photos = await pullDrivePhotos({ admin, organizationId: crew.organization_id, propertyId: args.propertyId, folderUrl: photoFolder });
+        // S789e: crew shots are touched up; a photographer's (their link, or a
+        // shoot booked for this unit) are left as they are.
+        const { data: booked } = await admin
+          .from("unit_progress_events")
+          .select("id")
+          .eq("organization_id", crew.organization_id)
+          .eq("property_id", args.propertyId)
+          .eq("stage", "photographer_booked")
+          .gte("created_at", new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString())
+          .limit(1);
+        const proShoot = crew.role === "photographer" || (booked ?? []).length > 0;
+        photos = await pullDrivePhotos({
+          admin,
+          organizationId: crew.organization_id,
+          propertyId: args.propertyId,
+          folderUrl: photoFolder,
+          touchUp: !proShoot,
+        });
       } catch (err) {
         console.error("[unit-progress] photo pull failed", err instanceof Error ? err.message : String(err));
         photos = { ok: false, reason: "failed" };

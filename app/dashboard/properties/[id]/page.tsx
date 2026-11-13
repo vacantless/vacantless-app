@@ -49,6 +49,7 @@ import {
   duplicateProperty,
   blastPriceDrop,
   savePhotoFolderAndPull,
+  switchPhotoTouchUp,
 } from "../actions";
 import { drivePullLine, photoSourceOf, type DrivePullReason } from "@/lib/drive-import";
 import {
@@ -1049,6 +1050,14 @@ export default async function PropertyDetailPage({
   if (!property) notFound();
   const p = property as Property;
   const nowMs = Date.now();
+  // S789e: how many photos have a touched-up and an original copy, and which shows now.
+  const { data: touchRows } = await supabase
+    .from("property_photos")
+    .select("touched_up")
+    .eq("property_id", params.id)
+    .not("original_url", "is", null);
+  const touchedNow = ((touchRows ?? []) as Array<{ touched_up: boolean }>).filter((r) => r.touched_up).length;
+  const originalsNow = ((touchRows ?? []) as Array<{ touched_up: boolean }>).length - touchedNow;
   // S480: this page is scoped to ONE property = ONE org; every distribution
   // account/proof read is filtered to THIS property's org (KI744 / Codex fold).
   const propertyOrgId = p.organization_id;
@@ -3547,6 +3556,10 @@ export default async function PropertyDetailPage({
         const reasons: DrivePullReason[] = ["badlink", "notshared", "empty", "nested", "full", "failed"];
         const outcome = added
           ? drivePullLine({ ok: true, added: Number(added[1]), skipped: Number(added[2] ?? 0), alreadyIn: Number(added[1]) === 0 ? 1 : 0 })
+          : /^originals_\d+$/.test(f)
+            ? `Showing the originals for ${f.slice(10)} photos.`
+            : /^touched_\d+$/.test(f)
+              ? `Showing the touched-up copies for ${f.slice(8)} photos.`
           : f === "saved"
             ? "Folder link saved."
             : f === "cleared"
@@ -3579,7 +3592,27 @@ export default async function PropertyDetailPage({
                   Open the folder
                 </a>
               )}
+              {(source === "gdrive" || !folderUrl) && (
+                <label className="flex w-full items-center gap-2 text-xs text-gray-700">
+                  <input type="checkbox" name="touch_up" defaultChecked />
+                  Touch the photos up: brighter and clearer. The originals are kept.
+                </label>
+              )}
             </form>
+            {(touchedNow > 0 || originalsNow > 0) && (
+              <form action={switchPhotoTouchUp} className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-700">
+                <input type="hidden" name="property_id" value={p.id} />
+                <input type="hidden" name="to" value={touchedNow > 0 ? "originals" : "touched"} />
+                <span>
+                  {touchedNow > 0
+                    ? `${touchedNow} photo${touchedNow === 1 ? " is" : "s are"} touched up.`
+                    : `${originalsNow} photo${originalsNow === 1 ? " shows its" : "s show their"} original.`}
+                </span>
+                <button type="submit" className="rounded-lg border border-gray-300 px-2 py-1 font-medium text-gray-700 hover:bg-gray-50">
+                  {touchedNow > 0 ? "Use the originals" : "Use the touched-up copies"}
+                </button>
+              </form>
+            )}
           </div>
         );
       })()}

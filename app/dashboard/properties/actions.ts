@@ -5021,9 +5021,9 @@ export async function deletePhoto(formData: FormData) {
   const supabase = createClient();
   const { data } = await supabase
     .from("property_photos")
-    .select("id, sort_order, is_cover, storage_path")
+    .select("id, sort_order, is_cover, storage_path, original_storage_path")
     .eq("property_id", propertyId);
-  const rows = (data ?? []) as PhotoRow[];
+  const rows = (data ?? []) as Array<PhotoRow & { original_storage_path: string | null }>;
 
   const target = rows.find((r) => r.id === id);
   // S712: building photos share one stored file across units. Keep the file
@@ -5060,9 +5060,10 @@ export async function deletePhoto(formData: FormData) {
   // future regression is visible (the reconcile script is the last-resort
   // backstop). Failure here is non-fatal: the row is already gone.
   if (target && !fileStillUsed) {
+    // S789e: a touched-up photo keeps its original beside it; both go.
     const { data: removed, error: rmErr } = await supabase.storage
       .from(PHOTO_BUCKET)
-      .remove([target.storage_path]);
+      .remove(target.original_storage_path ? [target.storage_path, target.original_storage_path] : [target.storage_path]);
     if (rmErr) {
       console.error("deletePhoto: storage remove failed", {
         path: target.storage_path,
@@ -6303,6 +6304,47 @@ export type SaveQuestionSheetResult =
     };
 
 /**
+ * S789e: switch a rental's touched-up photos back to their originals, or
+ * back to the touched-up copies. Swaps the two stored files on each photo
+ * that has both; nothing is deleted, so it can go either way any time.
+ */
+export async function switchPhotoTouchUp(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  const to = String(formData.get("to") ?? "");
+  if (!propertyId || (to !== "originals" && to !== "touched")) return;
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("property_photos")
+    .select("id, storage_path, url, original_storage_path, original_url, touched_up")
+    .eq("property_id", propertyId)
+    .eq("organization_id", org.id)
+    .not("original_url", "is", null)
+    .eq("touched_up", to === "originals");
+  const rows = (data ?? []) as Array<{ id: string; storage_path: string; url: string; original_storage_path: string; original_url: string; touched_up: boolean }>;
+  let switched = 0;
+  for (const r of rows) {
+    const { error } = await supabase
+      .from("property_photos")
+      .update({
+        storage_path: r.original_storage_path,
+        url: r.original_url,
+        original_storage_path: r.storage_path,
+        original_url: r.url,
+        touched_up: !r.touched_up,
+      })
+      .eq("id", r.id)
+      .eq("organization_id", org.id);
+    if (!error) switched++;
+  }
+  if (switched > 0) await followPhotoChange(supabase, propertyId);
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  redirect(`/dashboard/properties/${propertyId}?folder=${to === "originals" ? "originals" : "touched"}_${switched}#photo-folder`);
+}
+
+/**
  * S789b: save a rental's photo folder link and, for Google Drive, pull in the
  * photos that are not on the rental yet. An empty field removes the link.
  */
@@ -6339,7 +6381,8 @@ export async function savePhotoFolderAndPull(formData: FormData) {
 
   const admin = createAdminClient();
   if (!admin) back("failed");
-  const result = await pullDrivePhotos({ admin: admin!, organizationId: org.id, propertyId, folderUrl: url as string });
+  const touchUp = formData.get("touch_up") === "on";
+  const result = await pullDrivePhotos({ admin: admin!, organizationId: org.id, propertyId, folderUrl: url as string, touchUp });
   if (result.ok && result.added > 0) await followPhotoChange(supabase, propertyId);
   revalidatePath(`/dashboard/properties/${propertyId}`);
   back(result.ok ? `added_${result.added}${result.skipped > 0 ? `_${result.skipped}` : ""}` : result.reason);
