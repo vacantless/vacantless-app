@@ -62,6 +62,60 @@ export function runItemsToClose(rows: RunItemRow[], nowMs: number): Array<{ id: 
   return out;
 }
 
+// S788 (W9): a site can hold an older ad record that is still "live" after a
+// newer ad replaced it (Pillette 3: Kijiji 1744721877 expired, the paid
+// repost 1746104811 got a new link). Same-link records are closed when the
+// new one goes live (worker tracker); a different link never was. Close the
+// old record only when ALL hold: same rental and site; the checker marked it
+// not live (stale or not_found); its ad record is expired or removed; and
+// another record on that site is verified live with a different link.
+// Touches no ad and no listing_posts row.
+export const SUPERSEDED_REASON = "closed: an older ad on this site; a newer ad carries the rental now";
+
+export type SupersedeRow = {
+  id: string;
+  channel: string;
+  publish_status: string | null;
+  verification_status: string | null;
+  external_url: string | null;
+  listing_post: { status: string | null } | Array<{ status: string | null }> | null;
+  run: { property_id: string | null } | Array<{ property_id: string | null }> | null;
+};
+
+function supersedePropertyId(r: SupersedeRow): string | null {
+  const run = Array.isArray(r.run) ? r.run[0] : r.run;
+  return run?.property_id ?? null;
+}
+
+function supersedePostStatus(r: SupersedeRow): string | null {
+  const lp = Array.isArray(r.listing_post) ? r.listing_post[0] : r.listing_post;
+  return lp?.status ?? null;
+}
+
+/** Which old ad records a newer verified-live ad on the same site replaces. Pure. */
+export function supersededItems(rows: SupersedeRow[]): Array<{ id: string; reason: string }> {
+  const verifiedUrls = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const pid = supersedePropertyId(r);
+    if (!pid || r.publish_status !== "live" || r.verification_status !== "verified_live" || !r.external_url) continue;
+    const key = `${pid}|${r.channel}`;
+    if (!verifiedUrls.has(key)) verifiedUrls.set(key, new Set());
+    verifiedUrls.get(key)!.add(r.external_url);
+  }
+  const out: Array<{ id: string; reason: string }> = [];
+  for (const r of rows) {
+    const pid = supersedePropertyId(r);
+    if (!pid || r.publish_status !== "live") continue;
+    if (r.verification_status !== "stale" && r.verification_status !== "not_found") continue;
+    if (!(GONE_POST_STATUSES as readonly string[]).includes(supersedePostStatus(r) ?? "")) continue;
+    const urls = verifiedUrls.get(`${pid}|${r.channel}`);
+    if (!urls) continue;
+    const different = [...urls].some((u) => u !== r.external_url);
+    if (different) out.push({ id: r.id, reason: SUPERSEDED_REASON });
+  }
+  return out;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
 
@@ -76,12 +130,23 @@ export async function closeStaleRunItems(admin: Admin, nowISO: string): Promise<
       .limit(300);
     if (error || !data) return 0;
     const toClose = runItemsToClose(data as RunItemRow[], Date.parse(nowISO));
+    // S788 (W9): old ad records a newer verified-live ad on the same site replaced.
+    const { data: liveRows, error: liveErr } = await admin
+      .from("distribution_run_items")
+      .select("id, channel, publish_status, verification_status, external_url, listing_post:listing_posts(status), run:distribution_runs(property_id)")
+      .eq("publish_status", "live")
+      .limit(1000);
+    if (!liveErr && liveRows) {
+      const seen = new Set(toClose.map((c) => c.id));
+      for (const c of supersededItems(liveRows as SupersedeRow[])) if (!seen.has(c.id)) toClose.push(c);
+    }
     let n = 0;
     for (const c of toClose) {
       const { error: upErr } = await admin
         .from("distribution_run_items")
         .update({ publish_status: "skipped", error_code: "closed_stale", audit_message: c.reason, updated_at: nowISO })
-        .eq("id", c.id);
+        .eq("id", c.id)
+        .in("publish_status", ["live", "submitted", ...WAITING_STATUSES]);
       if (!upErr) n++;
     }
     return n;

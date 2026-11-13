@@ -1,6 +1,6 @@
 // Run with: npx tsx scripts/test-run-item-closer.ts
 // S728: which distribution_run_items are closed as bookkeeping.
-import { runItemsToClose, STALE_WAIT_DAYS } from "../lib/run-item-closer";
+import { runItemsToClose, STALE_WAIT_DAYS, supersededItems, SUPERSEDED_REASON } from "../lib/run-item-closer";
 
 let pass = 0;
 let fail = 0;
@@ -33,6 +33,32 @@ ok("needs_payment for 60 days closes", runItemsToClose([row({ publish_status: "n
 ok("skipped stays skipped", runItemsToClose([row({ publish_status: "skipped", updated_at: new Date(now - 90 * day).toISOString() })], now).length === 0);
 ok("reason names the wait", runItemsToClose([row({ publish_status: "needs_login", updated_at: new Date(now - 40 * day).toISOString() })], now)[0].reason.includes("login"));
 ok("array-shaped relations read too", runItemsToClose([row({ listing_post: [{ status: "removed" }], run: [{ property: [{ status: "leased" }] }] })], now).length === 1);
+
+// S788 (W9): an old ad record replaced by a newer verified-live ad on the same site.
+const sup = (o: Partial<Parameters<typeof supersededItems>[0][number]>) => ({
+  id: "old",
+  channel: "kijiji",
+  publish_status: "live",
+  verification_status: "stale",
+  external_url: "https://www.kijiji.ca/v/1744721877",
+  listing_post: { status: "removed" },
+  run: { property_id: "p1" },
+  ...o,
+});
+const fresh = sup({ id: "new", verification_status: "verified_live", external_url: "https://www.kijiji.ca/v/1746104811", listing_post: { status: "live" } });
+ok("Pillette 3: two old Kijiji records close, the new one stays", (() => {
+  const r = supersededItems([sup({ id: "a" }), sup({ id: "b" }), fresh]);
+  return r.length === 2 && r.every((x) => x.id !== "new" && x.reason === SUPERSEDED_REASON);
+})());
+ok("no newer verified ad on the site: stays (Glenrose, Unit 33)", supersededItems([sup({})]).length === 0);
+ok("newer ad on a different site does not count", supersededItems([sup({}), { ...fresh, channel: "zumper" }]).length === 0);
+ok("newer ad on a different rental does not count", supersededItems([sup({}), { ...fresh, run: { property_id: "p2" } }]).length === 0);
+ok("old record whose ad record is still live stays", supersededItems([sup({ listing_post: { status: "live" } }), fresh]).length === 0);
+ok("old record the checker still sees live stays", supersededItems([sup({ verification_status: "verified_live" }), fresh]).length === 0);
+ok("same link as the verified record stays (that path is the tracker's)", supersededItems([sup({ external_url: fresh.external_url }), fresh]).length === 0);
+ok("not_found counts like stale", supersededItems([sup({ verification_status: "not_found", listing_post: { status: "expired" } }), fresh]).length === 1);
+ok("array-shaped relations read too", supersededItems([sup({ listing_post: [{ status: "removed" }], run: [{ property_id: "p1" }] }), fresh]).length === 1);
+ok("a verified record without a link closes nothing", supersededItems([sup({}), { ...fresh, external_url: null }]).length === 0);
 
 console.log(`run-item-closer: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
