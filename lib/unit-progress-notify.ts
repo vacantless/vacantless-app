@@ -12,7 +12,7 @@ import { sendOrgNotification, type NotifyOrg } from "@/lib/notifications-server"
 import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
-import { STAGE_LABEL, isCrewRole, stageDateLine, type Stage } from "@/lib/unit-progress";
+import { STAGE_LABEL, isCrewRole, stageDateLine, tenancyEffectAction, type Stage, type TenancyEffect } from "@/lib/unit-progress";
 import { unitCardsForOrg } from "@/lib/unit-progress-server";
 import {
   emailFromContact,
@@ -26,7 +26,7 @@ import {
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/+$/, "");
 const MAX_RECIPIENTS = 10;
-export const TAP_NOTIFY_STAGES: readonly Stage[] = ["notice_given", "photos_in", "rented"];
+export const TAP_NOTIFY_STAGES: readonly Stage[] = ["notice_given", "photos_in", "rented", "moved_in"];
 
 type OrgRow = NotifyOrg & { public_contact_email: string | null; booking_timezone: string | null };
 
@@ -57,6 +57,7 @@ export async function notifyLandlordOfTap(args: {
   crewName: string;
   stage: Stage;
   dueDate: string | null;
+  effect?: TenancyEffect;
 }): Promise<void> {
   if (!TAP_NOTIFY_STAGES.includes(args.stage)) return;
   try {
@@ -64,8 +65,10 @@ export async function notifyLandlordOfTap(args: {
     if (!org) return;
     const { data: prop } = await args.admin.from("properties").select("address").eq("id", args.propertyId).maybeSingle();
     const address = (prop as { address: string | null } | null)?.address ?? "A unit";
-    const extra =
+    const tenancyAction = args.effect ? tenancyEffectAction(args.effect, args.propertyId, APP_URL) : null;
+    const base =
       args.stage === "rented" ? "Its ads are coming down. If that was a mistake, relist it from the rental page." : stageDateLine(args.stage, args.dueDate);
+    const extra = [base ? `${base}.`.replace(/\.\.$/, ".") : "", tenancyAction?.line ?? ""].filter(Boolean).join(" ");
     await sendOrgNotification({
       client: args.admin,
       org,
@@ -75,11 +78,11 @@ export async function notifyLandlordOfTap(args: {
         property_address: address,
         crew_name: args.crewName,
         stage_label: STAGE_LABEL[args.stage].toLowerCase(),
-        date_line: extra ? `${extra}.`.replace(/\.\.$/, ".") : "",
+        date_line: extra,
         dashboard_url: `${APP_URL}/dashboard/crew`,
       },
       operatorFallback: await operatorFallback(args.admin, org),
-      action: { label: "See every unit", url: `${APP_URL}/dashboard/crew` },
+      action: tenancyAction ? { label: tenancyAction.label, url: tenancyAction.url } : { label: "See every unit", url: `${APP_URL}/dashboard/crew` },
     });
   } catch (err) {
     console.error("[unit-progress] tap notify failed", err instanceof Error ? err.message : String(err));

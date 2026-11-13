@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accessibleBrand, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { buildingsForOrg, crewFromToken, unitCardsForOrg, type UnitCard } from "@/lib/unit-progress-server";
-import { CREW_ROLE_LABEL, STAGE_DATE_LABEL, STAGE_LABEL, canAddUnit, isStage, stageDateLine, stageTakesDate, tapsFor } from "@/lib/unit-progress";
+import { CREW_ROLE_LABEL, STAGE_DATE_LABEL, STAGE_LABEL, canAddUnit, isStage, stageDateLine, stageTakesDate, takesAdsDown, tapsFor, type Stage } from "@/lib/unit-progress";
 import { addUnitFromCrewLink, tapStageFromCrewLink } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +53,11 @@ export default async function CrewPage({
   const savedStage = status.startsWith("saved_") ? status.slice(6) : null;
   const savedUnit = cards.find((c) => c.id === searchParams.unit) ?? null;
 
+  // S789: Rented, Lease signed and Moved in take the ads down, so each asks once.
+  const needsConfirm = (s: Stage, c: UnitCard) => takesAdsDown(s) && c.status !== "leased";
+  const confirmLabel = (s: Stage) =>
+    s === "rented" ? "Yes, it's rented: take the ads down" : `Yes, ${STAGE_LABEL[s].toLowerCase()}: take the ads down`;
+
   const renderCard = (c: UnitCard) => {
     const buttons = tapsFor(crew.role, c.stage);
     return (
@@ -73,10 +78,10 @@ export default async function CrewPage({
         {buttons.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {buttons.map((s) =>
-              s === "rented" && searchParams.confirm !== c.id ? (
+              needsConfirm(s, c) && searchParams.confirm !== `${c.id}:${s}` ? (
                 <a
                   key={s}
-                  href={`/crew/${encodeURIComponent(params.token)}?confirm=${c.id}#u-${c.id}`}
+                  href={`/crew/${encodeURIComponent(params.token)}?confirm=${c.id}:${s}#u-${c.id}`}
                   className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800"
                 >
                   {STAGE_LABEL[s]}
@@ -95,12 +100,12 @@ export default async function CrewPage({
                 <button
                   type="submit"
                   className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                    s === "rented"
+                    needsConfirm(s, c)
                       ? "border-red-300 bg-red-50 text-red-800"
                       : "border-gray-300 bg-white text-gray-800"
                   }`}
                 >
-                  {s === "rented" ? "Yes, it's rented: take the ads down" : STAGE_LABEL[s]}
+                  {needsConfirm(s, c) ? confirmLabel(s) : STAGE_LABEL[s]}
                 </button>
               </form>
               ),
@@ -124,7 +129,7 @@ export default async function CrewPage({
       {savedStage && isStage(savedStage) && (
         <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
           Saved: {savedUnit?.address ?? "the unit"} is now {STAGE_LABEL[savedStage].toLowerCase()}.
-          {savedStage === "rented" ? " Its ads are coming down." : ""}
+          {takesAdsDown(savedStage) ? " If its ads were up, they are coming down." : ""}
         </div>
       )}
       {(status === "added" || status === "add_existed") && (
@@ -176,7 +181,7 @@ export default async function CrewPage({
             <label className="block text-xs font-medium text-gray-600" htmlFor="add-stage">Where it is at</label>
             <select id="add-stage" name="stage" className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm" defaultValue="under_construction">
               {tapsFor(crew.role, null)
-                .filter((st) => st !== "rented")
+                .filter((st) => !takesAdsDown(st))
                 .map((st) => (
                   <option key={st} value={st}>{STAGE_LABEL[st]}</option>
                 ))}

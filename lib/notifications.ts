@@ -457,7 +457,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Your crew updated a unit",
     description:
-      "When someone on your crew taps Tenant gave notice, Photos are in or Rented on their unit progress link, you get the unit and who tapped it.",
+      "When someone on your crew taps Tenant gave notice, Photos are in, Rented or Moved in on their unit progress link, you get the unit, who tapped it and the next step.",
     tokens: [...COMMON_TOKENS, "crew_name", "stage_label", "date_line", "dashboard_url"],
     defaultSubject: "{{property_address}}: {{stage_label}}",
     defaultBody:

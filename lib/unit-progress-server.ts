@@ -6,7 +6,7 @@
 // "Leased" save runs (app/dashboard/properties/actions.ts).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ORG_COLUMNS, type Org } from "@/lib/org";
-import { canAddUnit, canTap, cleanDate, cleanNote, cleanUnitNumber, composeUnitAddress, isCrewRole, isStage, stageTakesDate, takesAdsDown, type CrewRole, type Stage } from "@/lib/unit-progress";
+import { canAddUnit, canTap, cleanDate, cleanNote, cleanUnitNumber, composeUnitAddress, isCrewRole, isStage, stageTakesDate, takesAdsDown, tenancyEffect, type CrewRole, type Stage, type TenancyEffect, type TenancyLite } from "@/lib/unit-progress";
 import { splitAddressUnit } from "@/lib/address-unit";
 import { paidRentalLimitReached } from "@/lib/billing";
 import { copyBuildingPhotosTo } from "@/lib/building-photos-server";
@@ -63,15 +63,19 @@ export async function recordCrewTap(args: {
     .maybeSingle();
   if (!prop) return { ok: false, reason: "not_found" };
 
+  const dueDate = stageTakesDate(stage) ? cleanDate(args.dueDate) : null;
   const { error } = await admin.from("unit_progress_events").insert({
     organization_id: crew.organization_id,
     property_id: args.propertyId,
     stage,
     crew_member_id: crew.id,
     note: cleanNote(args.note),
-    due_date: stageTakesDate(stage) ? cleanDate(args.dueDate) : null,
+    due_date: dueDate,
   });
   if (error) return { ok: false, reason: "error" };
+
+  // S789: Tenant gave notice and Moved in reach the tenancy.
+  const effect = await applyTenancyEffect({ admin, organizationId: crew.organization_id, propertyId: args.propertyId, stage, dueDate });
 
   if (takesAdsDown(stage) && (prop as { status: string | null }).status !== "leased") {
     await markRentedAndTakeDown({ admin, organizationId: crew.organization_id, propertyId: args.propertyId });
@@ -84,9 +88,59 @@ export async function recordCrewTap(args: {
     propertyId: args.propertyId,
     crewName: crew.name,
     stage,
-    dueDate: stageTakesDate(stage) ? cleanDate(args.dueDate) : null,
+    dueDate,
+    effect,
   });
   return { ok: true, stage };
+}
+
+/**
+ * S789: write what a tap means for the unit's tenancy (lib/unit-progress
+ * tenancyEffect). Only ever fills an empty move-out date or turns an upcoming
+ * tenancy active; never overwrites what the landlord recorded. Never throws.
+ */
+async function applyTenancyEffect(args: {
+  admin: SupabaseClient;
+  organizationId: string;
+  propertyId: string;
+  stage: Stage;
+  dueDate: string | null;
+}): Promise<TenancyEffect> {
+  const { admin, organizationId, propertyId, stage, dueDate } = args;
+  if (stage !== "notice_given" && stage !== "moved_in") return { kind: "none" };
+  try {
+    const { data } = await admin
+      .from("tenancies")
+      .select("id, status, move_out_date")
+      .eq("organization_id", organizationId)
+      .eq("property_id", propertyId)
+      .in("status", ["active", "upcoming"])
+      .limit(10);
+    const effect = tenancyEffect(stage, dueDate, (data ?? []) as TenancyLite[]);
+    if (effect.kind === "set_move_out") {
+      const { data: done } = await admin
+        .from("tenancies")
+        .update({ move_out_date: effect.date })
+        .eq("id", effect.tenancyId)
+        .eq("organization_id", organizationId)
+        .is("move_out_date", null)
+        .select("id");
+      if (!done || done.length === 0) return { kind: "none" };
+    } else if (effect.kind === "activate") {
+      const { data: done } = await admin
+        .from("tenancies")
+        .update({ status: "active" })
+        .eq("id", effect.tenancyId)
+        .eq("organization_id", organizationId)
+        .eq("status", "upcoming")
+        .select("id");
+      if (!done || done.length === 0) return { kind: "none" };
+    }
+    return effect;
+  } catch (err) {
+    console.error("[unit-progress] tenancy effect failed", err instanceof Error ? err.message : String(err));
+    return { kind: "none" };
+  }
 }
 
 /** Mark the unit leased and run the landlord's lease-up takedown. Never throws. */
@@ -254,7 +308,7 @@ export async function addUnitFromCrew(args: {
       // best effort: a unit without its building's photos is still added
     }
   }
-  if (args.stage && isStage(args.stage) && canTap(crew.role, args.stage) && args.stage !== "rented") {
+  if (args.stage && isStage(args.stage) && canTap(crew.role, args.stage) && !takesAdsDown(args.stage)) {
     await recordCrewTap({ admin, crew, propertyId, stage: args.stage, dueDate: args.dueDate });
   }
   return { ok: true, propertyId, existed };

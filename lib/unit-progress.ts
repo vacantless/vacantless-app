@@ -108,9 +108,75 @@ export function currentStage(events: readonly ProgressEvent[]): Stage | null {
   return best ? (best.stage as Stage) : null;
 }
 
-/** A stage that takes the ads down. */
+/**
+ * A stage that takes the ads down. S789: Lease signed and Moved in do too, so
+ * a crew that skips the Rented tap never leaves ads up on a full unit (the
+ * caller only acts when the rental is not already leased).
+ */
 export function takesAdsDown(stage: Stage): boolean {
-  return stage === "rented";
+  return stage === "rented" || stage === "lease_signed" || stage === "moved_in";
+}
+
+// S789: what a tap does to the unit's tenancy. Pure.
+//   Tenant gave notice (with a date): the move-out date lands on the one
+//     current tenancy when it has none yet, so Today's "coming vacant" card
+//     (lib/coming-vacant) offers the one-click relist. Ads never go up on
+//     their own: posting can cost money, the landlord presses Relist.
+//   Moved in: the one upcoming tenancy becomes active; with no tenancy at
+//     all, the landlord is asked to add it.
+export type TenancyLite = { id: string; status: string; move_out_date: string | null };
+
+export type TenancyEffect =
+  | { kind: "none" }
+  | { kind: "set_move_out"; tenancyId: string; date: string }
+  | { kind: "move_out_already"; tenancyId: string; date: string }
+  | { kind: "activate"; tenancyId: string }
+  | { kind: "already_active"; tenancyId: string }
+  | { kind: "needs_tenancy" };
+
+export function tenancyEffect(stage: Stage, dueDate: string | null, tenancies: readonly TenancyLite[]): TenancyEffect {
+  const active = tenancies.filter((t) => t.status === "active");
+  const upcoming = tenancies.filter((t) => t.status === "upcoming");
+  if (stage === "notice_given") {
+    if (!dueDate || active.length !== 1) return { kind: "none" };
+    const t = active[0];
+    if (t.move_out_date) return { kind: "move_out_already", tenancyId: t.id, date: t.move_out_date };
+    return { kind: "set_move_out", tenancyId: t.id, date: dueDate };
+  }
+  if (stage === "moved_in") {
+    if (upcoming.length === 1 && active.length === 0) return { kind: "activate", tenancyId: upcoming[0].id };
+    if (active.length === 1 && upcoming.length === 0) return { kind: "already_active", tenancyId: active[0].id };
+    if (active.length === 0 && upcoming.length === 0) return { kind: "needs_tenancy" };
+    return { kind: "none" };
+  }
+  return { kind: "none" };
+}
+
+/** The extra sentence and button the landlord's email carries for an effect. */
+export function tenancyEffectAction(
+  effect: TenancyEffect,
+  propertyId: string,
+  appUrl: string,
+): { line: string; label: string; url: string } | null {
+  switch (effect.kind) {
+    case "set_move_out":
+    case "move_out_already":
+      return {
+        line: "The move-out date is on the tenancy. Relist from Today and the ads go up with viewings from 3 weeks before.",
+        label: "Relist now",
+        url: `${appUrl}/dashboard`,
+      };
+    case "activate":
+      return { line: "The tenancy is now active.", label: "See the tenancy", url: `${appUrl}/dashboard/tenancies/${effect.tenancyId}` };
+    case "needs_tenancy":
+      return {
+        line: "There is no tenancy for this unit yet. Add it so rent, renewals and notices start.",
+        label: "Add the tenancy",
+        url: `${appUrl}/dashboard/tenancies/new?property=${encodeURIComponent(propertyId)}`,
+      };
+    default:
+      return null;
+  }
 }
 
 /** Stages that carry a date, and what the date means. */

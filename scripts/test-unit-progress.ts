@@ -1,6 +1,6 @@
 // Run with: npx tsx scripts/test-unit-progress.ts
 // S788b: unit progress stages, who can tap what, current stage.
-import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL, cleanDate, stageTakesDate, stageDateLine, canAddUnit, cleanUnitNumber, composeUnitAddress } from "../lib/unit-progress";
+import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL, cleanDate, stageTakesDate, stageDateLine, canAddUnit, cleanUnitNumber, composeUnitAddress, tenancyEffect, tenancyEffectAction } from "../lib/unit-progress";
 
 let pass = 0;
 let fail = 0;
@@ -29,6 +29,7 @@ ok("newest event wins", currentStage([
 ]) === "photos_in");
 ok("unknown stage ignored", currentStage([{ stage: "bogus", created_at: "2026-11-20T00:00:00Z" }, { stage: "rented", created_at: "2026-11-13T00:00:00Z" }]) === "rented");
 ok("rented takes ads down", takesAdsDown("rented") && !takesAdsDown("waiting_deposit"));
+ok("lease signed and moved in take ads down too", takesAdsDown("lease_signed") && takesAdsDown("moved_in") && !takesAdsDown("notice_given"));
 ok("note trimmed and capped", cleanNote("  a  b ") === "a b" && (cleanNote("x".repeat(900)) ?? "").length === 500 && cleanNote("   ") === null);
 ok("role and stage guards", isCrewRole("contractor") && !isCrewRole("owner") && isStage("rented") && !isStage("done"));
 ok("every stage has a label without dashes", Object.values(STAGE_LABEL).every((l) => l.length > 0 && !/[–—]/.test(l)));
@@ -47,5 +48,23 @@ ok("manager and leasing can add a unit, contractor cannot", canAddUnit("manager"
 ok("unit number cleaned", cleanUnitNumber(" 22 ") === "22" && cleanUnitNumber("Unit 4B") === "4B" && cleanUnitNumber("#12") === "12" && cleanUnitNumber("") === null && cleanUnitNumber("22; drop") === null);
 ok("unit address composed", composeUnitAddress("833 Pillette Rd, Windsor, ON N8Y 3B4", "22") === "833 Pillette Rd, Unit 22, Windsor, ON N8Y 3B4");
 ok("unit address with a street only", composeUnitAddress("1551 Assumption St", "10") === "1551 Assumption St, Unit 10");
+// S789: what a tap does to the tenancy.
+const act = { id: "t1", status: "active", move_out_date: null };
+const up = { id: "t2", status: "upcoming", move_out_date: null };
+ok("notice fills an empty move-out date", JSON.stringify(tenancyEffect("notice_given", "2027-01-31", [act])) === JSON.stringify({ kind: "set_move_out", tenancyId: "t1", date: "2027-01-31" }));
+ok("notice never overwrites a recorded date", tenancyEffect("notice_given", "2027-01-31", [{ ...act, move_out_date: "2027-02-28" }]).kind === "move_out_already");
+ok("notice without a date does nothing", tenancyEffect("notice_given", null, [act]).kind === "none");
+ok("notice with no tenancy does nothing", tenancyEffect("notice_given", "2027-01-31", []).kind === "none");
+ok("notice with two current tenancies does nothing", tenancyEffect("notice_given", "2027-01-31", [act, { ...act, id: "t3" }]).kind === "none");
+ok("moved in turns the upcoming tenancy active", JSON.stringify(tenancyEffect("moved_in", null, [up])) === JSON.stringify({ kind: "activate", tenancyId: "t2" }));
+ok("moved in with no tenancy asks for one", tenancyEffect("moved_in", null, []).kind === "needs_tenancy");
+ok("moved in with the old tenant still active and a new one upcoming does nothing", tenancyEffect("moved_in", null, [act, up]).kind === "none");
+ok("other stages leave the tenancy alone", tenancyEffect("being_cleaned", "2026-12-01", [act]).kind === "none");
+const relist = tenancyEffectAction({ kind: "set_move_out", tenancyId: "t1", date: "2027-01-31" }, "p1", "https://app.vacantless.com");
+ok("notice email offers Relist now on Today", relist?.label === "Relist now" && relist.url === "https://app.vacantless.com/dashboard");
+const addT = tenancyEffectAction({ kind: "needs_tenancy" }, "p1", "https://app.vacantless.com");
+ok("moved in email links the new-tenancy form for the unit", addT?.label === "Add the tenancy" && addT.url.endsWith("/dashboard/tenancies/new?property=p1"));
+ok("no action for none", tenancyEffectAction({ kind: "none" }, "p1", "x") === null);
+ok("no em dashes in the effect lines", [relist, addT].every((a) => a && !a.line.includes("\u2014")));
 console.log(`unit-progress: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
