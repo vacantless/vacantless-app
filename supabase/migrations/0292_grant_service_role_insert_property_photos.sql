@@ -1,0 +1,11 @@
+-- ============================================================================
+-- Vacantless - S789: let the server add photos to a rental.
+-- ============================================================================
+-- service_role had SELECT on property_photos (0184) but never INSERT, so every
+-- server-side photo add failed with "permission denied for table
+-- property_photos": the crew "Photos are in" Drive pull (S789b, found live
+-- 2026-11-13 via the S789c miss log) and the building photos copied onto a
+-- unit added from a crew link (S788e, failed silently). Same class as 0184.
+-- Applied to prod 2026-11-13 by Claude (S789).
+-- ============================================================================
+grant insert on public.property_photos to service_role;
