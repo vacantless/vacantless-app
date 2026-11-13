@@ -33,7 +33,7 @@ ok("waiting notice shows the message", n?.message === msg);
 ok("full notice unchanged", siteSetupNotice("needs_operator", "free_limit_reached", null)?.message.includes("free ads") === true);
 
 const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
-ok("top summary names free ads full", page.includes('"free ads full"') && page.includes('item.errorCode === "free_limit_reached"'));
+ok("top summary names free ads full", page.includes('"site with free ads full"') && page.includes('item.errorCode === "free_limit_reached"'));
 ok("slots loaded only when this rental is stopped", page.includes('.in("run_id", slotRunIds') && page.includes("loadRentalsSlotChoice(supabase"));
 const pe = readFileSync("app/dashboard/properties/[id]/publish-everywhere.tsx", "utf8");
 ok("chooser posts the switch action", pe.includes("<form action={switchRentalsSlot}>") && pe.includes('name="weak_listing_post_id"'));
@@ -47,5 +47,17 @@ ok("action parks the rental, never approves it", fn.includes("error_code: SLOT_W
 ok("action wakes the home runner", fn.includes("triggerRentalsTakedown()"));
 const all = [page, pe, act, readFileSync("lib/rentals-slots.ts", "utf8")].join("\n");
 ok("no em dashes in new copy", !/Switch [^\n]*—|free ads[^\n]*—/.test(all) && !readFileSync("lib/rentals-slots.ts", "utf8").includes("—"));
+ok("waiting summary, never a repost", page.includes('"site making room"') && /for \(const key of slotWait\.keys\(\)\) \{\s*repost\.delete\(key\);/.test(page));
+import("../lib/for-you-row-state").then(({ forYouRowState }) => {
+  const st = forYouRowState({
+    rowKey: "rentals_ca",
+    item: { mode: "concierge", publishStatus: "needs_operator", externalUrl: null, waitingForSlot: true, siteSetup: { message: "m", href: "h", action: "a" } },
+    liveProofUrl: null, retiredUrls: [], alreadySignedIn: true, addonLocked: false, postingBlocked: false, hasMarketplaceKit: false,
+  });
+  ok("waiting row reads Posting, not Needs you", st.word === "Posting");
+  done();
+});
+function done() {
 console.log(`rentals-slots: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
+}

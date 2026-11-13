@@ -18,6 +18,8 @@ export type ForYouRowItem = {
   approved?: boolean;
   siteSetup?: { message: string; href: string; action: string } | null;
   externalUrl: string | null;
+  /** S785: another Rentals.ca ad is being switched off for this one; nothing for the landlord to do. */
+  waitingForSlot?: boolean;
 };
 
 export type ForYouRowStateInput = {
@@ -106,6 +108,8 @@ export function forYouRowState(input: ForYouRowStateInput): ForYouRowState {
       ? "addon"
       : postingBlocked
         ? "Posting"
+        : item?.waitingForSlot === true
+          ? "Posting"
         : payAtCheckout || siteSetup || needsApproval || needsConnect || signinFirst || repostable
           ? "Needs you"
           : preparing || working
