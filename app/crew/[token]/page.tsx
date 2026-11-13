@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accessibleBrand, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
-import { crewFromToken, unitCardsForOrg, type UnitCard } from "@/lib/unit-progress-server";
-import { CREW_ROLE_LABEL, STAGE_DATE_LABEL, STAGE_LABEL, isStage, stageDateLine, stageTakesDate, tapsFor } from "@/lib/unit-progress";
-import { tapStageFromCrewLink } from "./actions";
+import { buildingsForOrg, crewFromToken, unitCardsForOrg, type UnitCard } from "@/lib/unit-progress-server";
+import { CREW_ROLE_LABEL, STAGE_DATE_LABEL, STAGE_LABEL, canAddUnit, isStage, stageDateLine, stageTakesDate, tapsFor } from "@/lib/unit-progress";
+import { addUnitFromCrewLink, tapStageFromCrewLink } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +45,7 @@ export default async function CrewPage({
   const tz = org?.booking_timezone || "America/Toronto";
 
   const cards = await unitCardsForOrg(admin, crew.organization_id);
+  const buildings = canAddUnit(crew.role) ? await buildingsForOrg(admin, crew.organization_id) : [];
   const inProgress = cards.filter((c) => c.status !== "leased");
   const rented = cards.filter((c) => c.status === "leased");
 
@@ -126,6 +127,22 @@ export default async function CrewPage({
           {savedStage === "rented" ? " Its ads are coming down." : ""}
         </div>
       )}
+      {(status === "added" || status === "add_existed") && (
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          {status === "added" ? "Unit added. It stays private until the landlord posts it." : "That unit was already here. Its card is below."}
+        </div>
+      )}
+      {status.startsWith("add_") && status !== "add_existed" && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {status === "add_bad_unit"
+            ? "Type the unit number, like 22 or 4B."
+            : status === "add_plan_full"
+              ? "The account has no room for more rentals. Ask the landlord to add this unit."
+              : status === "add_archived"
+                ? "That unit was archived. Ask the landlord to bring it back."
+                : "That unit was not added. Please try again."}
+        </div>
+      )}
       {status === "not_allowed" && (
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           That step is not on your link. Ask the landlord to set it.
@@ -141,6 +158,35 @@ export default async function CrewPage({
         {inProgress.length === 0 && <p className="text-sm text-gray-600">No units yet.</p>}
         {inProgress.map(renderCard)}
       </div>
+
+      {buildings.length > 0 && (
+        <details className="mt-6 rounded-2xl border border-gray-200 bg-white p-4">
+          <summary className="cursor-pointer text-sm font-medium text-gray-800">Add a unit</summary>
+          <p className="mt-2 text-xs text-gray-500">For a unit that is not on this list yet. It stays private until the landlord posts it.</p>
+          <form action={addUnitFromCrewLink} className="mt-3 space-y-2">
+            <input type="hidden" name="token" value={params.token} />
+            <label className="block text-xs font-medium text-gray-600" htmlFor="add-street">Building</label>
+            <select id="add-street" name="street" required className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm">
+              {buildings.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+            <label className="block text-xs font-medium text-gray-600" htmlFor="add-unit">Unit number</label>
+            <input id="add-unit" name="unit" required maxLength={10} placeholder="22" className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm" />
+            <label className="block text-xs font-medium text-gray-600" htmlFor="add-stage">Where it is at</label>
+            <select id="add-stage" name="stage" className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm" defaultValue="under_construction">
+              {tapsFor(crew.role, null)
+                .filter((st) => st !== "rented")
+                .map((st) => (
+                  <option key={st} value={st}>{STAGE_LABEL[st]}</option>
+                ))}
+            </select>
+            <label className="block text-xs font-medium text-gray-600" htmlFor="add-date">Date, if it has one</label>
+            <input id="add-date" type="date" name="due_date" className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm" />
+            <button type="submit" className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800">Add the unit</button>
+          </form>
+        </details>
+      )}
 
       {rented.length > 0 && (
         <details className="mt-6">

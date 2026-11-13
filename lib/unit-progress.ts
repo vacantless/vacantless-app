@@ -150,3 +150,22 @@ export function cleanNote(raw: unknown): string | null {
   const s = String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, 500);
   return s.length > 0 ? s : null;
 }
+
+// S788e: the manager or leasing person can add a unit from their link (a unit
+// starting a reno that is not in Vacantless yet). It lands as a private draft.
+export function canAddUnit(role: CrewRole): boolean {
+  return role === "manager" || role === "leasing";
+}
+
+/** A unit number as typed: letters, digits and dashes, up to 10; else null. */
+export function cleanUnitNumber(raw: unknown): string | null {
+  const s = String(raw ?? "").trim().replace(/^(unit|suite|apt|#)\s*/i, "");
+  return /^[A-Za-z0-9-]{1,10}$/.test(s) ? s : null;
+}
+
+/** "833 Pillette Rd, Windsor, ON" + "22" -> "833 Pillette Rd, Unit 22, Windsor, ON". */
+export function composeUnitAddress(street: string, unit: string): string {
+  const parts = street.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return `Unit ${unit}`;
+  return [parts[0], `Unit ${unit}`, ...parts.slice(1)].join(", ");
+}

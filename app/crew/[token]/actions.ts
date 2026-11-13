@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { crewFromToken, recordCrewTap } from "@/lib/unit-progress-server";
+import { addUnitFromCrew, crewFromToken, recordCrewTap } from "@/lib/unit-progress-server";
 
 // S788b: a tap on a crew link (/crew/<token>). No Vacantless session: the
 // token is the handle. POST only (a server action), so link scanners that
@@ -27,4 +27,23 @@ export async function tapStageFromCrewLink(formData: FormData) {
   const result = await recordCrewTap({ admin, crew, propertyId, stage, note: formData.get("note"), dueDate: formData.get("due_date") });
   if (!result.ok) redirect(back(token, result.reason === "not_allowed" ? "not_allowed" : "error", propertyId));
   redirect(back(token, `saved_${result.stage}`, propertyId));
+}
+
+export async function addUnitFromCrewLink(formData: FormData) {
+  const token = String(formData.get("token") ?? "").trim();
+  if (!token) redirect("/crew/invalid");
+  const admin = createAdminClient();
+  if (!admin) redirect(back(token, "error"));
+  const crew = await crewFromToken(admin, token);
+  if (!crew) redirect("/crew/invalid");
+  const result = await addUnitFromCrew({
+    admin,
+    crew,
+    street: String(formData.get("street") ?? "").trim(),
+    unit: formData.get("unit"),
+    stage: String(formData.get("stage") ?? "").trim() || undefined,
+    dueDate: formData.get("due_date"),
+  });
+  if (!result.ok) redirect(back(token, `add_${result.reason}`));
+  redirect(back(token, result.existed ? "add_existed" : "added", result.propertyId));
 }

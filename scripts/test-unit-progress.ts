@@ -1,6 +1,6 @@
 // Run with: npx tsx scripts/test-unit-progress.ts
 // S788b: unit progress stages, who can tap what, current stage.
-import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL, cleanDate, stageTakesDate, stageDateLine } from "../lib/unit-progress";
+import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL, cleanDate, stageTakesDate, stageDateLine, canAddUnit, cleanUnitNumber, composeUnitAddress } from "../lib/unit-progress";
 
 let pass = 0;
 let fail = 0;
@@ -42,5 +42,10 @@ const now = new Date("2026-11-13T12:00:00Z");
 ok("good date kept", cleanDate("2026-12-01", now) === "2026-12-01");
 ok("bad dates dropped", cleanDate("2026-13-01", now) === null && cleanDate("12/01/2026", now) === null && cleanDate("", now) === null && cleanDate("2031-01-01", now) === null && cleanDate("2026-02-30", now) === null);
 ok("date line", stageDateLine("under_construction", "2026-12-01") === "Ready by Dec 1" && stageDateLine("notice_given", "2027-01-31") === "Moving out Jan 31" && stageDateLine("rented", "2026-12-01") === "");
+// S788e: adding a unit from a crew link.
+ok("manager and leasing can add a unit, contractor cannot", canAddUnit("manager") && canAddUnit("leasing") && !canAddUnit("contractor") && !canAddUnit("photographer"));
+ok("unit number cleaned", cleanUnitNumber(" 22 ") === "22" && cleanUnitNumber("Unit 4B") === "4B" && cleanUnitNumber("#12") === "12" && cleanUnitNumber("") === null && cleanUnitNumber("22; drop") === null);
+ok("unit address composed", composeUnitAddress("833 Pillette Rd, Windsor, ON N8Y 3B4", "22") === "833 Pillette Rd, Unit 22, Windsor, ON N8Y 3B4");
+ok("unit address with a street only", composeUnitAddress("1551 Assumption St", "10") === "1551 Assumption St, Unit 10");
 console.log(`unit-progress: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -6,7 +6,10 @@
 // "Leased" save runs (app/dashboard/properties/actions.ts).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ORG_COLUMNS, type Org } from "@/lib/org";
-import { canTap, cleanDate, cleanNote, isCrewRole, isStage, stageTakesDate, takesAdsDown, type CrewRole, type Stage } from "@/lib/unit-progress";
+import { canAddUnit, canTap, cleanDate, cleanNote, cleanUnitNumber, composeUnitAddress, isCrewRole, isStage, stageTakesDate, takesAdsDown, type CrewRole, type Stage } from "@/lib/unit-progress";
+import { splitAddressUnit } from "@/lib/address-unit";
+import { paidRentalLimitReached } from "@/lib/billing";
+import { copyBuildingPhotosTo } from "@/lib/building-photos-server";
 import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
 import { queueRobotTakedowns } from "@/lib/robot-takedown";
 import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
@@ -167,4 +170,92 @@ export async function unitCardsForOrg(admin: SupabaseClient, organizationId: str
       stageDate: l?.due ?? null,
     };
   });
+}
+
+/** The account's buildings (street without the unit), for the add-a-unit form. */
+export async function buildingsForOrg(admin: SupabaseClient, organizationId: string): Promise<string[]> {
+  const { data } = await admin
+    .from("properties")
+    .select("address")
+    .eq("organization_id", organizationId)
+    .limit(1000);
+  const set = new Set<string>();
+  for (const r of (data ?? []) as Array<{ address: string | null }>) {
+    const street = splitAddressUnit(r.address).street;
+    if (street) set.add(street);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+export type AddUnitResult =
+  | { ok: true; propertyId: string; existed: boolean }
+  | { ok: false; reason: "not_allowed" | "bad_unit" | "bad_building" | "plan_full" | "archived" | "error" };
+
+/**
+ * S788e: the manager or leasing person adds a unit from their link, with an
+ * optional first stage. It lands as a private draft (never public) with its
+ * building's photos, and counts toward a paid plan's rental limit like any
+ * rental the landlord adds.
+ */
+export async function addUnitFromCrew(args: {
+  admin: SupabaseClient;
+  crew: CrewMember;
+  street: string;
+  unit: unknown;
+  stage?: string;
+  dueDate?: unknown;
+}): Promise<AddUnitResult> {
+  const { admin, crew } = args;
+  if (!canAddUnit(crew.role)) return { ok: false, reason: "not_allowed" };
+  const unit = cleanUnitNumber(args.unit);
+  if (!unit) return { ok: false, reason: "bad_unit" };
+  const buildings = await buildingsForOrg(admin, crew.organization_id);
+  if (!buildings.includes(args.street)) return { ok: false, reason: "bad_building" };
+  const address = composeUnitAddress(args.street, unit);
+
+  const { data: same } = await admin
+    .from("properties")
+    .select("id, address, archived_at")
+    .eq("organization_id", crew.organization_id)
+    .ilike("address", address)
+    .limit(1);
+  const existing = ((same ?? []) as Array<{ id: string; archived_at: string | null }>)[0];
+  let propertyId: string;
+  let existed = false;
+  if (existing) {
+    if (existing.archived_at) return { ok: false, reason: "archived" };
+    propertyId = existing.id;
+    existed = true;
+  } else {
+    const { data: org } = await admin
+      .from("organizations")
+      .select("plan, rental_cap")
+      .eq("id", crew.organization_id)
+      .maybeSingle();
+    const o = org as { plan: string | null; rental_cap: number | null } | null;
+    if (o?.rental_cap != null) {
+      const { count } = await admin
+        .from("properties")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", crew.organization_id)
+        .is("archived_at", null);
+      if (paidRentalLimitReached({ plan: o.plan, rentalCap: o.rental_cap, rentals: count ?? 0 })) return { ok: false, reason: "plan_full" };
+    }
+    const { data: inserted, error } = await admin
+      .from("properties")
+      .insert({ organization_id: crew.organization_id, status: "draft", address })
+      .select("id")
+      .single();
+    if (error || !inserted) return { ok: false, reason: "error" };
+    propertyId = (inserted as { id: string }).id;
+    try {
+      await copyBuildingPhotosTo(admin, { orgId: crew.organization_id, propertyId, address });
+    } catch {
+      // best effort: a unit without its building's photos is still added
+    }
+  }
+  if (args.stage && isStage(args.stage) && canTap(crew.role, args.stage) && args.stage !== "rented") {
+    await recordCrewTap({ admin, crew, propertyId, stage: args.stage, dueDate: args.dueDate });
+  }
+  return { ok: true, propertyId, existed };
 }
