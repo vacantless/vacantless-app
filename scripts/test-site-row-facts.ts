@@ -50,5 +50,8 @@ const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
 ok("page reads last_verified_at", page.includes("external_expires_at, last_verified_at"));
 ok("page passes facts", page.includes("siteFacts={siteFacts}"));
 
+const tw = readFileSync("tailwind.config.ts", "utf8");
+ok("tailwind scans lib (site mark colours)", tw.includes("./lib/**/"));
+ok("facts read live records on any run", page.includes("liveFactByChannel.get(ch)") && page.includes('.in("run_id", slotRunIds.length > 0'));
 console.log(`site-row-facts: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

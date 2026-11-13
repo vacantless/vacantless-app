@@ -2327,6 +2327,17 @@ export default async function PropertyDetailPage({
     runItemRows = (ri ?? []) as RunItemRow[];
   }
   // S786c: one line under each live site: its renters, days left, last seen live.
+  // S786d: a live ad can sit on an older run, so read each site's latest live record on any run for this rental.
+  const { data: liveFactData } = await supabase
+    .from("distribution_run_items")
+    .select("channel, external_expires_at, last_verified_at, updated_at")
+    .in("run_id", slotRunIds.length > 0 ? slotRunIds : ["00000000-0000-0000-0000-000000000000"])
+    .eq("publish_status", "live")
+    .order("updated_at", { ascending: false });
+  const liveFactByChannel = new Map<string, { external_expires_at: string | null; last_verified_at: string | null }>();
+  for (const r of (liveFactData ?? []) as { channel: string; external_expires_at: string | null; last_verified_at: string | null }[]) {
+    if (!liveFactByChannel.has(r.channel)) liveFactByChannel.set(r.channel, r);
+  }
   const siteFactsNow = new Date();
   const liveChannels = new Set<string>([
     ...postRows.filter((r) => r.status === "live").map((r) => String(r.portal)),
@@ -2334,7 +2345,7 @@ export default async function PropertyDetailPage({
   ]);
   const siteFacts: Record<string, string> = {};
   for (const ch of liveChannels) {
-    const live = runItemRows.find((r) => r.channel === ch && r.publish_status === "live") ?? null;
+    const live = liveFactByChannel.get(ch) ?? runItemRows.find((r) => r.channel === ch && r.publish_status === "live") ?? null;
     const { renters, booked } = siteRenters(renterSources.rows, ch);
     const line = siteRowFacts({
       renters,
