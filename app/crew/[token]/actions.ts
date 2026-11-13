@@ -24,7 +24,7 @@ export async function tapStageFromCrewLink(formData: FormData) {
   const crew = await crewFromToken(admin, token);
   if (!crew) redirect("/crew/invalid");
 
-  const result = await recordCrewTap({ admin, crew, propertyId, stage, note: formData.get("note") });
+  const result = await recordCrewTap({ admin, crew, propertyId, stage, note: formData.get("note"), dueDate: formData.get("due_date") });
   if (!result.ok) redirect(back(token, result.reason === "not_allowed" ? "not_allowed" : "error", propertyId));
   redirect(back(token, `saved_${result.stage}`, propertyId));
 }

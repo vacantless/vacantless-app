@@ -5,7 +5,7 @@ import { requireCapability } from "@/lib/membership";
 import { PageHeader, SectionHeading, PRIMARY_ACTION_CLASS, SECONDARY_ACTION_CLASS } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { CopyLinkButton } from "@/components/copy-link-button";
-import { CREW_ROLES, CREW_ROLE_LABEL, STAGE_LABEL, TAP_ORDER } from "@/lib/unit-progress";
+import { CREW_ROLES, CREW_ROLE_LABEL, STAGE_LABEL, TAP_ORDER, stageDateLine } from "@/lib/unit-progress";
 import { unitCardsForOrg } from "@/lib/unit-progress-server";
 import { addCrewMember, newCrewLink, setCrewMemberActive, setUnitStage } from "./actions";
 
@@ -57,7 +57,7 @@ export default async function CrewPage({ searchParams }: { searchParams: { crew?
       <PageHeader
         icon={<Icons.wrench />}
         title="Unit progress"
-        subtitle="Give your manager, contractor, cleaner and photographer their own link. They tap where each unit is at, with no sign in. You see it here. A Rented tap takes the ads down. You can put them back up from the rental page."
+        subtitle="Give your manager, contractor, cleaner and photographer their own link. They tap where each unit is at, with no sign in. You see it here. A Rented tap takes the ads down. You can put them back up from the rental page. Some stages take a date, like a move out day."
       />
 
       {flash && (
@@ -119,7 +119,7 @@ export default async function CrewPage({ searchParams }: { searchParams: { crew?
                     {p.address}
                   </Link>
                   <p className="text-xs text-gray-500">
-                    {l ? `${STAGE_LABEL[l.stage]} · ${fmtWhen(l.at, tz)}${l.by ? ` by ${l.by}` : ""}` : "No stage yet"}
+                    {l ? `${STAGE_LABEL[l.stage]}${p.stageDate ? `, ${stageDateLine(l.stage, p.stageDate).toLowerCase()}` : ""} · ${fmtWhen(l.at, tz)}${l.by ? ` by ${l.by}` : ""}` : "No stage yet"}
                   </p>
                 </div>
                 <form action={setUnitStage} className="flex gap-2">
@@ -130,6 +130,7 @@ export default async function CrewPage({ searchParams }: { searchParams: { crew?
                       <option key={st} value={st}>{STAGE_LABEL[st]}</option>
                     ))}
                   </select>
+                  <input type="date" name="due_date" aria-label="Date, if the stage has one" className={FIELD} />
                   <button type="submit" className={SECONDARY_ACTION_CLASS}>Save</button>
                 </form>
               </li>

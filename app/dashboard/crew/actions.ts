@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
-import { cleanNote, isCrewRole, isStage } from "@/lib/unit-progress";
+import { cleanDate, cleanNote, isCrewRole, isStage, stageTakesDate } from "@/lib/unit-progress";
 
 // S788b: the landlord's side of unit progress links (PLAN-S788-UNIT-PROGRESS).
 const BASE = "/dashboard/crew";
@@ -83,6 +83,7 @@ export async function setUnitStage(formData: FormData) {
     stage,
     actor_user_id: user?.id ?? null,
     note: cleanNote(formData.get("note")),
+    due_date: stageTakesDate(stage) ? cleanDate(formData.get("due_date")) : null,
   });
   if (error) redirect(`${BASE}?crew=error`);
   revalidatePath(BASE);

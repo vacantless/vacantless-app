@@ -1,6 +1,6 @@
 // Run with: npx tsx scripts/test-unit-progress.ts
 // S788b: unit progress stages, who can tap what, current stage.
-import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL } from "../lib/unit-progress";
+import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL, cleanDate, stageTakesDate, stageDateLine } from "../lib/unit-progress";
 
 let pass = 0;
 let fail = 0;
@@ -33,5 +33,14 @@ ok("note trimmed and capped", cleanNote("  a  b ") === "a b" && (cleanNote("x".r
 ok("role and stage guards", isCrewRole("contractor") && !isCrewRole("owner") && isStage("rented") && !isStage("done"));
 ok("every stage has a label without dashes", Object.values(STAGE_LABEL).every((l) => l.length > 0 && !/[–—]/.test(l)));
 
+// S788c: the rest of the lifecycle and stage dates.
+ok("manager can tap notice, lease signed, moved in, on hold", ["notice_given", "lease_signed", "moved_in", "on_hold"].every((st) => canTap("manager", st as never)));
+ok("contractor cannot tap notice or moved in", !canTap("contractor", "notice_given") && !canTap("contractor", "moved_in"));
+ok("notice comes first, on hold last", TAP_ORDER[0] === "notice_given" && TAP_ORDER[TAP_ORDER.length - 1] === "on_hold");
+ok("dated stages", stageTakesDate("notice_given") && stageTakesDate("under_construction") && stageTakesDate("photographer_booked") && !stageTakesDate("rented"));
+const now = new Date("2026-11-13T12:00:00Z");
+ok("good date kept", cleanDate("2026-12-01", now) === "2026-12-01");
+ok("bad dates dropped", cleanDate("2026-13-01", now) === null && cleanDate("12/01/2026", now) === null && cleanDate("", now) === null && cleanDate("2031-01-01", now) === null && cleanDate("2026-02-30", now) === null);
+ok("date line", stageDateLine("under_construction", "2026-12-01") === "Ready by Dec 1" && stageDateLine("notice_given", "2027-01-31") === "Moving out Jan 31" && stageDateLine("rented", "2026-12-01") === "");
 console.log(`unit-progress: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

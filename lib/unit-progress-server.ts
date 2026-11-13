@@ -6,7 +6,7 @@
 // "Leased" save runs (app/dashboard/properties/actions.ts).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ORG_COLUMNS, type Org } from "@/lib/org";
-import { canTap, cleanNote, isCrewRole, isStage, takesAdsDown, type CrewRole, type Stage } from "@/lib/unit-progress";
+import { canTap, cleanDate, cleanNote, isCrewRole, isStage, stageTakesDate, takesAdsDown, type CrewRole, type Stage } from "@/lib/unit-progress";
 import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
 import { queueRobotTakedowns } from "@/lib/robot-takedown";
 import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
@@ -46,6 +46,7 @@ export async function recordCrewTap(args: {
   propertyId: string;
   stage: string;
   note?: unknown;
+  dueDate?: unknown;
 }): Promise<TapResult> {
   const { admin, crew } = args;
   if (!isStage(args.stage) || !canTap(crew.role, args.stage)) return { ok: false, reason: "not_allowed" };
@@ -65,6 +66,7 @@ export async function recordCrewTap(args: {
     stage,
     crew_member_id: crew.id,
     note: cleanNote(args.note),
+    due_date: stageTakesDate(stage) ? cleanDate(args.dueDate) : null,
   });
   if (error) return { ok: false, reason: "error" };
 
@@ -116,6 +118,7 @@ export type UnitCard = {
   stage: Stage | null;
   stageAt: string | null;
   stageBy: string | null;
+  stageDate: string | null;
 };
 
 /** The units a crew link shows: every rental in the account not archived, newest stage first. */
@@ -131,16 +134,16 @@ export async function unitCardsForOrg(admin: SupabaseClient, organizationId: str
   if (rows.length === 0) return [];
   const { data: evs } = await admin
     .from("unit_progress_events")
-    .select("property_id, stage, created_at, crew:crew_members(name)")
+    .select("property_id, stage, created_at, due_date, crew:crew_members(name)")
     .eq("organization_id", organizationId)
     .in("property_id", rows.map((r) => r.id))
     .order("created_at", { ascending: false })
     .limit(2000);
-  const latest = new Map<string, { stage: string; created_at: string; by: string | null }>();
-  for (const e of (evs ?? []) as Array<{ property_id: string; stage: string; created_at: string; crew: { name: string | null } | Array<{ name: string | null }> | null }>) {
+  const latest = new Map<string, { stage: string; created_at: string; by: string | null; due: string | null }>();
+  for (const e of (evs ?? []) as Array<{ property_id: string; stage: string; created_at: string; due_date: string | null; crew: { name: string | null } | Array<{ name: string | null }> | null }>) {
     if (latest.has(e.property_id) || !isStage(e.stage)) continue;
     const crew = Array.isArray(e.crew) ? e.crew[0] : e.crew;
-    latest.set(e.property_id, { stage: e.stage, created_at: e.created_at, by: crew?.name ?? null });
+    latest.set(e.property_id, { stage: e.stage, created_at: e.created_at, by: crew?.name ?? null, due: e.due_date ?? null });
   }
   return rows.map((r) => {
     const l = latest.get(r.id);
@@ -151,6 +154,7 @@ export async function unitCardsForOrg(admin: SupabaseClient, organizationId: str
       stage: l ? (l.stage as Stage) : null,
       stageAt: l?.created_at ?? null,
       stageBy: l?.by ?? null,
+      stageDate: l?.due ?? null,
     };
   });
 }

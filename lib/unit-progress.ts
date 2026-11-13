@@ -19,6 +19,7 @@ export function isCrewRole(v: unknown): v is CrewRole {
 }
 
 export const STAGES = [
+  "notice_given",
   "under_construction",
   "being_cleaned",
   "ready_for_photos",
@@ -30,6 +31,9 @@ export const STAGES = [
   "waiting_deposit",
   "deposit_clearing",
   "rented",
+  "lease_signed",
+  "moved_in",
+  "on_hold",
   "put_back_up",
 ] as const;
 export type Stage = (typeof STAGES)[number];
@@ -39,6 +43,7 @@ export function isStage(v: unknown): v is Stage {
 }
 
 export const STAGE_LABEL: Record<Stage, string> = {
+  notice_given: "Tenant gave notice",
   under_construction: "Under construction",
   being_cleaned: "Being cleaned",
   ready_for_photos: "Ready for photos",
@@ -50,11 +55,15 @@ export const STAGE_LABEL: Record<Stage, string> = {
   waiting_deposit: "Waiting for deposit",
   deposit_clearing: "Deposit clearing",
   rented: "Rented",
+  lease_signed: "Lease signed",
+  moved_in: "Moved in",
+  on_hold: "On hold",
   put_back_up: "Back on the market",
 };
 
 /** The stages a person taps on their link, in the order they show. */
 export const TAP_ORDER: Stage[] = [
+  "notice_given",
   "under_construction",
   "being_cleaned",
   "ready_for_photos",
@@ -64,6 +73,9 @@ export const TAP_ORDER: Stage[] = [
   "waiting_deposit",
   "deposit_clearing",
   "rented",
+  "lease_signed",
+  "moved_in",
+  "on_hold",
 ];
 
 const ROLE_TAPS: Record<CrewRole, readonly Stage[]> = {
@@ -99,6 +111,38 @@ export function currentStage(events: readonly ProgressEvent[]): Stage | null {
 /** A stage that takes the ads down. */
 export function takesAdsDown(stage: Stage): boolean {
   return stage === "rented";
+}
+
+/** Stages that carry a date, and what the date means. */
+export const STAGE_DATE_LABEL: Partial<Record<Stage, string>> = {
+  notice_given: "Moving out",
+  under_construction: "Ready by",
+  being_cleaned: "Ready by",
+  photographer_booked: "Shoot date",
+};
+
+export function stageTakesDate(stage: Stage): boolean {
+  return STAGE_DATE_LABEL[stage] !== undefined;
+}
+
+/** A YYYY-MM-DD date within two years either side of now, or null. */
+export function cleanDate(raw: unknown, now: Date = new Date()): string | null {
+  const s = String(raw ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const t = Date.parse(`${s}T12:00:00Z`);
+  if (!Number.isFinite(t)) return null;
+  const twoYears = 2 * 366 * 24 * 3600 * 1000;
+  if (Math.abs(t - now.getTime()) > twoYears) return null;
+  return new Date(t).toISOString().slice(0, 10) === s ? s : null;
+}
+
+/** "Ready by Dec 1" for a stage's date; empty when there is none. */
+export function stageDateLine(stage: Stage, date: string | null): string {
+  const label = STAGE_DATE_LABEL[stage];
+  if (!label || !date) return "";
+  const d = new Date(`${date}T12:00:00Z`);
+  const md = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric" }).format(d);
+  return `${label} ${md}`;
 }
 
 /** A note is kept short and plain; empty means none. */

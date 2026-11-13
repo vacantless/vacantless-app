@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accessibleBrand, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { crewFromToken, unitCardsForOrg, type UnitCard } from "@/lib/unit-progress-server";
-import { CREW_ROLE_LABEL, STAGE_LABEL, isStage, tapsFor } from "@/lib/unit-progress";
+import { CREW_ROLE_LABEL, STAGE_DATE_LABEL, STAGE_LABEL, isStage, stageDateLine, stageTakesDate, tapsFor } from "@/lib/unit-progress";
 import { tapStageFromCrewLink } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +62,7 @@ export default async function CrewPage({
             {c.stage ? STAGE_LABEL[c.stage] : "No stage yet"}
           </span>
         </div>
+        {c.stage && c.stageDate && <p className="mt-1 text-sm text-gray-700">{stageDateLine(c.stage, c.stageDate)}</p>}
         {c.stageAt && (
           <p className="mt-1 text-xs text-gray-500">
             {fmtWhen(c.stageAt, tz)}
@@ -80,10 +81,16 @@ export default async function CrewPage({
                   {STAGE_LABEL[s]}
                 </a>
               ) : (
-              <form key={s} action={tapStageFromCrewLink}>
+              <form key={s} action={tapStageFromCrewLink} className={stageTakesDate(s) ? "flex items-center gap-2" : ""}>
                 <input type="hidden" name="token" value={params.token} />
                 <input type="hidden" name="property_id" value={c.id} />
                 <input type="hidden" name="stage" value={s} />
+                {stageTakesDate(s) && (
+                  <label className="sr-only" htmlFor={`d-${c.id}-${s}`}>{STAGE_DATE_LABEL[s]}</label>
+                )}
+                {stageTakesDate(s) && (
+                  <input id={`d-${c.id}-${s}`} type="date" name="due_date" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+                )}
                 <button
                   type="submit"
                   className={`rounded-lg border px-3 py-2 text-sm font-medium ${
