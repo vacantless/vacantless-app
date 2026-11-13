@@ -342,12 +342,13 @@ export function siteCheckoutUrl(
 }
 
 /** S709: where a built, unpaid Kijiji ad waits (Pending, "Activate Ad"). */
-export const KIJIJI_MY_ADS_URL = "https://www.kijiji.ca/m-my-ads/active/1";
+// S784: the Pending ad sits on the Inactive list; Active showed "no active ads".
+export const KIJIJI_MY_ADS_URL = "https://www.kijiji.ca/m-my-ads/inactive/1";
 
 /** S709: the one-line pay instruction for a checkout link. Pure. */
 export function siteCheckoutHint(checkoutUrl: string): string {
   if (checkoutUrl === KIJIJI_MY_ADS_URL) {
-    return "Your ad is built and waiting for payment. In My Ads, open the Pending ad and press Activate Ad. Pick your saved card, type its security code and press Pay. You pay only when you press Pay.";
+    return "Your ad is built and waiting for payment. It is on the Inactive list in My Ads, marked Pending. Press Activate Ad. Pick your saved card, type its security code and press Pay. You pay only when you press Pay.";
   }
   return "Your ad is built and waiting at checkout. You pay only when you press Pay. Pick your saved card, type its security code and press Pay.";
 }
