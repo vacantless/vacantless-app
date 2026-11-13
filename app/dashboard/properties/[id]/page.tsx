@@ -1,4 +1,5 @@
 import { GROUP_SIZE_MAX, accountGroupRule } from "@/lib/group-viewing";
+import { loadRentalsSlotChoice } from "@/lib/rentals-slots";
 import Link from "next/link";
 import { buildAdPreview } from "@/lib/ad-preview";
 import { showRelistButton } from "@/lib/relist-visibility";
@@ -569,6 +570,8 @@ function buildSyndicationBlockerSummary({
   // again are different jobs; the header now counts them apart, and its renew
   // count is the card's (live ads due, by the same status).
   const repost = new Map<string, string>();
+  // S785: the site's free ads are all in use (Rentals.ca free plan).
+  const slotsFull = new Map<string, string>();
   const labelFor = (key: string, fallback?: string | null) =>
     fallback || labelByKey.get(key) || key;
 
@@ -586,6 +589,9 @@ function buildSyndicationBlockerSummary({
 
   for (const item of runItems) {
     const label = labelFor(item.channel, item.channelLabel);
+    if (item.errorCode === "free_limit_reached" && item.publishStatus === "needs_operator") {
+      slotsFull.set(item.channel, label);
+    }
     if (item.errorCode === "spend_period_cap" || item.errorCode === "spend_per_ad_cap") {
       feeLimit.set(item.channel, label);
     } else if (item.publishStatus === "needs_payment") payment.set(item.channel, label);
@@ -622,6 +628,13 @@ function buildSyndicationBlockerSummary({
   for (const key of feeLimit.keys()) payment.delete(key);
 
   return (
+    summary(
+      [...slotsFull.values()],
+      "free ads full",
+      "free ads full",
+      (label) => `${label}'s free ads are all in use. Pick an ad to switch off below. This one goes up in its place.`,
+      (list) => `${list} have all their free ads in use. Pick an ad to switch off below.`,
+    ) ??
     summary(
       [...feeLimit.values()],
       "over your fee limit",
@@ -1041,6 +1054,26 @@ export default async function PropertyDetailPage({
     .neq("property_id", p.id);
   const rentalsCaNote = rentalsCaCapNote(rentalsCaLiveElsewhere ?? 0);
   const capNotes: Record<string, string> = rentalsCaNote ? { rentals_ca: rentalsCaNote } : {};
+  // S785: when the Rentals.ca free ads are full, offer to switch the weakest off.
+  const { data: slotRuns } = await supabase
+    .from("distribution_runs")
+    .select("id")
+    .eq("organization_id", p.organization_id)
+    .eq("property_id", p.id);
+  const slotRunIds = ((slotRuns ?? []) as { id: string }[]).map((r) => r.id);
+  const { data: slotWaitItem } = await supabase
+    .from("distribution_run_items")
+    .select("id")
+    .eq("organization_id", p.organization_id)
+    .in("run_id", slotRunIds.length > 0 ? slotRunIds : ["00000000-0000-0000-0000-000000000000"])
+    .eq("channel", "rentals_ca")
+    .eq("publish_status", "needs_operator")
+    .eq("error_code", "free_limit_reached")
+    .limit(1)
+    .maybeSingle();
+  const rentalsSlotChoice = slotWaitItem
+    ? await loadRentalsSlotChoice(supabase, p.organization_id, p.id)
+    : null;
 
   const { data: photos } = await supabase
     .from("property_photos")
@@ -2536,6 +2569,26 @@ export default async function PropertyDetailPage({
                     title: "Over your fee limit.",
                     body:
                       "This post would go over a fee limit you set. The post shows the limit. Raise it in Settings, then approve again.",
+                  }
+              : searchParams.dist === "slot_switch_queued"
+                ? {
+                    tone: "success",
+                    title: "Switching that ad off.",
+                    body:
+                      "We take the chosen ad off Rentals.ca, then post this one in its place.",
+                  }
+              : searchParams.dist === "slot_switch_failed"
+                ? {
+                    tone: "danger",
+                    title: "Could not switch that ad off.",
+                    body:
+                      "Check that Rentals.ca is still signed in, then try again. You can also turn one off on Rentals.ca yourself.",
+                  }
+              : searchParams.dist === "slot_switch_stale"
+                ? {
+                    tone: "warning",
+                    title: "That choice is out of date.",
+                    body: "The ads changed since this page loaded. Look at the list again and pick one.",
                   }
               : searchParams.dist === "already_posted"
                 ? {
@@ -4783,6 +4836,7 @@ export default async function PropertyDetailPage({
           brokerage={brokerage}
           robotPostingAllowed={robotPostingAccess.allowed}
           capNotes={capNotes}
+          rentalsSlotChoice={rentalsSlotChoice}
           adPreview={adPreview}
           moreOpen={typeof searchParams.pageposts === "string"}
           more={

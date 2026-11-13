@@ -13,7 +13,9 @@
 // or org id we then trust. createClient() is RLS-scoped to the operator's org, so
 // a read of another org's row returns null and the action stops.
 
-import { triggerPostNow } from "@/lib/post-now";
+import { triggerPostNow, triggerRentalsTakedown } from "@/lib/post-now";
+import { queueRobotTakedowns } from "@/lib/robot-takedown";
+import { SLOT_WAIT_CODE, slotWaitMessage, slotWaitNote } from "@/lib/rentals-slots";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { checkPeriodSpend, spendCapBlockMessage } from "@/lib/spend-cap";
@@ -1846,3 +1848,79 @@ export async function postInstagramNow(formData: FormData) {
 // S695: completeCopilotPost (S482) was removed with the browser co-pilot
 // (DECISION-S694). A Facebook / Kijiji / Viewit item now goes live through
 // updateRunItem's per-portal URL gate, or through the concierge desk.
+
+/**
+ * S785: the Rentals.ca "free ads full" stop as one click. Switches the chosen
+ * live Rentals.ca ad off (the robot's takedown) and parks this rental's
+ * Rentals.ca item at waiting_for_free_slot; the worker approves it once the
+ * takedown is done, so it never races the full account. Works for any org
+ * with the Posting add-on and a live Rentals.ca sign-in.
+ */
+export async function switchRentalsSlot(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyId = String(formData.get("property_id") ?? "");
+  const itemId = String(formData.get("item_id") ?? "");
+  const weakPostId = String(formData.get("weak_listing_post_id") ?? "");
+  if (!propertyId || !itemId || !weakPostId) redirect("/dashboard/properties");
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const uid = await userId(supabase);
+
+  const { data: item } = await supabase
+    .from("distribution_run_items")
+    .select("id, notes, publish_status, error_code")
+    .eq("id", itemId)
+    .eq("organization_id", org.id)
+    .eq("channel", "rentals_ca")
+    .eq("publish_status", "needs_operator")
+    .eq("error_code", "free_limit_reached")
+    .maybeSingle();
+  const { data: weak } = await supabase
+    .from("listing_posts")
+    .select("id, property_id, properties!inner(address)")
+    .eq("id", weakPostId)
+    .eq("organization_id", org.id)
+    .eq("portal", "rentals_ca")
+    .eq("status", "live")
+    .neq("property_id", propertyId)
+    .maybeSingle();
+  if (!item || !weak) backTo(propertyId, "slot_switch_stale", "rentals_ca");
+
+  const weakRow = weak as unknown as { id: string; property_id: string; properties: { address: string } | { address: string }[] };
+  const weakAddress = (Array.isArray(weakRow.properties) ? weakRow.properties[0]?.address : weakRow.properties?.address) ?? "";
+  const queued = await queueRobotTakedowns({
+    supabase,
+    organizationId: org.id,
+    propertyId: weakRow.property_id,
+    portals: ["rentals_ca"],
+    audit: () => "Switching this Rentals.ca ad off to free a free-ad slot for another rental you chose.",
+  });
+  const takedown = queued.find((q) => q.listingPostId === weakRow.id);
+  if (!takedown) backTo(propertyId, "slot_switch_failed", "rentals_ca");
+
+  const now = new Date().toISOString();
+  const prevNotes = ((item as { notes: string | null }).notes ?? "").trim();
+  const { data: parked } = await supabase
+    .from("distribution_run_items")
+    .update({
+      error_code: SLOT_WAIT_CODE,
+      error_message: slotWaitMessage(weakAddress),
+      audit_message: slotWaitMessage(weakAddress),
+      notes: [prevNotes, slotWaitNote(takedown!.runItemId, uid)].filter(Boolean).join("\n"),
+      updated_at: now,
+    })
+    .eq("id", itemId)
+    .eq("organization_id", org.id)
+    .eq("error_code", "free_limit_reached")
+    .select("id")
+    .maybeSingle();
+  if (!parked) backTo(propertyId, "slot_switch_failed", "rentals_ca");
+
+  // Rentals.ca takedowns run on the home runner; ask it to run now instead of
+  // at its daily time. Best-effort: the daily run is the fallback.
+  await triggerRentalsTakedown();
+
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  backTo(propertyId, "slot_switch_queued", "rentals_ca");
+}

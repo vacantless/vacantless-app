@@ -273,6 +273,17 @@ export function siteSetupNotice(
       action: "Sign in to Rentals.ca",
     };
   }
+  // S785: the landlord chose an ad to switch off; this one posts once it is off.
+  if (errorCode === "waiting_for_free_slot") {
+    return {
+      message:
+        errorMessage && errorMessage.trim()
+          ? errorMessage.trim()
+          : "Switching another Rentals.ca ad off first to free a slot. This ad posts by itself once that one is off.",
+      href: "https://rentals.ca/manage/listings",
+      action: "See your Rentals.ca ads",
+    };
+  }
   // S724 (V251-31/33): the free plan on the landlord's Rentals.ca account is full.
   if (errorCode === "free_limit_reached") {
     return {

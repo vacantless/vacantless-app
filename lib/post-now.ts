@@ -43,3 +43,28 @@ export async function triggerPostNow(
     return false;
   }
 }
+
+// S785: Rentals.ca takedowns run on the home runner (rentals-live-check-home.yml).
+// A slot switch asks it to run now instead of at its daily 14:17 UTC run.
+export const RENTALS_TAKEDOWN_EVENT = "rentals-takedown";
+
+export async function triggerRentalsTakedown(
+  fetchImpl: typeof fetch = fetch,
+  token: string | undefined = process.env.POST_NOW_GITHUB_TOKEN,
+): Promise<boolean> {
+  if (!token) return false;
+  try {
+    const { url, init } = postNowRequest(token);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetchImpl(url, {
+      ...init,
+      body: JSON.stringify({ event_type: RENTALS_TAKEDOWN_EVENT }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    return res.status === 204;
+  } catch {
+    return false;
+  }
+}

@@ -43,6 +43,8 @@ import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
 import { allowChannelAndPostNow, markAdsRenewed, publishProperty, requestConciergePublish, startSitePost } from "../actions";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
+import { rentersWord, shortAddress, type RentalsSlotChoice } from "@/lib/rentals-slots";
+import { switchRentalsSlot } from "../distribution-actions";
 import { forYouRowState, needsYouSentence } from "@/lib/for-you-row-state";
 import { SITES_SETUP_HREF, SITE_WORD_CLASS } from "@/lib/sites-setup";
 import {
@@ -96,6 +98,10 @@ export type PublishEverywhereRunItem = {
   approved?: boolean;
   /** S724 (V251-36): photos the site turned down on a live ad. */
   photoNote?: string | null;
+  /** S785: Rentals.ca free ads full; the ads that could be switched off. */
+  slotChoice?: RentalsSlotChoice | null;
+  /** S785: a chosen ad is being switched off; this one posts after. */
+  waitingForSlot?: boolean;
 };
 
 export type PublishEverywherePostingBlocker = {
@@ -1195,7 +1201,9 @@ function ForYouRow({
         </div>
       ) : needsApproval ? (
         <div className="mt-2">
-          {siteSetup ? (
+          {item?.slotChoice ? (
+            <RentalsSlotChooser propertyId={propertyId} itemId={item.id} choice={item.slotChoice} />
+          ) : siteSetup ? (
             <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
               <p className="text-base leading-relaxed text-amber-950">{siteSetup.message}</p>
               <a
@@ -1213,6 +1221,7 @@ function ForYouRow({
             {paid ? " and cover the fee" : ""}.
           </p>
           )}
+          {item?.slotChoice || item?.waitingForSlot ? null : (
           <button
             type="button"
             onClick={() => setApproveOpen(true)}
@@ -1220,6 +1229,7 @@ function ForYouRow({
           >
             Approve and post →
           </button>
+          )}
         </div>
       ) : needsConnect ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -1609,6 +1619,58 @@ function ConfirmModal({
           the site, then save the link.
         </p>
       </div>
+    </div>
+  );
+}
+
+// S785: the Rentals.ca free ads are full. List the ads holding the free slots,
+// weakest first (fewest Rentals.ca renters in 30 days), each with one button.
+function RentalsSlotChooser({
+  propertyId,
+  itemId,
+  choice,
+}: {
+  propertyId: string;
+  itemId: string;
+  choice: RentalsSlotChoice;
+}) {
+  return (
+    <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+      <p className="text-base leading-relaxed text-amber-950">
+        Your Rentals.ca free ads are all in use. Switch one off and this ad goes up in its place. Renters each one
+        brought from Rentals.ca in the last 30 days:
+      </p>
+      <ul className="mt-2 space-y-2">
+        {choice.ads.map((ad, i) => (
+          <li key={ad.listingPostId} className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-base text-amber-950">
+              {shortAddress(ad.address)}: {rentersWord(ad.renters30)}
+              {i === 0 ? <span className="ml-2 rounded bg-amber-200 px-1.5 text-sm font-semibold">fewest</span> : null}
+            </span>
+            <form action={switchRentalsSlot}>
+              <input type="hidden" name="property_id" value={propertyId} />
+              <input type="hidden" name="item_id" value={itemId} />
+              <input type="hidden" name="weak_listing_post_id" value={ad.listingPostId} />
+              <button
+                type="submit"
+                className={
+                  i === 0
+                    ? "inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
+                    : "inline-flex items-center rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-base font-semibold text-amber-900 hover:bg-amber-100"
+                }
+              >
+                Switch {shortAddress(ad.address)} off and post this one
+              </button>
+            </form>
+          </li>
+        ))}
+      </ul>
+      {choice.otherUsed > 0 ? (
+        <p className="mt-2 text-sm text-amber-900">
+          {choice.otherUsed === 1 ? "1 more free ad is" : `${choice.otherUsed} more free ads are`} used by
+          ads posted from another Vacantless account with the same Rentals.ca sign-in. Those stay as they are.
+        </p>
+      ) : null}
     </div>
   );
 }

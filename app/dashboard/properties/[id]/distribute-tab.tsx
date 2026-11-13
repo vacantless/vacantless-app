@@ -13,6 +13,7 @@
 // gone; Connect / Disconnect Facebook Page lives in Settings. What remains below
 // Publish Everywhere is the live-ad-link list.
 
+import type { RentalsSlotChoice } from "@/lib/rentals-slots";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
 import {
@@ -301,6 +302,7 @@ export function DistributeTab({
   renewDueKeys = [],
   robotPostingAllowed = false,
   capNotes = {},
+  rentalsSlotChoice = null,
   adPreview = null,
   more = null,
   moreOpen = false,
@@ -336,6 +338,8 @@ export function DistributeTab({
   robotPostingAllowed?: boolean;
   /** S723: per-site approval warnings (Rentals.ca free cap), passed through. */
   capNotes?: Readonly<Record<string, string>>;
+  /** S785: Rentals.ca free ads full, the ads that could be switched off. */
+  rentalsSlotChoice?: RentalsSlotChoice | null;
   /** S724 (V251-29): the ad's facts, shown in the approval box. */
   adPreview?: AdPreview | null;
   /** S762 (REVIEW-S761 item 4): Keep it fresh and Relist, shown under More. */
@@ -437,6 +441,15 @@ export function DistributeTab({
           siteSetup: siteSetupNotice(it.publishStatus, it.errorCode, it.errorMessage),
           photoNote: photoRefusedNote(it.errorCode, it.errorMessage),
           approved: it.autopilotApproved === true,
+          slotChoice:
+            it.channel === "rentals_ca" &&
+            it.errorCode === "free_limit_reached" &&
+            it.publishStatus === "needs_operator" &&
+            rentalsSlotChoice &&
+            rentalsSlotChoice.ads.length > 0
+              ? rentalsSlotChoice
+              : null,
+          waitingForSlot: it.channel === "rentals_ca" && it.errorCode === "waiting_for_free_slot",
         }))}
         postingBlocker={publishEverywherePostingBlocker}
         shownChannelKeys={shownChannelKeys}
