@@ -305,6 +305,7 @@ export function DistributeTab({
   capNotes = {},
   rentalsSlotChoice = null,
   roomNotes = {},
+  siteFacts = {},
   adPreview = null,
   more = null,
   moreOpen = false,
@@ -344,6 +345,8 @@ export function DistributeTab({
   rentalsSlotChoice?: RentalsSlotChoice | null;
   /** S786: per-site note on a rental that gave its slot away (Rentals.ca). */
   roomNotes?: Readonly<Record<string, string>>;
+  /** S786c: one line per live site (renters, days left, last seen live). */
+  siteFacts?: Readonly<Record<string, string>>;
   /** S724 (V251-29): the ad's facts, shown in the approval box. */
   adPreview?: AdPreview | null;
   /** S762 (REVIEW-S761 item 4): Keep it fresh and Relist, shown under More. */
@@ -466,6 +469,7 @@ export function DistributeTab({
         robotPostingAllowed={robotPostingAllowed}
         capNotes={capNotes}
         roomNotes={roomNotes}
+        siteFacts={siteFacts}
         adPreview={adPreview}
       />
     </div>

@@ -1,6 +1,7 @@
 import { GROUP_SIZE_MAX, accountGroupRule } from "@/lib/group-viewing";
 import { loadMadeRoom, loadRentalsSlotChoice, madeRoomLine, slotIsStuck } from "@/lib/rentals-slots";
 import { captureNote, paidPressedAt } from "@/lib/paid-capture-note";
+import { siteRenters, siteRowFacts } from "@/lib/site-row-facts";
 import Link from "next/link";
 import { buildAdPreview } from "@/lib/ad-preview";
 import { showRelistButton } from "@/lib/relist-visibility";
@@ -2312,17 +2313,37 @@ export default async function PropertyDetailPage({
     operator_submit_approved_at: string | null;
     stale_after: string | null;
     external_expires_at: string | null;
+    last_verified_at: string | null;
   };
   let runItemRows: RunItemRow[] = [];
   if (activeRun) {
     const { data: ri } = await supabase
       .from("distribution_run_items")
       .select(
-        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, error_code, audit_message, transport, verification_status, proof_url, concierge_requested_at, operator_submit_approved_at, stale_after, external_expires_at",
+        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, error_code, audit_message, transport, verification_status, proof_url, concierge_requested_at, operator_submit_approved_at, stale_after, external_expires_at, last_verified_at",
       )
       .eq("run_id", activeRun.id)
       .order("created_at", { ascending: true });
     runItemRows = (ri ?? []) as RunItemRow[];
+  }
+  // S786c: one line under each live site: its renters, days left, last seen live.
+  const siteFactsNow = new Date();
+  const liveChannels = new Set<string>([
+    ...postRows.filter((r) => r.status === "live").map((r) => String(r.portal)),
+    ...runItemRows.filter((r) => r.publish_status === "live").map((r) => r.channel),
+  ]);
+  const siteFacts: Record<string, string> = {};
+  for (const ch of liveChannels) {
+    const live = runItemRows.find((r) => r.channel === ch && r.publish_status === "live") ?? null;
+    const { renters, booked } = siteRenters(renterSources.rows, ch);
+    const line = siteRowFacts({
+      renters,
+      booked,
+      expiresAt: live?.external_expires_at ?? null,
+      verifiedAt: live?.last_verified_at ?? null,
+      now: siteFactsNow,
+    });
+    if (line) siteFacts[ch] = line;
   }
   const { data: autoAcctRows } = await supabase
     .from("distribution_channel_accounts")
@@ -4898,6 +4919,7 @@ export default async function PropertyDetailPage({
           capNotes={capNotes}
           rentalsSlotChoice={rentalsSlotChoice}
           roomNotes={roomNotes}
+          siteFacts={siteFacts}
           adPreview={adPreview}
           moreOpen={typeof searchParams.pageposts === "string"}
           more={

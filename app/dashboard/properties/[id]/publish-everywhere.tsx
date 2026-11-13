@@ -48,6 +48,7 @@ import { notePaidOnSite, retryRentalsSlot, slotDoneByHand, switchRentalsSlot } f
 import { offersIPaid } from "@/lib/paid-capture-note";
 import { postingInFlight } from "@/lib/posting-in-flight";
 import { LiveRefresh } from "./live-refresh";
+import { siteMark } from "@/lib/site-row-facts";
 import { forYouRowState, needsYouSentence } from "@/lib/for-you-row-state";
 import { SITES_SETUP_HREF, SITE_WORD_CLASS } from "@/lib/sites-setup";
 import {
@@ -137,22 +138,19 @@ const MODE_CHIP: Record<PublishMode, { label: string; cls: string }> = {
 };
 
 
-// A tiny per-channel glyph for the row. Purely decorative; unknown keys fall
-// back to a house. Keeps the surface readable without pulling in brand SVGs.
-const CHANNEL_GLYPH: Record<string, string> = {
-  facebook: "🛒",
-  kijiji: "🅺",
-  linkedin: "in",
-  instagram: "📸",
-  facebook_feed: "📘",
-  whatsapp: "🟢",
-  snapchat: "👻",
-  rentals_ca: "🏢",
-  rentfaster: "🏘️",
-  zumper: "📍",
-  viewit: "👁️",
-  realtor_ca: "Ⓡ",
-};
+// S786c: a small lettered mark per site (lib/site-row-facts SITE_MARK), in
+// place of the emoji glyphs. Decorative; the label beside it names the site.
+function SiteMarkBadge({ k, label, className }: { k: string; label?: string; className: string }) {
+  const m = siteMark(k, label);
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex shrink-0 items-center justify-center font-bold leading-none ${m.cls} ${className}`}
+    >
+      {m.text}
+    </span>
+  );
+}
 
 // Paid self-serve listing sites (a listing fee applies, paid direct to the
 // site). Only matters for LIVE assisted_manual channels — a planned one still
@@ -340,9 +338,7 @@ function ChannelRow({
   return (
     <div className="py-1.5">
       <div className="flex items-center gap-3">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-sm">
-          {CHANNEL_GLYPH[row.key] ?? "🏠"}
-        </span>
+        <SiteMarkBadge k={row.key} label={row.label} className="h-7 w-7 rounded-lg text-[12px]" />
         <span className="text-sm font-semibold text-gray-800">{row.label}</span>
         {isLive && live?.liveUrl ? (
           <a
@@ -418,6 +414,7 @@ export function PublishEverywhere({
   robotPostingAllowed = false,
   capNotes = {},
   roomNotes = {},
+  siteFacts = {},
   adPreview = null,
 }: {
   propertyId: string;
@@ -459,6 +456,8 @@ export function PublishEverywhere({
   capNotes?: Readonly<Record<string, string>>;
   /** S786: a site this rental gave away (Rentals.ca slot switch). */
   roomNotes?: Readonly<Record<string, string>>;
+  /** S786c: per live site, "4 renters · 30 days left · seen live 2 hours ago". */
+  siteFacts?: Readonly<Record<string, string>>;
   /** S724 (V251-29): the ad's facts, shown in the approval box. */
   adPreview?: AdPreview | null;
 }) {
@@ -825,6 +824,7 @@ export function PublishEverywhere({
             robotPostingAllowed={robotPostingAllowed}
             capNotes={capNotes}
             roomNotes={roomNotes}
+            siteFacts={siteFacts}
             adPreview={adPreview}
             otherRows={[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows].filter(isSiteRow)}
             liveStateFor={liveStateFor}
@@ -883,6 +883,7 @@ function ForYouHandoff({
   robotPostingAllowed = false,
   capNotes = {},
   roomNotes = {},
+  siteFacts = {},
   adPreview = null,
   otherRows = [],
   liveStateFor,
@@ -890,6 +891,8 @@ function ForYouHandoff({
   capNotes?: Readonly<Record<string, string>>;
   /** S786: a site this rental gave away (Rentals.ca slot switch). */
   roomNotes?: Readonly<Record<string, string>>;
+  /** S786c: per live site, "4 renters · 30 days left · seen live 2 hours ago". */
+  siteFacts?: Readonly<Record<string, string>>;
   adPreview?: AdPreview | null;
   /** S734: the one-line rows (connected sites, sign-in sites), partitioned
    *  with the for-you rows so a locked Rentals.ca or Zumper row sits under
@@ -955,6 +958,7 @@ function ForYouHandoff({
             addonLocked={locked(row)}
             capNote={capNotes[row.key] ?? null}
             roomNote={roomNotes[row.key] ?? null}
+            siteFact={siteFacts[row.key] ?? null}
             adPreview={adPreview}
           />
         );
@@ -1029,10 +1033,12 @@ function ForYouRow({
   addonLocked = false,
   capNote = null,
   roomNote = null,
+  siteFact = null,
   adPreview = null,
 }: {
   capNote?: string | null;
   roomNote?: string | null;
+  siteFact?: string | null;
   adPreview?: AdPreview | null;
   marketplaceKit?: MarketplaceKitData | null;
   /** S713: a robot site and the org has no Posting add-on. */
@@ -1088,9 +1094,7 @@ function ForYouRow({
       className="rounded-xl border border-indigo-100 bg-white p-3"
     >
       <div className="flex items-center gap-2">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-100 text-xs">
-          {CHANNEL_GLYPH[row.key] ?? "🏠"}
-        </span>
+        <SiteMarkBadge k={row.key} label={row.label} className="h-6 w-6 rounded-md text-[11px]" />
         <span className="text-base font-semibold text-gray-800">{row.label}</span>
         <span
           className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-bold ${stateChip.cls}`}
@@ -1133,6 +1137,7 @@ function ForYouRow({
           ) : (
             <p className="mt-2 text-base font-semibold text-green-700">On.</p>
           )}
+          {siteFact ? <p className="mt-1 text-sm text-gray-500">{siteFact}</p> : null}
           {item?.photoNote ? (
             <p className="mt-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-base leading-relaxed text-amber-950">
               {item.photoNote}
@@ -1626,7 +1631,7 @@ function ConfirmModal({
                 key={r.key}
                 className="flex items-center gap-2 border-b border-gray-100 py-2.5 text-[13px]"
               >
-                {CHANNEL_GLYPH[r.key] ?? "🏠"} {r.label}
+                <SiteMarkBadge k={r.key} label={r.label} className="h-5 w-5 rounded text-[10px]" /> {r.label}
                 <span className="ml-auto text-[10px] font-black tracking-wide text-green-700">
                   On
                 </span>
@@ -1656,9 +1661,7 @@ function ConfirmModal({
                   key={row.key}
                   className="flex items-center gap-2 text-[13px] text-indigo-950"
                 >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white text-xs">
-                    {CHANNEL_GLYPH[row.key] ?? "🏠"}
-                  </span>
+                  <SiteMarkBadge k={row.key} label={row.label} className="h-6 w-6 rounded-md text-[11px]" />
                   <span className="font-semibold">{row.label}</span>
                 </div>
               ))}
@@ -1684,9 +1687,7 @@ function ConfirmModal({
                   key={row.key}
                   className="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2 text-[12.5px] text-gray-700"
                 >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-50 text-xs">
-                    {CHANNEL_GLYPH[row.key] ?? "🏠"}
-                  </span>
+                  <SiteMarkBadge k={row.key} label={row.label} className="h-6 w-6 rounded-md text-[11px]" />
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold text-gray-900">
                       {row.label}
