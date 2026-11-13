@@ -2330,13 +2330,18 @@ export default async function PropertyDetailPage({
   // S786d: a live ad can sit on an older run, so read each site's latest live record on any run for this rental.
   const { data: liveFactData } = await supabase
     .from("distribution_run_items")
-    .select("channel, external_expires_at, last_verified_at, updated_at")
+    .select("channel, external_expires_at, last_verified_at, verification_status, updated_at")
     .in("run_id", slotRunIds.length > 0 ? slotRunIds : ["00000000-0000-0000-0000-000000000000"])
     .eq("publish_status", "live")
     .order("updated_at", { ascending: false });
-  const liveFactByChannel = new Map<string, { external_expires_at: string | null; last_verified_at: string | null }>();
-  for (const r of (liveFactData ?? []) as { channel: string; external_expires_at: string | null; last_verified_at: string | null }[]) {
-    if (!liveFactByChannel.has(r.channel)) liveFactByChannel.set(r.channel, r);
+  // S787: an old ad can stay "live" in a record the checker has since marked stale (expired). Prefer a record verified live.
+  type LiveFact = { external_expires_at: string | null; last_verified_at: string | null; verification_status: string | null };
+  const liveFactByChannel = new Map<string, LiveFact>();
+  for (const r of (liveFactData ?? []) as (LiveFact & { channel: string })[]) {
+    const have = liveFactByChannel.get(r.channel);
+    if (!have || (have.verification_status !== "verified_live" && r.verification_status === "verified_live")) {
+      liveFactByChannel.set(r.channel, r);
+    }
   }
   const siteFactsNow = new Date();
   const liveChannels = new Set<string>([
@@ -2351,7 +2356,7 @@ export default async function PropertyDetailPage({
       renters,
       booked,
       expiresAt: live?.external_expires_at ?? null,
-      verifiedAt: live?.last_verified_at ?? null,
+      verifiedAt: live?.verification_status === "verified_live" ? live.last_verified_at : null,
       now: siteFactsNow,
     });
     if (line) siteFacts[ch] = line;
