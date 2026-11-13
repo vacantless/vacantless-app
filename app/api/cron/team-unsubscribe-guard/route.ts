@@ -36,11 +36,22 @@ function authorized(req: NextRequest): boolean {
 async function readBlocked(apiKey: string): Promise<BrevoBlockedContact[]> {
   const all: BrevoBlockedContact[] = [];
   for (let offset = 0; offset < 5000; offset += 100) {
-    const res = await fetch(`${BREVO_BLOCKED_ENDPOINT}?limit=100&offset=${offset}`, {
-      headers: { "api-key": apiKey, accept: "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(10_000),
-    });
+    // S789f: Brevo sometimes answers slowly; one retry before calling the run
+    // failed (2026-11-13: two runs timed out, the next ones were fine).
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        res = await fetch(`${BREVO_BLOCKED_ENDPOINT}?limit=100&offset=${offset}`, {
+          headers: { "api-key": apiKey, accept: "application/json" },
+          cache: "no-store",
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (res.ok || res.status < 500) break;
+      } catch (e) {
+        if (attempt === 1) throw e;
+      }
+    }
+    if (!res) throw new Error("brevo_no_answer");
     if (!res.ok) throw new Error(`brevo_${res.status}`);
     const json = (await res.json()) as { contacts?: BrevoBlockedContact[]; count?: number };
     const page = json.contacts ?? [];
