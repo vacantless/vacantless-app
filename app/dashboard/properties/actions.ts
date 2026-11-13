@@ -1,5 +1,7 @@
 "use server";
 
+import { cleanPhotoFolderUrl, photoSourceOf } from "@/lib/drive-import";
+import { pullDrivePhotos } from "@/lib/drive-import-server";
 import { parseGroupSize } from "@/lib/group-viewing";
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { SITES_SETUP_HREF } from "@/lib/sites-setup";
@@ -6299,6 +6301,49 @@ export type SaveQuestionSheetResult =
       answerOnceRemaining: number;
       complete: boolean;
     };
+
+/**
+ * S789b: save a rental's photo folder link and, for Google Drive, pull in the
+ * photos that are not on the rental yet. An empty field removes the link.
+ */
+export async function savePhotoFolderAndPull(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const propertyId = String(formData.get("property_id") ?? "");
+  if (!propertyId) return;
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const back = (v: string): never => redirect(`/dashboard/properties/${propertyId}?folder=${v}#photo-folder`);
+
+  const supabase = createClient();
+  const { data: prop } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  if (!prop) redirect("/dashboard/properties");
+
+  const raw = String(formData.get("photo_folder_url") ?? "").trim();
+  if (!raw) {
+    await supabase.from("properties").update({ photo_source_url: null }).eq("id", propertyId).eq("organization_id", org.id);
+    revalidatePath(`/dashboard/properties/${propertyId}`);
+    back("cleared");
+  }
+  const url = cleanPhotoFolderUrl(raw);
+  if (!url) back("badlink");
+  await supabase.from("properties").update({ photo_source_url: url }).eq("id", propertyId).eq("organization_id", org.id);
+  if (photoSourceOf(url) !== "gdrive") {
+    revalidatePath(`/dashboard/properties/${propertyId}`);
+    back("saved");
+  }
+
+  const admin = createAdminClient();
+  if (!admin) back("failed");
+  const result = await pullDrivePhotos({ admin: admin!, organizationId: org.id, propertyId, folderUrl: url as string });
+  if (result.ok && result.added > 0) await followPhotoChange(supabase, propertyId);
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  back(result.ok ? `added_${result.added}${result.skipped > 0 ? `_${result.skipped}` : ""}` : result.reason);
+}
 
 export async function saveQuestionSheet(
   propertyId: string,

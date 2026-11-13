@@ -16,6 +16,8 @@ import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 import { notifyWaitingRentersRented } from "@/lib/rented-notice-server";
 import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
+import { cleanPhotoFolderUrl, photoSourceOf, type DrivePullResult } from "@/lib/drive-import";
+import { pullDrivePhotos } from "@/lib/drive-import-server";
 
 export type CrewMember = {
   id: string;
@@ -40,7 +42,7 @@ export async function crewFromToken(admin: SupabaseClient, token: string): Promi
   return row;
 }
 
-export type TapResult = { ok: true; stage: Stage } | { ok: false; reason: "not_allowed" | "not_found" | "error" };
+export type TapResult = { ok: true; stage: Stage; photos?: DrivePullResult } | { ok: false; reason: "not_allowed" | "not_found" | "error" };
 
 /** Record a tap from a crew link; a Rented tap also takes the ads down. */
 export async function recordCrewTap(args: {
@@ -50,18 +52,21 @@ export async function recordCrewTap(args: {
   stage: string;
   note?: unknown;
   dueDate?: unknown;
+  /** S789b: the unit's photo folder link, sent with a "Photos are in" tap. */
+  photoFolder?: unknown;
 }): Promise<TapResult> {
   const { admin, crew } = args;
   if (!isStage(args.stage) || !canTap(crew.role, args.stage)) return { ok: false, reason: "not_allowed" };
   const stage = args.stage;
   const { data: prop } = await admin
     .from("properties")
-    .select("id, status")
+    .select("id, status, photo_source_url")
     .eq("id", args.propertyId)
     .eq("organization_id", crew.organization_id)
     .is("archived_at", null)
     .maybeSingle();
   if (!prop) return { ok: false, reason: "not_found" };
+  let photoFolder = (prop as { photo_source_url: string | null }).photo_source_url ?? null;
 
   const dueDate = stageTakesDate(stage) ? cleanDate(args.dueDate) : null;
   const { error } = await admin.from("unit_progress_events").insert({
@@ -77,6 +82,29 @@ export async function recordCrewTap(args: {
   // S789: Tenant gave notice and Moved in reach the tenancy.
   const effect = await applyTenancyEffect({ admin, organizationId: crew.organization_id, propertyId: args.propertyId, stage, dueDate });
 
+  // S789b: "Photos are in" pulls the photos from the unit's Drive folder. A
+  // link sent with the tap is saved on the rental first.
+  let photos: DrivePullResult | undefined;
+  if (stage === "photos_in") {
+    const sent = cleanPhotoFolderUrl(args.photoFolder);
+    if (sent && sent !== photoFolder) {
+      const { error: linkErr } = await admin
+        .from("properties")
+        .update({ photo_source_url: sent })
+        .eq("id", args.propertyId)
+        .eq("organization_id", crew.organization_id);
+      if (!linkErr) photoFolder = sent;
+    }
+    if (photoFolder && photoSourceOf(photoFolder) === "gdrive") {
+      try {
+        photos = await pullDrivePhotos({ admin, organizationId: crew.organization_id, propertyId: args.propertyId, folderUrl: photoFolder });
+      } catch (err) {
+        console.error("[unit-progress] photo pull failed", err instanceof Error ? err.message : String(err));
+        photos = { ok: false, reason: "failed" };
+      }
+    }
+  }
+
   if (takesAdsDown(stage) && (prop as { status: string | null }).status !== "leased") {
     await markRentedAndTakeDown({ admin, organizationId: crew.organization_id, propertyId: args.propertyId });
   }
@@ -90,8 +118,10 @@ export async function recordCrewTap(args: {
     stage,
     dueDate,
     effect,
+    photos,
+    hasPhotoFolder: !!photoFolder,
   });
-  return { ok: true, stage };
+  return { ok: true, stage, photos };
 }
 
 /**
@@ -186,18 +216,20 @@ export type UnitCard = {
   stageAt: string | null;
   stageBy: string | null;
   stageDate: string | null;
+  /** S789b: the unit has a photo folder link saved. */
+  hasPhotoFolder: boolean;
 };
 
 /** The units a crew link shows: every rental in the account not archived, newest stage first. */
 export async function unitCardsForOrg(admin: SupabaseClient, organizationId: string): Promise<UnitCard[]> {
   const { data: props } = await admin
     .from("properties")
-    .select("id, address, status")
+    .select("id, address, status, photo_source_url")
     .eq("organization_id", organizationId)
     .is("archived_at", null)
     .order("address", { ascending: true })
     .limit(300);
-  const rows = (props ?? []) as Array<{ id: string; address: string | null; status: string | null }>;
+  const rows = (props ?? []) as Array<{ id: string; address: string | null; status: string | null; photo_source_url: string | null }>;
   if (rows.length === 0) return [];
   const { data: evs } = await admin
     .from("unit_progress_events")
@@ -222,6 +254,7 @@ export async function unitCardsForOrg(admin: SupabaseClient, organizationId: str
       stageAt: l?.created_at ?? null,
       stageBy: l?.by ?? null,
       stageDate: l?.due ?? null,
+      hasPhotoFolder: !!r.photo_source_url,
     };
   });
 }

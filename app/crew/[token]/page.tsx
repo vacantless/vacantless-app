@@ -4,6 +4,18 @@ import { accessibleBrand, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { buildingsForOrg, crewFromToken, unitCardsForOrg, type UnitCard } from "@/lib/unit-progress-server";
 import { CREW_ROLE_LABEL, STAGE_DATE_LABEL, STAGE_LABEL, canAddUnit, isStage, stageDateLine, stageTakesDate, takesAdsDown, tapsFor, type Stage } from "@/lib/unit-progress";
 import { addUnitFromCrewLink, tapStageFromCrewLink } from "./actions";
+import { drivePullLine, type DrivePullReason } from "@/lib/drive-import";
+
+// S789b: pulling photos from a Drive folder can take a little while.
+export const maxDuration = 60;
+
+function crewPhotosLine(raw: string | undefined): string {
+  if (!raw) return "";
+  const m = raw.match(/^added_(\d{1,3})$/);
+  if (m) return drivePullLine({ ok: true, added: Number(m[1]), skipped: 0, alreadyIn: Number(m[1]) === 0 ? 1 : 0 });
+  const reasons: DrivePullReason[] = ["badlink", "notshared", "empty", "nested", "full", "failed"];
+  return (reasons as string[]).includes(raw) ? drivePullLine({ ok: false, reason: raw as DrivePullReason }) : "";
+}
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +40,7 @@ export default async function CrewPage({
   searchParams,
 }: {
   params: { token: string };
-  searchParams: { status?: string; unit?: string; confirm?: string };
+  searchParams: { status?: string; unit?: string; confirm?: string; photos?: string };
 }) {
   const admin = createAdminClient();
   if (!admin) notFound();
@@ -50,6 +62,7 @@ export default async function CrewPage({
   const rented = cards.filter((c) => c.status === "leased");
 
   const status = searchParams.status ?? "";
+  const photosLine = crewPhotosLine(searchParams.photos);
   const savedStage = status.startsWith("saved_") ? status.slice(6) : null;
   const savedUnit = cards.find((c) => c.id === searchParams.unit) ?? null;
 
@@ -87,7 +100,7 @@ export default async function CrewPage({
                   {STAGE_LABEL[s]}
                 </a>
               ) : (
-              <form key={s} action={tapStageFromCrewLink} className={stageTakesDate(s) ? "flex items-center gap-2" : ""}>
+              <form key={s} action={tapStageFromCrewLink} className={stageTakesDate(s) || (s === "photos_in" && !c.hasPhotoFolder) ? "flex flex-wrap items-center gap-2" : ""}>
                 <input type="hidden" name="token" value={params.token} />
                 <input type="hidden" name="property_id" value={c.id} />
                 <input type="hidden" name="stage" value={s} />
@@ -96,6 +109,15 @@ export default async function CrewPage({
                 )}
                 {stageTakesDate(s) && (
                   <input id={`d-${c.id}-${s}`} type="date" name="due_date" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+                )}
+                {s === "photos_in" && !c.hasPhotoFolder && (
+                  <input
+                    type="url"
+                    name="photo_folder"
+                    aria-label="Google Drive folder link, if you have one"
+                    placeholder="Google Drive folder link, if you have one"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                  />
                 )}
                 <button
                   type="submit"
@@ -130,6 +152,7 @@ export default async function CrewPage({
         <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
           Saved: {savedUnit?.address ?? "the unit"} is now {STAGE_LABEL[savedStage].toLowerCase()}.
           {takesAdsDown(savedStage) ? " If its ads were up, they are coming down." : ""}
+          {savedStage === "photos_in" && photosLine ? ` ${photosLine}` : ""}
         </div>
       )}
       {(status === "added" || status === "add_existed") && (

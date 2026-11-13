@@ -12,6 +12,7 @@ import { sendOrgNotification, type NotifyOrg } from "@/lib/notifications-server"
 import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
+import { drivePullLine, type DrivePullResult } from "@/lib/drive-import";
 import { STAGE_LABEL, isCrewRole, stageDateLine, tenancyEffectAction, type Stage, type TenancyEffect } from "@/lib/unit-progress";
 import { unitCardsForOrg } from "@/lib/unit-progress-server";
 import {
@@ -58,6 +59,8 @@ export async function notifyLandlordOfTap(args: {
   stage: Stage;
   dueDate: string | null;
   effect?: TenancyEffect;
+  photos?: DrivePullResult;
+  hasPhotoFolder?: boolean;
 }): Promise<void> {
   if (!TAP_NOTIFY_STAGES.includes(args.stage)) return;
   try {
@@ -68,7 +71,15 @@ export async function notifyLandlordOfTap(args: {
     const tenancyAction = args.effect ? tenancyEffectAction(args.effect, args.propertyId, APP_URL) : null;
     const base =
       args.stage === "rented" ? "Its ads are coming down. If that was a mistake, relist it from the rental page." : stageDateLine(args.stage, args.dueDate);
-    const extra = [base ? `${base}.`.replace(/\.\.$/, ".") : "", tenancyAction?.line ?? ""].filter(Boolean).join(" ");
+    const photoLine =
+      args.stage !== "photos_in"
+        ? ""
+        : args.photos
+          ? drivePullLine(args.photos)
+          : args.hasPhotoFolder
+            ? "Pull them in from the photo folder on the rental page."
+            : "Add the unit's Google Drive photo folder on the rental page. Next time, photos pull in on their own.";
+    const extra = [base ? `${base}.`.replace(/\.\.$/, ".") : "", tenancyAction?.line ?? "", photoLine].filter(Boolean).join(" ");
     await sendOrgNotification({
       client: args.admin,
       org,
@@ -82,7 +93,11 @@ export async function notifyLandlordOfTap(args: {
         dashboard_url: `${APP_URL}/dashboard/crew`,
       },
       operatorFallback: await operatorFallback(args.admin, org),
-      action: tenancyAction ? { label: tenancyAction.label, url: tenancyAction.url } : { label: "See every unit", url: `${APP_URL}/dashboard/crew` },
+      action: tenancyAction
+        ? { label: tenancyAction.label, url: tenancyAction.url }
+        : args.stage === "photos_in"
+          ? { label: "See the photos", url: `${APP_URL}/dashboard/properties/${args.propertyId}` }
+          : { label: "See every unit", url: `${APP_URL}/dashboard/crew` },
     });
   } catch (err) {
     console.error("[unit-progress] tap notify failed", err instanceof Error ? err.message : String(err));

@@ -24,9 +24,12 @@ export async function tapStageFromCrewLink(formData: FormData) {
   const crew = await crewFromToken(admin, token);
   if (!crew) redirect("/crew/invalid");
 
-  const result = await recordCrewTap({ admin, crew, propertyId, stage, note: formData.get("note"), dueDate: formData.get("due_date") });
+  const result = await recordCrewTap({ admin, crew, propertyId, stage, note: formData.get("note"), dueDate: formData.get("due_date"), photoFolder: formData.get("photo_folder") });
   if (!result.ok) redirect(back(token, result.reason === "not_allowed" ? "not_allowed" : "error", propertyId));
-  redirect(back(token, `saved_${result.stage}`, propertyId));
+  // S789b: say how the photo pull went on the saved banner.
+  const url = new URL(back(token, `saved_${result.stage}`, propertyId), "https://x");
+  if (result.photos) url.searchParams.set("photos", result.photos.ok ? `added_${result.photos.added}` : result.photos.reason);
+  redirect(`${url.pathname}${url.search}`);
 }
 
 export async function addUnitFromCrewLink(formData: FormData) {

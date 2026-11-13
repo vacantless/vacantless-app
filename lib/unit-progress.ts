@@ -162,7 +162,7 @@ export function tenancyEffectAction(
     case "set_move_out":
     case "move_out_already":
       return {
-        line: "The move-out date is on the tenancy. Relist from Today and the ads go up with viewings from 3 weeks before.",
+        line: "The move-out date is on the tenancy. Relist from Today to put the ads up. Viewings open 3 weeks before.",
         label: "Relist now",
         url: `${appUrl}/dashboard`,
       };

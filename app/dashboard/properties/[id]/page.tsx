@@ -48,7 +48,9 @@ import {
   relistLeasedProperty,
   duplicateProperty,
   blastPriceDrop,
+  savePhotoFolderAndPull,
 } from "../actions";
+import { drivePullLine, photoSourceOf, type DrivePullReason } from "@/lib/drive-import";
 import {
   buildAllListingCopy,
   COPY_PORTAL_KEYS,
@@ -300,6 +302,8 @@ import type { AddressDisplayMode } from "@/lib/address-privacy";
 import { shareLinkStatus } from "@/lib/documents";
 
 export const dynamic = "force-dynamic";
+// S789b: "Save and pull photos" fetches a Drive folder, which can take a little while.
+export const maxDuration = 60;
 
 function packetHasText(value: unknown): boolean {
   return typeof value === "string" && value.trim().length > 0;
@@ -1000,6 +1004,8 @@ export default async function PropertyDetailPage({
     photos?: string;
     waitlist?: string;
     photoskipped?: string;
+    /** S789b: the photo folder pull outcome. */
+    folder?: string;
     photoerr?: string;
     photosource?: string;
     duplicated?: string;
@@ -1035,7 +1041,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, emergency_info, emergency_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, emergency_info, emergency_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at, photo_source_url",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -3531,6 +3537,52 @@ export default async function PropertyDetailPage({
         photoCap={photoCap}
         storageUpsell={storageUpsell}
       />
+
+      {/* S789b: the unit's photo folder. Google Drive pulls in on its own when the crew taps Photos are in. */}
+      {(() => {
+        const folderUrl = (property as { photo_source_url?: string | null }).photo_source_url ?? "";
+        const source = photoSourceOf(folderUrl);
+        const f = searchParams.folder ?? "";
+        const added = f.match(/^added_(\d{1,3})(?:_(\d{1,3}))?$/);
+        const reasons: DrivePullReason[] = ["badlink", "notshared", "empty", "nested", "full", "failed"];
+        const outcome = added
+          ? drivePullLine({ ok: true, added: Number(added[1]), skipped: Number(added[2] ?? 0), alreadyIn: Number(added[1]) === 0 ? 1 : 0 })
+          : f === "saved"
+            ? "Folder link saved."
+            : f === "cleared"
+              ? "Folder link taken off."
+              : (reasons as string[]).includes(f)
+                ? drivePullLine({ ok: false, reason: f as DrivePullReason })
+                : "";
+        return (
+          <div id="photo-folder" className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
+            <h3 className="text-sm font-semibold text-gray-900">Photo folder</h3>
+            <p className="mt-1 text-xs text-gray-600">
+              Paste the Google Drive folder with this unit&apos;s photos. Share it so anyone with the link can view. When your crew taps Photos are in, new photos pull in on their own. Other folder links are kept here for you to open.
+            </p>
+            {outcome && <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-800">{outcome}</p>}
+            <form action={savePhotoFolderAndPull} className="mt-3 flex flex-wrap items-center gap-2">
+              <input type="hidden" name="property_id" value={p.id} />
+              <input
+                type="url"
+                name="photo_folder_url"
+                defaultValue={folderUrl}
+                placeholder="https://drive.google.com/drive/folders/..."
+                aria-label="Photo folder link"
+                className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+              />
+              <button type="submit" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                {source === "gdrive" || !folderUrl ? "Save and pull photos" : "Save"}
+              </button>
+              {folderUrl && source !== "gdrive" && (
+                <a href={folderUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-brand">
+                  Open the folder
+                </a>
+              )}
+            </form>
+          </div>
+        );
+      })()}
 
       <TabbedSections initialTab={defaultTab}>
 
