@@ -44,7 +44,10 @@ import { CopyLink } from "./copy-link";
 import { allowChannelAndPostNow, markAdsRenewed, publishProperty, requestConciergePublish, startSitePost } from "../actions";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
 import { rentersWord, shortAddress, type RentalsSlotChoice } from "@/lib/rentals-slots";
-import { retryRentalsSlot, switchRentalsSlot } from "../distribution-actions";
+import { notePaidOnSite, retryRentalsSlot, slotDoneByHand, switchRentalsSlot } from "../distribution-actions";
+import { offersIPaid } from "@/lib/paid-capture-note";
+import { postingInFlight } from "@/lib/posting-in-flight";
+import { LiveRefresh } from "./live-refresh";
 import { forYouRowState, needsYouSentence } from "@/lib/for-you-row-state";
 import { SITES_SETUP_HREF, SITE_WORD_CLASS } from "@/lib/sites-setup";
 import {
@@ -104,6 +107,10 @@ export type PublishEverywhereRunItem = {
   waitingForSlot?: boolean;
   /** S785d: that switch stopped (sign-in expired); offer to try again. */
   slotStuck?: boolean;
+  /** S786: the landlord pressed "I paid"; the worker is saving the link. */
+  paidPressed?: boolean;
+  /** S786: why the worker could not save the paid ad's link yet. */
+  captureNote?: string | null;
 };
 
 export type PublishEverywherePostingBlocker = {
@@ -410,6 +417,7 @@ export function PublishEverywhere({
   renewDueKeys = [],
   robotPostingAllowed = false,
   capNotes = {},
+  roomNotes = {},
   adPreview = null,
 }: {
   propertyId: string;
@@ -449,6 +457,8 @@ export function PublishEverywhere({
   robotPostingAllowed?: boolean;
   /** S723: per-site warning shown in the approval box (Rentals.ca free cap). */
   capNotes?: Readonly<Record<string, string>>;
+  /** S786: a site this rental gave away (Rentals.ca slot switch). */
+  roomNotes?: Readonly<Record<string, string>>;
   /** S724 (V251-29): the ad's facts, shown in the approval box. */
   adPreview?: AdPreview | null;
 }) {
@@ -600,6 +610,8 @@ export function PublishEverywhere({
 
   return (
     <div className="space-y-5">
+      {/* S786: refresh while a site is still moving, so nobody has to reload. */}
+      <LiveRefresh active={postingInFlight(runItems)} />
       {/* S705: one column. The address card, the right-hand summary panel and
           the per-site "next step" box are gone: the page header already names
           the rental, and every site now appears once, in the list below. */}
@@ -811,6 +823,7 @@ export function PublishEverywhere({
             brokerage={brokerage}
             robotPostingAllowed={robotPostingAllowed}
             capNotes={capNotes}
+            roomNotes={roomNotes}
             adPreview={adPreview}
             otherRows={[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows].filter(isSiteRow)}
             liveStateFor={liveStateFor}
@@ -868,11 +881,14 @@ function ForYouHandoff({
   brokerage = null,
   robotPostingAllowed = false,
   capNotes = {},
+  roomNotes = {},
   adPreview = null,
   otherRows = [],
   liveStateFor,
 }: {
   capNotes?: Readonly<Record<string, string>>;
+  /** S786: a site this rental gave away (Rentals.ca slot switch). */
+  roomNotes?: Readonly<Record<string, string>>;
   adPreview?: AdPreview | null;
   /** S734: the one-line rows (connected sites, sign-in sites), partitioned
    *  with the for-you rows so a locked Rentals.ca or Zumper row sits under
@@ -937,6 +953,7 @@ function ForYouHandoff({
             marketplaceKit={row.key === "facebook" ? marketplaceKit : null}
             addonLocked={locked(row)}
             capNote={capNotes[row.key] ?? null}
+            roomNote={roomNotes[row.key] ?? null}
             adPreview={adPreview}
           />
         );
@@ -1010,9 +1027,11 @@ function ForYouRow({
   marketplaceKit = null,
   addonLocked = false,
   capNote = null,
+  roomNote = null,
   adPreview = null,
 }: {
   capNote?: string | null;
+  roomNote?: string | null;
   adPreview?: AdPreview | null;
   marketplaceKit?: MarketplaceKitData | null;
   /** S713: a robot site and the org has no Posting add-on. */
@@ -1079,6 +1098,11 @@ function ForYouRow({
       </div>
       {!isLive && firstRunCostLine(row.key) ? (
         <p className="mt-1 text-sm leading-snug text-gray-500">{firstRunCostLine(row.key)}</p>
+      ) : null}
+      {!isLive && roomNote ? (
+        <p className="mt-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed text-gray-700">
+          {roomNote}
+        </p>
       ) : null}
 
       {paid && !isLive && (
@@ -1186,20 +1210,81 @@ function ForYouRow({
             Post first, then come back to this step.
           </p>
         )
+      ) : payAtCheckout && item?.checkoutUrl && item.captureNote ? (
+        // S786: the worker could not save the paid ad's link; say why.
+        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="text-base leading-relaxed text-amber-950">{item.captureNote}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {/sign-in/i.test(item.captureNote) ? (
+              <a
+                href={`/dashboard/site-signin/${row.key}`}
+                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
+              >
+                Sign in to {PAID_SITE_LABEL[row.key] ?? row.label}
+              </a>
+            ) : (
+              <a
+                href="#get-online-more"
+                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
+              >
+                Paste the ad&apos;s link
+              </a>
+            )}
+            <a
+              href={item.checkoutUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm font-semibold text-emerald-800 hover:underline"
+            >
+              Not paid yet? Pay on {PAID_SITE_LABEL[row.key] ?? row.label} ↗
+            </a>
+          </div>
+        </div>
+      ) : payAtCheckout && item?.checkoutUrl && item.paidPressed ? (
+        // S786: "I paid" pressed; paid-capture is saving the link.
+        <div className="mt-2">
+          <p className="text-base text-emerald-800">
+            Thanks. We&apos;re saving the link from {PAID_SITE_LABEL[row.key] ?? row.label} now. It usually takes a few
+            minutes, and this page updates by itself.
+          </p>
+          <a
+            href={item.checkoutUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 inline-flex text-sm font-semibold text-emerald-800 hover:underline"
+          >
+            Not paid yet? Pay on {PAID_SITE_LABEL[row.key] ?? row.label} ↗
+          </a>
+        </div>
       ) : payAtCheckout && item?.checkoutUrl ? (
         <div className="mt-2">
           <p className="text-base text-emerald-800">
             {item.checkoutHint ??
               "Your ad is built and waiting at checkout. You pay only when you press Pay. Pick your saved card, type its security code and press Pay."}
           </p>
-          <a
-            href={item.checkoutUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
-          >
-            Pay on {PAID_SITE_LABEL[row.key] ?? row.label} ↗
-          </a>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <a
+              href={item.checkoutUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
+            >
+              Pay on {PAID_SITE_LABEL[row.key] ?? row.label} ↗
+            </a>
+            {offersIPaid(row.key) ? (
+              // S786: wakes paid-capture now instead of its 2-hourly run.
+              <form action={notePaidOnSite}>
+                <input type="hidden" name="property_id" value={propertyId} />
+                <input type="hidden" name="item_id" value={item.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-base font-semibold text-emerald-800 hover:bg-emerald-50"
+                >
+                  I paid
+                </button>
+              </form>
+            ) : null}
+          </div>
         </div>
       ) : needsApproval ? (
         <div className="mt-2">
@@ -1224,16 +1309,29 @@ function ForYouRow({
           </p>
           )}
           {item?.slotStuck ? (
-            <form action={retryRentalsSlot}>
-              <input type="hidden" name="property_id" value={propertyId} />
-              <input type="hidden" name="item_id" value={item.id} />
-              <button
-                type="submit"
-                className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
-              >
-                Try the switch again
-              </button>
-            </form>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <form action={retryRentalsSlot}>
+                <input type="hidden" name="property_id" value={propertyId} />
+                <input type="hidden" name="item_id" value={item.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
+                >
+                  Try the switch again
+                </button>
+              </form>
+              {/* S786: our message says "turn it off yourself"; this makes that path finish. */}
+              <form action={slotDoneByHand}>
+                <input type="hidden" name="property_id" value={propertyId} />
+                <input type="hidden" name="item_id" value={item.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-base font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  I turned it off
+                </button>
+              </form>
+            </div>
           ) : null}
           {item?.slotChoice || item?.waitingForSlot ? null : (
           <button
@@ -1269,7 +1367,7 @@ function ForYouRow({
         <p className="mt-2 text-base text-amber-800">
           We&apos;re filling in the ad. Free sites post when it is ready. A
           paid site waits for you here. Most sites take up to 15 minutes;
-          Rentals.ca can take up to 3 hours. Reload this page to check.
+          Rentals.ca can take up to 3 hours. This page updates by itself.
         </p>
       ) : working ? (
         <div className="mt-2">
@@ -1639,6 +1737,7 @@ function ConfirmModal({
 
 // S785: the Rentals.ca free ads are full. List the ads holding the free slots,
 // weakest first (fewest Rentals.ca renters in 30 days), each with one button.
+// S786: the button asks once before a live ad comes down ("Yes, switch").
 function RentalsSlotChooser({
   propertyId,
   itemId,
@@ -1648,6 +1747,7 @@ function RentalsSlotChooser({
   itemId: string;
   choice: RentalsSlotChoice;
 }) {
+  const [picked, setPicked] = useState<string | null>(null);
   return (
     <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
       <p className="text-base leading-relaxed text-amber-950">
@@ -1661,12 +1761,32 @@ function RentalsSlotChooser({
               {shortAddress(ad.address)}: {rentersWord(ad.renters30)}
               {i === 0 ? <span className="ml-2 rounded bg-amber-200 px-1.5 text-sm font-semibold">fewest</span> : null}
             </span>
-            <form action={switchRentalsSlot}>
-              <input type="hidden" name="property_id" value={propertyId} />
-              <input type="hidden" name="item_id" value={itemId} />
-              <input type="hidden" name="weak_listing_post_id" value={ad.listingPostId} />
+            {picked === ad.listingPostId ? (
+              <form action={switchRentalsSlot} className="flex flex-wrap items-center gap-2">
+                <input type="hidden" name="property_id" value={propertyId} />
+                <input type="hidden" name="item_id" value={itemId} />
+                <input type="hidden" name="weak_listing_post_id" value={ad.listingPostId} />
+                <span className="text-sm text-amber-950">
+                  Take {shortAddress(ad.address)} off Rentals.ca?
+                </span>
+                <button
+                  type="submit"
+                  className="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
+                >
+                  Yes, switch
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPicked(null)}
+                  className="inline-flex items-center rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-base font-semibold text-amber-900 hover:bg-amber-100"
+                >
+                  Cancel
+                </button>
+              </form>
+            ) : (
               <button
-                type="submit"
+                type="button"
+                onClick={() => setPicked(ad.listingPostId)}
                 className={
                   i === 0
                     ? "inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-base font-semibold text-white hover:bg-emerald-700"
@@ -1675,10 +1795,13 @@ function RentalsSlotChooser({
               >
                 Switch {shortAddress(ad.address)} off and post this one
               </button>
-            </form>
+            )}
           </li>
         ))}
       </ul>
+      <p className="mt-2 text-sm text-amber-900">
+        Its renters stay in Vacantless, and its other sites stay on. Post it to Rentals.ca again when a slot is free.
+      </p>
       {choice.otherUsed > 0 ? (
         <p className="mt-2 text-sm text-amber-900">
           {choice.otherUsed === 1 ? "1 more free ad is" : `${choice.otherUsed} more free ads are`} used by

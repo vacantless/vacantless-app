@@ -2,13 +2,14 @@
 // the health email). Kept out of page.tsx so the page holds no query text.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { postingCoverage, type Coverage } from "@/lib/posting-coverage";
+import { loadMadeRoom } from "@/lib/rentals-slots";
 
 export async function loadPostingCoverage(
   supabase: SupabaseClient,
   orgId: string,
   postingAddon: boolean,
 ): Promise<Coverage> {
-  const [{ data: props }, { data: posts }, { data: sessions }] = await Promise.all([
+  const [{ data: props }, { data: posts }, { data: sessions }, madeRoom] = await Promise.all([
     supabase
       .from("properties")
       .select("id, address, status")
@@ -24,6 +25,7 @@ export async function loadPostingCoverage(
       .from("distribution_channel_session_status")
       .select("channel, alive")
       .eq("organization_id", orgId),
+    loadMadeRoom(supabase, orgId),
   ]);
   return postingCoverage({
     properties: ((props ?? []) as { id: string; address: string | null; status: string | null }[]),
@@ -34,5 +36,6 @@ export async function loadPostingCoverage(
     })),
     sessions: (sessions ?? []) as { channel: string; alive: boolean | null }[],
     postingAddon,
+    madeRoom,
   });
 }

@@ -68,3 +68,29 @@ export async function triggerRentalsTakedown(
     return false;
   }
 }
+
+// S786: "I paid" on a Kijiji checkout wakes the paid-capture job
+// (vacantless-worker .github/workflows/paid-capture.yml) instead of waiting
+// for its 2-hourly run.
+export const PAID_CAPTURE_EVENT = "paid-capture";
+
+export async function triggerPaidCapture(
+  fetchImpl: typeof fetch = fetch,
+  token: string | undefined = process.env.POST_NOW_GITHUB_TOKEN,
+): Promise<boolean> {
+  if (!token) return false;
+  try {
+    const { url, init } = postNowRequest(token);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetchImpl(url, {
+      ...init,
+      body: JSON.stringify({ event_type: PAID_CAPTURE_EVENT }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    return res.status === 204;
+  } catch {
+    return false;
+  }
+}

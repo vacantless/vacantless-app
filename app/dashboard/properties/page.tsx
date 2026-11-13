@@ -472,6 +472,7 @@ export default async function PropertiesPage({
         renew,
         lights,
         missingRobot,
+        madeRoomFor: !archivedView ? cov?.madeRoomFor ?? null : null,
         statusLabel,
         statusTone,
         cover: coverByProperty.get(p.id) ?? null,
@@ -840,6 +841,14 @@ export default async function PropertiesPage({
                               </span>
                             ),
                           )}
+                          {v.madeRoomFor ? (
+                            <span
+                              title={`Switched off Rentals.ca to make room for ${v.madeRoomFor}`}
+                              className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-500"
+                            >
+                              Rentals.ca: made room for {v.madeRoomFor}
+                            </span>
+                          ) : null}
                           <ReadinessChips
                             signals={v.readiness}
                             skipNeeds={v.launch.label === "Needs viewings" ? ["viewings"] : []}

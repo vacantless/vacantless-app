@@ -20,6 +20,10 @@ export type ForYouRowItem = {
   externalUrl: string | null;
   /** S785: another Rentals.ca ad is being switched off for this one; nothing for the landlord to do. */
   waitingForSlot?: boolean;
+  /** S786: "I paid" pressed and the worker is saving the link. */
+  paidPressed?: boolean;
+  /** S786: the worker could not save the paid ad's link (the landlord has a step). */
+  captureNote?: string | null;
 };
 
 export type ForYouRowStateInput = {
@@ -109,6 +113,8 @@ export function forYouRowState(input: ForYouRowStateInput): ForYouRowState {
       : postingBlocked
         ? "Posting"
         : item?.waitingForSlot === true
+          ? "Posting"
+        : payAtCheckout && item?.paidPressed === true && !item?.captureNote
           ? "Posting"
         : payAtCheckout || siteSetup || needsApproval || needsConnect || signinFirst || repostable
           ? "Needs you"

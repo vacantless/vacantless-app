@@ -13,7 +13,10 @@
 // or org id we then trust. createClient() is RLS-scoped to the operator's org, so
 // a read of another org's row returns null and the action stops.
 
-import { triggerPostNow, triggerRentalsTakedown } from "@/lib/post-now";
+import { triggerPaidCapture, triggerPostNow, triggerRentalsTakedown } from "@/lib/post-now";
+import { offersIPaid, paidPressedNote } from "@/lib/paid-capture-note";
+import { takenDownNote } from "@/lib/ads-still-up";
+import { closeTakedownItems, resetLiveRunItemsForPost } from "@/lib/facebook-page-takedown";
 import { queueRobotTakedowns } from "@/lib/robot-takedown";
 import { SLOT_WAIT_CODE, slotTakedownId, slotWaitMessage, slotWaitNote } from "@/lib/rentals-slots";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
@@ -1986,4 +1989,129 @@ export async function retryRentalsSlot(formData: FormData) {
   await triggerRentalsTakedown();
   revalidatePath(`/dashboard/properties/${propertyId}`);
   backTo(propertyId, "slot_switch_queued", "rentals_ca");
+}
+
+/**
+ * S786: the landlord paid on Kijiji. Note it on the item and wake the
+ * paid-capture job so the new ad's link is saved in minutes, not at its
+ * 2-hourly run. Changes no status: paid-capture records the ad live once it
+ * finds it, or writes why it could not on the item.
+ */
+export async function notePaidOnSite(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyId = String(formData.get("property_id") ?? "");
+  const itemId = String(formData.get("item_id") ?? "");
+  if (!propertyId || !itemId) redirect("/dashboard/properties");
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+
+  const { data: item } = await supabase
+    .from("distribution_run_items")
+    .select("id, channel, notes")
+    .eq("id", itemId)
+    .eq("organization_id", org.id)
+    .eq("publish_status", "needs_payment")
+    .maybeSingle();
+  const row = item as { id: string; channel: string; notes: string | null } | null;
+  if (!row || !offersIPaid(row.channel)) backTo(propertyId, "paid_stale");
+
+  const now = new Date().toISOString();
+  const prevNotes = (row!.notes ?? "").trim();
+  await supabase
+    .from("distribution_run_items")
+    .update({
+      notes: [prevNotes, paidPressedNote(now)].filter(Boolean).join("\n"),
+      // A note from an earlier check is out of date once they say they paid.
+      error_message: null,
+      audit_message: "The landlord says they paid on Kijiji. Saving the new ad's link.",
+      updated_at: now,
+    })
+    .eq("id", row!.id)
+    .eq("organization_id", org.id)
+    .eq("publish_status", "needs_payment");
+
+  await triggerPaidCapture();
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  backTo(propertyId, "paid_noted", row!.channel);
+}
+
+/**
+ * S786: during a Rentals.ca slot switch the landlord turned the other ad off
+ * on Rentals.ca themselves. Record that ad as taken down (their word, like
+ * "I took it down"), close its takedown, approve the waiting rental and wake
+ * the home runner to post it. Before S786 our own message said "turn it off
+ * yourself" and nothing then released the waiting rental.
+ */
+export async function slotDoneByHand(formData: FormData) {
+  await requireCapability("manage_properties", FORBIDDEN);
+  const propertyId = String(formData.get("property_id") ?? "");
+  const itemId = String(formData.get("item_id") ?? "");
+  if (!propertyId || !itemId) redirect("/dashboard/properties");
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: waiter } = await supabase
+    .from("distribution_run_items")
+    .select("id, notes")
+    .eq("id", itemId)
+    .eq("organization_id", org.id)
+    .eq("channel", "rentals_ca")
+    .eq("error_code", SLOT_WAIT_CODE)
+    .maybeSingle();
+  const takedownId = slotTakedownId((waiter as { notes: string | null } | null)?.notes);
+  if (!waiter || !takedownId) backTo(propertyId, "slot_switch_stale", "rentals_ca");
+
+  const { data: takedown } = await supabase
+    .from("distribution_run_items")
+    .select("id, listing_post_id")
+    .eq("id", takedownId!)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  const postId = (takedown as { listing_post_id: string | null } | null)?.listing_post_id ?? null;
+  if (postId) {
+    const { data: post } = await supabase
+      .from("listing_posts")
+      .select("id, notes, status")
+      .eq("id", postId)
+      .eq("organization_id", org.id)
+      .maybeSingle();
+    const p = post as { id: string; notes: string | null; status: string | null } | null;
+    if (p && p.status === "live") {
+      await supabase
+        .from("listing_posts")
+        .update({ status: "removed", notes: takenDownNote(p.notes, user?.email, new Date()) })
+        .eq("id", p.id)
+        .eq("organization_id", org.id);
+      await resetLiveRunItemsForPost(supabase, org.id, p.id);
+    }
+    await closeTakedownItems(supabase, org.id, postId, "the landlord turned it off on Rentals.ca for a slot switch");
+  }
+
+  const now = new Date().toISOString();
+  const { data: released } = await supabase
+    .from("distribution_run_items")
+    .update({
+      operator_submit_approved_at: now,
+      operator_submit_approved_by: user?.id ?? null,
+      error_code: null,
+      error_message: null,
+      audit_message: "You turned the other Rentals.ca ad off. Posting this one in its slot.",
+      updated_at: now,
+    })
+    .eq("id", itemId)
+    .eq("organization_id", org.id)
+    .eq("error_code", SLOT_WAIT_CODE)
+    .select("id")
+    .maybeSingle();
+  if (!released) backTo(propertyId, "slot_switch_stale", "rentals_ca");
+
+  // The home runner posts Rentals.ca; this event runs its post sweep too.
+  await triggerRentalsTakedown();
+  revalidatePath(`/dashboard/properties/${propertyId}`);
+  backTo(propertyId, "slot_done_by_hand", "rentals_ca");
 }

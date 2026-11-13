@@ -38,6 +38,8 @@ export type CoverageInput = {
   sessions: CoverageSession[];
   /** canUseRobotPosting for the org. */
   postingAddon: boolean;
+  /** S786: rentals that gave their Rentals.ca slot to another (lib/rentals-slots loadMadeRoom): property id -> that rental's short address. */
+  madeRoom?: ReadonlyMap<string, string>;
 };
 
 export type CoverageRow = {
@@ -49,6 +51,8 @@ export type CoverageRow = {
   /** The subset of `missing` the robot posts (Kijiji, Rentals.ca, Zumper). */
   missingRobot: string[];
   offered: number;
+  /** S786: Rentals.ca was switched off to make room for this rental (short address); not counted as missing. */
+  madeRoomFor?: string | null;
 };
 
 export type Coverage = {
@@ -88,7 +92,8 @@ export function postingCoverage(input: CoverageInput): Coverage {
   for (const prop of input.properties) {
     if (prop.status !== "available") continue;
     const live = liveByProperty.get(prop.id) ?? new Set<string>();
-    const missing = offered.filter((k) => !live.has(k));
+    const madeRoomFor = input.madeRoom?.get(prop.id) ?? null;
+    const missing = offered.filter((k) => !live.has(k) && !(k === "rentals_ca" && madeRoomFor));
     rows.push({
       propertyId: prop.id,
       address: prop.address,
@@ -96,6 +101,7 @@ export function postingCoverage(input: CoverageInput): Coverage {
       missing,
       missingRobot: missing.filter((k) => isRobotPostedChannel(k)),
       offered: offered.length,
+      madeRoomFor,
     });
   }
   return { rows, signInToAdd: [...signInToAdd], gaps: rows.filter((r) => r.missing.length > 0).length };

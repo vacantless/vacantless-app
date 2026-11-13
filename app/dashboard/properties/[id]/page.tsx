@@ -1,5 +1,6 @@
 import { GROUP_SIZE_MAX, accountGroupRule } from "@/lib/group-viewing";
-import { loadRentalsSlotChoice, slotIsStuck } from "@/lib/rentals-slots";
+import { loadMadeRoom, loadRentalsSlotChoice, madeRoomLine, slotIsStuck } from "@/lib/rentals-slots";
+import { captureNote, paidPressedAt } from "@/lib/paid-capture-note";
 import Link from "next/link";
 import { buildAdPreview } from "@/lib/ad-preview";
 import { showRelistButton } from "@/lib/relist-visibility";
@@ -576,6 +577,8 @@ function buildSyndicationBlockerSummary({
   const slotWait = new Map<string, string>();
   // S785e: that switch stopped (an expired sign-in); the row offers to try again.
   const slotStuck = new Map<string, string>();
+  // S786: "I paid" pressed; not a payment to ask for again.
+  const savingPaid = new Set<string>();
   const labelFor = (key: string, fallback?: string | null) =>
     fallback || labelByKey.get(key) || key;
 
@@ -602,6 +605,13 @@ function buildSyndicationBlockerSummary({
     }
     if (item.errorCode === "spend_period_cap" || item.errorCode === "spend_per_ad_cap") {
       feeLimit.set(item.channel, label);
+    } else if (
+      item.publishStatus === "needs_payment" &&
+      paidPressedAt(item.notes) != null &&
+      !captureNote(item.errorMessage)
+    ) {
+      // S786: the landlord said they paid; the row says the link is being saved.
+      savingPaid.add(item.channel);
     } else if (item.publishStatus === "needs_payment") payment.set(item.channel, label);
     // S710 audit: a run item left at needs_login from before the site was
     // signed in again kept saying "Sign in to Kijiji" on Agile's Bruce 303
@@ -634,6 +644,7 @@ function buildSyndicationBlockerSummary({
         };
 
   for (const key of feeLimit.keys()) payment.delete(key);
+  for (const key of savingPaid) payment.delete(key);
   for (const key of [...slotWait.keys(), ...slotStuck.keys()]) {
     repost.delete(key);
     refresh.delete(key);
@@ -1100,6 +1111,9 @@ export default async function PropertyDetailPage({
   const rentalsSlotChoice = slotWaitItem
     ? await loadRentalsSlotChoice(supabase, p.organization_id, p.id)
     : null;
+  // S786: this rental gave its Rentals.ca slot to another; say so on the row.
+  const madeRoomFor = (await loadMadeRoom(supabase, p.organization_id)).get(p.id) ?? null;
+  const roomNotes: Record<string, string> = madeRoomFor ? { rentals_ca: madeRoomLine(madeRoomFor) } : {};
 
   const { data: photos } = await supabase
     .from("property_photos")
@@ -2608,7 +2622,27 @@ export default async function PropertyDetailPage({
                     tone: "danger",
                     title: "Could not switch that ad off.",
                     body:
-                      "Check that Rentals.ca is still signed in, then try again. You can also turn one off on Rentals.ca yourself.",
+                      "Check that Rentals.ca is still signed in, then try again.",
+                  }
+              : searchParams.dist === "slot_done_by_hand"
+                ? {
+                    tone: "success",
+                    title: "Thanks. Posting this one now.",
+                    body:
+                      "We marked the other ad as off Rentals.ca. The robot now posts this one in its place. This page updates by itself.",
+                  }
+              : searchParams.dist === "paid_noted"
+                ? {
+                    tone: "success",
+                    title: "Thanks. Saving the link from Kijiji.",
+                    body:
+                      "We are reading your Kijiji ads for the new one. It usually takes a few minutes. This page updates by itself.",
+                  }
+              : searchParams.dist === "paid_stale"
+                ? {
+                    tone: "warning",
+                    title: "That ad is not waiting for payment any more.",
+                    body: "Look at the site's row below for where it is now.",
                   }
               : searchParams.dist === "slot_switch_stale"
                 ? {
@@ -4863,6 +4897,7 @@ export default async function PropertyDetailPage({
           robotPostingAllowed={robotPostingAccess.allowed}
           capNotes={capNotes}
           rentalsSlotChoice={rentalsSlotChoice}
+          roomNotes={roomNotes}
           adPreview={adPreview}
           moreOpen={typeof searchParams.pageposts === "string"}
           more={

@@ -14,6 +14,7 @@
 // Publish Everywhere is the live-ad-link list.
 
 import { slotIsStuck, type RentalsSlotChoice } from "@/lib/rentals-slots";
+import { captureNote, paidPressedAt } from "@/lib/paid-capture-note";
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
 import {
@@ -303,6 +304,7 @@ export function DistributeTab({
   robotPostingAllowed = false,
   capNotes = {},
   rentalsSlotChoice = null,
+  roomNotes = {},
   adPreview = null,
   more = null,
   moreOpen = false,
@@ -340,6 +342,8 @@ export function DistributeTab({
   capNotes?: Readonly<Record<string, string>>;
   /** S785: Rentals.ca free ads full, the ads that could be switched off. */
   rentalsSlotChoice?: RentalsSlotChoice | null;
+  /** S786: per-site note on a rental that gave its slot away (Rentals.ca). */
+  roomNotes?: Readonly<Record<string, string>>;
   /** S724 (V251-29): the ad's facts, shown in the approval box. */
   adPreview?: AdPreview | null;
   /** S762 (REVIEW-S761 item 4): Keep it fresh and Relist, shown under More. */
@@ -451,6 +455,8 @@ export function DistributeTab({
               : null,
           waitingForSlot: it.channel === "rentals_ca" && it.errorCode === "waiting_for_free_slot",
           slotStuck: it.channel === "rentals_ca" && it.errorCode === "waiting_for_free_slot" && slotIsStuck(it.errorMessage),
+          paidPressed: it.publishStatus === "needs_payment" && paidPressedAt(it.notes) != null,
+          captureNote: it.publishStatus === "needs_payment" ? captureNote(it.errorMessage) : null,
         }))}
         postingBlocker={publishEverywherePostingBlocker}
         shownChannelKeys={shownChannelKeys}
@@ -459,6 +465,7 @@ export function DistributeTab({
         brokerage={brokerage}
         robotPostingAllowed={robotPostingAllowed}
         capNotes={capNotes}
+        roomNotes={roomNotes}
         adPreview={adPreview}
       />
     </div>

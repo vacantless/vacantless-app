@@ -47,7 +47,7 @@ export function slotWaitNote(takedownItemId: string, userId: string | null): str
 }
 
 export function slotWaitMessage(weakAddress: string): string {
-  return `Switching ${shortAddress(weakAddress)} off Rentals.ca first to free a slot. This ad posts by itself once that one is off, usually within a day.`;
+  return `Switching ${shortAddress(weakAddress)} off Rentals.ca first to free a slot. This ad posts by itself once that one is off, usually within a few minutes.`;
 }
 
 /** Pure: the summary line at the top of the rental page. */
@@ -119,4 +119,100 @@ export function slotIsStuck(errorMessage: string | null | undefined): boolean {
 export function slotTakedownId(notes: string | null | undefined): string | null {
   const m = (notes ?? "").match(/slot_after:([0-9a-f-]{36})/i);
   return m ? m[1] : null;
+}
+
+// ---------------------------------------------------------------------------
+// S786: the rental that made room. After a switch, the weak rental's
+// Rentals.ca ad is off, so the Rentals list called it "missing" and offered
+// "Post to Rentals.ca", which led straight back to the full account and an
+// offer to switch the new one off (a loop). While the rental it made room for
+// is still waiting or live on Rentals.ca, the weak rental is not missing
+// Rentals.ca: it gave its slot away by the landlord's choice.
+// ---------------------------------------------------------------------------
+
+export type SlotWaiterRow = {
+  /** The rental that took the slot. */
+  beneficiaryPropertyId: string;
+  beneficiaryAddress: string;
+  /** Still at waiting_for_free_slot (the switch is under way or stopped). */
+  waiting: boolean;
+  /** The takedown it waited on. */
+  takedownItemId: string;
+};
+
+/** Pure: weak rental id -> the short address of the rental it made room for. */
+export function madeRoomPairs(args: {
+  waiters: readonly SlotWaiterRow[];
+  /** takedown item id -> the property whose ad it took down */
+  takedownProperty: ReadonlyMap<string, string>;
+  /** properties with a live Rentals.ca ad now */
+  liveOnRentals: ReadonlySet<string>;
+}): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const w of args.waiters) {
+    const weak = args.takedownProperty.get(w.takedownItemId);
+    if (!weak || weak === w.beneficiaryPropertyId) continue;
+    if (args.liveOnRentals.has(weak)) continue;
+    if (!w.waiting && !args.liveOnRentals.has(w.beneficiaryPropertyId)) continue;
+    out.set(weak, shortAddress(w.beneficiaryAddress));
+  }
+  return out;
+}
+
+/** Loader for madeRoomPairs. Never throws; an error means no pairs. */
+export async function loadMadeRoom(supabase: SupabaseClient, organizationId: string): Promise<Map<string, string>> {
+  try {
+    const { data: rows } = await supabase
+      .from("distribution_run_items")
+      .select("id, notes, error_code, distribution_runs!inner(property_id, properties!inner(address))")
+      .eq("organization_id", organizationId)
+      .eq("channel", "rentals_ca")
+      .ilike("notes", "%slot_after:%");
+    const waiters: SlotWaiterRow[] = [];
+    for (const r of (rows ?? []) as Record<string, any>[]) {
+      const run = Array.isArray(r.distribution_runs) ? r.distribution_runs[0] : r.distribution_runs;
+      const prop = run && (Array.isArray(run.properties) ? run.properties[0] : run.properties);
+      const takedownItemId = slotTakedownId(r.notes);
+      if (!run?.property_id || !takedownItemId) continue;
+      waiters.push({
+        beneficiaryPropertyId: run.property_id,
+        beneficiaryAddress: prop?.address ?? "",
+        waiting: r.error_code === SLOT_WAIT_CODE,
+        takedownItemId,
+      });
+    }
+    if (waiters.length === 0) return new Map();
+    const { data: takedowns } = await supabase
+      .from("distribution_run_items")
+      .select("id, listing_post_id")
+      .eq("organization_id", organizationId)
+      .in("id", waiters.map((w) => w.takedownItemId));
+    const postIds = ((takedowns ?? []) as { listing_post_id: string | null }[])
+      .map((t) => t.listing_post_id)
+      .filter((x): x is string => Boolean(x));
+    const { data: posts } = postIds.length
+      ? await supabase.from("listing_posts").select("id, property_id").eq("organization_id", organizationId).in("id", postIds)
+      : { data: [] };
+    const postProperty = new Map(((posts ?? []) as { id: string; property_id: string }[]).map((p) => [p.id, p.property_id]));
+    const takedownProperty = new Map<string, string>();
+    for (const t of (takedowns ?? []) as { id: string; listing_post_id: string | null }[]) {
+      const prop = t.listing_post_id ? postProperty.get(t.listing_post_id) : undefined;
+      if (prop) takedownProperty.set(t.id, prop);
+    }
+    const { data: live } = await supabase
+      .from("listing_posts")
+      .select("property_id")
+      .eq("organization_id", organizationId)
+      .eq("portal", "rentals_ca")
+      .eq("status", "live");
+    const liveOnRentals = new Set(((live ?? []) as { property_id: string }[]).map((p) => p.property_id));
+    return madeRoomPairs({ waiters, takedownProperty, liveOnRentals });
+  } catch {
+    return new Map();
+  }
+}
+
+/** Pure: the line on the rental that made room. */
+export function madeRoomLine(forAddress: string): string {
+  return `Switched off Rentals.ca to make room for ${forAddress}. Posting here again needs a free Rentals.ca slot back.`;
 }
