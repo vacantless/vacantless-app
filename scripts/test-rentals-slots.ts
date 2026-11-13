@@ -47,7 +47,8 @@ ok("action parks the rental, never approves it", fn.includes("error_code: SLOT_W
 ok("action wakes the home runner", fn.includes("triggerRentalsTakedown()"));
 const all = [page, pe, act, readFileSync("lib/rentals-slots.ts", "utf8")].join("\n");
 ok("no em dashes in new copy", !/Switch [^\n]*—|free ads[^\n]*—/.test(all) && !readFileSync("lib/rentals-slots.ts", "utf8").includes("—"));
-ok("waiting summary, never a repost", page.includes('"site making room"') && /for \(const key of slotWait\.keys\(\)\) \{\s*repost\.delete\(key\);/.test(page));
+ok("stopped switch has its own summary", page.includes('"switch stopped"') && page.includes("if (slotIsStuck(item.errorMessage)) slotStuck.set(item.channel, label);"));
+ok("waiting summary, never a repost", page.includes('"site making room"') && /for \(const key of \[\.\.\.slotWait\.keys\(\), \.\.\.slotStuck\.keys\(\)\]\) \{\s*repost\.delete\(key\);/.test(page));
 import("../lib/for-you-row-state").then(({ forYouRowState }) => {
   const st = forYouRowState({
     rowKey: "rentals_ca",

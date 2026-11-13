@@ -1,5 +1,5 @@
 import { GROUP_SIZE_MAX, accountGroupRule } from "@/lib/group-viewing";
-import { loadRentalsSlotChoice } from "@/lib/rentals-slots";
+import { loadRentalsSlotChoice, slotIsStuck } from "@/lib/rentals-slots";
 import Link from "next/link";
 import { buildAdPreview } from "@/lib/ad-preview";
 import { showRelistButton } from "@/lib/relist-visibility";
@@ -574,6 +574,8 @@ function buildSyndicationBlockerSummary({
   const slotsFull = new Map<string, string>();
   // S785: the landlord chose an ad to switch off; this one posts after.
   const slotWait = new Map<string, string>();
+  // S785e: that switch stopped (an expired sign-in); the row offers to try again.
+  const slotStuck = new Map<string, string>();
   const labelFor = (key: string, fallback?: string | null) =>
     fallback || labelByKey.get(key) || key;
 
@@ -594,7 +596,10 @@ function buildSyndicationBlockerSummary({
     if (item.errorCode === "free_limit_reached" && item.publishStatus === "needs_operator") {
       slotsFull.set(item.channel, label);
     }
-    if (item.errorCode === "waiting_for_free_slot") slotWait.set(item.channel, label);
+    if (item.errorCode === "waiting_for_free_slot") {
+      if (slotIsStuck(item.errorMessage)) slotStuck.set(item.channel, label);
+      else slotWait.set(item.channel, label);
+    }
     if (item.errorCode === "spend_period_cap" || item.errorCode === "spend_per_ad_cap") {
       feeLimit.set(item.channel, label);
     } else if (item.publishStatus === "needs_payment") payment.set(item.channel, label);
@@ -629,7 +634,7 @@ function buildSyndicationBlockerSummary({
         };
 
   for (const key of feeLimit.keys()) payment.delete(key);
-  for (const key of slotWait.keys()) {
+  for (const key of [...slotWait.keys(), ...slotStuck.keys()]) {
     repost.delete(key);
     refresh.delete(key);
   }
@@ -641,6 +646,13 @@ function buildSyndicationBlockerSummary({
       "sites with free ads full",
       (label) => `${label}'s free ads are all in use. Pick an ad to switch off below. This one goes up in its place.`,
       (list) => `${list} have all their free ads in use. Pick an ad to switch off below.`,
+    ) ??
+    summary(
+      [...slotStuck.values()],
+      "switch stopped",
+      "switches stopped",
+      (label) => `The ${label} switch stopped. Sign in to ${label} again, then press Try the switch again below.`,
+      (list) => `The switches on ${list} stopped. Sign in again, then press Try the switch again below.`,
     ) ??
     summary(
       [...slotWait.values()],
