@@ -12,6 +12,8 @@ import {
   embeddedFolderViewUrl,
   isDriveImageHost,
   drivePullLine,
+  photoUrlsToTry,
+  sizedViewThumb,
 } from "../lib/drive-import";
 
 let pass = 0;
@@ -75,5 +77,11 @@ const lines = [
 ];
 ok("no em dashes", lines.every((l) => !l.includes("—")));
 
+const withThumb = entries.find((e) => e.name === "20230121_134806.jpg");
+ok("folder view image link read", withThumb?.thumb === "https://lh3.googleusercontent.com/x=s190");
+ok("view image asked for at 2400", sizedViewThumb("https://lh3.googleusercontent.com/drive-storage/AbC=s190") === "https://lh3.googleusercontent.com/drive-storage/AbC=s2400" && sizedViewThumb("https://evil.com/x=s190") === null && sizedViewThumb(undefined) === null);
+const tries = photoUrlsToTry({ id: "abc", name: "a.jpg", kind: "file", thumb: "https://lh3.googleusercontent.com/drive-storage/AbC=s190" }, null);
+ok("three routes in order", tries.length === 3 && tries[0].includes("/thumbnail?id=abc") && tries[1].endsWith("=s2400") && tries[2].startsWith("https://drive.usercontent.google.com/download?id=abc"));
+ok("two routes without a view link", photoUrlsToTry({ id: "abc", name: "a.jpg", kind: "file" }, null).length === 2);
 console.log(`drive-import: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

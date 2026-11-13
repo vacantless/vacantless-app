@@ -10,8 +10,8 @@ import { photoCapForPlan } from "@/lib/billing";
 import {
   driveImages,
   driveSourceRef,
-  driveThumbnailUrl,
   embeddedFolderViewUrl,
+  photoUrlsToTry,
   isDriveImageHost,
   parseDriveFolderUrl,
   parseEmbeddedFolderView,
@@ -46,36 +46,54 @@ export async function listDriveFolder(ref: DriveFolderRef): Promise<DriveEntry[]
   return parseEmbeddedFolderView(page.text);
 }
 
+type Fetched = { bytes: Uint8Array; type: string };
+type FetchMiss = { miss: string };
+
 /** One photo's bytes, following redirects only through Google's own hosts. */
-export async function fetchDriveImage(url: string): Promise<{ bytes: Uint8Array; type: string } | null> {
+export async function fetchDriveImage(url: string): Promise<Fetched | null> {
+  const r = await fetchDriveImageWhy(url);
+  return "miss" in r ? null : r;
+}
+
+/** Same, saying why a fetch missed so a failed pull can be read in the logs. */
+async function fetchDriveImageWhy(url: string): Promise<Fetched | FetchMiss> {
   let current = url;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     let u: URL;
     try {
       u = new URL(current);
     } catch {
-      return null;
+      return { miss: "bad url" };
     }
-    if (u.protocol !== "https:" || !isDriveImageHost(u.hostname)) return null;
+    if (u.protocol !== "https:" || !isDriveImageHost(u.hostname)) return { miss: `host ${u.hostname}` };
     let res: Response;
     try {
       res = await fetch(u.href, { redirect: "manual", signal: AbortSignal.timeout(PHOTO_TIMEOUT_MS), headers: { "user-agent": "Mozilla/5.0 Vacantless" } });
-    } catch {
-      return null;
+    } catch (err) {
+      return { miss: `fetch ${u.hostname} ${err instanceof Error ? err.name : "error"}` };
     }
     if (res.status >= 300 && res.status < 400) {
       const loc = res.headers.get("location");
-      if (!loc) return null;
+      if (!loc) return { miss: `${res.status} without location` };
       current = new URL(loc, u.href).href;
       continue;
     }
-    if (!res.ok) return null;
+    if (!res.ok) return { miss: `${res.status} from ${u.hostname}` };
     const len = Number(res.headers.get("content-length") ?? "0");
-    if (len > MAX_PHOTO_BYTES) return null;
+    if (len > MAX_PHOTO_BYTES) return { miss: `too big ${len}` };
     const buf = new Uint8Array(await res.arrayBuffer());
-    if (buf.byteLength === 0 || buf.byteLength > MAX_PHOTO_BYTES) return null;
+    if (buf.byteLength === 0 || buf.byteLength > MAX_PHOTO_BYTES) return { miss: `size ${buf.byteLength}` };
     const type = sniffImageType(buf);
-    return type ? { bytes: buf, type } : null;
+    return type ? { bytes: buf, type } : { miss: `not an image (${res.headers.get("content-type") ?? "no type"}) from ${u.hostname}` };
+  }
+  return { miss: "too many redirects" };
+}
+
+async function fetchFirstThatWorks(urls: string[], misses: string[]): Promise<Fetched | null> {
+  for (const url of urls) {
+    const r = await fetchDriveImageWhy(url);
+    if (!("miss" in r)) return r;
+    if (misses.length < 10) misses.push(r.miss);
   }
   return null;
 }
@@ -131,10 +149,11 @@ export async function pullDrivePhotos(args: {
   }
 
   // Fetch a few at a time, then store in gallery order.
+  const misses: string[] = [];
   const fetched: Array<{ entry: DriveEntry; img: { bytes: Uint8Array; type: string } | null }> = [];
   for (let i = 0; i < todo.length; i += CONCURRENCY) {
     const batch = todo.slice(i, i + CONCURRENCY);
-    const got = await Promise.all(batch.map((e) => fetchDriveImage(driveThumbnailUrl(e.id, resourceKey))));
+    const got = await Promise.all(batch.map((e) => fetchFirstThatWorks(photoUrlsToTry(e, resourceKey), misses)));
     batch.forEach((entry, j) => fetched.push({ entry, img: got[j] }));
   }
 
@@ -151,6 +170,7 @@ export async function pullDrivePhotos(args: {
     const path = photoStoragePath(organizationId, propertyId, photoId, extForType(img.type));
     const { error: upErr } = await admin.storage.from(PHOTO_BUCKET).upload(path, img.bytes, { contentType: img.type, upsert: false });
     if (upErr) {
+      if (misses.length < 10) misses.push(`storage ${upErr.message}`);
       skipped++;
       continue;
     }
@@ -166,6 +186,7 @@ export async function pullDrivePhotos(args: {
       source_ref: driveSourceRef(entry.id),
     });
     if (insErr) {
+      if (misses.length < 10) misses.push(`insert ${insErr.message}`);
       await admin.storage.from(PHOTO_BUCKET).remove([path]);
       skipped++;
       continue;
@@ -173,6 +194,9 @@ export async function pullDrivePhotos(args: {
     order++;
     firstEver = false;
     added++;
+  }
+  if (skipped > 0) {
+    console.warn("[drive-import] some photos missed", { propertyId, skipped, added, first: misses.slice(0, 3) });
   }
   if (added === 0) return { ok: false, reason: "failed" };
   return { ok: true, added, skipped, alreadyIn };

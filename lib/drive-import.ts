@@ -88,13 +88,39 @@ export function driveThumbnailUrl(fileId: string, resourceKey: string | null): s
   return withKey(`https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w2400`, resourceKey);
 }
 
+/** The original file, for when the resized links do not answer. */
+export function driveDownloadUrl(fileId: string, resourceKey: string | null): string {
+  return withKey(`https://drive.usercontent.google.com/download?id=${encodeURIComponent(fileId)}&export=download`, resourceKey);
+}
+
+/** The folder view's own small image link, asked for at 2400 px. */
+export function sizedViewThumb(thumb: string | undefined): string | null {
+  if (!thumb || !/^https:\/\/lh3\.googleusercontent\.com\//.test(thumb)) return null;
+  return thumb.replace(/=[swh]\d+(-[a-z0-9-]+)?$/i, "") + "=s2400";
+}
+
+/** Every link to try for one photo, in order. */
+export function photoUrlsToTry(entry: DriveEntry, resourceKey: string | null): string[] {
+  const urls = [driveThumbnailUrl(entry.id, resourceKey)];
+  const view = sizedViewThumb(entry.thumb);
+  if (view) urls.push(view);
+  urls.push(driveDownloadUrl(entry.id, resourceKey));
+  return urls;
+}
+
 /** Hosts a Drive photo fetch may be redirected through. */
 export function isDriveImageHost(host: string): boolean {
   const h = host.toLowerCase();
   return h === "drive.google.com" || h === "drive.usercontent.google.com" || h.endsWith(".googleusercontent.com");
 }
 
-export type DriveEntry = { id: string; name: string; kind: "file" | "folder" };
+export type DriveEntry = {
+  id: string;
+  name: string;
+  kind: "file" | "folder";
+  /** The image link the folder view itself shows (lh3.googleusercontent.com), when there is one. */
+  thumb?: string;
+};
 
 function decodeEntities(s: string): string {
   return s
@@ -118,8 +144,11 @@ export function parseEmbeddedFolderView(html: string): DriveEntry[] {
     const hrefm = part.match(/<a href="([^"]*)"/);
     const href = hrefm ? hrefm[1] : "";
     const kind: DriveEntry["kind"] = /\/folders\//.test(href) ? "folder" : "file";
+    const thumbm = part.match(/class="flip-entry-thumb"><img src="(https:\/\/lh3\.googleusercontent\.com\/[^"]+)"/);
     seen.add(idm[1]);
-    out.push({ id: idm[1], name: decodeEntities((titlem?.[1] ?? "").trim()), kind });
+    const entry: DriveEntry = { id: idm[1], name: decodeEntities((titlem?.[1] ?? "").trim()), kind };
+    if (thumbm) entry.thumb = decodeEntities(thumbm[1]);
+    out.push(entry);
   }
   return out;
 }
