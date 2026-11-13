@@ -54,6 +54,8 @@ export const SWEEP_PATHS = [
   "/api/cron/ad-update-repost",
   // S771: a "New" renter we already answered, quiet for 3 days, becomes "Contacted".
   "/api/cron/quiet-new-leads",
+  // S788d: unit progress reminders to the crew (lib/unit-progress-reminders).
+  "/api/cron/unit-progress",
 ] as const;
 
 export type SweepResult = {

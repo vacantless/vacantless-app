@@ -448,6 +448,51 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     defaultAccent: "#2563eb",
     active: true,
   },
+  // S788d: unit progress links (PLAN-S788-UNIT-PROGRESS). The crew tap a
+  // unit's stage on their no-login link; the landlord hears about the taps
+  // that need them, and the crew get a reminder only when something waits.
+  {
+    key: "leasing.unit_progress_update",
+    family: "leasing",
+    audience: "operator",
+    label: "Your crew updated a unit",
+    description:
+      "When someone on your crew taps Tenant gave notice, Photos are in or Rented on their unit progress link, you get the unit and who tapped it.",
+    tokens: [...COMMON_TOKENS, "crew_name", "stage_label", "date_line", "dashboard_url"],
+    defaultSubject: "{{property_address}}: {{stage_label}}",
+    defaultBody:
+      "{{crew_name}} marked {{property_address}} as {{stage_label}}. {{date_line}}\n\nSee every unit: {{dashboard_url}}",
+    defaultAccent: "#2563eb",
+    active: true,
+  },
+  {
+    key: "leasing.unit_progress_stuck",
+    family: "leasing",
+    audience: "operator",
+    label: "A unit has no update after a reminder",
+    description:
+      "When we reminded your crew about a unit and nothing changed in 3 days, you get one note with the units and who was asked.",
+    tokens: [...COMMON_TOKENS, "unit_count", "unit_lines", "dashboard_url"],
+    defaultSubject: "{{unit_count}} units have no update from your crew",
+    defaultBody:
+      "We reminded your crew about these units 3 or more days ago. Nothing has changed since.\n\n{{unit_lines}}\n\nSee every unit: {{dashboard_url}}",
+    defaultAccent: "#d97706",
+    active: true,
+  },
+  {
+    key: "leasing.crew_progress_reminder",
+    family: "leasing",
+    audience: "trade",
+    label: "Reminder to your crew to update units",
+    description:
+      "Your manager, leasing person, contractor or cleaner gets a short note when a unit needs an update from them. At most one a day, only when something is waiting.",
+    tokens: [...COMMON_TOKENS, "crew_name", "reminder_count", "reminder_lines", "crew_url"],
+    defaultSubject: "{{org_name}}: {{reminder_count}} units need an update",
+    defaultBody:
+      "Hi {{crew_name}},\n\n{{reminder_lines}}\n\nTap where each unit is at: {{crew_url}}",
+    defaultAccent: "#2563eb",
+    active: true,
+  },
   // Lease-up ad closeout task (S575). Audience operator. When a unit is marked
   // leased and the policy ladder reaches hard take-down, non-Graph/manual
   // channels become a human task instead of an automated delete. The worker may
@@ -1260,6 +1305,8 @@ const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   "leasing.distribution_job_needs_action": "listing",
   "leasing.distribution_takedown_needed": "listing",
   "leasing.ads_still_up": "listing",
+  "leasing.unit_progress_update": "listing",
+  "leasing.unit_progress_stuck": "listing",
   // owner — landlord / property-owner compliance, assets, rent increases
   "leasing.rent_increase": "owner",
   "leasing.landlord_furnace_service": "owner",

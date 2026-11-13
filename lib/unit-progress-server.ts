@@ -73,6 +73,16 @@ export async function recordCrewTap(args: {
   if (takesAdsDown(stage) && (prop as { status: string | null }).status !== "leased") {
     await markRentedAndTakeDown({ admin, organizationId: crew.organization_id, propertyId: args.propertyId });
   }
+  // S788d: the landlord hears about the taps that need them.
+  const { notifyLandlordOfTap } = await import("@/lib/unit-progress-notify");
+  await notifyLandlordOfTap({
+    admin,
+    organizationId: crew.organization_id,
+    propertyId: args.propertyId,
+    crewName: crew.name,
+    stage,
+    dueDate: stageTakesDate(stage) ? cleanDate(args.dueDate) : null,
+  });
   return { ok: true, stage };
 }
 
