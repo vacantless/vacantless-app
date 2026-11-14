@@ -42,7 +42,7 @@ import {
   setPostingAutopilot,
   startPostingOnlyCheckout,
 } from "./actions";
-import { BrandBanner } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import {
   FOUNDING20_OFFER,
   foundingChannel,
@@ -265,7 +265,7 @@ export default async function BillingPage({
 
   return (
     <div>
-      <BrandBanner
+      <PageHeader
         icon={<Icons.card />}
         eyebrow="Account"
         title="Billing"

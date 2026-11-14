@@ -17,7 +17,7 @@ import {
 } from "@/app/dashboard/settings/actions";
 import { AddQuestionForm } from "./add-question-form";
 import { ScreeningAskToggles } from "./screening-builtins";
-import { BrandBanner, IconTile } from "@/components/ui";
+import { PageHeader, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -99,7 +99,7 @@ export default async function ScreeningSettingsPage({
 
   return (
     <div>
-      <BrandBanner
+      <PageHeader
         eyebrow="Leasing"
         title="Questions for renters"
         subtitle="Set up the qualifying questions on your inquiry form and choose which answers get a “possible mismatch” heads-up. This shapes every inquiry across all your rentals."

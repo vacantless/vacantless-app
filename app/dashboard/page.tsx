@@ -968,16 +968,16 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
                 href={`/dashboard/leads/${l.id}`}
                 className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50"
               >
-                <span className="min-w-0 flex-1 truncate text-gray-900">
-                  {l.name || l.email || "Unnamed renter"}
-                  {l.property?.address && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      {l.property.address}
-                    </span>
-                  )}
-                  {l.source && (
-                    <span className="ml-2 text-xs text-gray-400">
-                      via {l.source}
+                <span className="min-w-0 flex-1 text-gray-900 sm:truncate">
+                  <span className="block truncate sm:inline">{l.name || l.email || "Unnamed renter"}</span>
+                  {(l.property?.address || l.source) && (
+                    <span className="block truncate text-xs text-gray-500 sm:ml-2 sm:inline">
+                      {l.property?.address ? shortAddress(l.property.address) : ""}
+                      {l.source && (
+                        <span className="text-gray-400">
+                          {l.property?.address ? " · " : ""}via {l.source}
+                        </span>
+                      )}
                     </span>
                   )}
                 </span>

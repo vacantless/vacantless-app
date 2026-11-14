@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg } from "@/lib/org";
 import { generateSlots, type Availability } from "@/lib/booking";
 import { sortPhotos } from "@/lib/photos";
+import { PageHeader } from "@/components/ui";
+import { Icons } from "@/components/icons";
 import { buildReplyKitCards, longDayLabel, nextTimesLabel, type ReplyKitPost, type ReplyKitProperty } from "@/lib/reply-kit";
 import { ReplyKit } from "./reply-kit";
 
@@ -86,11 +88,11 @@ export default async function QuickRepliesPage() {
 
   return (
     <div className="mx-auto max-w-xl px-1 py-4">
-      <h1 className="text-xl font-semibold text-gray-900">Quick replies</h1>
-      <p className="mt-1 text-sm text-gray-600">
-        Match the photo and price from the chat. Pick the site, copy, and paste it in the chat. Each site has its own link,
-        so you see where bookings come from.
-      </p>
+      <PageHeader
+        icon={<Icons.chat />}
+        title="Quick replies"
+        subtitle="Match the photo and price from the chat. Pick the site, copy, and paste it in the chat. Each site has its own link, so you see where bookings come from."
+      />
       <ReplyKit cards={cards} phone={org.public_contact_phone ?? null} />
       <details className="mt-6 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700">
         <summary className="cursor-pointer font-medium text-gray-900">Put this on your phone&apos;s home screen</summary>

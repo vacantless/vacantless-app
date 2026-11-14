@@ -8,7 +8,7 @@ import {
   type RiskLevel,
   type Jurisdiction,
 } from "@/lib/clauses";
-import { BrandBanner } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import { Icons } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -108,7 +108,7 @@ export default async function LeaseClausesPage({
 
   return (
     <div>
-      <BrandBanner
+      <PageHeader
         eyebrow="Tenants"
         title="Lease clauses"
         subtitle="Your reusable clause library. Build it here once; pull clauses in when you prepare a lease inside a tenancy."

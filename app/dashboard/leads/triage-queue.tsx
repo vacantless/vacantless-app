@@ -150,7 +150,7 @@ function QueueRow({
             </span>
           )}
         </div>
-        <p className="mt-1 truncate text-sm text-gray-500">
+        <p className="mt-1 text-sm text-gray-500 sm:truncate">
           {l.property?.address ?? "No rental linked"}
           {l.source && <span className="text-gray-400"> · via {l.source}</span>}
           <span className="text-gray-400">

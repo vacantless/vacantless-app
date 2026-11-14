@@ -4,6 +4,8 @@ import { shapeReferralRows, referralCounts, type ReferralRow } from "@/lib/refer
 import { ReferAFriendForm } from "./refer-form";
 import { REFERRAL_CREDIT_COPY } from "@/lib/referral-credit";
 import { DEFAULT_TIME_ZONE } from "@/lib/dates";
+import { PageHeader } from "@/components/ui";
+import { Icons } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
 
@@ -39,13 +41,11 @@ export default async function ReferralsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 py-6">
-      <header className="space-y-1">
-        <h1 className="text-xl font-semibold text-slate-900">Refer a landlord</h1>
-        <p className="text-sm text-slate-500">
-          Know another landlord who could use Vacantless? Send them a link and
-          they&rsquo;ll set up their own free account in a couple of minutes.
-        </p>
-      </header>
+      <PageHeader
+        icon={<Icons.users />}
+        title="Refer a landlord"
+        subtitle="Know another landlord who could use Vacantless? Send them a link. They set up their own free account in a couple of minutes."
+      />
 
       <section className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
         <p className="text-sm font-semibold text-green-900">{REFERRAL_CREDIT_COPY.headline}</p>
@@ -99,7 +99,7 @@ export default async function ReferralsPage() {
                       )}
                     </td>
                     <td className="px-3 py-2 text-slate-500">
-                      {new Date(v.createdAt).toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE })}
+                      {new Date(v.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: DEFAULT_TIME_ZONE })}
                     </td>
                   </tr>
                 ))}
