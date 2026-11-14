@@ -142,3 +142,11 @@ export function buildTodayLane(input: TodayInput): TodayItem[] {
 
   return items;
 }
+
+// S793: one line under "New this week" on Today. Viewings booked counts
+// viewings made in the last 7 days; kept counts those marked attended.
+// Nothing to say when both are zero.
+export function weekHint(viewingsBooked: number, viewingsKept: number): string | undefined {
+  if (viewingsBooked <= 0 && viewingsKept <= 0) return undefined;
+  return `${plural(viewingsBooked, "viewing", "viewings")} booked, ${viewingsKept} kept`;
+}

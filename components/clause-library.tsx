@@ -146,7 +146,6 @@ function ClauseCard({ c }: { c: ClauseView }) {
             <span className="font-medium text-gray-900">{c.title}</span>
             <span className="ml-2 inline-flex flex-wrap items-center gap-1.5 align-middle">
               <StatusChip tone={RISK_TONE[c.risk_level]}>{RISK_LABEL[c.risk_level]}</StatusChip>
-              <StatusChip tone="neutral">{c.key}</StatusChip>
               <StatusChip tone="info">{APPLICABLE_LABEL[c.applicable_to]}</StatusChip>
               {current ? (
                 <StatusChip tone="success">v{current.version}</StatusChip>
@@ -251,6 +250,10 @@ function ClauseCard({ c }: { c: ClauseView }) {
 
           {/* Edit metadata + delete */}
           <div className="border-t border-gray-100 pt-4">
+            {/* S793: the internal name left the closed row; it shows here only. */}
+            <p className="mb-3 text-xs text-gray-400">
+              Internal name: <code className="rounded bg-gray-100 px-1">{c.key}</code>
+            </p>
             <form action={saveClause} className="space-y-3">
               <input type="hidden" name="id" value={c.id} />
               <input type="hidden" name="key" value={c.key} />

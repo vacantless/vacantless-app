@@ -34,7 +34,7 @@ import { GettingStartedCard } from "./getting-started-card";
 import { deriveRentIncrease } from "@/lib/rent-increase";
 import { loadGuidelineLookup } from "@/lib/guideline-server";
 import { RentIncreaseRow } from "@/components/rent-increase-card";
-import { buildTodayLane } from "@/lib/dashboard-today";
+import { buildTodayLane, weekHint } from "@/lib/dashboard-today";
 import { VIEWING_PRESETS, presetOpenedNotice } from "@/lib/viewing-presets";
 import { openViewingPreset } from "./availability/actions";
 import { TodayLane } from "./today-lane";
@@ -338,6 +338,21 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   const newThisWeek = inPlayLeads.filter(
     (l) => new Date(l.created_at).getTime() >= weekAgo,
   );
+  // S793: viewings booked and kept in the same 7 days, for the tile's hint.
+  const weekAgoIso = new Date(weekAgo).toISOString();
+  const [{ count: viewingsBookedWeek }, { count: viewingsKeptWeek }] = await Promise.all([
+    supabase
+      .from("showings")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
+      .gte("created_at", weekAgoIso),
+    supabase
+      .from("showings")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
+      .eq("outcome", "attended")
+      .gte("scheduled_at", weekAgoIso),
+  ]);
 
   // S792: the stage strip counts the last 30 days. All-time totals (109 New
   // since May) read as neglect; older renters stay in Renters.
@@ -682,6 +697,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         <StatCard
           label="New this week"
           value={newThisWeek.length}
+          hint={weekHint(viewingsBookedWeek ?? 0, viewingsKeptWeek ?? 0)}
           icon={<Icons.bolt className="h-4 w-4" />}
         />
         <StatCard

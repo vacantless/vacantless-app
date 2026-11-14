@@ -1,6 +1,6 @@
 // Unit tests for the pure "Today" action lane.
 // Run: npx tsx scripts/test-dashboard-today.ts
-import { buildTodayLane, type TodayInput } from "../lib/dashboard-today";
+import { buildTodayLane, weekHint, type TodayInput } from "../lib/dashboard-today";
 import { needsReplyToday } from "../lib/pipeline";
 
 let passed = 0;
@@ -188,5 +188,13 @@ if (failed > 0) process.exit(1);
   ok("new lead 30 days old does not count", !needsReplyToday("new", "2026-09-12T10:00:00Z", now));
   ok("contacted lead never counts", !needsReplyToday("contacted", "2026-10-11T10:00:00Z", now));
   ok("missing date does not count", !needsReplyToday("new", null, now));
+  if (failed > 0) process.exit(1);
+}
+
+// S793: the "this week" hint under New this week.
+{
+  ok("no viewings -> no hint", weekHint(0, 0) === undefined);
+  ok("one booked", weekHint(1, 0) === "1 viewing booked, 0 kept");
+  ok("several", weekHint(4, 3) === "4 viewings booked, 3 kept");
   if (failed > 0) process.exit(1);
 }
