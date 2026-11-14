@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
-import { stopTenancyStripeRent } from "@/lib/stripe-rent-stop";
+import { stopTenancyStripeRent, scheduleTenancyRentStopAfterNext } from "@/lib/stripe-rent-stop";
 import { canCreateRentSubscription } from "@/lib/stripe-connect";
 import { requireCapability } from "@/lib/membership";
 import {
@@ -756,13 +756,36 @@ export async function endTenancy(formData: FormData) {
 
   const supabase = createClient();
 
-  // S796: never leave a live monthly bank debit running on an ended tenancy.
-  // Stop Stripe rent first; if Stripe can't confirm the stop, do not end.
+  // S796: never leave a live monthly bank debit running unattended on an
+  // ended tenancy. The landlord picks one of:
+  //   rent=after_next  take the next payment, then stop (S796b; the rent-stop
+  //                    sweep cancels the debit once that payment clears)
+  //   rent=keep        a stop after the last payment is already scheduled
+  //   anything else    stop the debit now
+  // If Stripe can't confirm, the tenancy is not ended.
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
-  const stop = await stopTenancyStripeRent(supabase, org.id, id);
-  if (!stop.ok) {
-    redirect(`/dashboard/tenancies/${id}?striperent=endstopfail`);
+  const rentChoice = s(formData, "rent");
+  let stopAfterIso: string | null = null;
+  let stoppedNow = false;
+  if (rentChoice === "keep") {
+    const { data: keepRow } = await supabase
+      .from("tenancies")
+      .select("rent_stop_after")
+      .eq("id", id)
+      .maybeSingle();
+    stopAfterIso = (keepRow as { rent_stop_after: string | null } | null)?.rent_stop_after ?? null;
+  } else if (rentChoice === "after_next") {
+    const sched = await scheduleTenancyRentStopAfterNext(supabase, org.id, id);
+    if (sched.ok) stopAfterIso = sched.dateIso;
+    else if (sched.code !== "nolive") redirect(`/dashboard/tenancies/${id}?striperent=endnonext`);
+  }
+  if (!stopAfterIso) {
+    const stop = await stopTenancyStripeRent(supabase, org.id, id);
+    if (!stop.ok) {
+      redirect(`/dashboard/tenancies/${id}?striperent=endstopfail`);
+    }
+    stoppedNow = stop.stopped;
   }
 
   await supabase
@@ -772,7 +795,11 @@ export async function endTenancy(formData: FormData) {
 
   revalidatePath(`/dashboard/tenancies/${id}`);
   revalidatePath("/dashboard/tenancies");
-  redirect(`/dashboard/tenancies/${id}?ended=1${stop.stopped ? "&rentstopped=1" : ""}`);
+  redirect(
+    `/dashboard/tenancies/${id}?ended=1${stoppedNow ? "&rentstopped=1" : ""}${
+      stopAfterIso ? `&rentstopafter=${stopAfterIso}` : ""
+    }`,
+  );
 }
 
 // ===========================================================================

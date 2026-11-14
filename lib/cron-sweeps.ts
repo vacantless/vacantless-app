@@ -56,6 +56,8 @@ export const SWEEP_PATHS = [
   "/api/cron/quiet-new-leads",
   // S788d: unit progress reminders to the crew (lib/unit-progress-reminders).
   "/api/cron/unit-progress",
+  // S796b: stops rent after the last payment clears (lib/stripe-rent-stop).
+  "/api/cron/rent-stop",
 ] as const;
 
 export type SweepResult = {

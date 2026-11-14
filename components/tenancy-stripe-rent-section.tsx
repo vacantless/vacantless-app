@@ -5,6 +5,8 @@ import {
   createStripeRentSubscription,
   refreshStripeRentSubscription,
   stopStripeRentSubscription,
+  scheduleStripeRentStop,
+  cancelScheduledStripeRentStop,
 } from "@/app/dashboard/tenancies/stripe-rent-actions";
 import {
   mandateStatusLabel,
@@ -47,6 +49,8 @@ export type TenancyStripeRentView = {
   lastPaymentLabel: string | null;
   lastPaymentAmountLabel: string | null;
   lastPaymentState: "paid" | "processing" | "failed" | null;
+  // S796b: a stop is scheduled for after the payment on this date.
+  stopAfterLabel: string | null;
 };
 
 function lastPaymentText(view: TenancyStripeRentView): string {
@@ -163,7 +167,12 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
                   Bank debits take a few business days to confirm. Subscription{" "}
                   <span className="font-mono">{view.subscriptionId}</span>.
                 </p>
-                <div className="flex flex-wrap items-center gap-3">
+                {view.stopAfterLabel && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    Last payment: {view.stopAfterLabel}. Rent stops on its own once that payment goes through.
+                  </p>
+                )}
+                <div className="flex flex-wrap items-start gap-3">
                   <form action={refreshStripeRentSubscription}>
                     <input type="hidden" name="tenancy_id" value={view.tenancyId} />
                     <SubmitButton
@@ -173,25 +182,53 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
                       Refresh status
                     </SubmitButton>
                   </form>
-                  <details className="text-sm">
-                    <summary className="cursor-pointer select-none rounded-lg border border-red-200 bg-white px-4 py-2 font-semibold text-red-600 transition hover:bg-red-50">
-                      Stop monthly rent
-                    </summary>
-                    <form action={stopStripeRentSubscription} className="mt-2 space-y-2 rounded-lg border border-red-100 bg-red-50 p-3">
+                  {view.stopAfterLabel && (
+                    <form action={cancelScheduledStripeRentStop}>
                       <input type="hidden" name="tenancy_id" value={view.tenancyId} />
-                      <p className="text-sm text-gray-700">
-                        This stops the {view.rentLabel} monthly debit now. No more
-                        payments will be pulled. A payment already processing at
-                        the bank still completes. The bank authorization is kept,
-                        so you can restart rent later.
-                      </p>
                       <SubmitButton
-                        pendingLabel="Stopping…"
-                        className="inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        pendingLabel="Saving…"
+                        className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Yes, stop monthly rent
+                        Keep collecting instead
                       </SubmitButton>
                     </form>
+                  )}
+                  <details className="text-sm">
+                    <summary className="inline-flex cursor-pointer select-none list-none items-center rounded-lg border border-red-200 bg-white px-4 py-2 font-semibold text-red-600 transition hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+                      {view.stopAfterLabel ? "Stop rent now" : "Stop monthly rent"}
+                    </summary>
+                    <div className="mt-2 space-y-3 rounded-lg border border-red-100 bg-red-50 p-3">
+                      {!view.stopAfterLabel && view.nextChargeLabel && (
+                        <form action={scheduleStripeRentStop} className="space-y-2">
+                          <input type="hidden" name="tenancy_id" value={view.tenancyId} />
+                          <p className="text-sm text-gray-700">
+                            Take one last {view.rentLabel} payment on {view.nextChargeLabel}, then stop.
+                            Rent stops on its own once that payment goes through.
+                          </p>
+                          <SubmitButton
+                            pendingLabel="Saving…"
+                            className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Stop after the {view.nextChargeLabel} payment
+                          </SubmitButton>
+                        </form>
+                      )}
+                      <form action={stopStripeRentSubscription} className="space-y-2">
+                        <input type="hidden" name="tenancy_id" value={view.tenancyId} />
+                        <p className="text-sm text-gray-700">
+                          Or stop the {view.rentLabel} monthly debit now. No more
+                          payments will be pulled. A payment already processing at
+                          the bank still completes. The bank authorization is kept,
+                          so you can restart rent later.
+                        </p>
+                        <SubmitButton
+                          pendingLabel="Stopping…"
+                          className="inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Yes, stop rent now
+                        </SubmitButton>
+                      </form>
+                    </div>
                   </details>
                 </div>
               </div>

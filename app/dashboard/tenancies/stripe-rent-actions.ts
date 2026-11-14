@@ -20,7 +20,7 @@ import {
   selectActiveSchedulePhase,
   canCreateRentSubscription,
 } from "@/lib/stripe-connect";
-import { stopTenancyStripeRent } from "@/lib/stripe-rent-stop";
+import { stopTenancyStripeRent, scheduleTenancyRentStopAfterNext } from "@/lib/stripe-rent-stop";
 import type { N1Snapshot } from "@/lib/n1-render";
 import { isValidProcessDate } from "@/lib/rotessa";
 
@@ -306,6 +306,7 @@ export async function createStripeRentSubscription(formData: FormData) {
         stripe_subscription_id: parsed.subscriptionId,
         stripe_subscription_status: parsed.status,
         stripe_subscription_synced_at: new Date().toISOString(),
+        rent_stop_after: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", tenancyId);
@@ -403,6 +404,48 @@ export async function stopStripeRentSubscription(formData: FormData) {
 
   revalidatePath(tenancyPath(tenancyId));
   redirect(`${tenancyPath(tenancyId)}?striperent=${result.stopped ? "stopped" : "nothingtostop"}`);
+}
+
+// S796b: stop after the next payment. Rent keeps collecting; the rent-stop
+// sweep cancels the debit once that payment clears.
+export async function scheduleStripeRentStop(formData: FormData) {
+  const tenancyId = String(formData.get("tenancy_id") ?? "").trim();
+  if (!tenancyId) redirect("/dashboard/tenancies");
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_rent", `${tenancyPath(tenancyId)}?striperent=forbidden`);
+
+  const supabase = createClient();
+  const result = await scheduleTenancyRentStopAfterNext(supabase, org.id, tenancyId);
+  if (!result.ok) {
+    redirect(`${tenancyPath(tenancyId)}?striperent=${result.code === "nolive" ? "nothingtostop" : result.code}`);
+  }
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(`${tenancyPath(tenancyId)}?striperent=stopscheduled`);
+}
+
+// S796b: undo a scheduled stop. Rent carries on as before.
+export async function cancelScheduledStripeRentStop(formData: FormData) {
+  const tenancyId = String(formData.get("tenancy_id") ?? "").trim();
+  if (!tenancyId) redirect("/dashboard/tenancies");
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_rent", `${tenancyPath(tenancyId)}?striperent=forbidden`);
+
+  const supabase = createClient();
+  // An ended tenancy must not go back to collecting rent with no end in sight.
+  const { data: stRow } = await supabase.from("tenancies").select("status").eq("id", tenancyId).maybeSingle();
+  if ((stRow as { status: string | null } | null)?.status === "ended") {
+    redirect(`${tenancyPath(tenancyId)}?striperent=keepended`);
+  }
+  await supabase
+    .from("tenancies")
+    .update({ rent_stop_after: null, updated_at: new Date().toISOString() })
+    .eq("id", tenancyId);
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(`${tenancyPath(tenancyId)}?striperent=stopcleared`);
 }
 
 

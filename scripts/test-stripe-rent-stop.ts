@@ -6,6 +6,7 @@ import {
   canCreateRentSubscription,
   summarizeRentPayments,
   subscriptionStatusLabel,
+  decideScheduledRentStop,
 } from "../lib/stripe-connect";
 
 let passed = 0;
@@ -93,6 +94,42 @@ const DEC18 = Date.UTC(2026, 11, 18, 12) / 1000;
     ],
   );
   ok("void invoices are skipped", r.lastPaymentState === "paid");
+}
+
+// decideScheduledRentStop: last payment Dec 1, then stop.
+{
+  const base = { stopAfterIso: "2026-12-01", nextChargeIso: "2026-12-01", lastPaymentIso: "2026-11-04", lastPaymentState: "paid" as const };
+  ok("no date -> never stops", !decideScheduledRentStop({ ...base, stopAfterIso: null, todayIso: "2027-01-01" }).stop);
+  ok("before the date -> wait", decideScheduledRentStop({ ...base, todayIso: "2026-11-20" }).reason === "before_date");
+  ok("on the date, not issued yet -> wait", !decideScheduledRentStop({ ...base, todayIso: "2026-12-01" }).stop);
+  ok(
+    "issued but still processing -> wait",
+    decideScheduledRentStop({ stopAfterIso: "2026-12-01", todayIso: "2026-12-03", nextChargeIso: "2027-01-01", lastPaymentIso: "2026-12-01", lastPaymentState: "processing" }).reason === "waiting",
+  );
+  ok(
+    "issued and paid -> stop",
+    decideScheduledRentStop({ stopAfterIso: "2026-12-01", todayIso: "2026-12-05", nextChargeIso: "2027-01-01", lastPaymentIso: "2026-12-04", lastPaymentState: "paid" }).reason === "paid",
+  );
+  ok(
+    "an older paid payment does not count as the last one",
+    !decideScheduledRentStop({ stopAfterIso: "2026-12-01", todayIso: "2026-12-02", nextChargeIso: "2027-01-01", lastPaymentIso: "2026-11-04", lastPaymentState: "paid" }).stop,
+  );
+  ok(
+    "grace: 14 days later stops even if never paid",
+    decideScheduledRentStop({ stopAfterIso: "2026-12-01", todayIso: "2026-12-15", nextChargeIso: "2027-01-01", lastPaymentIso: "2026-12-01", lastPaymentState: "failed" }).reason === "grace",
+  );
+  ok(
+    "grace also covers Stripe being unreadable",
+    decideScheduledRentStop({ stopAfterIso: "2026-12-01", todayIso: "2026-12-20", nextChargeIso: null, lastPaymentIso: null, lastPaymentState: null }).stop,
+  );
+  ok(
+    "unreadable before grace -> wait",
+    !decideScheduledRentStop({ stopAfterIso: "2026-12-01", todayIso: "2026-12-10", nextChargeIso: null, lastPaymentIso: null, lastPaymentState: null }).stop,
+  );
+  ok(
+    "grace is before the next monthly debit (Feb, shortest month)",
+    decideScheduledRentStop({ stopAfterIso: "2027-02-01", todayIso: "2027-02-15", nextChargeIso: "2027-03-01", lastPaymentIso: null, lastPaymentState: null }).stop,
+  );
 }
 
 console.log(`\nstripe-rent-stop: ${passed} passed, ${failed} failed`);

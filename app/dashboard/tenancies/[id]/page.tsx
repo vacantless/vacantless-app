@@ -226,6 +226,7 @@ type Tenancy = {
   stripe_rent_amount_synced_cents: number | null;
   stripe_subscription_id: string | null;
   stripe_subscription_status: string | null;
+  rent_stop_after: string | null;
   report_token: string | null;
   renewal_autopilot: boolean | null;
   renewal_intent: string | null;
@@ -378,6 +379,8 @@ const STRIPE_RENT_SUCCESS: Record<string, string> = {
   subsynced: "Subscription status refreshed.",
   stopped: "Monthly rent stopped. No more debits will run. The bank authorization is kept, so you can restart rent any time.",
   nothingtostop: "There was no active monthly rent to stop.",
+  stopscheduled: "Done. Rent takes one last payment, then stops on its own once that payment goes through.",
+  stopcleared: "The scheduled stop is cancelled. Monthly rent carries on.",
 };
 const STRIPE_RENT_ERROR: Record<string, string> = {
   notconfigured: "Payments aren't configured on this deployment yet.",
@@ -401,6 +404,9 @@ const STRIPE_RENT_ERROR: Record<string, string> = {
   nosub: "Set up the monthly rent subscription before refreshing.",
   stopfail: "Stripe couldn't stop the monthly rent just now. Nothing changed. Try again.",
   endstopfail: "This tenancy was not ended. Stripe couldn't stop its monthly rent debit, and we won't end a tenancy while the debit is still running. Try again.",
+  nonext: "We couldn't read the next payment date from Stripe just now. Nothing changed. Try again, or stop rent now.",
+  endnonext: "This tenancy was not ended. We couldn't read the next payment date from Stripe to set the last payment. Try again, or choose to stop rent now.",
+  keepended: "This tenancy has ended, so rent can't go back to collecting every month. It takes the last payment and stops, or you can stop it now.",
   stopfirst: "Stop the monthly rent first (Rent collection, Stop monthly rent). Then you can delete this tenancy.",
 };
 
@@ -420,6 +426,7 @@ export default async function TenancyDetailPage({
     rotessa?: string;
     striperent?: string;
     rentstopped?: string;
+    rentstopafter?: string;
     serve?: string;
     renewal?: string;
     moveout?: string;
@@ -457,7 +464,7 @@ export default async function TenancyDetailPage({
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_rent_amount_synced_cents, stripe_subscription_id, stripe_subscription_status, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, move_out_date, move_out_source, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, beds, rent_control_exempt, first_occupancy_date, status, available_date, viewing_earliest_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_rent_amount_synced_cents, stripe_subscription_id, stripe_subscription_status, rent_stop_after, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, move_out_date, move_out_source, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, beds, rent_control_exempt, first_occupancy_date, status, available_date, viewing_earliest_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -525,6 +532,7 @@ export default async function TenancyDetailPage({
     lastPaymentAmountLabel:
       rentSummary?.lastPaymentCents != null ? formatRentCents(rentSummary.lastPaymentCents) : null,
     lastPaymentState: rentSummary?.lastPaymentState ?? null,
+    stopAfterLabel: t.rent_stop_after ? formatProcessDate(t.rent_stop_after) : null,
   };
   const todayIso = new Date().toISOString().slice(0, 10);
   const defaultProcessDate = defaultFirstProcessDate(todayIso);
@@ -1448,9 +1456,11 @@ export default async function TenancyDetailPage({
         ? "Tenancy created. This rental is now marked Leased and off its public listing page - it won't take new inquiries or viewing bookings."
         : FLASH.created)) ||
     (searchParams.ended &&
-      (searchParams.rentstopped
-        ? "Tenancy marked ended. Its automatic monthly rent debit was stopped too."
-        : FLASH.ended)) ||
+      (searchParams.rentstopafter && /^\d{4}-\d{2}-\d{2}$/.test(searchParams.rentstopafter)
+        ? `Tenancy marked ended. Rent takes one last payment on ${formatProcessDate(searchParams.rentstopafter)}, then stops on its own.`
+        : searchParams.rentstopped
+          ? "Tenancy marked ended. Its automatic monthly rent debit was stopped too."
+          : FLASH.ended)) ||
     (searchParams.tenant && TENANT_FLASH[searchParams.tenant]) ||
     (searchParams.rotessa && ROTESSA_SUCCESS[searchParams.rotessa]) ||
     (searchParams.striperent && STRIPE_RENT_SUCCESS[searchParams.striperent]) ||
@@ -3200,11 +3210,56 @@ export default async function TenancyDetailPage({
 
       {/* Lifecycle actions ----------------------------------------------- */}
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        {t.status !== "ended" && (
+        {t.status !== "ended" && !rentLive && (
           <form action={endTenancy}>
             <input type="hidden" name="id" value={t.id} />
             <button className={SECONDARY_ACTION_CLASS}>End tenancy</button>
           </form>
+        )}
+        {t.status !== "ended" && rentLive && (
+          <details className="w-full sm:w-auto">
+            <summary className={`${SECONDARY_ACTION_CLASS} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}>
+              End tenancy
+            </summary>
+            <form action={endTenancy} className="mt-3 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <input type="hidden" name="id" value={t.id} />
+              <div>
+                <label htmlFor="end-tenancy-date" className="mb-1 block text-xs font-medium text-gray-600">
+                  Tenancy end date
+                </label>
+                <input
+                  id="end-tenancy-date"
+                  type="date"
+                  name="end_date"
+                  defaultValue={t.end_date ?? todayIso}
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <p className="text-sm text-gray-700">
+                This tenancy has an automatic {formatRentCents(t.rent_cents)} monthly rent debit. Choose what happens to it.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {stripeRentView.stopAfterLabel ? (
+                  <button name="rent" value="keep" className={SECONDARY_ACTION_CLASS}>
+                    End tenancy (last payment {stripeRentView.stopAfterLabel}, then rent stops)
+                  </button>
+                ) : (
+                  stripeRentView.nextChargeLabel && (
+                    <button name="rent" value="after_next" className={SECONDARY_ACTION_CLASS}>
+                      End tenancy, take the {stripeRentView.nextChargeLabel} payment, then stop rent
+                    </button>
+                  )
+                )}
+                <button
+                  name="rent"
+                  value="now"
+                  className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-50"
+                >
+                  End tenancy and stop rent now
+                </button>
+              </div>
+            </form>
+          </details>
         )}
         <form action={deleteTenancy}>
           <input type="hidden" name="id" value={t.id} />
@@ -3214,8 +3269,7 @@ export default async function TenancyDetailPage({
         </form>
         <p className="text-xs text-gray-400">
           Ending keeps the record; deleting removes it and its tenants permanently.
-          {rentLive &&
-            ` Ending also stops the automatic ${formatRentCents(t.rent_cents)} monthly rent debit. Stop the rent before deleting.`}
+          {rentLive && " A tenancy with automatic rent running can't be deleted until the rent has stopped."}
         </p>
       </div>
     </div>

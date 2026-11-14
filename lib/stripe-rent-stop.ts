@@ -10,6 +10,8 @@ import { getStripe } from "@/lib/stripe";
 import {
   planRentStop,
   summarizeRentPayments,
+  subscriptionIsLive,
+  decideScheduledRentStop,
   type RentPaymentSummary,
 } from "@/lib/stripe-connect";
 
@@ -129,6 +131,7 @@ export async function stopTenancyStripeRent(
       stripe_subscription_schedule_id: null,
       stripe_rent_amount_synced_cents: null,
       stripe_rent_amount_synced_at: null,
+      rent_stop_after: null,
       updated_at: now,
     })
     .eq("id", tenancyId);
@@ -158,4 +161,111 @@ export async function fetchRentPaymentSummary(
     console.error("[stripe-rent] payment summary failed:", errReason(err));
     return null;
   }
+}
+
+export type ScheduleStopResult =
+  | { ok: true; dateIso: string }
+  | { ok: false; code: "nolive" | "notconnected" | "nonext" };
+
+/**
+ * S796b: schedule the stop for after the NEXT payment. Reads the next charge
+ * date from Stripe (never from the form) and stores it as rent_stop_after.
+ * Nothing changes at Stripe: the rent-stop sweep cancels the debit once that
+ * payment clears.
+ */
+export async function scheduleTenancyRentStopAfterNext(
+  supabase: SupabaseClient,
+  orgId: string,
+  tenancyId: string,
+): Promise<ScheduleStopResult> {
+  const { data: tData } = await supabase
+    .from("tenancies")
+    .select("id, stripe_subscription_id, stripe_subscription_status")
+    .eq("id", tenancyId)
+    .maybeSingle();
+  const tenancy = tData as {
+    id: string;
+    stripe_subscription_id: string | null;
+    stripe_subscription_status: string | null;
+  } | null;
+  if (!tenancy?.stripe_subscription_id || !subscriptionIsLive(tenancy.stripe_subscription_status)) {
+    return { ok: false, code: "nolive" };
+  }
+  const { data: cData } = await supabase
+    .from("stripe_connect_accounts")
+    .select("connected_account_id")
+    .eq("organization_id", orgId)
+    .limit(1);
+  const stripeAccount = (cData?.[0] as { connected_account_id: string } | undefined)?.connected_account_id;
+  if (!stripeAccount) return { ok: false, code: "notconnected" };
+
+  const summary = await fetchRentPaymentSummary(stripeAccount, tenancy.stripe_subscription_id);
+  if (!summary?.nextChargeIso) return { ok: false, code: "nonext" };
+
+  const { error } = await supabase
+    .from("tenancies")
+    .update({ rent_stop_after: summary.nextChargeIso, updated_at: new Date().toISOString() })
+    .eq("id", tenancyId);
+  if (error) return { ok: false, code: "nonext" };
+  return { ok: true, dateIso: summary.nextChargeIso };
+}
+
+/**
+ * S796b sweep: carry out scheduled "stop after the last payment" stops.
+ * Service-role client (no signed-in user). Safe to run twice: a stopped
+ * tenancy has rent_stop_after cleared.
+ */
+export async function runScheduledRentStops(opts: { admin: SupabaseClient; todayIso?: string }) {
+  const todayIso = opts.todayIso ?? new Date().toISOString().slice(0, 10);
+  const out = { ok: true, checked: 0, stopped: 0, waiting: 0, cleared: 0, failed: 0 };
+  const { data, error } = await opts.admin
+    .from("tenancies")
+    .select("id, organization_id, rent_stop_after, stripe_subscription_id, stripe_subscription_status")
+    .not("rent_stop_after", "is", null)
+    .limit(100);
+  if (error) return { ...out, ok: false, error: error.message };
+  type Row = {
+    id: string;
+    organization_id: string;
+    rent_stop_after: string;
+    stripe_subscription_id: string | null;
+    stripe_subscription_status: string | null;
+  };
+  for (const row of (data ?? []) as Row[]) {
+    out.checked++;
+    if (!row.stripe_subscription_id || !subscriptionIsLive(row.stripe_subscription_status)) {
+      // Nothing live any more (stopped by hand, or canceled at Stripe).
+      await opts.admin.from("tenancies").update({ rent_stop_after: null }).eq("id", row.id);
+      out.cleared++;
+      continue;
+    }
+    const { data: cData } = await opts.admin
+      .from("stripe_connect_accounts")
+      .select("connected_account_id")
+      .eq("organization_id", row.organization_id)
+      .limit(1);
+    const stripeAccount = (cData?.[0] as { connected_account_id: string } | undefined)?.connected_account_id;
+    const summary = await fetchRentPaymentSummary(stripeAccount, row.stripe_subscription_id);
+    const decision = decideScheduledRentStop({
+      stopAfterIso: row.rent_stop_after,
+      todayIso,
+      nextChargeIso: summary?.nextChargeIso ?? null,
+      lastPaymentIso: summary?.lastPaymentIso ?? null,
+      lastPaymentState: summary?.lastPaymentState ?? null,
+    });
+    if (!decision.stop) {
+      out.waiting++;
+      continue;
+    }
+    const result = await stopTenancyStripeRent(opts.admin, row.organization_id, row.id);
+    if (result.ok) {
+      out.stopped++;
+      console.log("[rent-stop] stopped", row.id, decision.reason);
+    } else {
+      out.failed++;
+      out.ok = false;
+      console.error("[rent-stop] stop failed", row.id, result.code, result.reason ?? "");
+    }
+  }
+  return out;
 }

@@ -557,6 +557,51 @@ export function summarizeRentPayments(
   return out;
 }
 
+/** Days after the last-payment date at which a scheduled stop fires even if
+ *  the payment still has not shown as paid. Shorter than any month, so the
+ *  next monthly debit can never run. */
+export const RENT_STOP_GRACE_DAYS = 14;
+
+function addDaysIso(iso: string, days: number): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!m) return null;
+  const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + days, 12);
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/**
+ * S796b: is it time to carry out a scheduled "stop after the last payment"?
+ * Pure. The landlord's rule: let the final payment go through, then stop.
+ *   * before the last-payment date: wait.
+ *   * the final payment was issued (the next charge date has moved past the
+ *     stop date) and it shows paid: stop.
+ *   * otherwise wait, but never past the grace window, so a slow or failed
+ *     final payment can not let another monthly debit run.
+ */
+export function decideScheduledRentStop(input: {
+  stopAfterIso: string | null | undefined;
+  todayIso: string;
+  nextChargeIso: string | null | undefined;
+  lastPaymentIso: string | null | undefined;
+  lastPaymentState: RentPaymentState | null | undefined;
+}): { stop: boolean; reason: "none" | "before_date" | "paid" | "grace" | "waiting" } {
+  const stopAfter = (input.stopAfterIso ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(stopAfter)) return { stop: false, reason: "none" };
+  const grace = addDaysIso(stopAfter, RENT_STOP_GRACE_DAYS);
+  if (grace && input.todayIso >= grace) return { stop: true, reason: "grace" };
+  if (input.todayIso < stopAfter) return { stop: false, reason: "before_date" };
+  const issued = !!input.nextChargeIso && input.nextChargeIso > stopAfter;
+  if (
+    issued &&
+    input.lastPaymentState === "paid" &&
+    !!input.lastPaymentIso &&
+    input.lastPaymentIso >= stopAfter
+  ) {
+    return { stop: true, reason: "paid" };
+  }
+  return { stop: false, reason: "waiting" };
+}
+
 // ===========================================================================
 // Increment 4 — webhook reconciliation. The rent rail runs on the LANDLORD's
 // CONNECTED account, so its Stripe events arrive with `event.account` set
