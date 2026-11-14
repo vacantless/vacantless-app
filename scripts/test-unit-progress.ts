@@ -1,6 +1,6 @@
 // Run with: npx tsx scripts/test-unit-progress.ts
 // S788b: unit progress stages, who can tap what, current stage.
-import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL, cleanDate, stageTakesDate, stageDateLine, canAddUnit, cleanUnitNumber, composeUnitAddress, tenancyEffect, tenancyEffectAction, stageChip, daysAgoText } from "../lib/unit-progress";
+import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL, cleanDate, stageTakesDate, stageDateLine, canAddUnit, cleanUnitNumber, composeUnitAddress, tenancyEffect, tenancyEffectAction, stageChip, daysAgoText, shootLinkExpiry, shootLinkState, cleanPersonName, photographerLabel } from "../lib/unit-progress";
 
 let pass = 0;
 let fail = 0;
@@ -79,5 +79,18 @@ ok("finished turnover hides after 14 days", stageChip({ stage: "moved_in", at: a
 ok("any stage hides after 60 days", stageChip({ stage: "under_construction", at: ago(61), date: null, by: null }, n2) === null && stageChip({ stage: "under_construction", at: ago(30), date: null, by: null }, n2) !== null);
 ok("days ago text", daysAgoText(ago(1), n2) === "yesterday" && daysAgoText(ago(5), n2) === "5 days ago");
 ok("chip titles plain: no parentheses, no dashes", [c1, c2].every((c) => c && !/[()\u2014\u2013]/.test(c.title)));
+// S791a: the photographer's one-time link.
+const n3 = new Date("2026-11-13T12:00:00Z");
+ok("shoot link lasts 30 days after the shoot", shootLinkExpiry("2026-11-20", n3).toISOString() === "2026-12-20T23:59:00.000Z");
+ok("shoot link without a date lasts 45 days", shootLinkExpiry(null, n3).toISOString() === "2026-12-28T12:00:00.000Z");
+ok("a shoot date in the past still gives a week", shootLinkExpiry("2026-09-01", n3).getTime() === n3.getTime() + 7 * 24 * 3600 * 1000);
+const later = "2026-12-01T00:00:00Z";
+ok("open link", shootLinkState({ used_at: null, revoked_at: null, expires_at: later }, n3) === "open");
+ok("used link stays used even if switched off after", shootLinkState({ used_at: "2026-11-12T00:00:00Z", revoked_at: "2026-11-12T01:00:00Z", expires_at: later }, n3) === "used");
+ok("switched-off link", shootLinkState({ used_at: null, revoked_at: "2026-11-12T00:00:00Z", expires_at: later }, n3) === "off");
+ok("expired link", shootLinkState({ used_at: null, revoked_at: null, expires_at: "2026-11-13T11:59:59Z" }, n3) === "expired" && shootLinkState({ used_at: null, revoked_at: null, expires_at: "junk" }, n3) === "expired");
+ok("photographer name cleaned", cleanPersonName("  Sam   Lee ") === "Sam Lee" && cleanPersonName("") === null && cleanPersonName(null) === null && (cleanPersonName("x".repeat(200)) ?? "").length === 120);
+ok("photographer label", photographerLabel("Sam Lee") === "Photographer Sam Lee" && photographerLabel(null) === "The photographer" && photographerLabel("  ") === "The photographer");
+ok("photographer still taps only Photos are in", tapsFor("photographer", null).join() === "photos_in");
 console.log(`unit-progress: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

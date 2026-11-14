@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { cleanDate, cleanNote, isCrewRole, isStage, stageTakesDate } from "@/lib/unit-progress";
+import { createShootLink, revokeShootLink } from "@/lib/photo-shoot-server";
 
 // S788b: the landlord's side of unit progress links (PLAN-S788-UNIT-PROGRESS).
 const BASE = "/dashboard/crew";
@@ -77,15 +78,37 @@ export async function setUnitStage(formData: FormData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const dueDate = stageTakesDate(stage) ? cleanDate(formData.get("due_date")) : null;
   const { error } = await supabase.from("unit_progress_events").insert({
     organization_id: org.id,
     property_id: propertyId,
     stage,
     actor_user_id: user?.id ?? null,
     note: cleanNote(formData.get("note")),
-    due_date: stageTakesDate(stage) ? cleanDate(formData.get("due_date")) : null,
+    due_date: dueDate,
   });
   if (error) redirect(`${BASE}?crew=error`);
+  // S791a: a booked shoot gets the photographer's one-time link.
+  let shootMade = false;
+  if (stage === "photographer_booked") {
+    shootMade = !!(await createShootLink({
+      client: supabase,
+      organizationId: org.id,
+      propertyId,
+      shootDate: dueDate,
+      actorUserId: user?.id ?? null,
+    }));
+  }
   revalidatePath(BASE);
-  redirect(`${BASE}?crew=stage_saved#u-${propertyId}`);
+  redirect(`${BASE}?crew=${shootMade ? "shoot_link" : "stage_saved"}#u-${propertyId}`);
+}
+
+/** S791a: switch a photographer's one-time link off before it is used. */
+export async function switchOffShootLink(formData: FormData) {
+  await requireCapability("manage_properties", `${BASE}?crew=forbidden`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  await revokeShootLink(createClient(), org.id, s(formData, "id"));
+  revalidatePath(BASE);
+  redirect(`${BASE}?crew=shoot_off`);
 }

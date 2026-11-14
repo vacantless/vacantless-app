@@ -18,6 +18,7 @@ import { notifyWaitingRentersRented } from "@/lib/rented-notice-server";
 import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
 import { cleanPhotoFolderUrl, photoSourceOf, type DrivePullResult } from "@/lib/drive-import";
 import { pullDrivePhotos } from "@/lib/drive-import-server";
+import { createShootLink, openShootLinks } from "@/lib/photo-shoot-server";
 
 export type CrewMember = {
   id: string;
@@ -42,7 +43,7 @@ export async function crewFromToken(admin: SupabaseClient, token: string): Promi
   return row;
 }
 
-export type TapResult = { ok: true; stage: Stage; photos?: DrivePullResult } | { ok: false; reason: "not_allowed" | "not_found" | "error" };
+export type TapResult = { ok: true; stage: Stage; photos?: DrivePullResult; shootToken?: string | null } | { ok: false; reason: "not_allowed" | "not_found" | "error" };
 
 /** Record a tap from a crew link; a Rented tap also takes the ads down. */
 export async function recordCrewTap(args: {
@@ -54,6 +55,8 @@ export async function recordCrewTap(args: {
   dueDate?: unknown;
   /** S789b: the unit's photo folder link, sent with a "Photos are in" tap. */
   photoFolder?: unknown;
+  /** S791a: the photographer's name, sent with a "Photographer booked" tap. */
+  photographerName?: unknown;
 }): Promise<TapResult> {
   const { admin, crew } = args;
   if (!isStage(args.stage) || !canTap(crew.role, args.stage)) return { ok: false, reason: "not_allowed" };
@@ -78,6 +81,19 @@ export async function recordCrewTap(args: {
     due_date: dueDate,
   });
   if (error) return { ok: false, reason: "error" };
+
+  // S791a: a booked shoot gets its own one-time link for the photographer.
+  let shootToken: string | null | undefined;
+  if (stage === "photographer_booked") {
+    shootToken = await createShootLink({
+      client: admin,
+      organizationId: crew.organization_id,
+      propertyId: args.propertyId,
+      shootDate: dueDate,
+      photographerName: args.photographerName,
+      crewMemberId: crew.id,
+    });
+  }
 
   // S789: Tenant gave notice and Moved in reach the tenancy.
   const effect = await applyTenancyEffect({ admin, organizationId: crew.organization_id, propertyId: args.propertyId, stage, dueDate });
@@ -138,7 +154,7 @@ export async function recordCrewTap(args: {
     photos,
     hasPhotoFolder: !!photoFolder,
   });
-  return { ok: true, stage, photos };
+  return { ok: true, stage, photos, shootToken };
 }
 
 /**
@@ -235,6 +251,10 @@ export type UnitCard = {
   stageDate: string | null;
   /** S789b: the unit has a photo folder link saved. */
   hasPhotoFolder: boolean;
+  /** S791a: the unit's open photographer link, if a shoot is booked. */
+  shootLinkId: string | null;
+  shootToken: string | null;
+  shootPhotographer: string | null;
 };
 
 /** The units a crew link shows: every rental in the account not archived, newest stage first. */
@@ -255,6 +275,12 @@ export async function unitCardsForOrg(admin: SupabaseClient, organizationId: str
     .in("property_id", rows.map((r) => r.id))
     .order("created_at", { ascending: false })
     .limit(2000);
+  let shoots = new Map<string, { id: string; token: string; photographerName: string | null }>();
+  try {
+    shoots = await openShootLinks(admin, organizationId);
+  } catch {
+    // a missing shoot list never hides the units
+  }
   const latest = new Map<string, { stage: string; created_at: string; by: string | null; due: string | null }>();
   for (const e of (evs ?? []) as Array<{ property_id: string; stage: string; created_at: string; due_date: string | null; crew: { name: string | null } | Array<{ name: string | null }> | null }>) {
     if (latest.has(e.property_id) || !isStage(e.stage)) continue;
@@ -272,6 +298,9 @@ export async function unitCardsForOrg(admin: SupabaseClient, organizationId: str
       stageBy: l?.by ?? null,
       stageDate: l?.due ?? null,
       hasPhotoFolder: !!r.photo_source_url,
+      shootLinkId: shoots.get(r.id)?.id ?? null,
+      shootToken: shoots.get(r.id)?.token ?? null,
+      shootPhotographer: shoots.get(r.id)?.photographerName ?? null,
     };
   });
 }

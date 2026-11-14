@@ -5,6 +5,7 @@ import { buildingsForOrg, crewFromToken, unitCardsForOrg, type UnitCard } from "
 import { CREW_ROLE_LABEL, STAGE_DATE_LABEL, STAGE_LABEL, canAddUnit, isStage, stageDateLine, stageTakesDate, takesAdsDown, tapsFor, type Stage } from "@/lib/unit-progress";
 import { addUnitFromCrewLink, tapStageFromCrewLink } from "./actions";
 import { drivePullLine, type DrivePullReason } from "@/lib/drive-import";
+import { CopyLinkButton } from "@/components/copy-link-button";
 
 // S789b: pulling photos from a Drive folder can take a little while.
 export const maxDuration = 60;
@@ -88,6 +89,16 @@ export default async function CrewPage({
             {c.stageBy ? ` by ${c.stageBy}` : ""}
           </p>
         )}
+        {c.shootToken && canAddUnit(crew.role) && (
+          <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+            <p>
+              Photographer{c.shootPhotographer ? ` ${c.shootPhotographer}` : ""}: send them this link. It works once, for this unit only. They paste where the photos are and tap Photos are in.
+            </p>
+            <div className="mt-2">
+              <CopyLinkButton path={`/crew/shoot/${c.shootToken}`} label="Copy the photographer's link" />
+            </div>
+          </div>
+        )}
         {buttons.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {buttons.map((s) =>
@@ -109,6 +120,16 @@ export default async function CrewPage({
                 )}
                 {stageTakesDate(s) && (
                   <input id={`d-${c.id}-${s}`} type="date" name="due_date" className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm" />
+                )}
+                {s === "photographer_booked" && (
+                  <input
+                    type="text"
+                    name="photographer_name"
+                    maxLength={120}
+                    aria-label="Photographer's name, if you know it"
+                    placeholder="Photographer's name, if you know it"
+                    className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                  />
                 )}
                 {s === "photos_in" && !c.hasPhotoFolder && (
                   <input
@@ -153,6 +174,7 @@ export default async function CrewPage({
           Saved: {savedUnit?.address ?? "the unit"} is now {STAGE_LABEL[savedStage].toLowerCase()}.
           {takesAdsDown(savedStage) ? " If its ads were up, they are coming down." : ""}
           {savedStage === "photos_in" && photosLine ? ` ${photosLine}` : ""}
+          {savedStage === "photographer_booked" && canAddUnit(crew.role) ? " Copy the photographer's link on the unit and send it to them." : ""}
         </div>
       )}
       {(status === "added" || status === "add_existed") && (

@@ -61,6 +61,8 @@ export async function notifyLandlordOfTap(args: {
   effect?: TenancyEffect;
   photos?: DrivePullResult;
   hasPhotoFolder?: boolean;
+  /** S791a: the link a photographer sent with their one-time link. */
+  deliveryUrl?: string | null;
 }): Promise<void> {
   if (!TAP_NOTIFY_STAGES.includes(args.stage)) return;
   try {
@@ -71,10 +73,16 @@ export async function notifyLandlordOfTap(args: {
     const tenancyAction = args.effect ? tenancyEffectAction(args.effect, args.propertyId, APP_URL) : null;
     const base =
       args.stage === "rented" ? "Its ads are coming down. If that was a mistake, relist it from the rental page." : stageDateLine(args.stage, args.dueDate);
+    const deliveryLine =
+      args.stage === "photos_in" && args.deliveryUrl && !(args.photos && args.photos.ok)
+        ? `The photographer's photos are here: ${args.deliveryUrl}. Add them on the rental page.`
+        : "";
     const photoLine =
       args.stage !== "photos_in"
         ? ""
-        : args.photos
+        : deliveryLine
+          ? [args.photos ? drivePullLine(args.photos) : "", deliveryLine].filter(Boolean).join(" ")
+          : args.photos
           ? drivePullLine(args.photos)
           : args.hasPhotoFolder
             ? "Pull them in from the photo folder on the rental page."

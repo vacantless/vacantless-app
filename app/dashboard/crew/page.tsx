@@ -7,7 +7,7 @@ import { Icons } from "@/components/icons";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { CREW_ROLES, CREW_ROLE_LABEL, STAGE_LABEL, TAP_ORDER, stageDateLine } from "@/lib/unit-progress";
 import { unitCardsForOrg } from "@/lib/unit-progress-server";
-import { addCrewMember, newCrewLink, setCrewMemberActive, setUnitStage } from "./actions";
+import { addCrewMember, newCrewLink, setCrewMemberActive, setUnitStage, switchOffShootLink } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,8 @@ const FLASH: Record<string, { tone: "ok" | "err"; text: string }> = {
   off: { tone: "ok", text: "Their link is switched off." },
   new_link: { tone: "ok", text: "New link made. The old one no longer works." },
   stage_saved: { tone: "ok", text: "Stage saved." },
+  shoot_link: { tone: "ok", text: "Stage saved. Copy the photographer's link under the unit and send it to them. It works once." },
+  shoot_off: { tone: "ok", text: "The photographer's link is switched off." },
   name_required: { tone: "err", text: "A name is needed." },
   role_required: { tone: "err", text: "Pick what they do." },
   stage_invalid: { tone: "err", text: "Mark a rented unit on its rental page. That takes the ads down." },
@@ -57,7 +59,7 @@ export default async function CrewPage({ searchParams }: { searchParams: { crew?
       <PageHeader
         icon={<Icons.wrench />}
         title="Unit progress"
-        subtitle="Give your manager, contractor, cleaner and photographer their own link. They tap where each unit is at, with no sign in. You see it here. A Rented tap takes the ads down. You can put them back up from the rental page. Some stages take a date, like a move out day."
+        subtitle="Give your manager, contractor, cleaner and photographer their own link. They tap where each unit is at, with no sign in. You see it here. A Rented tap takes the ads down. You can put them back up from the rental page. Some stages take a date, like a move out day. Photographer booked makes a one-time link for that shoot."
       />
 
       {flash && (
@@ -121,6 +123,16 @@ export default async function CrewPage({ searchParams }: { searchParams: { crew?
                   <p className="text-xs text-gray-500">
                     {l ? `${STAGE_LABEL[l.stage]}${p.stageDate ? `, ${stageDateLine(l.stage, p.stageDate).toLowerCase()}` : ""} · ${fmtWhen(l.at, tz)}${l.by ? ` by ${l.by}` : ""}` : "No stage yet"}
                   </p>
+                  {p.shootToken && (
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-sky-800">Photographer{p.shootPhotographer ? ` ${p.shootPhotographer}` : ""}: one-time link</span>
+                      <CopyLinkButton path={`/crew/shoot/${p.shootToken}`} label="Copy their link" />
+                      <form action={switchOffShootLink}>
+                        <input type="hidden" name="id" value={p.shootLinkId ?? ""} />
+                        <button type="submit" className="text-xs text-gray-500 underline">Switch off</button>
+                      </form>
+                    </div>
+                  )}
                 </div>
                 <form action={setUnitStage} className="flex gap-2">
                   <input type="hidden" name="property_id" value={p.id} />

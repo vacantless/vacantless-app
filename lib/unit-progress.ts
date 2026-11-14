@@ -306,3 +306,40 @@ export const STAGE_TONE_CLASS: Record<StageTone, string> = {
   done: "border-emerald-200 bg-emerald-50 text-emerald-700",
   hold: "border-gray-200 bg-gray-50 text-gray-600",
 };
+
+// S791a: the photographer's one-time link (/crew/shoot/<token>). Made when a
+// unit is marked "Photographer booked"; one unit, one "Photos are in" tap.
+export type ShootLinkState = "open" | "used" | "off" | "expired";
+
+/** When a shoot link stops working: 30 days after the shoot, or 45 days from now without a date. */
+export function shootLinkExpiry(shootDate: string | null, now: Date = new Date()): Date {
+  const day = 24 * 3600 * 1000;
+  if (shootDate && /^\d{4}-\d{2}-\d{2}$/.test(shootDate)) {
+    const t = Date.parse(`${shootDate}T23:59:00Z`);
+    if (Number.isFinite(t)) return new Date(Math.max(t + 30 * day, now.getTime() + 7 * day));
+  }
+  return new Date(now.getTime() + 45 * day);
+}
+
+export function shootLinkState(
+  row: { used_at: string | null; revoked_at: string | null; expires_at: string },
+  now: Date = new Date(),
+): ShootLinkState {
+  if (row.used_at) return "used";
+  if (row.revoked_at) return "off";
+  const t = Date.parse(row.expires_at);
+  if (!Number.isFinite(t) || t <= now.getTime()) return "expired";
+  return "open";
+}
+
+/** A person's name as typed, up to 120 characters; else null. */
+export function cleanPersonName(raw: unknown): string | null {
+  const s = String(raw ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  return s.length > 0 ? s : null;
+}
+
+/** Who the landlord's email names for a photographer's tap. */
+export function photographerLabel(name: string | null | undefined): string {
+  const n = (name ?? "").trim();
+  return n ? `Photographer ${n}` : "The photographer";
+}
