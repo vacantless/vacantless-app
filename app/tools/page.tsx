@@ -48,6 +48,20 @@ const FREE_TOOLS: { href: string; form: string; title: string; body: string }[] 
   },
 ];
 
+
+// S795: the forms that come with a tenancy on a paid plan, so a landlord can see
+// the whole list. Each is built and prepare-only: you check it, sign it and serve
+// or file it yourself.
+const PAID_FORMS: { form: string; body: string }[] = [
+  { form: "N5", body: "A tenant is damaging the unit or disturbing others." },
+  { form: "N6", body: "Illegal acts, or a tenant who misstated their income." },
+  { form: "N13", body: "You need the unit empty to renovate, repair or demolish." },
+  { form: "L1", body: "Ask the Board to evict and collect unpaid rent, after an N4." },
+  { form: "L2", body: "Ask the Board to end a tenancy after you served a notice." },
+  { form: "L9", body: "Collect rent a tenant owes." },
+  { form: "L10", body: "Collect what a former tenant owes." },
+];
+
 export default function ToolsPage() {
   return (
     <div className="min-h-screen bg-white text-[#15211d]">
@@ -86,6 +100,22 @@ export default function ToolsPage() {
             These tools explain the rules in plain words and fill government forms from the numbers
             you enter. They are not legal advice.
           </p>
+        </section>
+        <section className="pb-10">
+          <div className="mx-auto w-[min(1000px,calc(100%-32px))]">
+            <h2 className="text-[1.3rem] font-extrabold tracking-tight">Every other form we fill</h2>
+            <p className="mt-1.5 max-w-[62ch] text-[0.95rem] leading-relaxed text-[#384a42]">
+              On any paid plan these are filled from the tenancy you already have in Vacantless. You check each one, sign it and serve or file it yourself.
+            </p>
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+              {PAID_FORMS.map((f) => (
+                <li key={f.form} className="rounded-xl border border-[#d9e1dc] bg-white p-4">
+                  <p className="text-[0.79rem] font-extrabold uppercase tracking-[0.06em] text-[#16756a]">Form {f.form}</p>
+                  <p className="mt-1 text-[0.95rem] leading-relaxed text-[#384a42]">{f.body}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
         </section>
         <MarketingCta
           title="Fill your next vacancy the same easy way."
