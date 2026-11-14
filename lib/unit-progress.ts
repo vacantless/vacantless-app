@@ -235,3 +235,74 @@ export function composeUnitAddress(street: string, unit: string): string {
   if (parts.length === 0) return `Unit ${unit}`;
   return [parts[0], `Unit ${unit}`, ...parts.slice(1)].join(", ");
 }
+
+// S790a: the stage chip on the Rentals list and the rental page, so the
+// landlord sees a turnover without opening Unit progress. Pure.
+export type StageTone = "notice" | "work" | "ready" | "done" | "hold";
+
+const STAGE_TONE: Record<Stage, StageTone> = {
+  notice_given: "notice",
+  under_construction: "work",
+  being_cleaned: "work",
+  touch_up: "work",
+  ready_for_photos: "ready",
+  photographer_booked: "ready",
+  photos_in: "ready",
+  ready_to_post: "ready",
+  live: "done",
+  put_back_up: "done",
+  waiting_deposit: "done",
+  deposit_clearing: "done",
+  rented: "done",
+  lease_signed: "done",
+  moved_in: "done",
+  on_hold: "hold",
+};
+
+/** Stages that end a turnover: the chip goes away 14 days after them. */
+const FINISHING: readonly Stage[] = ["live", "put_back_up", "rented", "lease_signed", "moved_in"];
+
+export type LatestStage = { stage: string; at: string; date: string | null; by: string | null };
+export type StageChip = { label: string; detail: string; title: string; tone: StageTone };
+
+/** "today", "yesterday" or "3 days ago", counted in whole days. */
+export function daysAgoText(at: string, now: Date = new Date()): string {
+  const t = Date.parse(at);
+  if (!Number.isFinite(t)) return "";
+  const days = Math.max(0, Math.floor((now.getTime() - t) / (24 * 3600 * 1000)));
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  return `${days} days ago`;
+}
+
+/**
+ * The chip for a unit's latest stage, or null when there is none to show:
+ * no tap yet, a finished turnover more than 14 days old, or any stage more
+ * than 60 days old.
+ */
+export function stageChip(latest: LatestStage | null | undefined, now: Date = new Date()): StageChip | null {
+  if (!latest || !isStage(latest.stage)) return null;
+  const stage = latest.stage;
+  const t = Date.parse(latest.at);
+  if (!Number.isFinite(t)) return null;
+  const ageDays = (now.getTime() - t) / (24 * 3600 * 1000);
+  if (ageDays > 60) return null;
+  if (FINISHING.includes(stage) && ageDays > 14) return null;
+  const label = STAGE_LABEL[stage];
+  const dateLine = stageDateLine(stage, latest.date);
+  const ago = daysAgoText(latest.at, now);
+  const who = latest.by?.trim() ? latest.by.trim().split(/\s+/)[0] : "";
+  const detail = dateLine || ago;
+  const title = [`${label}.`, dateLine ? `${dateLine}.` : "", who ? `${who} set it ${ago}.` : `Set ${ago}.`]
+    .filter(Boolean)
+    .join(" ");
+  return { label, detail, title, tone: STAGE_TONE[stage] };
+}
+
+export const STAGE_TONE_CLASS: Record<StageTone, string> = {
+  notice: "border-violet-200 bg-violet-50 text-violet-700",
+  work: "border-amber-200 bg-amber-50 text-amber-800",
+  ready: "border-sky-200 bg-sky-50 text-sky-700",
+  done: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  hold: "border-gray-200 bg-gray-50 text-gray-600",
+};

@@ -37,6 +37,8 @@ import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { coverageLabel, shortAddress } from "@/lib/posting-coverage";
 import { sortPhotos } from "@/lib/photos";
+import { latestStages } from "@/lib/unit-progress-latest";
+import { stageChip, STAGE_TONE_CLASS } from "@/lib/unit-progress";
 import {
   siteLights,
   postMissingLabel,
@@ -398,6 +400,9 @@ export default async function PropertiesPage({
 
   const coverByProperty = new Map<string, string>();
   const rowIds = rows.map((r) => r.id);
+  // S790a: each rental's latest unit progress stage, for the stage chip.
+  const stageByProperty = archivedView ? new Map() : await latestStages(supabase, org.id, rowIds);
+  const chipNow = new Date();
   if (rowIds.length > 0) {
     const { data: photoRows } = await supabase
       .from("property_photos")
@@ -476,6 +481,7 @@ export default async function PropertiesPage({
         statusLabel,
         statusTone,
         cover: coverByProperty.get(p.id) ?? null,
+        stage: stageChip(stageByProperty.get(p.id), chipNow),
         canHardDelete: hardDeletable(p.status, leadCount, tenancyCount, postCount),
         needsYou:
           (cov?.missing.length ?? 0) > 0 || renew.length > 0 || launch.tone === "warn",
@@ -796,6 +802,16 @@ export default async function PropertiesPage({
                         {shortAddress(p.address)}
                       </Link>
                       {meta && <p className="mt-0.5 text-xs text-gray-500">{meta}</p>}
+                      {v.stage ? (
+                        <Link
+                          href="/dashboard/crew"
+                          title={`${v.stage.title} Open Unit progress.`}
+                          className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition hover:opacity-80 ${STAGE_TONE_CLASS[v.stage.tone]}`}
+                        >
+                          {v.stage.label}
+                          {v.stage.detail ? <span className="font-normal opacity-80">· {v.stage.detail}</span> : null}
+                        </Link>
+                      ) : null}
                       {(v.lights.length > 0 || !archivedView) && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                           {v.lights.map((l) =>

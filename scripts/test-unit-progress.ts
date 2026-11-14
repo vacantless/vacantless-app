@@ -1,6 +1,6 @@
 // Run with: npx tsx scripts/test-unit-progress.ts
 // S788b: unit progress stages, who can tap what, current stage.
-import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL, cleanDate, stageTakesDate, stageDateLine, canAddUnit, cleanUnitNumber, composeUnitAddress, tenancyEffect, tenancyEffectAction } from "../lib/unit-progress";
+import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL, cleanDate, stageTakesDate, stageDateLine, canAddUnit, cleanUnitNumber, composeUnitAddress, tenancyEffect, tenancyEffectAction, stageChip, daysAgoText } from "../lib/unit-progress";
 
 let pass = 0;
 let fail = 0;
@@ -66,5 +66,18 @@ const addT = tenancyEffectAction({ kind: "needs_tenancy" }, "p1", "https://app.v
 ok("moved in email links the new-tenancy form for the unit", addT?.label === "Add the tenancy" && addT.url.endsWith("/dashboard/tenancies/new?property=p1"));
 ok("no action for none", tenancyEffectAction({ kind: "none" }, "p1", "x") === null);
 ok("no em dashes in the effect lines", [relist, addT].every((a) => a && !a.line.includes("\u2014")));
+// S790a: the stage chip.
+const n2 = new Date("2026-11-13T12:00:00Z");
+const ago = (d: number) => new Date(n2.getTime() - d * 24 * 3600 * 1000).toISOString();
+ok("no chip without a tap", stageChip(null, n2) === null && stageChip({ stage: "done", at: ago(1), date: null, by: null }, n2) === null);
+const c1 = stageChip({ stage: "being_cleaned", at: ago(2), date: "2026-12-01", by: "Xavier Smith" }, n2);
+ok("cleaning chip shows the ready-by date", c1?.label === "Being cleaned" && c1.detail === "Ready by Dec 1" && c1.tone === "work");
+ok("chip title names who set it", c1?.title === "Being cleaned. Ready by Dec 1. Xavier set it 2 days ago.");
+const c2 = stageChip({ stage: "photos_in", at: ago(0), date: null, by: null }, n2);
+ok("undated chip shows when", c2?.detail === "today" && c2.title === "Photos are in. Set today." && c2.tone === "ready");
+ok("finished turnover hides after 14 days", stageChip({ stage: "moved_in", at: ago(15), date: null, by: null }, n2) === null && stageChip({ stage: "moved_in", at: ago(3), date: null, by: null }, n2)?.tone === "done");
+ok("any stage hides after 60 days", stageChip({ stage: "under_construction", at: ago(61), date: null, by: null }, n2) === null && stageChip({ stage: "under_construction", at: ago(30), date: null, by: null }, n2) !== null);
+ok("days ago text", daysAgoText(ago(1), n2) === "yesterday" && daysAgoText(ago(5), n2) === "5 days ago");
+ok("chip titles plain: no parentheses, no dashes", [c1, c2].every((c) => c && !/[()\u2014\u2013]/.test(c.title)));
 console.log(`unit-progress: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -1,4 +1,6 @@
 import { GROUP_SIZE_MAX, accountGroupRule } from "@/lib/group-viewing";
+import { latestStages } from "@/lib/unit-progress-latest";
+import { stageChip, STAGE_TONE_CLASS } from "@/lib/unit-progress";
 import { loadMadeRoom, loadRentalsSlotChoice, madeRoomLine, slotIsStuck } from "@/lib/rentals-slots";
 import { captureNote, paidPressedAt } from "@/lib/paid-capture-note";
 import { siteRenters, siteRowFacts } from "@/lib/site-row-facts";
@@ -1050,6 +1052,10 @@ export default async function PropertyDetailPage({
   if (!property) notFound();
   const p = property as Property;
   const nowMs = Date.now();
+  // S790a: the unit's latest unit progress stage, shown as a chip in the header.
+  const unitStage = (property as { archived_at?: string | null }).archived_at
+    ? null
+    : stageChip((await latestStages(supabase, p.organization_id, [p.id])).get(p.id), new Date(nowMs));
   // S789e: how many photos have a touched-up and an original copy, and which shows now.
   const { data: touchRows } = await supabase
     .from("property_photos")
@@ -3447,6 +3453,16 @@ export default async function PropertyDetailPage({
             >
               {propertyStatusBadge(p.status).label}
             </span>
+            {unitStage ? (
+              <Link
+                href="/dashboard/crew"
+                title={`${unitStage.title} Open Unit progress.`}
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition hover:opacity-80 ${STAGE_TONE_CLASS[unitStage.tone]}`}
+              >
+                {unitStage.label}
+                {unitStage.detail ? <span className="font-normal opacity-80">· {unitStage.detail}</span> : null}
+              </Link>
+            ) : null}
             {p.rent_cents ? (
               <span className="text-sm text-gray-500">
                 ${(p.rent_cents / 100).toLocaleString()}/mo
