@@ -23,6 +23,7 @@ import { TriageQueue } from "./triage-queue";
 import { isChatPlaceholder } from "@/lib/chat-leads";
 import { answeredLeadIds } from "@/lib/lead-answered";
 import { ScreenshotLeadCard } from "./screenshot-lead-card";
+import { openFollowUpDate } from "@/lib/lead-detail";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ type LeadRow = {
   next_action_at: string | null;
   qualified_out: boolean;
   property_id: string | null;
-  property: { address: string } | null;
+  property: { address: string; status?: string | null } | null;
 };
 
 export default async function LeadsPage({
@@ -59,12 +60,16 @@ export default async function LeadsPage({
   const { data } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, status, notes, created_at, next_action_at, qualified_out, property_id, property:properties(address)",
+      "id, name, email, phone, source, status, notes, created_at, next_action_at, qualified_out, property_id, property:properties(address, status)",
     )
     .eq("organization_id", org.id)
     .order("created_at", { ascending: false });
 
-  const all = (data ?? []) as unknown as LeadRow[];
+  // S792: a follow-up on a rented or off-market rental no longer asks for you.
+  const all = ((data ?? []) as unknown as LeadRow[]).map((l) => ({
+    ...l,
+    next_action_at: openFollowUpDate(l.next_action_at, l.property?.status),
+  }));
   // S740: renters the auto-reply already answered are not "Needs a reply".
   const answered = await answeredLeadIds(
     supabase,
@@ -203,12 +208,14 @@ export default async function LeadsPage({
         })}
       </div>
 
-      {/* Advanced: the exact eight stages, for operators who want them. */}
-      <details className="mb-3 text-sm" open={!!filter}>
+      {/* S792: one "More filters" control holds the exact stages, the screening
+          filter and the stage meanings, so the first renter sits higher. */}
+      <details className="mb-5 text-sm" open={!!filter || !!screen}>
         <summary className="cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-700">
-          All stages
+          More filters{filter || screen ? ", on" : ""}
         </summary>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <p className="mt-3 text-xs font-medium uppercase tracking-wider text-gray-400">Every stage</p>
+        <div className="mb-4 mt-2 flex flex-wrap gap-2">
           {PIPELINE_STAGES.map((s) => {
             const n = scoped.filter((l) => l.status === s).length;
             return (
@@ -221,10 +228,9 @@ export default async function LeadsPage({
             );
           })}
         </div>
-      </details>
 
       {showScreenFilter && (
-        <div className="mb-5 flex flex-wrap items-center gap-2 text-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
           <span className="text-xs font-medium uppercase tracking-wider text-gray-400">
             Screening
           </span>
@@ -252,10 +258,7 @@ export default async function LeadsPage({
         </div>
       )}
 
-      <details className="mb-5 text-sm">
-        <summary className="cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-700">
-          What the stages mean
-        </summary>
+        <p className="text-xs font-medium uppercase tracking-wider text-gray-400">What the stages mean</p>
         <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 rounded-2xl border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2">
           {PIPELINE_STAGES.map((s) => (
             <div key={s} className="flex gap-2">

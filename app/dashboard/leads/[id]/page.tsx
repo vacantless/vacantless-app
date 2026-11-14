@@ -17,6 +17,7 @@ import {
   noSuitableTimeBadge,
   followUpStatus,
   followUpLabel,
+  rentalClosesFollowUps,
   suggestedNextStageOptions,
   canOfferEarlyTenancy,
   buildReplyDraft,
@@ -93,6 +94,7 @@ type Lead = {
   property: {
     id: string;
     address: string;
+    status?: string | null;
     rent_cents: number | null;
     beds: number | null;
     baths: number | null;
@@ -142,7 +144,7 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, source_detail, no_suitable_time, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, email_opt_out_at, sms_opt_out, property:properties(id, address, rent_cents, beds, baths, parking, available_date, laundry, pet_friendly, pets_cats, pets_dogs), listing_post:listing_posts(portal, label, url)",
+      "id, name, email, phone, source, source_detail, no_suitable_time, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, email_opt_out_at, sms_opt_out, property:properties(id, address, status, rent_cents, beds, baths, parking, available_date, laundry, pet_friendly, pets_cats, pets_dogs), listing_post:listing_posts(portal, label, url)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -248,8 +250,10 @@ export default async function LeadDetailPage({
     post: l.listing_post,
   });
   const noSuitableTimeText = noSuitableTimeBadge(l.no_suitable_time);
-  const followStatus = followUpStatus(l.next_action_at, today);
-  const followText = followUpLabel(l.next_action_at, today);
+  // S792: once the rental is rented or off the market the follow-up stops asking.
+  const followClosed = !!l.next_action_at && rentalClosesFollowUps(l.property?.status);
+  const followStatus = followClosed ? "none" : followUpStatus(l.next_action_at, today);
+  const followText = followClosed ? "Closed: this rental is no longer on the market." : followUpLabel(l.next_action_at, today);
   const quickStages = suggestedNextStageOptions(l.status);
   // S724: every draft carries the rental page so the renter can book alone.
   const bookingUrl = l.property?.id ? listingUrl(l.property.id) : null;
@@ -537,17 +541,6 @@ export default async function LeadDetailPage({
         </div>
       ) : null}
 
-      <ApplicationCard
-        leadId={l.id}
-        application={application}
-        canApplications={canApplications}
-        applyBaseUrl={APP_URL}
-        timeZone={timeZone}
-        bannerKey={applyBannerKey}
-        printUrl={`/dashboard/leads/${l.id}/application/print`}
-        filedDownloadUrl={applicationFiledDownloadUrl}
-      />
-
       {!emailBlock && l.email_opt_out_at && (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p className="font-medium">This renter unsubscribed from follow-up emails.</p>
@@ -575,6 +568,25 @@ export default async function LeadDetailPage({
           <p className="font-medium">{CHAT_LEAD_LINE}</p>
           <p className="mt-1 text-blue-800">{l.notes}</p>
         </div>
+      )}
+
+      {/* S792: reply and text come first; details, viewings and the application follow. */}
+      {!chatOnly && (
+      <InquiryReplyPanel
+        leadId={l.id}
+        propertyId={l.property?.id ?? null}
+        email={l.email}
+        phone={l.phone}
+        subject={replyDraft.subject}
+        body={replyDraft.body}
+        aiDraft={aiReplyDraft}
+        suggestedQuestion={aiReplyDraft?.suggestedQuestion ?? null}
+        canCapture={canUseAiReply}
+      />
+      )}
+
+      {textBack && l.phone && (
+        <TextBackPanel leadId={l.id} phoneLabel={displayCanadianNumber(l.phone)} flash={searchParams.text ?? null} />
       )}
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -729,23 +741,16 @@ export default async function LeadDetailPage({
         />
       )}
 
-      {textBack && l.phone && (
-        <TextBackPanel leadId={l.id} phoneLabel={displayCanadianNumber(l.phone)} flash={searchParams.text ?? null} />
-      )}
-
-      {!chatOnly && (
-      <InquiryReplyPanel
+      <ApplicationCard
         leadId={l.id}
-        propertyId={l.property?.id ?? null}
-        email={l.email}
-        phone={l.phone}
-        subject={replyDraft.subject}
-        body={replyDraft.body}
-        aiDraft={aiReplyDraft}
-        suggestedQuestion={aiReplyDraft?.suggestedQuestion ?? null}
-        canCapture={canUseAiReply}
+        application={application}
+        canApplications={canApplications}
+        applyBaseUrl={APP_URL}
+        timeZone={timeZone}
+        bannerKey={applyBannerKey}
+        printUrl={`/dashboard/leads/${l.id}/application/print`}
+        filedDownloadUrl={applicationFiledDownloadUrl}
       />
-      )}
 
       <div className="mt-8">
         <SectionHeading>Activity</SectionHeading>
@@ -866,7 +871,7 @@ function FollowUp({
               {text}
             </span>
           ) : (
-            <span className="text-sm text-gray-400">None scheduled</span>
+            <span className="text-sm text-gray-400">{text || "None scheduled"}</span>
           )}
         </div>
         {isSet && (

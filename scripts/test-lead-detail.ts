@@ -10,6 +10,8 @@ import {
   suggestedNextStageOptions,
   canOfferEarlyTenancy,
   buildReplyDraft,
+  rentalClosesFollowUps,
+  openFollowUpDate,
 } from "../lib/lead-detail";
 
 let passed = 0;
@@ -291,6 +293,12 @@ ok(
 );
 ok("early-tenancy: lost -> false", canOfferEarlyTenancy("lost") === false);
 ok("early-tenancy: junk -> false", canOfferEarlyTenancy("zzz") === false);
+
+// S792: a follow-up stops asking once its rental is rented or off the market.
+ok("follow-up closes on a rented rental", rentalClosesFollowUps("leased") && rentalClosesFollowUps("off_market"));
+ok("follow-up stays open on a live rental", !rentalClosesFollowUps("available") && !rentalClosesFollowUps("paused") && !rentalClosesFollowUps("draft") && !rentalClosesFollowUps(null));
+ok("open date drops on a rented rental", openFollowUpDate("2026-09-14", "leased") === null);
+ok("open date kept on a live rental", openFollowUpDate("2026-09-14", "available") === "2026-09-14" && openFollowUpDate(null, "available") === null);
 
 // ---------------------------------------------------------------------------
 console.log(`\nlead-detail: ${passed} passed, ${failed} failed`);

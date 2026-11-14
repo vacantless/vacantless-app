@@ -173,7 +173,7 @@ export default async function ReportsPage({
         ) : (
           <div className="space-y-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             {funnel.map((step, i) => {
-              const widthPct = funnel[0].count
+              const widthPct = funnel[0].count && step.count
                 ? Math.max(4, Math.round((step.count / funnel[0].count) * 100))
                 : 0;
               return (

@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import {
   PageHeader,
   SectionHeading,
-  EmptyState,
   PRIMARY_ACTION_CLASS,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -77,7 +77,7 @@ export default async function MySettingsPage({
       <PageHeader
         icon={<Icons.settings />}
         title="My settings"
-        subtitle={`Your personal coverage and preferences for ${org.name}.`}
+        subtitle={`Your sign-in and your own settings for ${org.name}.`}
       />
 
       {flash && (
@@ -92,18 +92,42 @@ export default async function MySettingsPage({
         </div>
       )}
 
-      {hasLinkedAgent ? (
-        <div className="space-y-6">
-          <MyCoverageCard me={me} />
-          <DashboardDefaultsCard defaultView={defaultView} />
+      <div className="space-y-6">
+        {/* S792: every person has something here, not an empty box. */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-900">Your sign-in</h3>
+          <p className="mt-1 text-sm text-gray-600">
+            You sign in as <span className="font-medium text-gray-900">{user.email ?? "your email"}</span>.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link href="/forgot-password" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              Change my password
+            </Link>
+            <Link href="/dashboard/automations" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              Choose which emails I get
+            </Link>
+            <Link href="/dashboard/settings?tab=team" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              Add a teammate
+            </Link>
+          </div>
         </div>
-      ) : (
-        <EmptyState
-          icon={<Icons.users className="h-5 w-5" />}
-          title="Nothing to set here yet"
-          description="This page is for people who show your rentals. Add yourself or a helper under Viewings, then Showing agents. Then each person sets the times they can cover here."
-        />
-      )}
+        {hasLinkedAgent ? (
+          <>
+            <MyCoverageCard me={me} />
+            <DashboardDefaultsCard defaultView={defaultView} />
+          </>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-5">
+            <h3 className="text-sm font-semibold text-gray-900">Do you show the rentals yourself?</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              Add yourself as a showing agent. Then you set the times you can cover here.
+            </p>
+            <Link href="/dashboard/showing-agents" className="mt-3 inline-block text-sm font-semibold text-brand hover:underline">
+              Open Showing agents
+            </Link>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

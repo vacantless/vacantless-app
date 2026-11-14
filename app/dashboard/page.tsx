@@ -50,6 +50,10 @@ import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { NeedsYouCards } from "./needs-you-cards";
 import { ComingVacantCards } from "./coming-vacant-cards";
 import { deriveComingVacant, type ComingVacant } from "@/lib/coming-vacant";
+import { rentalClosesFollowUps } from "@/lib/lead-detail";
+import { latestStages } from "@/lib/unit-progress-latest";
+import { stageChip, STAGE_TONE_CLASS } from "@/lib/unit-progress";
+import { shortAddress } from "@/lib/posting-coverage";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +67,7 @@ type LeadRow = {
   property_id: string | null;
   qualified_out: boolean;
   next_action_at?: string | null;
-  property: { address: string } | null;
+  property: { address: string; status?: string | null } | null;
 };
 
 const OPEN_STATUSES: LeadStatus[] = [
@@ -197,7 +201,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     supabase
       .from("leads")
       .select(
-        "id, name, email, source, status, created_at, property_id, qualified_out, next_action_at, property:properties(address)",
+        "id, name, email, source, status, created_at, property_id, qualified_out, next_action_at, property:properties(address, status)",
       )
       .eq("organization_id", org.id)
       .order("created_at", { ascending: false }),
@@ -333,9 +337,26 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     (l) => new Date(l.created_at).getTime() >= weekAgo,
   );
 
+  // S792: the stage strip counts the last 30 days. All-time totals (109 New
+  // since May) read as neglect; older renters stay in Renters.
+  const recentLeads = allLeads.filter((l) => new Date(l.created_at).getTime() >= monthAgo);
   const counts: Record<string, number> = {};
   for (const stage of PIPELINE_STAGES) counts[stage] = 0;
-  for (const l of allLeads) counts[l.status] = (counts[l.status] ?? 0) + 1;
+  for (const l of recentLeads) counts[l.status] = (counts[l.status] ?? 0) + 1;
+
+  // S792: units in a turnover, with the same stage chip the Rentals list shows.
+  const { data: turnoverProps } = await supabase
+    .from("properties")
+    .select("id, address")
+    .eq("organization_id", org.id)
+    .is("archived_at", null)
+    .limit(300);
+  const turnoverRows = (turnoverProps ?? []) as { id: string; address: string | null }[];
+  const turnoverStages = await latestStages(supabase, org.id, turnoverRows.map((r) => r.id));
+  const chipNow = new Date();
+  const unitsInProgress = turnoverRows
+    .map((r) => ({ id: r.id, address: r.address ?? "A unit", chip: stageChip(turnoverStages.get(r.id), chipNow) }))
+    .filter((u): u is { id: string; address: string; chip: NonNullable<ReturnType<typeof stageChip>> } => u.chip !== null);
 
   // Rent-increase rollup (N1 v1, S282): the only actionable statuses surface
   // here, most-urgent first. "Today" uses the org's timezone (Ontario default).
@@ -434,6 +455,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       (l) =>
         (l.status === "contacted" || l.status === "replied") &&
         !!l.next_action_at &&
+        !rentalClosesFollowUps(l.property?.status) &&
         l.next_action_at.slice(0, 10) <= today,
     ).length,
     viewingsToday,
@@ -778,9 +800,36 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
           lead. On a zero-data org it was 8 identical "0" tiles - a wall of
           zeros that says nothing (fresh-org audit P3). It reappears the moment
           the first inquiry lands. */}
-      {allLeads.length > 0 && (
+      {unitsInProgress.length > 0 && (
         <>
-          <SectionHeading>Renters by stage</SectionHeading>
+          <SectionHeading action={{ href: "/dashboard/crew", label: "Unit progress" }}>
+            Units being turned over
+          </SectionHeading>
+          <ul className="mb-8 divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white shadow-sm">
+            {unitsInProgress.map((u) => (
+              <li key={u.id}>
+                <Link
+                  href={`/dashboard/properties/${u.id}`}
+                  title={u.chip.title}
+                  className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 transition hover:bg-gray-50"
+                >
+                  <span className="min-w-0 truncate text-sm font-medium text-gray-900">{shortAddress(u.address)}</span>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STAGE_TONE_CLASS[u.chip.tone]}`}
+                  >
+                    {u.chip.label}
+                    {u.chip.detail ? <span className="font-normal opacity-80">· {u.chip.detail}</span> : null}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {recentLeads.length > 0 && (
+        <>
+          <SectionHeading>Renters by stage, last 30 days</SectionHeading>
           <div className="mb-8 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
             {PIPELINE_STAGES.map((stage) => (
               <div

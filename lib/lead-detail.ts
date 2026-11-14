@@ -142,6 +142,19 @@ export function followUpStatus(
   return "upcoming";
 }
 
+/**
+ * S792: a follow-up stops asking once its rental is rented or off the market.
+ * The date stays on the renter; lists and counts read it through this.
+ */
+export function rentalClosesFollowUps(propertyStatus: string | null | undefined): boolean {
+  return propertyStatus === "leased" || propertyStatus === "off_market";
+}
+
+/** The follow-up date to act on: null once the rental is rented or off the market. */
+export function openFollowUpDate(nextActionAt: string | null | undefined, propertyStatus: string | null | undefined): string | null {
+  return rentalClosesFollowUps(propertyStatus) ? null : (nextActionAt ?? null);
+}
+
 /** Whole-day difference (due - today); null when either is missing/invalid. */
 export function daysUntilFollowUp(
   nextActionAt: string | null,
