@@ -154,7 +154,7 @@ function Hero() {
           <p className="mb-[26px] max-w-[34rem] text-[clamp(1.02rem,1.6vw,1.16rem)] leading-[1.55] text-[#384a42]">
             Press Set Live and your ad goes up on the rental sites. Every renter
             gets a reply in seconds and books a viewing from your hours. Your
-            crew updates each turnover from a link. Once it is rented, rent,
+            crew updates each turnover from a link. After move-in, rent,
             repairs, rent increases and LTB notices run from the same place.
           </p>
           <div className="mb-3.5 flex flex-wrap items-center gap-3">
