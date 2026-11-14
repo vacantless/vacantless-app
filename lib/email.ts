@@ -2208,7 +2208,7 @@ function incidentNotificationHtml(p: IncidentReportNotificationPayload): string 
       <p style="margin:0 0 16px;">${who} marked this an emergency at <strong>${addr}</strong>. Please contact them as soon as you can.</p>`
           : p.is_message
             ? `<p style="margin:0 0 16px;font-size:16px;">New message from a tenant</p>
-      <p style="margin:0 0 16px;">${who} sent a message about <strong>${addr}</strong>. It is not a repair, so it will not become a work order.</p>`
+      <p style="margin:0 0 16px;">${who} sent a message about <strong>${addr}</strong>. It is not a repair, so it will not become a repair.</p>`
             : `<p style="margin:0 0 16px;font-size:16px;">New maintenance report</p>
       <p style="margin:0 0 16px;">${who} reported an issue at <strong>${addr}</strong>.</p>`
       }

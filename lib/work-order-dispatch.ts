@@ -302,13 +302,13 @@ export function dispatchErrorMessage(code: string | undefined): string | null {
     case "terms_required":
       return "Enable trade dispatch (review and accept the one-time terms) before sending a job.";
     case "notfound":
-      return "That work order or trade could not be found.";
+      return "That repair or trade could not be found.";
     case "no_email":
-      return "That trade has no email on file — add one to dispatch the job to them.";
+      return "That trade has no email on file. Add one to dispatch the job to them.";
     case "active_exists":
-      return "This work order already has an active dispatch.";
+      return "This repair already has an active dispatch.";
     case "needs_brief":
-      return "Add a description to this work order before dispatching — a trade needs to know what the job is to accept or quote it. Use Edit to add one.";
+      return "Add a description to this repair before dispatching. A trade needs to know what the job is to accept or quote it. Use Edit to add one.";
     case "bad_quote":
       return "Enter a valid quote amount.";
     case "schedule_required":

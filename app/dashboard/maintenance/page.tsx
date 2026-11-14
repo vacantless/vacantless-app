@@ -351,10 +351,10 @@ const SCHED_ERROR: Record<string, string> = {
   no_rules: "This supplier has no saved times yet.",
   no_dates: "Add the tenant's availability first, then fill the supplier's windows.",
   no_windows: "Add the supplier's offered windows first.",
-  notfound: "That work order could not be found.",
+  notfound: "That repair could not be found.",
   no_tenant_email: "This job has no tenant with an email on file. Copy the link and send it yourself.",
   email_failed: "The email didn't go through. Copy the link and send it yourself.",
-  forbidden: "You don't have permission to manage work orders.",
+  forbidden: "You don't have permission to manage repairs.",
   save_failed: "Couldn't save. Please try again.",
 };
 
@@ -1747,7 +1747,7 @@ export default async function MaintenancePage({
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img
                                       src={p.url}
-                                      alt="Work order photo"
+                                      alt="Repair photo"
                                       className="h-16 w-16 rounded-md border border-gray-200 object-cover"
                                     />
                                   </a>

@@ -347,7 +347,7 @@ export function composeNoticeFromWorkOrder(
   const impact = (hasCat && CATEGORY_IMPACT_HINT[rawCat]) || SCHEDULED_WORK_TEMPLATE.impact;
 
   return {
-    name: "From work order",
+    name: "From repair",
     subject: noEmDash(subject),
     body: noEmDash(body),
     impact: noEmDash(impact),

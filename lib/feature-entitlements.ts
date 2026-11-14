@@ -62,7 +62,7 @@ const MAINTENANCE_ORG_FEATURE_SETTINGS = {
   incident_dispatch: {
     key: "incident_dispatch",
     label: "Trade dispatch",
-    description: "Lets operators dispatch work orders to trades and manage quote scheduling.",
+    description: "Lets operators dispatch repairs to trades and manage quote scheduling.",
   },
 } satisfies Record<"incident_intake" | "incident_dispatch", OrgFeatureSetting>;
 

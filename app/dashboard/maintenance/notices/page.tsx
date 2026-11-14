@@ -119,8 +119,8 @@ export default async function BuildingNoticesPage({
       prefillBody = draft.body;
       prefillImpact = draft.impact;
       prefillNote = w.title
-        ? `Pre-filled from the work order "${w.title}". Review the details, dates, and what-to-expect line before sending.`
-        : "Pre-filled from a work order. Review the details, dates, and what-to-expect line before sending.";
+        ? `Pre-filled from the repair "${w.title}". Review the details, dates, and what-to-expect line before sending.`
+        : "Pre-filled from a repair. Review the details, dates, and what-to-expect line before sending.";
     }
   }
 

@@ -75,7 +75,7 @@ ok("accepts media while submitted", reportAcceptsMedia("submitted"));
 ok("rejects media once converted", !reportAcceptsMedia("converted"));
 ok("rejects media once declined", !reportAcceptsMedia("declined"));
 ok("status label submitted->New", incidentReportStatusLabel("submitted") === "New");
-ok("status label converted", /work order/i.test(incidentReportStatusLabel("converted")));
+ok("status label converted", /repair/i.test(incidentReportStatusLabel("converted")));
 
 // --- Token ------------------------------------------------------------------
 const t1 = generateReportToken();

@@ -130,7 +130,7 @@ export function incidentReportStatusLabel(status: string): string {
     case "approved":
       return "Approved";
     case "converted":
-      return "Converted to work order";
+      return "Converted to repair";
     case "declined":
       return "Declined";
     default:

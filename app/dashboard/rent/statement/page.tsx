@@ -265,7 +265,7 @@ export default async function StatementPage({
           <EmptyState
             icon={<Icons.chart className="h-5 w-5" />}
             title="Nothing in this period"
-            description="No rent payments, expenses, or completed maintenance fall in this window. Record payments inside a tenancy, log expenses, and complete work orders, then they'll roll up here."
+            description="No rent payments, expenses, or completed maintenance fall in this window. Record payments inside a tenancy, log expenses, and complete repairs, then they'll roll up here."
           />
         ) : (
           <Card padded={false} className="overflow-x-auto">

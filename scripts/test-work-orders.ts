@@ -159,7 +159,7 @@ ok("trade contact blank name rejected", matchCode(validateTradeContactInput({ na
 ok("trade contact bad email rejected", matchCode(validateTradeContactInput({ name: "Joe", email: "not-an-email" }), "email"));
 
 // --- error messages ---------------------------------------------------------
-ok("error message known", workOrderErrorMessage("title") === "Give the work order a short title.");
+ok("error message known", workOrderErrorMessage("title") === "Give the repair a short title.");
 ok("error message unknown -> generic", (workOrderErrorMessage("weird") ?? "").startsWith("Something went wrong"));
 ok("error message undefined -> null", workOrderErrorMessage(undefined) === null);
 
