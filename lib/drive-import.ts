@@ -183,11 +183,35 @@ export type DrivePullResult =
   | { ok: true; added: number; skipped: number; alreadyIn: number }
   | { ok: false; reason: DrivePullReason; subfolders?: string[] };
 
+/** S792: how to try the photos that could not be read, by where the line shows. */
+export type PullRetryWhere = "crew" | "shoot" | "rental" | "email";
+export const PULL_RETRY: Record<PullRetryWhere, string> = {
+  crew: "Tap Photos are in again to try them.",
+  shoot: "The landlord is told, so they can add them.",
+  rental: "Press Save and pull photos again to try them.",
+  email: "Pull them again from the photo folder on the rental page.",
+};
+
+/** S792: the pull result for a page link: added_N, added_N_M (M missed) or the reason. */
+export function pullResultParam(r: DrivePullResult): string {
+  return r.ok ? `added_${r.added}${r.skipped > 0 ? `_${r.skipped}` : ""}` : r.reason;
+}
+
+const PULL_REASONS: readonly DrivePullReason[] = ["badlink", "notshared", "empty", "nested", "full", "failed"];
+
+/** S792: read pullResultParam back; null for anything else. */
+export function pullResultFromParam(raw: string | null | undefined): DrivePullResult | null {
+  if (!raw) return null;
+  const m = raw.match(/^added_(\d{1,3})(?:_(\d{1,3}))?$/);
+  if (m) return { ok: true, added: Number(m[1]), skipped: Number(m[2] ?? 0), alreadyIn: Number(m[1]) === 0 ? 1 : 0 };
+  return (PULL_REASONS as readonly string[]).includes(raw) ? { ok: false, reason: raw as DrivePullReason } : null;
+}
+
 /** One plain line for the landlord's email or the page. */
-export function drivePullLine(r: DrivePullResult): string {
+export function drivePullLine(r: DrivePullResult, where?: PullRetryWhere): string {
   if (r.ok) {
     if (r.added === 0) return r.alreadyIn > 0 ? "Every photo in the folder is already on the rental." : "No new photos in the folder.";
-    const skip = r.skipped > 0 ? ` ${r.skipped} could not be read.` : "";
+    const skip = r.skipped > 0 ? ` ${r.skipped} could not be read.${where ? ` ${PULL_RETRY[where]}` : ""}` : "";
     return `${r.added} photo${r.added === 1 ? "" : "s"} pulled in from the folder.${skip}`;
   }
   switch (r.reason) {

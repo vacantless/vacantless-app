@@ -53,7 +53,7 @@ import {
   savePhotoFolderAndPull,
   switchPhotoTouchUp,
 } from "../actions";
-import { drivePullLine, photoSourceOf, pullsFrom, type DrivePullReason } from "@/lib/drive-import";
+import { drivePullLine, photoSourceOf, pullResultFromParam, pullsFrom } from "@/lib/drive-import";
 import {
   buildAllListingCopy,
   COPY_PORTAL_KEYS,
@@ -3568,10 +3568,9 @@ export default async function PropertyDetailPage({
         const folderUrl = (property as { photo_source_url?: string | null }).photo_source_url ?? "";
         const source = photoSourceOf(folderUrl);
         const f = searchParams.folder ?? "";
-        const added = f.match(/^added_(\d{1,3})(?:_(\d{1,3}))?$/);
-        const reasons: DrivePullReason[] = ["badlink", "notshared", "empty", "nested", "full", "failed"];
-        const outcome = added
-          ? drivePullLine({ ok: true, added: Number(added[1]), skipped: Number(added[2] ?? 0), alreadyIn: Number(added[1]) === 0 ? 1 : 0 })
+        const pulled = pullResultFromParam(f);
+        const outcome = pulled?.ok
+          ? drivePullLine(pulled, "rental")
           : /^originals_\d+$/.test(f)
             ? `Showing the originals for ${f.slice(10)} photos.`
             : /^touched_\d+$/.test(f)
@@ -3580,8 +3579,8 @@ export default async function PropertyDetailPage({
             ? "Folder link saved."
             : f === "cleared"
               ? "Folder link taken off."
-              : (reasons as string[]).includes(f)
-                ? drivePullLine({ ok: false, reason: f as DrivePullReason })
+              : pulled
+                ? drivePullLine(pulled)
                 : "";
         return (
           <div id="photo-folder" className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">

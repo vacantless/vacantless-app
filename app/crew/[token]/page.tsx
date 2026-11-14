@@ -4,18 +4,15 @@ import { accessibleBrand, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { buildingsForOrg, crewFromToken, unitCardsForOrg, type UnitCard } from "@/lib/unit-progress-server";
 import { CREW_ROLE_LABEL, STAGE_DATE_LABEL, STAGE_LABEL, canAddUnit, isStage, stageDateLine, stageTakesDate, takesAdsDown, tapsFor, type Stage } from "@/lib/unit-progress";
 import { addUnitFromCrewLink, tapStageFromCrewLink } from "./actions";
-import { drivePullLine, type DrivePullReason } from "@/lib/drive-import";
+import { drivePullLine, pullResultFromParam } from "@/lib/drive-import";
 import { CopyLinkButton } from "@/components/copy-link-button";
 
 // S789b: pulling photos from a Drive folder can take a little while.
 export const maxDuration = 60;
 
 function crewPhotosLine(raw: string | undefined): string {
-  if (!raw) return "";
-  const m = raw.match(/^added_(\d{1,3})$/);
-  if (m) return drivePullLine({ ok: true, added: Number(m[1]), skipped: 0, alreadyIn: Number(m[1]) === 0 ? 1 : 0 });
-  const reasons: DrivePullReason[] = ["badlink", "notshared", "empty", "nested", "full", "failed"];
-  return (reasons as string[]).includes(raw) ? drivePullLine({ ok: false, reason: raw as DrivePullReason }) : "";
+  const r = pullResultFromParam(raw);
+  return r ? drivePullLine(r, "crew") : "";
 }
 
 export const dynamic = "force-dynamic";

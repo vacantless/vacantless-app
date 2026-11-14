@@ -4,6 +4,7 @@ import { accessibleBrand, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { shootFromToken } from "@/lib/photo-shoot-server";
 import { stageDateLine } from "@/lib/unit-progress";
 import { photosInFromShootLink } from "./actions";
+import { PULL_RETRY, pullResultFromParam } from "@/lib/drive-import";
 
 // S791a: a photographer's one-time link (PLAN-S788-UNIT-PROGRESS step 7).
 // One unit: its address and shoot date, a box for the link to the photos and
@@ -14,10 +15,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 function photosLine(raw: string | undefined): string {
-  if (!raw) return "";
-  const m = raw.match(/^added_(\d{1,3})$/);
-  if (m) return Number(m[1]) > 0 ? `${m[1]} photo${m[1] === "1" ? "" : "s"} are on the rental now.` : "";
-  return "";
+  const r = pullResultFromParam(raw);
+  if (!r || !r.ok || r.added === 0) return "";
+  const on = `${r.added} photo${r.added === 1 ? " is" : "s are"} on the rental now.`;
+  return r.skipped > 0 ? `${on} ${r.skipped} could not be read. ${PULL_RETRY.shoot}` : on;
 }
 
 export default async function ShootPage({

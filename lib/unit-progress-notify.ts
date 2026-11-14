@@ -74,7 +74,7 @@ export async function notifyLandlordOfTap(args: {
     const base =
       args.stage === "rented" ? "Its ads are coming down. If that was a mistake, relist it from the rental page." : stageDateLine(args.stage, args.dueDate);
     const deliveryLine =
-      args.stage === "photos_in" && args.deliveryUrl && !(args.photos && args.photos.ok)
+      args.stage === "photos_in" && args.deliveryUrl && !(args.photos && args.photos.ok && args.photos.skipped === 0)
         ? `The photographer's photos are here: ${args.deliveryUrl}. Add them on the rental page.`
         : "";
     const photoLine =
@@ -83,7 +83,7 @@ export async function notifyLandlordOfTap(args: {
         : deliveryLine
           ? [args.photos ? drivePullLine(args.photos) : "", deliveryLine].filter(Boolean).join(" ")
           : args.photos
-          ? drivePullLine(args.photos)
+          ? drivePullLine(args.photos, "email")
           : args.hasPhotoFolder
             ? "Pull them in from the photo folder on the rental page."
             : "Add the unit's Google Drive or Dropbox photo folder on the rental page. Next time, photos pull in on their own.";

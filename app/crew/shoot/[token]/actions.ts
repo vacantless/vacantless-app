@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { pullResultParam } from "@/lib/drive-import";
 import { recordShootPhotosIn, shootFromToken } from "@/lib/photo-shoot-server";
 
 // S791a: the photographer's "Photos are in" on their one-time link. POST only
@@ -21,5 +22,5 @@ export async function photosInFromShootLink(formData: FormData) {
   if (!shoot) redirect("/crew/invalid");
   const result = await recordShootPhotosIn({ admin, shoot, folder: formData.get("photo_link") });
   if (!result.ok) redirect(back(token, result.reason));
-  redirect(back(token, "done", result.photos ? (result.photos.ok ? `added_${result.photos.added}` : result.photos.reason) : undefined));
+  redirect(back(token, "done", result.photos ? pullResultParam(result.photos) : undefined));
 }

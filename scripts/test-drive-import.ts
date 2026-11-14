@@ -12,6 +12,9 @@ import {
   embeddedFolderViewUrl,
   isDriveImageHost,
   drivePullLine,
+  pullResultParam,
+  pullResultFromParam,
+  PULL_RETRY,
   photoUrlsToTry,
   sizedViewThumb,
   pullsFrom,
@@ -88,5 +91,18 @@ ok("two routes without a view link", photoUrlsToTry({ id: "abc", name: "a.jpg", 
 ok("pulls from Drive and Dropbox only", pullsFrom("gdrive") && pullsFrom("dropbox") && !pullsFrom("other") && !pullsFrom(null));
 ok("Dropbox link is a pull source", pullsFrom(photoSourceOf("https://www.dropbox.com/scl/fo/abc/xyz?rlkey=1")));
 ok("bad link names both providers", drivePullLine({ ok: false, reason: "badlink" }).includes("Google Drive or Dropbox"));
+// S792: the skipped count survives the page link, and each surface says how to try again.
+ok("param round trip with misses", JSON.stringify(pullResultFromParam(pullResultParam({ ok: true, added: 20, skipped: 1, alreadyIn: 0 }))) === JSON.stringify({ ok: true, added: 20, skipped: 1, alreadyIn: 0 }));
+ok("param keeps the old shape", pullResultParam({ ok: true, added: 3, skipped: 0, alreadyIn: 0 }) === "added_3" && pullResultFromParam("added_3")?.ok === true);
+ok("param reasons", pullResultParam({ ok: false, reason: "notshared" }) === "notshared" && (pullResultFromParam("notshared") as { reason?: string })?.reason === "notshared");
+ok("param rejects junk", pullResultFromParam("saved") === null && pullResultFromParam("added_x") === null && pullResultFromParam(undefined) === null);
+ok("crew line says tap again", drivePullLine({ ok: true, added: 20, skipped: 1, alreadyIn: 0 }, "crew") === "20 photos pulled in from the folder. 1 could not be read. Tap Photos are in again to try them.");
+ok("no retry hint without misses", drivePullLine({ ok: true, added: 20, skipped: 0, alreadyIn: 0 }, "email") === "20 photos pulled in from the folder.");
+for (const [k, v] of Object.entries(PULL_RETRY)) {
+  const words = v.replace(/[.]$/, "").split(/\s+/).length;
+  ok(`retry ${k} plain`, words <= 14 && !/[()]|login|leased|plan/i.test(v) && !v.includes("\u2014"));
+}
+
 console.log(`drive-import: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
+

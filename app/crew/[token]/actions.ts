@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { pullResultParam } from "@/lib/drive-import";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { addUnitFromCrew, crewFromToken, recordCrewTap } from "@/lib/unit-progress-server";
 
@@ -28,7 +29,7 @@ export async function tapStageFromCrewLink(formData: FormData) {
   if (!result.ok) redirect(back(token, result.reason === "not_allowed" ? "not_allowed" : "error", propertyId));
   // S789b: say how the photo pull went on the saved banner.
   const url = new URL(back(token, `saved_${result.stage}`, propertyId), "https://x");
-  if (result.photos) url.searchParams.set("photos", result.photos.ok ? `added_${result.photos.added}` : result.photos.reason);
+  if (result.photos) url.searchParams.set("photos", pullResultParam(result.photos));
   redirect(`${url.pathname}${url.search}`);
 }
 

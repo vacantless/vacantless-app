@@ -1,6 +1,6 @@
 "use server";
 
-import { cleanPhotoFolderUrl, photoSourceOf, pullsFrom } from "@/lib/drive-import";
+import { cleanPhotoFolderUrl, photoSourceOf, pullResultParam, pullsFrom } from "@/lib/drive-import";
 import { pullFolderPhotos } from "@/lib/photo-folder-pull-server";
 import { dropboxListSharedTree, fetchDropboxSharedFile, getDropboxAccessToken } from "@/lib/dropbox-import-server";
 import { parseGroupSize } from "@/lib/group-viewing";
@@ -6135,7 +6135,7 @@ export async function savePhotoFolderAndPull(formData: FormData) {
   const result = (await pullFolderPhotos({ admin: admin!, organizationId: org.id, propertyId, folderUrl: url as string, touchUp })) ?? { ok: false as const, reason: "badlink" as const };
   if (result.ok && result.added > 0) await followPhotoChange(supabase, propertyId);
   revalidatePath(`/dashboard/properties/${propertyId}`);
-  back(result.ok ? `added_${result.added}${result.skipped > 0 ? `_${result.skipped}` : ""}` : result.reason);
+  back(pullResultParam(result));
 }
 
 export async function saveQuestionSheet(
