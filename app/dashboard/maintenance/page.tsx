@@ -276,14 +276,14 @@ function chipTone(tone: string): ChipTone {
 }
 
 const WO_SUCCESS: Record<string, string> = {
-  created: "Work order created.",
-  saved: "Work order updated.",
-  status: "Work order status updated.",
-  deleted: "Work order deleted.",
+  created: "Repair added.",
+  saved: "Repair updated.",
+  status: "Repair status updated.",
+  deleted: "Repair deleted.",
   rated: "Rating saved. Thanks: it helps other landlords near you.",
-  photo_added: "Photo added to the work order.",
+  photo_added: "Photo added to the repair.",
   photo_removed: "Photo removed.",
-  receipt_added: "Receipt filed to the work order and property vault.",
+  receipt_added: "Receipt filed to the repair and property vault.",
 };
 const TRADE_SUCCESS: Record<string, string> = {
   created: "Trade contact added.",
@@ -303,7 +303,7 @@ const DIR_INFO: Record<string, string> = {
 };
 // Incident-report triage (Slice 3) outcomes.
 const REPORT_SUCCESS: Record<string, string> = {
-  approved: "Report approved and converted to a work order. Assign a trade and cost below.",
+  approved: "Report approved as a repair. Assign a trade and cost below.",
   declined: "Report declined.",
   handled: "Marked handled.",
   emergency_phone: "Emergency phone saved.",
@@ -336,7 +336,7 @@ const SCHED_SUCCESS: Record<string, string> = {
   removed: "Window removed.",
   filled: "Filled the supplier's offered windows from their saved times. Edit as needed.",
   remembered: "Saved these windows as this supplier's default.",
-  confirmed: "Visit confirmed. The date is on the work order.",
+  confirmed: "Visit confirmed. The date is on the repair.",
   cleared: "Cleared the confirmed visit.",
   link_ready: "Tenant scheduling link ready. Email it to the tenant below, or copy it.",
   link_emailed: "Emailed the tenant their link to pick times.",
@@ -427,7 +427,8 @@ function SchedulingBlock({
   const tenantToken = appt?.tenant_access_token ?? null;
   const tenantLinkExpired = isTenantScheduleLinkExpired(appt?.token_expires_at ?? null);
   const tenantLink = tenantToken ? `${APP_ORIGIN}${tenantScheduleLinkPath(tenantToken)}` : null;
-  const startOpen = hasChosen || supplier.length > 0 || tenant.length > 0 || !!tenantToken;
+  // S793: a confirmed visit starts folded; the summary line carries the date.
+  const startOpen = !hasChosen && (supplier.length > 0 || tenant.length > 0 || !!tenantToken);
 
   const windowRow = (w: RsDayWindow, side: "supplier" | "tenant") => (
     <li key={windowKey(w)} className="flex items-center justify-between gap-2 text-xs">
@@ -483,7 +484,12 @@ function SchedulingBlock({
       <details open={startOpen}>
         <summary className="cursor-pointer text-sm font-semibold text-gray-800">
           Schedule the visit
-          {hasChosen ? <span className="ml-2 text-xs font-normal text-green-700">· confirmed</span> : null}
+          {hasChosen ? (
+            <span className="ml-2 text-xs font-normal text-green-700">
+              · confirmed for {fmtDate(appt!.chosen_date)},{" "}
+              {formatWindowClock(appt!.chosen_start_minute!, appt!.chosen_end_minute!)}
+            </span>
+          ) : null}
         </summary>
 
         <div className="mt-3 space-y-4">
@@ -665,6 +671,7 @@ export default async function MaintenancePage({
 }: {
   searchParams: {
     wo?: string;
+    new?: string;
     trade?: string;
     report?: string;
     status?: string;
@@ -1266,7 +1273,7 @@ export default async function MaintenancePage({
     <div>
       <PageHeader
         eyebrow="Repairs"
-        title="Repairs and work orders"
+        title="Repairs"
         subtitle="Log a repair issue, assign it to one of your own trades, and track it to done. Send a job to your trade to accept, quote and book from a link. Costs you record here feed your year-end statements. You pay your trades directly; Vacantless never moves money."
         icon={<Icons.bolt className="h-6 w-6" />}
         action={
@@ -1274,8 +1281,8 @@ export default async function MaintenancePage({
             <Link href="/dashboard/maintenance/notices" className={SECONDARY_ACTION_CLASS}>
               Building notices
             </Link>
-            <a href="#new-work-order" className={PRIMARY_ACTION_CLASS} style={{ background: "var(--brand-gradient, var(--brand-color))" }}>
-              New work order
+            <a href="?new=1#new-work-order" className={PRIMARY_ACTION_CLASS} style={{ background: "var(--brand-gradient, var(--brand-color))" }}>
+              New repair
             </a>
           </>
         }
@@ -1313,7 +1320,7 @@ export default async function MaintenancePage({
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Open work orders" value={openCount} hint="Not yet completed or cancelled" icon={<Icons.bolt className="h-4 w-4" />} />
+        <StatCard label="Open repairs" value={openCount} hint="Not yet completed or cancelled" icon={<Icons.bolt className="h-4 w-4" />} />
         <StatCard label="Urgent & open" value={urgentOpen} hint="Marked urgent, still active" icon={<Icons.clock className="h-4 w-4" />} />
         <StatCard label="Spent this month" value={formatMoneyCents(monthSpend)} hint="Completed work, current month" icon={<Icons.card className="h-4 w-4" />} />
       </div>
@@ -1340,7 +1347,7 @@ export default async function MaintenancePage({
                 <h3 className="font-semibold text-gray-900">Let tenants report issues themselves</h3>
                 <p className="mt-1 text-sm text-gray-600">
                   Give each tenancy a private link to report a maintenance problem with photos or a
-                  short video. Reports land here for you to approve into a work order. No tenant
+                  short video. Reports land here for you to approve as a repair. No tenant
                   account needed. Available on Starter and up.
                 </p>
               </div>
@@ -1402,7 +1409,7 @@ export default async function MaintenancePage({
           <EmptyState
             icon={<Icons.bolt className="h-5 w-5" />}
             title="No tenant reports waiting"
-            description="When a tenant submits an issue through their reporting link, it shows up here to approve into a work order or decline. Share a tenancy's link from its page under Tenants."
+            description="When a tenant submits an issue through their reporting link, it shows up here to approve as a repair or decline. Share a tenancy's link from its page under Tenants."
           />
         ) : (
           <div className="space-y-3">
@@ -1503,7 +1510,7 @@ export default async function MaintenancePage({
                           style={{ background: "var(--brand-gradient, var(--brand-color))" }}
                           pendingLabel="Approving…"
                         >
-                          Approve → work order
+                          Approve as a repair
                         </SubmitButton>
                       </form>
                       <p className="text-xs text-gray-500">
@@ -1613,11 +1620,11 @@ export default async function MaintenancePage({
         {orders.length === 0 ? (
           <EmptyState
             icon={<Icons.bolt className="h-5 w-5" />}
-            title="No work orders here"
+            title="No repairs here"
             description={
               allOrders.length === 0
                 ? "When a tenant reports an issue or you schedule maintenance, log it here so nothing slips."
-                : "No work orders match these filters. Try Active or All above."
+                : "No repairs match these filters. Try Active or All above."
             }
           />
         ) : (
@@ -2254,8 +2261,17 @@ export default async function MaintenancePage({
       </div>
 
       {/* New work order */}
-      <div id="new-work-order" className="mt-8 scroll-mt-6">
-        <SectionHeading>New work order</SectionHeading>
+      {/* S793: the 14-field form folds. It opens from the header button, and by
+          itself when there is no repair yet. */}
+      <details
+        id="new-work-order"
+        className="group mt-8 scroll-mt-6"
+        open={searchParams.new === "1" || allOrders.length === 0}
+      >
+        <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <span className="text-gray-400 group-open:rotate-90">›</span>
+          New repair
+        </summary>
         <Card>
           <form action={createWorkOrder} className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
@@ -2377,18 +2393,18 @@ export default async function MaintenancePage({
                 style={{ background: "var(--brand-gradient, var(--brand-color))" }}
                 pendingLabel="Creating…"
               >
-                Create work order
+                Add repair
               </SubmitButton>
             </div>
           </form>
         </Card>
-      </div>
+      </details>
 
       {/* Trade contacts rolodex */}
       <div id="trades" className="mt-8 scroll-mt-6">
         <SectionHeading>Your trades</SectionHeading>
         <p className="mb-3 text-sm text-gray-600">
-          Your own roster of vendors. Add the people you already use; assign them to work orders. You pay your trades directly. Vacantless keeps the list and the history.
+          Your own roster of vendors. Add the people you already use; assign them to repairs. You pay your trades directly. Vacantless keeps the list and the history.
         </p>
 
         {tradeCities.length > 1 && (

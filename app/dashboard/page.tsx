@@ -797,8 +797,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
               </span>
               <div className="min-w-0">
                 <p className="font-semibold text-gray-900">
-                  {activeWorkOrders.length} open work{" "}
-                  {activeWorkOrders.length === 1 ? "order" : "orders"}
+                  {activeWorkOrders.length} open{" "}
+                  {activeWorkOrders.length === 1 ? "repair" : "repairs"}
                   {urgentWorkOrders.length > 0 && (
                     <span className="ml-2 inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-100">
                       {urgentWorkOrders.length} urgent
