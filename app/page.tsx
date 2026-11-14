@@ -10,9 +10,19 @@ import { createClient } from "@/lib/supabase/server";
 import { VacantlessMark } from "../components/vacantless-mark";
 
 export const metadata = {
-  title: "Vacantless - Every renter answered, every viewing booked",
+  // S790b: the title and description say the whole job, not only showings:
+  // this is what Google results and link previews show first.
+  title: "Vacantless - Fill the vacancy, then the rental runs itself",
   description:
-    "Share one link in your rental ads. Renters get an instant reply, book their own viewing time and get reminders. You see every renter in one list. Free for one rental, paid plans from CA$29 a month.",
+    "Ads posted to Kijiji, Rentals.ca and Zumper, every renter answered and booked, then rent, repairs, LTB notices, turnovers and taxes. Free for one rental, paid plans from CA$29 a month.",
+  openGraph: {
+    title: "Vacantless - Fill the vacancy, then the rental runs itself",
+    description:
+      "Ads posted, every renter answered and booked, then rent, repairs, LTB notices, turnovers and taxes. Free for one rental.",
+    url: "https://www.vacantless.com",
+    siteName: "Vacantless",
+    type: "website",
+  },
 };
 
 export const dynamic = "force-dynamic";
@@ -40,10 +50,9 @@ export default async function Home() {
         <StopDoing />
         <SeeItWork />
         <LeasingProof />
-        <HowItWorks />
-        <WhatYouGet />
         <Automations />
         <AfterTheLease />
+        <HowItWorks />
         <LittleThings />
         <Pricing />
         <FounderBand />
@@ -143,10 +152,10 @@ function Hero() {
             Ads posted and kept up, every renter answered and booked, then rent, repairs, notices and taxes on any paid plan.
           </p>
           <p className="mb-[26px] max-w-[34rem] text-[clamp(1.02rem,1.6vw,1.16rem)] leading-[1.55] text-[#384a42]">
-            Press Set Live and your ad goes up on the rental sites. Renters get a
-            reply in seconds, pick a viewing time from your hours and get
-            reminders before they come. You see every renter in one list, and
-            you stop playing phone tag.
+            Press Set Live and your ad goes up on the rental sites. Every renter
+            gets a reply in seconds and books a viewing from your hours. Your
+            crew updates each turnover from a link. Once it is rented, rent,
+            repairs, rent increases and LTB notices run from the same place.
           </p>
           <div className="mb-3.5 flex flex-wrap items-center gap-3">
             <PrimaryButton href="/signup">{SIGNUP_LABEL}</PrimaryButton>
@@ -177,6 +186,11 @@ const STOP_DOING: string[] = [
   "Missing the rent increase date",
   "Paying for an N4 or N12",
   "Shoeboxing receipts for the T776",
+  // S790b: unit progress links (S788), repairs from a link (S759), Drive
+  // photo pull (S789).
+  "Chasing a vacancy schedule by email",
+  "Phone tag between tenants and trades",
+  "Downloading and re-uploading unit photos",
 ];
 
 function StopDoing() {
@@ -439,61 +453,6 @@ const HOW_STEPS: { title: string; body: string }[] = [
   },
 ];
 
-/* --------------------------------------------------------------- What you get */
-
-function WhatYouGet() {
-  return (
-    <section id="product" className="border-b border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]">
-      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="What renters get, and what you get.">
-          Fast answers for renters. A calmer inbox for you.
-        </SectionHead>
-        <div className="grid gap-4 md:grid-cols-2">
-          {GET_GROUPS.map((g) => (
-            <article key={g.title} className="rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
-              <h3 className="mb-3 text-[1.08rem] font-bold">{g.title}</h3>
-              <ul className="grid list-none gap-2 p-0">
-                {g.items.map((it) => (
-                  <li key={it} className="flex items-start gap-2 text-[0.9rem] leading-snug text-[#273832]">
-                    <CheckMark />
-                    {it}
-                  </li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const GET_GROUPS: { title: string; items: string[] }[] = [
-  {
-    title: "For the renter",
-    items: [
-      "A clean page for your unit with photos and the key facts",
-      "A reply by email within seconds, with a link to book",
-      "Viewing times they pick themselves, whenever suits them",
-      "An email confirmation and a reminder email the day before",
-      "On any paid plan, a text the day before from your own local number. They reply YES to confirm",
-      "A cancel link, so you hear about it instead of a no show",
-    ],
-  },
-  {
-    title: "For you",
-    items: [
-      "An email the moment a renter asks or books",
-      "Every renter in one list, with their answers and notes",
-      "A follow-up list when a viewing is cancelled",
-      "Group viewings: several renters at one time, so a no-show costs you nothing",
-      "A quick question after each viewing, so your list stays true",
-      "Showing agents: hand viewings to the people who run them, each with a private phone page",
-      "Your name and colours on every page and email renters see",
-    ],
-  },
-];
-
 /* S759: the four jobs Vacantless runs for a landlord (Noam, 2026-11-06:
    "automate showings, rent increases, taxes, repairs and the back and
    forth"). Every line was walked end to end on prod (Lakeview, S759):
@@ -503,19 +462,39 @@ const GET_GROUPS: { title: string; items: string[] }[] = [
    pre-authorized debit (Stripe or Rotessa) or logged, costs from the bank,
    a file or typed in. Screenshots are real Lakeview pages
    (demo-videos/shots.mjs, public/marketing). */
-const AUTOMATIONS: { kicker: string; title: string; points: string[]; img: string; alt: string; phone?: boolean }[] = [
+// S790b: "What renters get, and what you get" folded into the Showings card
+// (its other lines moved to Little things), and a Turnovers card for unit
+// progress (S788/S789). A card shows a screenshot (img) or a drawn preview.
+const AUTOMATIONS: { kicker: string; title: string; points: string[]; img?: string; alt: string; phone?: boolean; preview?: "turnovers" }[] = [
   {
     kicker: "Showings",
     title: "Every renter answered and booked.",
     points: [
       "A reply with your booking link within seconds, day or night",
-      "Renters pick a time from your viewing hours",
-      "Reminders the day before, and they confirm with one tap or a YES by text",
+      "Renters pick a time from your viewing hours. Group viewings let several come at once",
+      "A confirmation, and a reminder email the day before. On paid plans, a text from your own number too",
+      "They confirm with one tap, or reply YES to the text",
       "Cancelled or no-show? They land on a follow-up list",
+      "Every renter in one list, with their answers and notes",
+      "Someone else shows the unit? They get a private phone page with the times and lockbox code",
     ],
     img: "/marketing/auto-showings.jpg",
     alt: "A rental's booking page with open viewing times",
     phone: true,
+  },
+  {
+    kicker: "Turnovers",
+    title: "Know where every unit is, without chasing anyone.",
+    points: [
+      "Your manager, contractor and cleaner each get their own link. No sign-in, no app",
+      "They tap where a unit is: notice given, reno, cleaning, photos in, rented, moved in, with a ready-by date",
+      "Photos are in? New photos come in from your Google Drive folder, brightened, with the originals kept",
+      "Tenant gave notice? The unit is on your relist list with the move-out date",
+      "Rented takes your ads down. Moved in starts the tenancy",
+      "Each unit's stage shows on your rentals, and you hear when one stalls",
+    ],
+    alt: "A crew member's turnover page: each unit with its stage, date and the next buttons to tap",
+    preview: "turnovers",
   },
   {
     kicker: "Rent increases",
@@ -561,7 +540,7 @@ function Automations() {
     <section id="automations" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
         <SectionHead title="Then it runs the rest.">
-          Ads posted and kept up. Renters answered and booked. Once the unit is rented: rent collected, rent increases served, repairs booked, and the books and tax papers done, on any paid plan.
+          Ads posted and kept up. Renters answered and booked. Every turnover tracked by your crew. Once the unit is rented: rent collected, rent increases served, repairs booked, and the books and tax papers done, on any paid plan.
         </SectionHead>
         <div className="grid gap-12 sm:gap-16">
           {AUTOMATIONS.map((a, i) => (
@@ -583,20 +562,85 @@ function Automations() {
                   ))}
                 </ul>
               </div>
-              <figure className={`m-0 ${a.phone ? "flex justify-center" : ""}`}>
-                <img
-                  src={a.img}
-                  alt={a.alt}
-                  loading="lazy"
-                  decoding="async"
-                  className={`h-auto rounded-xl border border-[#d9e1dc] bg-white shadow-[0_18px_50px_rgba(16,40,32,0.12)] ${a.phone ? "w-[min(320px,80%)]" : "w-full"}`}
-                />
+              <figure className={`m-0 ${a.phone || a.preview ? "flex justify-center" : ""}`}>
+                {a.preview === "turnovers" ? (
+                  <TurnoverPreview label={a.alt} />
+                ) : (
+                  <img
+                    src={a.img}
+                    alt={a.alt}
+                    loading="lazy"
+                    decoding="async"
+                    className={`h-auto rounded-xl border border-[#d9e1dc] bg-white shadow-[0_18px_50px_rgba(16,40,32,0.12)] ${a.phone ? "w-[min(320px,80%)]" : "w-full"}`}
+                  />
+                )}
               </figure>
             </div>
           ))}
         </div>
       </div>
     </section>
+  );
+}
+
+/* S790b: a drawn copy of the crew link page (app/crew/[token]), the way a
+   contractor sees it on a phone. Made-up units and names, same stage names,
+   buttons per role and saved line as the app (lib/unit-progress tapsFor,
+   lib/drive-import drivePullLine). */
+const PREVIEW_UNITS: { address: string; stage: string; line?: string; when: string; taps: string[] }[] = [
+  {
+    address: "48 Maple Court, Unit 2",
+    stage: "Being cleaned",
+    line: "Ready by Dec 1",
+    when: "Nov 13, 9:40 AM by Sam",
+    taps: ["Under construction", "Ready for photos", "Photos are in"],
+  },
+  {
+    address: "48 Maple Court, Unit 5",
+    stage: "Photos are in",
+    when: "Nov 13, 10:05 AM by Sam",
+    taps: ["Under construction", "Being cleaned", "Ready for photos"],
+  },
+  {
+    address: "210 Elm Street, Unit 1",
+    stage: "Tenant gave notice",
+    line: "Moving out Jan 31",
+    when: "Nov 10, 2:20 PM by Dana",
+    taps: ["Under construction", "Being cleaned", "Ready for photos", "Photos are in"],
+  },
+];
+
+function TurnoverPreview({ label }: { label: string }) {
+  return (
+    <div role="img" aria-label={label} className="w-[min(360px,92%)] overflow-hidden rounded-[28px] border border-[#a4b5ac]/85 bg-[#f6f7f6] p-3 shadow-[0_18px_50px_rgba(16,40,32,0.12)]">
+      <div className="mb-3 px-1.5 pt-1">
+        <p className="text-[0.62rem] font-semibold uppercase tracking-wide text-[var(--color-accent)]">Maple Court Rentals</p>
+        <p className="text-[0.95rem] font-extrabold text-[#15211d]">Unit progress</p>
+        <p className="text-[0.72rem] leading-snug text-[#59655f]">Sam, contractor. Tap where each unit is at.</p>
+        <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[0.7rem] leading-snug text-emerald-900">
+          Saved: 48 Maple Court, Unit 5 is now photos are in. 12 photos pulled in from the folder.
+        </p>
+      </div>
+      <div className="grid gap-2.5">
+        {PREVIEW_UNITS.map((u) => (
+          <div key={u.address} className="rounded-2xl border border-gray-200 bg-white p-3">
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-[0.82rem] font-semibold text-gray-900">{u.address}</span>
+              <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[0.68rem] font-medium text-gray-700">{u.stage}</span>
+            </div>
+            {u.line ? <p className="mt-1 text-[0.74rem] text-gray-700">{u.line}</p> : null}
+            <p className="mt-0.5 text-[0.68rem] text-gray-500">{u.when}</p>
+            {u.taps.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {u.taps.map((t) => (
+                  <span key={t} className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-[0.7rem] font-medium text-gray-800">{t}</span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -668,42 +712,62 @@ function AfterTheLease() {
    city pages (app/rentals/[city]), equipment end of life (lib/equipment-eol),
    inspections and receipts (tenancies/[id]), tenant files (documents-section),
    teammates (Growth, lib/team teammateLimit). Noam approved 2026-11-10 14:32. */
-const LITTLE_THINGS: { text: string; plan?: string }[] = [
-  { text: "Renter wrote in a chat? Upload the screenshot and they land in your list." },
-  { text: "Have an old ad or a realtor's data sheet? Paste it or drop the PDF. The form fills itself." },
-  { text: "Quick replies on your phone. Each rental's booking link and next open times, ready to share." },
-  { text: "Time not working for a renter? Suggest up to three open times. They pick one." },
-  { text: "Not sure a renter is coming? One tap nudges them to confirm." },
-  { text: "A 15-second video ad made from your photos, ready for Facebook or Instagram." },
-  { text: "Each rental shows which site brings renters who actually book." },
-  { text: "Worried someone copied your ad to scam renters? One click opens a search of your cover photo, Kijiji and Marketplace near your price." },
-  { text: "Missed a call from a renter? It shows on their record with a reminder to call back.", plan: "paid plans, with texting on" },
-  { text: "Renter not confirming? The time opens up again after the hours you choose." },
-  { text: "Need someone in by a date? Renters who want to move in too late can't book themselves." },
-  { text: "Tenant moving out? One click relists the unit from their move-out date." },
-  { text: "Signed out of Kijiji, Rentals.ca or Zumper? We email you a one-tap way back in." },
-  { text: "Your open rentals can also show on vacantless.com, where renters search by city." },
-  { text: "Water heater or furnace near the end of its life? You get a reminder." },
-  { text: "Move-in, move-out and routine inspections on your calendar, with a reminder." },
-  { text: "Keep each tenant's files in one place. Share them by a link that expires." },
-  { text: "A rent receipt for your tenant in one click." },
-  { text: "Add a teammate with their own login. No shared password.", plan: "paid plans" },
-  // S779 (doc LKQCTfbHkEJb9JaCNNbMr4, approved 17:10), each read in code and on
-  // Agile first: lib/group-viewing + viewing_group_size; showing_instructions on
-  // /agent/[token]; arrival phone in confirmations (S754c); inquiry_require_phone
-  // on Questions for renters; lib/renewal (the landlord sends the check-in link,
-  // nothing is sent for them, so the line says so); RentIncreaseMarketNote
-  // (canUseMarketRent); tenancy-insurance (opt-in alert); compliance calendar
-  // (opt-in) + detector-eol; portal-lead-scam (scam_held).
-  { text: "Viewings at the same building get booked close together. One trip, not three." },
-  { text: "Whoever shows the unit sees the lockbox code, which buzzer to press and who to call." },
-  { text: "Renters get the number to call when they arrive, so nobody stands outside." },
-  { text: "Make a phone number required on your renter form, so you can always call back." },
-  { text: "90 days before a lease ends, you get a link to ask the tenant: staying or leaving?" },
-  { text: "At renewal, see the market rent next to the legal cap.", plan: "paid plans" },
-  { text: "Log your tenant's insurance. Turn on the alert and you hear before it lapses." },
-  { text: "Smoke alarms, Vacant Home Tax and winterizing on your calendar, with reminders." },
-  { text: "Messages that look like scams are held, not filed as renters." },
+// S790b: the same lines under four headings so they read as breadth, not a
+// long list; three lines from the old "What renters get" section moved here;
+// the relist line now starts from the crew's notice tap (S789).
+type LittleThing = { text: string; plan?: string };
+const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
+  {
+    head: "Renters and viewings",
+    items: [
+      { text: "Renter wrote in a chat? Upload the screenshot and they land in your list." },
+      { text: "Quick replies on your phone. Each rental's booking link and next open times, ready to share." },
+      { text: "Time not working for a renter? Suggest up to three open times. They pick one." },
+      { text: "Not sure a renter is coming? One tap nudges them to confirm." },
+      { text: "Renter not confirming? The time opens up again after the hours you choose." },
+      { text: "Need someone in by a date? Renters who want to move in too late can't book themselves." },
+      { text: "Viewings at the same building get booked close together. One trip, not three." },
+      { text: "Renters get the number to call when they arrive, so nobody stands outside." },
+      { text: "Every renter gets a cancel link, so you hear about it instead of a no-show." },
+      { text: "A quick question after each viewing keeps your renter list true." },
+      { text: "Make a phone number required on your renter form, so you can always call back." },
+      { text: "Missed a call from a renter? It shows on their record with a reminder to call back.", plan: "paid plans, with texting on" },
+      { text: "Messages that look like scams are held, not filed as renters." },
+    ],
+  },
+  {
+    head: "Your ads",
+    items: [
+      { text: "Have an old ad or a realtor's data sheet? Paste it or drop the PDF. The form fills itself." },
+      { text: "A 15-second video ad made from your photos, ready for Facebook or Instagram." },
+      { text: "Each rental shows which site brings renters who actually book." },
+      { text: "Worried someone copied your ad to scam renters? One click opens a search of your cover photo, Kijiji and Marketplace near your price." },
+      { text: "Signed out of Kijiji, Rentals.ca or Zumper? We email you a one-tap way back in." },
+      { text: "Your open rentals can also show on vacantless.com, where renters search by city." },
+      { text: "Your name and colours on every page and email renters see." },
+    ],
+  },
+  {
+    head: "Turnovers and upkeep",
+    items: [
+      { text: "Tenant gave notice? Your crew taps it with the date, and one click relists the unit." },
+      { text: "Phone photos come in brighter. One click switches back to the originals." },
+      { text: "Water heater or furnace near the end of its life? You get a reminder." },
+      { text: "Move-in, move-out and routine inspections on your calendar, with a reminder." },
+      { text: "Smoke alarms, Vacant Home Tax and winterizing on your calendar, with reminders." },
+    ],
+  },
+  {
+    head: "Tenants and money",
+    items: [
+      { text: "90 days before a lease ends, you get a link to ask the tenant: staying or leaving?" },
+      { text: "At renewal, see the market rent next to the legal cap.", plan: "paid plans" },
+      { text: "Log your tenant's insurance. Turn on the alert and you hear before it lapses." },
+      { text: "Keep each tenant's files in one place. Share them by a link that expires." },
+      { text: "A rent receipt for your tenant in one click." },
+      { text: "Add a teammate with their own login. No shared password.", plan: "paid plans" },
+    ],
+  },
 ];
 
 function LittleThings() {
@@ -713,17 +777,24 @@ function LittleThings() {
         <SectionHead title="Little things that save you time and money.">
           Small touches that save you a call, a trip, an hour or a bill.
         </SectionHead>
-        <ul className="grid list-none gap-3 p-0 md:grid-cols-2">
-          {LITTLE_THINGS.map((t) => (
-            <li key={t.text} className="flex items-start gap-2 rounded-lg border border-[#d9e1dc] bg-white p-4 text-[0.92rem] leading-snug text-[#273832]">
-              <CheckMark />
-              <span>
-                {t.text}
-                {t.plan ? <span className="ml-1 text-xs text-[#5a6b64]">({t.plan})</span> : null}
-              </span>
-            </li>
+        <div className="grid gap-4 md:grid-cols-2">
+          {LITTLE_THING_GROUPS.map((g) => (
+            <div key={g.head} className="rounded-lg border border-[#d9e1dc] bg-white p-5">
+              <h3 className="mb-3 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">{g.head}</h3>
+              <ul className="grid list-none gap-2.5 p-0">
+                {g.items.map((t) => (
+                  <li key={t.text} className="flex items-start gap-2 text-[0.9rem] leading-snug text-[#273832]">
+                    <CheckMark />
+                    <span>
+                      {t.text}
+                      {t.plan ? <span className="ml-1 text-xs text-[#5a6b64]">({t.plan})</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
     </section>
   );
