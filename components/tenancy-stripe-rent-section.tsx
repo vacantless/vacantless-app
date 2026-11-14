@@ -4,6 +4,7 @@ import {
   refreshStripeRentMandate,
   createStripeRentSubscription,
   refreshStripeRentSubscription,
+  stopStripeRentSubscription,
 } from "@/app/dashboard/tenancies/stripe-rent-actions";
 import {
   mandateStatusLabel,
@@ -41,7 +42,24 @@ export type TenancyStripeRentView = {
   firstChargeDefault: string;
   firstChargeMin: string;
   firstChargeHint: string;
+  // S796: read live from Stripe; null when unknown or not applicable.
+  nextChargeLabel: string | null;
+  lastPaymentLabel: string | null;
+  lastPaymentAmountLabel: string | null;
+  lastPaymentState: "paid" | "processing" | "failed" | null;
 };
+
+function lastPaymentText(view: TenancyStripeRentView): string {
+  if (!view.lastPaymentLabel) return "None yet";
+  const amount = view.lastPaymentAmountLabel ? `${view.lastPaymentAmountLabel} on ` : "";
+  const state =
+    view.lastPaymentState === "processing"
+      ? " (processing at the bank)"
+      : view.lastPaymentState === "failed"
+        ? " (did not go through)"
+        : "";
+  return `${amount}${view.lastPaymentLabel}${state}`;
+}
 
 function mandateTone(status: string): ChipTone {
   const s = normalizeMandateStatus(status);
@@ -104,7 +122,7 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
                 </dd>
               </div>
             </dl>
-            {!view.subscriptionId && (
+            {!(view.subscriptionId && subscriptionIsLive(view.subscriptionStatus)) && (
               <form action={refreshStripeRentMandate}>
                 <input type="hidden" name="tenancy_id" value={view.tenancyId} />
                 <SubmitButton
@@ -119,41 +137,63 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
 
           {/* Monthly rent subscription (increment 3) */}
           <div className="border-t border-gray-100 pt-4">
-            {view.subscriptionId ? (
-              <div className="space-y-2">
+            {view.subscriptionId && subscriptionIsLive(view.subscriptionStatus) ? (
+              <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <StatusChip tone={subscriptionIsLive(view.subscriptionStatus) ? "success" : "warn"}>
-                    {subscriptionStatusLabel(view.subscriptionStatus)}
-                  </StatusChip>
+                  <StatusChip tone="success">{subscriptionStatusLabel(view.subscriptionStatus)}</StatusChip>
                   <span className="text-sm text-gray-600">
-                    {view.rentLabel}/mo, billed automatically to the saved bank account.
+                    Billed automatically to the saved bank account.
                   </span>
                 </div>
-                <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
                   <div>
-                    <dt className="text-gray-500">Subscription ID</dt>
-                    <dd className="font-mono text-xs text-gray-700">{view.subscriptionId}</dd>
+                    <dt className="text-gray-500">Amount</dt>
+                    <dd className="font-medium text-gray-900">{view.rentLabel}/mo</dd>
                   </div>
                   <div>
-                    <dt className="text-gray-500">Last synced</dt>
-                    <dd className="font-medium text-gray-900">
-                      {view.syncedAt ? new Date(view.syncedAt).toLocaleString() : "-"}
-                    </dd>
+                    <dt className="text-gray-500">Last payment</dt>
+                    <dd className="font-medium text-gray-900">{lastPaymentText(view)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-500">Next payment</dt>
+                    <dd className="font-medium text-gray-900">{view.nextChargeLabel ?? "-"}</dd>
                   </div>
                 </dl>
                 <p className="text-xs text-gray-400">
-                  Bank debits can take a few business days to confirm. Manage or
-                  cancel the subscription from your Stripe dashboard.
+                  Bank debits take a few business days to confirm. Subscription{" "}
+                  <span className="font-mono">{view.subscriptionId}</span>.
                 </p>
-                <form action={refreshStripeRentSubscription}>
-                  <input type="hidden" name="tenancy_id" value={view.tenancyId} />
-                  <SubmitButton
-                    pendingLabel="Refreshing…"
-                    className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Refresh status
-                  </SubmitButton>
-                </form>
+                <div className="flex flex-wrap items-center gap-3">
+                  <form action={refreshStripeRentSubscription}>
+                    <input type="hidden" name="tenancy_id" value={view.tenancyId} />
+                    <SubmitButton
+                      pendingLabel="Refreshing…"
+                      className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Refresh status
+                    </SubmitButton>
+                  </form>
+                  <details className="text-sm">
+                    <summary className="cursor-pointer select-none rounded-lg border border-red-200 bg-white px-4 py-2 font-semibold text-red-600 transition hover:bg-red-50">
+                      Stop monthly rent
+                    </summary>
+                    <form action={stopStripeRentSubscription} className="mt-2 space-y-2 rounded-lg border border-red-100 bg-red-50 p-3">
+                      <input type="hidden" name="tenancy_id" value={view.tenancyId} />
+                      <p className="text-sm text-gray-700">
+                        This stops the {view.rentLabel} monthly debit now. No more
+                        payments will be pulled. A payment already processing at
+                        the bank still completes. The bank authorization is kept,
+                        so you can restart rent later.
+                      </p>
+                      <SubmitButton
+                        pendingLabel="Stopping…"
+                        className="inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Yes, stop monthly rent
+                      </SubmitButton>
+                    </form>
+                  </details>
+                </div>
               </div>
             ) : view.rentCents == null ? (
               <p className="text-sm text-gray-600">
@@ -163,6 +203,13 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
             ) : (
               <form action={createStripeRentSubscription} className="space-y-3">
                 <input type="hidden" name="tenancy_id" value={view.tenancyId} />
+                {view.subscriptionId && (
+                  <p className="text-sm text-gray-600">
+                    <StatusChip tone="neutral">Stopped</StatusChip>{" "}
+                    Monthly rent is stopped. No debits are running.
+                    {view.lastPaymentLabel ? ` Last payment: ${lastPaymentText(view)}.` : ""}
+                  </p>
+                )}
                 <p className="text-sm text-gray-600">
                   Schedule automatic monthly rent of{" "}
                   <span className="font-medium text-gray-900">{view.rentLabel}</span> starting on

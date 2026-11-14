@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { stopTenancyStripeRent } from "@/lib/stripe-rent-stop";
+import { canCreateRentSubscription } from "@/lib/stripe-connect";
 import { requireCapability } from "@/lib/membership";
 import {
   isTenancyStatus,
@@ -753,6 +755,16 @@ export async function endTenancy(formData: FormData) {
   const endDate = parseDateOrNull(s(formData, "end_date")) ?? todayIso();
 
   const supabase = createClient();
+
+  // S796: never leave a live monthly bank debit running on an ended tenancy.
+  // Stop Stripe rent first; if Stripe can't confirm the stop, do not end.
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const stop = await stopTenancyStripeRent(supabase, org.id, id);
+  if (!stop.ok) {
+    redirect(`/dashboard/tenancies/${id}?striperent=endstopfail`);
+  }
+
   await supabase
     .from("tenancies")
     .update({ status: "ended", end_date: endDate, updated_at: new Date().toISOString() })
@@ -760,7 +772,7 @@ export async function endTenancy(formData: FormData) {
 
   revalidatePath(`/dashboard/tenancies/${id}`);
   revalidatePath("/dashboard/tenancies");
-  redirect(`/dashboard/tenancies/${id}?ended=1`);
+  redirect(`/dashboard/tenancies/${id}?ended=1${stop.stopped ? "&rentstopped=1" : ""}`);
 }
 
 // ===========================================================================
@@ -772,6 +784,26 @@ export async function deleteTenancy(formData: FormData) {
   if (!id) return;
 
   const supabase = createClient();
+
+  // S796: deleting the record would orphan a live Stripe rent subscription
+  // (the debit keeps running with nothing in the app pointing at it). Refuse
+  // until rent is stopped.
+  const { data: liveRow } = await supabase
+    .from("tenancies")
+    .select("stripe_subscription_id, stripe_subscription_status")
+    .eq("id", id)
+    .maybeSingle();
+  const live = liveRow as { stripe_subscription_id: string | null; stripe_subscription_status: string | null } | null;
+  if (
+    live &&
+    !canCreateRentSubscription({
+      subscriptionId: live.stripe_subscription_id,
+      subscriptionStatus: live.stripe_subscription_status,
+    })
+  ) {
+    redirect(`/dashboard/tenancies/${id}?striperent=stopfirst`);
+  }
+
   await supabase.from("tenancies").delete().eq("id", id);
 
   revalidatePath("/dashboard/tenancies");

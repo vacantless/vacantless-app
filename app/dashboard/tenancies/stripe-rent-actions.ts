@@ -18,7 +18,9 @@ import {
   isoToUnixSeconds,
   validateStripeRentUpdate,
   selectActiveSchedulePhase,
+  canCreateRentSubscription,
 } from "@/lib/stripe-connect";
+import { stopTenancyStripeRent } from "@/lib/stripe-rent-stop";
 import type { N1Snapshot } from "@/lib/n1-render";
 import { isValidProcessDate } from "@/lib/rotessa";
 
@@ -210,6 +212,7 @@ type SubTenancyRow = {
   stripe_payment_method_id: string | null;
   stripe_mandate_status: string | null;
   stripe_subscription_id: string | null;
+  stripe_subscription_status: string | null;
 };
 
 export async function createStripeRentSubscription(formData: FormData) {
@@ -239,12 +242,20 @@ export async function createStripeRentSubscription(formData: FormData) {
 
   const { data: tData } = await supabase
     .from("tenancies")
-    .select("id, rent_cents, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_subscription_id")
+    .select("id, rent_cents, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_subscription_id, stripe_subscription_status")
     .eq("id", tenancyId)
     .maybeSingle();
   const tenancy = tData as SubTenancyRow | null;
   if (!tenancy) redirect("/dashboard/tenancies");
-  if (tenancy.stripe_subscription_id) redirect(`${tenancyPath(tenancyId)}?striperent=subalready`);
+  // A stopped (canceled / expired) subscription no longer blocks a restart.
+  if (
+    !canCreateRentSubscription({
+      subscriptionId: tenancy.stripe_subscription_id,
+      subscriptionStatus: tenancy.stripe_subscription_status,
+    })
+  ) {
+    redirect(`${tenancyPath(tenancyId)}?striperent=subalready`);
+  }
   if (!tenancy.stripe_customer_id) redirect(`${tenancyPath(tenancyId)}?striperent=nocustomer`);
 
   const prereq = validateRentSubscriptionPrereqs({
@@ -370,6 +381,28 @@ export async function refreshStripeRentSubscription(formData: FormData) {
 
   revalidatePath(tenancyPath(tenancyId));
   redirect(`${tenancyPath(tenancyId)}?striperent=subsynced`);
+}
+
+// Stop the monthly rent subscription (S796). Cancels it at Stripe right away so
+// no further debits run; the bank authorization is kept so rent can be
+// restarted later without the tenant authorizing again.
+export async function stopStripeRentSubscription(formData: FormData) {
+  const tenancyId = String(formData.get("tenancy_id") ?? "").trim();
+  if (!tenancyId) redirect("/dashboard/tenancies");
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_rent", `${tenancyPath(tenancyId)}?striperent=forbidden`);
+
+  const supabase = createClient();
+  const result = await stopTenancyStripeRent(supabase, org.id, tenancyId);
+  if (!result.ok) {
+    const reason = result.reason ? `&reason=${encodeURIComponent(result.reason)}` : "";
+    redirect(`${tenancyPath(tenancyId)}?striperent=${result.code}${reason}`);
+  }
+
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(`${tenancyPath(tenancyId)}?striperent=${result.stopped ? "stopped" : "nothingtostop"}`);
 }
 
 

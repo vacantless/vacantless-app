@@ -39,7 +39,8 @@ import TenancyStripeRentSection, {
   type TenancyStripeRentView,
 } from "@/components/tenancy-stripe-rent-section";
 import { getStripe } from "@/lib/stripe";
-import { shouldPromptRentRailSync } from "@/lib/stripe-connect";
+import { shouldPromptRentRailSync, subscriptionIsLive } from "@/lib/stripe-connect";
+import { fetchRentPaymentSummary } from "@/lib/stripe-rent-stop";
 import { recordPayment, deletePayment } from "../payment-actions";
 import { reportTenancyIssue, generateTenantReportLink } from "../maintenance-actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
@@ -375,6 +376,8 @@ const STRIPE_RENT_SUCCESS: Record<string, string> = {
   synced: "Stripe rent status refreshed.",
   subscribed: "Monthly rent scheduled. Stripe will bill the saved bank account automatically.",
   subsynced: "Subscription status refreshed.",
+  stopped: "Monthly rent stopped. No more debits will run. The bank authorization is kept, so you can restart rent any time.",
+  nothingtostop: "There was no active monthly rent to stop.",
 };
 const STRIPE_RENT_ERROR: Record<string, string> = {
   notconfigured: "Payments aren't configured on this deployment yet.",
@@ -396,6 +399,9 @@ const STRIPE_RENT_ERROR: Record<string, string> = {
   baddate: "Pick a first charge date at least 2 business days from today.",
   subfail: "Stripe couldn't create the rent subscription. Try again.",
   nosub: "Set up the monthly rent subscription before refreshing.",
+  stopfail: "Stripe couldn't stop the monthly rent just now. Nothing changed. Try again.",
+  endstopfail: "This tenancy was not ended. Stripe couldn't stop its monthly rent debit, and we won't end a tenancy while the debit is still running. Try again.",
+  stopfirst: "Stop the monthly rent first (Rent collection, Stop monthly rent). Then you can delete this tenancy.",
 };
 
 export default async function TenancyDetailPage({
@@ -413,6 +419,7 @@ export default async function TenancyDetailPage({
     err?: string;
     rotessa?: string;
     striperent?: string;
+    rentstopped?: string;
     serve?: string;
     renewal?: string;
     moveout?: string;
@@ -489,6 +496,12 @@ export default async function TenancyDetailPage({
   const stripeConnectRow = stripeConnectRows?.[0] as
     | { connected_account_id: string; country: string | null; charges_enabled: boolean; onboarding_state: string }
     | undefined;
+  // S796: amount, last payment and next payment, read live from Stripe.
+  const rentSummary = await fetchRentPaymentSummary(
+    stripeConnectRow?.connected_account_id,
+    t.stripe_subscription_id,
+  );
+  const rentLive = subscriptionIsLive(t.stripe_subscription_status) && !!t.stripe_subscription_id;
   const stripeRentView: TenancyStripeRentView = {
     tenancyId: t.id,
     primaryName: primary?.name ?? null,
@@ -507,6 +520,11 @@ export default async function TenancyDetailPage({
     firstChargeDefault: defaultFirstProcessDate(new Date().toISOString().slice(0, 10)),
     firstChargeMin: minProcessDate(new Date().toISOString().slice(0, 10)),
     firstChargeHint: formatProcessDate(defaultFirstProcessDate(new Date().toISOString().slice(0, 10))),
+    nextChargeLabel: rentSummary?.nextChargeIso ? formatProcessDate(rentSummary.nextChargeIso) : null,
+    lastPaymentLabel: rentSummary?.lastPaymentIso ? formatProcessDate(rentSummary.lastPaymentIso) : null,
+    lastPaymentAmountLabel:
+      rentSummary?.lastPaymentCents != null ? formatRentCents(rentSummary.lastPaymentCents) : null,
+    lastPaymentState: rentSummary?.lastPaymentState ?? null,
   };
   const todayIso = new Date().toISOString().slice(0, 10);
   const defaultProcessDate = defaultFirstProcessDate(todayIso);
@@ -1429,7 +1447,10 @@ export default async function TenancyDetailPage({
       (searchParams.offmarket
         ? "Tenancy created. This rental is now marked Leased and off its public listing page - it won't take new inquiries or viewing bookings."
         : FLASH.created)) ||
-    (searchParams.ended && FLASH.ended) ||
+    (searchParams.ended &&
+      (searchParams.rentstopped
+        ? "Tenancy marked ended. Its automatic monthly rent debit was stopped too."
+        : FLASH.ended)) ||
     (searchParams.tenant && TENANT_FLASH[searchParams.tenant]) ||
     (searchParams.rotessa && ROTESSA_SUCCESS[searchParams.rotessa]) ||
     (searchParams.striperent && STRIPE_RENT_SUCCESS[searchParams.striperent]) ||
@@ -3193,6 +3214,8 @@ export default async function TenancyDetailPage({
         </form>
         <p className="text-xs text-gray-400">
           Ending keeps the record; deleting removes it and its tenants permanently.
+          {rentLive &&
+            ` Ending also stops the automatic ${formatRentCents(t.rent_cents)} monthly rent debit. Stop the rent before deleting.`}
         </p>
       </div>
     </div>

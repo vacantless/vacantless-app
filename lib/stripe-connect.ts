@@ -446,7 +446,7 @@ const SUBSCRIPTION_STATUS_LABELS: Record<string, string> = {
   unpaid: "Unpaid",
   incomplete: "Awaiting first payment",
   incomplete_expired: "Setup expired",
-  canceled: "Canceled",
+  canceled: "Stopped",
   paused: "Paused",
 };
 
@@ -457,6 +457,104 @@ export function subscriptionStatusLabel(status: unknown): string {
 /** Is the subscription still on the hook to collect (not canceled/expired)? Pure. */
 export function subscriptionIsLive(status: unknown): boolean {
   return typeof status === "string" && ["active", "trialing", "past_due", "unpaid", "incomplete"].includes(status);
+}
+
+// ===========================================================================
+// S796: stop monthly rent + payment summary. Pure decisions only; the impure
+// Stripe calls live in lib/stripe-rent-stop.ts.
+// ===========================================================================
+
+/** What stopping rent has to do for this tenancy. Pure. */
+export type RentStopPlan = "none" | "cancel_subscription" | "cancel_schedule_then_subscription";
+export function planRentStop(input: {
+  subscriptionId: unknown;
+  subscriptionStatus: unknown;
+  scheduleId: unknown;
+}): RentStopPlan {
+  const hasSub = typeof input.subscriptionId === "string" && input.subscriptionId.trim() !== "";
+  if (!hasSub) return "none";
+  if (!subscriptionIsLive(input.subscriptionStatus)) return "none";
+  const hasSchedule = typeof input.scheduleId === "string" && input.scheduleId.trim() !== "";
+  return hasSchedule ? "cancel_schedule_then_subscription" : "cancel_subscription";
+}
+
+/** May a new rent subscription be created on this tenancy? Pure. A stopped
+ *  (canceled / expired) subscription no longer blocks a restart. */
+export function canCreateRentSubscription(input: {
+  subscriptionId: unknown;
+  subscriptionStatus: unknown;
+}): boolean {
+  const hasSub = typeof input.subscriptionId === "string" && input.subscriptionId.trim() !== "";
+  if (!hasSub) return true;
+  return !subscriptionIsLive(input.subscriptionStatus);
+}
+
+export type RentPaymentState = "paid" | "processing" | "failed";
+export type RentPaymentSummary = {
+  nextChargeIso: string | null;
+  lastPaymentIso: string | null;
+  lastPaymentCents: number | null;
+  lastPaymentState: RentPaymentState | null;
+};
+
+type SummarySub = {
+  status?: string | null;
+  current_period_end?: number | null;
+  cancel_at_period_end?: boolean | null;
+  items?: { data?: Array<{ current_period_end?: number | null }> | null } | null;
+};
+type SummaryInvoice = {
+  status?: string | null;
+  amount_due?: number | null;
+  amount_paid?: number | null;
+  created?: number | null;
+  status_transitions?: { paid_at?: number | null } | null;
+};
+
+/**
+ * Next debit date + the most recent real (non-zero) rent debit, from a
+ * subscription and its invoices. Pure.
+ *   * next = the current period end (item-level on newer API versions, top
+ *     level on older ones), only while the subscription is live and not set to
+ *     end at the period end.
+ *   * last = the newest invoice with money due. The $0 invoice Stripe cuts for
+ *     the stub period before the first charge date is skipped. Bank debits sit
+ *     "open" for a few business days, so open = processing, unless the
+ *     subscription is past_due / unpaid, which means the debit bounced.
+ */
+export function summarizeRentPayments(
+  sub: SummarySub | null | undefined,
+  invoices: SummaryInvoice[] | null | undefined,
+): RentPaymentSummary {
+  const out: RentPaymentSummary = {
+    nextChargeIso: null,
+    lastPaymentIso: null,
+    lastPaymentCents: null,
+    lastPaymentState: null,
+  };
+  const status = typeof sub?.status === "string" ? sub.status : null;
+  if (sub && subscriptionIsLive(status) && sub.cancel_at_period_end !== true) {
+    const item = sub.items?.data?.[0]?.current_period_end;
+    const end = typeof item === "number" ? item : typeof sub.current_period_end === "number" ? sub.current_period_end : null;
+    out.nextChargeIso = unixToIsoDate(end);
+  }
+  const real = (invoices ?? [])
+    .filter((i) => i && typeof i.amount_due === "number" && i.amount_due > 0 && i.status !== "void" && i.status !== "draft")
+    .sort((a, b) => (b.created ?? 0) - (a.created ?? 0));
+  const last = real[0];
+  if (last) {
+    if (last.status === "paid") {
+      out.lastPaymentState = "paid";
+      out.lastPaymentIso = unixToIsoDate(last.status_transitions?.paid_at ?? last.created);
+      out.lastPaymentCents = typeof last.amount_paid === "number" && last.amount_paid > 0 ? last.amount_paid : last.amount_due ?? null;
+    } else {
+      const bounced = last.status === "uncollectible" || status === "past_due" || status === "unpaid";
+      out.lastPaymentState = bounced ? "failed" : "processing";
+      out.lastPaymentIso = unixToIsoDate(last.created);
+      out.lastPaymentCents = last.amount_due ?? null;
+    }
+  }
+  return out;
 }
 
 // ===========================================================================
