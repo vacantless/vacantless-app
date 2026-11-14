@@ -1,3 +1,4 @@
+import { longDate } from "@/lib/keep-fresh";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -330,7 +331,7 @@ const PAYMENT_FLASH: Record<string, string> = {
 // Maintenance "Report an issue" outcome (?wo=...). `reported` is success-toned;
 // the rest are validation errors handled by workOrderErrorMessage.
 const WO_FLASH: Record<string, string> = {
-  reported: "Maintenance issue logged. Track it in Maintenance.",
+  reported: "Repair issue logged. Track it in Repairs.",
 };
 // Map the lib/work-orders tone vocabulary onto the shared StatusChip ChipTone.
 function woChipTone(
@@ -1735,7 +1736,7 @@ export default async function TenancyDetailPage({
             )}
             {" · "}
             {formatRentCents(t.rent_cents)}
-            {t.rent_cents != null ? "/mo" : ""} · from {t.start_date}
+            {t.rent_cents != null ? "/mo" : ""} · from {longDate(t.start_date)}
             {t.end_date ? ` to ${t.end_date}` : ""}
           </>
         }
@@ -2903,18 +2904,18 @@ export default async function TenancyDetailPage({
       </CollapsibleSection>
 
       {/* Maintenance (work-order module Slice 3) -------------------------- */}
-      <CollapsibleSection id="maintenance" title="Maintenance" status={maintenanceStatus}>
+      <CollapsibleSection id="maintenance" title="Repairs" status={maintenanceStatus}>
       <div className="mb-8 space-y-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm text-gray-600">
             Repair and maintenance jobs for this unit. Log an issue here; assign a
-            trade, set a cost, and track it to done in Maintenance.
+            trade, set a cost, and track it to done in Repairs.
           </p>
           <Link
             href="/dashboard/maintenance"
             className="shrink-0 text-sm font-medium text-brand hover:underline"
           >
-            Open in Maintenance →
+            Open in Repairs →
           </Link>
         </div>
 

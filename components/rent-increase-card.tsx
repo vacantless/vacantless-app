@@ -1,3 +1,4 @@
+import { longDate } from "@/lib/keep-fresh";
 import Link from "next/link";
 import { Card, StatusChip } from "@/components/ui";
 import { formatRentCents } from "@/lib/tenancy";
@@ -59,12 +60,12 @@ export function RentIncreaseCard({
           <div>
             <dt className="text-gray-500">Eligible</dt>
             <dd className="font-medium text-gray-900">
-              {result.earliestEffectiveDate}
+              {longDate(result.earliestEffectiveDate)}
             </dd>
           </div>
           <div>
             <dt className="text-gray-500">Serve N1 by</dt>
-            <dd className="font-medium text-gray-900">{result.serveByDate}</dd>
+            <dd className="font-medium text-gray-900">{longDate(result.serveByDate)}</dd>
           </div>
           {rent && (
             <div className="col-span-2 sm:col-span-1">

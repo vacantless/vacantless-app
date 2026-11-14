@@ -21,6 +21,7 @@
 // Stripe/Rotessa; e-signing the N1 (the legal-gated tail).
 // ============================================================================
 
+import { longDate } from "./keep-fresh";
 import { parseISODate } from "./proration";
 
 /**
@@ -221,12 +222,12 @@ function buildNote(
     case "exempt":
       return "This unit is exempt from the guideline cap (first occupied after Nov 15, 2018).";
     case "scheduled":
-      return `Next increase eligible ${d.earliestEffectiveDate}. Serve the N1 by ${d.serveByDate} to apply ${g}.`;
+      return `Next increase eligible ${longDate(d.earliestEffectiveDate)}. Serve the N1 by ${longDate(d.serveByDate)} to apply ${g}.`;
     case "serve_window":
-      return `Serve the N1 now (by ${d.serveByDate}) for a ${d.earliestEffectiveDate} increase at ${g}.`;
+      return `Serve the N1 by ${longDate(d.serveByDate)} for a ${longDate(d.earliestEffectiveDate)} increase at ${g}.`;
     case "serve_late":
-      return `Past the ideal serve date — serve now for a ${d.effectiveDate} effective date at ${g}.`;
+      return `Past the ideal serve date. Serve now for a ${longDate(d.effectiveDate)} effective date at ${g}.`;
     case "overdue":
-      return `Eligible since ${d.earliestEffectiveDate} — you're leaving money on the table. Serve now for a ${d.effectiveDate} increase at ${g}.`;
+      return `Eligible since ${longDate(d.earliestEffectiveDate)}. You're leaving money on the table. Serve now for a ${longDate(d.effectiveDate)} increase at ${g}.`;
   }
 }

@@ -45,6 +45,12 @@ export function shortDate(ymd: string): string {
   const [, m, d] = ymd.split("-").map(Number);
   return `${MONTHS[(m || 1) - 1]} ${d}`;
 }
+/** "2026-11-12" -> "Nov 12, 2026". Anything else comes back unchanged. */
+export function longDate(ymd: string | null | undefined): string {
+  if (!ymd || !/^\d{4}-\d{2}-\d{2}/.test(ymd)) return ymd ?? "";
+  const [y, m, d] = ymd.slice(0, 10).split("-").map(Number);
+  return `${MONTHS[(m || 1) - 1]} ${d}, ${y}`;
+}
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }

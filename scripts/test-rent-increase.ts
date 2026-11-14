@@ -53,7 +53,7 @@ ok("unknown year -> null", guidelineForYear(2099) === null);
 {
   const r = deriveRentIncrease(inp(), "2025-06-01")!; // ~273 days out
   ok("far out -> scheduled", r.status === "scheduled");
-  ok("scheduled note mentions serve-by", r.note.includes("2025-12-01"));
+  ok("scheduled note mentions serve-by", r.note.includes("Dec 1, 2025"));
 }
 
 // --- status: inside reminder window, ≥90 days runway -> serve_window --------

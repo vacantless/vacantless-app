@@ -1,3 +1,4 @@
+import { longDate } from "@/lib/keep-fresh";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
@@ -134,8 +135,8 @@ export default async function TenanciesPage({
                     </span>
                     <span className="block truncate text-xs text-gray-500">
                       {t.property?.address ?? "Unit removed"} · from{" "}
-                      {t.start_date}
-                      {t.end_date ? ` to ${t.end_date}` : ""}
+                      {longDate(t.start_date)}
+                      {t.end_date ? ` to ${longDate(t.end_date)}` : ""}
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
