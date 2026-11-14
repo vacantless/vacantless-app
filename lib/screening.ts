@@ -35,6 +35,29 @@ export const SCREENING_REASON = {
 export type ScreeningReason =
   (typeof SCREENING_REASON)[keyof typeof SCREENING_REASON];
 
+/**
+ * S792: the mismatch chip says why in a word: "income", "move-in date", "pets".
+ * A reason the landlord reworded has no short word and is left to the hover text.
+ */
+export function mismatchWords(reasons: readonly string[] | null | undefined): string {
+  const words: string[] = [];
+  for (const r of reasons ?? []) {
+    if (r === SCREENING_REASON.income) words.push("income");
+    else if (r === SCREENING_REASON.moveIn) words.push("move-in date");
+    else if (r === SCREENING_REASON.pets) words.push("pets");
+  }
+  return [...new Set(words)].join(", ");
+}
+
+/** The chip label and its hover text for a flagged renter. */
+export function mismatchChip(reasons: readonly string[] | null | undefined): { label: string; title: string } {
+  const words = mismatchWords(reasons);
+  return {
+    label: words ? `Possible mismatch: ${words}` : "Possible mismatch",
+    title: (reasons ?? []).filter(Boolean).join(". "),
+  };
+}
+
 // Operator-tunable reason copy (S257). An org may override the wording shown on
 // a flagged inquiry per criterion (e.g. soften it, or match its own voice). A
 // null/blank override falls back to the canonical default above. The override is

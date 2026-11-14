@@ -12,6 +12,7 @@ import {
   type TriageBucket,
 } from "@/lib/lead-triage";
 import { StatusSelect } from "./status-select";
+import { mismatchChip } from "@/lib/screening";
 
 // TriageQueue — the Inquiries triage queue (Codex design audit #4, S377).
 // Replaces the flat chronological table (+ separate mobile cards) with a single
@@ -29,6 +30,7 @@ export type QueueLead = {
   created_at: string;
   next_action_at: string | null;
   qualified_out: boolean;
+  qualify_out_reasons?: string[] | null;
   property: { address: string } | null;
   /** S740: an auto-reply or any outbound email or text already went out. */
   answered?: boolean;
@@ -145,8 +147,8 @@ function QueueRow({
             </span>
           )}
           {l.qualified_out && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-              Possible mismatch
+            <span title={mismatchChip(l.qualify_out_reasons).title} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+              {mismatchChip(l.qualify_out_reasons).label}
             </span>
           )}
         </div>

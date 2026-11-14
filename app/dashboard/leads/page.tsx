@@ -38,6 +38,7 @@ type LeadRow = {
   created_at: string;
   next_action_at: string | null;
   qualified_out: boolean;
+  qualify_out_reasons?: string[] | null;
   property_id: string | null;
   property: { address: string; status?: string | null } | null;
 };
@@ -60,7 +61,7 @@ export default async function LeadsPage({
   const { data } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, status, notes, created_at, next_action_at, qualified_out, property_id, property:properties(address, status)",
+      "id, name, email, phone, source, status, notes, created_at, next_action_at, qualified_out, qualify_out_reasons, property_id, property:properties(address, status)",
     )
     .eq("organization_id", org.id)
     .order("created_at", { ascending: false });

@@ -19,6 +19,8 @@ import {
   type OrgScreeningConfig,
   type ScreeningContext,
   type ScreeningAnswers,
+  mismatchWords,
+  mismatchChip,
 } from "../lib/screening";
 
 let passed = 0;
@@ -711,6 +713,13 @@ const goodAnswers: ScreeningAnswers = {
     someOff.ok && someOff.values.screening_ask_occupants === true,
   );
 }
+
+// S792: the mismatch chip says why in a word.
+ok("mismatch words", mismatchWords(["Income below your requirement", "Has pets; rental is not pet-friendly"]) === "income, pets");
+ok("mismatch move-in", mismatchWords(["Move-in later than your window"]) === "move-in date");
+ok("custom reason has no word", mismatchWords(["Too many people"]) === "" && mismatchChip(["Too many people"]).label === "Possible mismatch" && mismatchChip(["Too many people"]).title === "Too many people");
+ok("chip label with a word", mismatchChip(["Income below your requirement"]).label === "Possible mismatch: income");
+ok("chip with nothing", mismatchChip(null).label === "Possible mismatch" && mismatchChip(null).title === "");
 
 console.log(`\nscreening: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

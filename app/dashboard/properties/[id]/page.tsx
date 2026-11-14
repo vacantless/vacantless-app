@@ -4896,13 +4896,7 @@ export default async function PropertyDetailPage({
         })()}
       </div>
 
-      {marketRentEnabled && (
-        <MarketRentPanel
-          suggestion={marketRentSuggestion}
-          city={marketRentCity}
-          className="mb-6"
-        />
-      )}
+      {/* S792: the market rent card shows once, beside the rent on Edit listing. */}
 
       {/* --- Marketing kit (Tier A, Growth+) --- */}
       <MarketingKitCard

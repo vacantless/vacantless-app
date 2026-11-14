@@ -5,7 +5,7 @@ import { requireCapability } from "@/lib/membership";
 import { PageHeader, SectionHeading, PRIMARY_ACTION_CLASS, SECONDARY_ACTION_CLASS } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { CopyLinkButton } from "@/components/copy-link-button";
-import { CREW_ROLES, CREW_ROLE_LABEL, STAGE_LABEL, TAP_ORDER, stageDateLine } from "@/lib/unit-progress";
+import { CREW_ROLES, CREW_ROLE_LABEL, STAGE_LABEL, STAGE_TONE_CLASS, TAP_ORDER, stageChip, stageDateLine } from "@/lib/unit-progress";
 import { unitCardsForOrg } from "@/lib/unit-progress-server";
 import { addCrewMember, newCrewLink, setCrewMemberActive, setUnitStage, switchOffShootLink } from "./actions";
 
@@ -53,6 +53,55 @@ export default async function CrewPage({ searchParams }: { searchParams: { crew?
   const crew = (crewData ?? []) as Crew[];
   const flash = searchParams.crew ? FLASH[searchParams.crew] : null;
   const landlordStages = TAP_ORDER.filter((st) => st !== "rented");
+
+  const chipNow = new Date();
+  const unitRow = (p: (typeof cards)[number]) => {
+            const l = p.stage && p.stageAt ? { stage: p.stage, at: p.stageAt, by: p.stageBy } : null;
+            const chip = l ? stageChip({ stage: l.stage, at: l.at, date: p.stageDate ?? null, by: l.by ?? null }, chipNow) : null;
+            return (
+              <li key={p.id} id={`u-${p.id}`} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div>
+                  <Link href={`/dashboard/properties/${p.id}`} className="text-sm font-medium text-gray-900 hover:underline">
+                    {p.address}
+                  </Link>
+                  {chip && (
+                    <span title={chip.title} className={`ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STAGE_TONE_CLASS[chip.tone]}`}>
+                      {chip.label}
+                    </span>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    {l ? `${STAGE_LABEL[l.stage]}${p.stageDate ? `, ${stageDateLine(l.stage, p.stageDate).toLowerCase()}` : ""} · ${fmtWhen(l.at, tz)}${l.by ? ` by ${l.by}` : ""}` : "No stage yet"}
+                  </p>
+                  {p.shootToken && (
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-sky-800">Photographer{p.shootPhotographer ? ` ${p.shootPhotographer}` : ""}: one-time link</span>
+                      <CopyLinkButton path={`/crew/shoot/${p.shootToken}`} label="Copy their link" />
+                      <form action={switchOffShootLink}>
+                        <input type="hidden" name="id" value={p.shootLinkId ?? ""} />
+                        <button type="submit" className="text-xs text-gray-500 underline">Switch off</button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+                <form action={setUnitStage} className="flex gap-2">
+                  <input type="hidden" name="property_id" value={p.id} />
+                  <select name="stage" className={FIELD} defaultValue={l && l.stage !== "rented" ? l.stage : ""}>
+                    <option value="" disabled>Set stage</option>
+                    {landlordStages.map((st) => (
+                      <option key={st} value={st}>{STAGE_LABEL[st]}</option>
+                    ))}
+                  </select>
+                  <input type="date" name="due_date" aria-label="Date, if the stage has one" className={FIELD} />
+                  <button type="submit" className={SECONDARY_ACTION_CLASS}>Save</button>
+                </form>
+              </li>
+            );
+  };
+  // S792: a unit is in a turnover while its stage chip still shows.
+  const showsChip = (p: (typeof cards)[number]) =>
+    !!(p.stage && p.stageAt && stageChip({ stage: p.stage, at: p.stageAt, date: p.stageDate ?? null, by: p.stageBy ?? null }, chipNow));
+  const inTurnover = cards.filter(showsChip);
+  const otherUnits = cards.filter((p) => !showsChip(p));
 
   return (
     <div>
@@ -111,44 +160,20 @@ export default async function CrewPage({ searchParams }: { searchParams: { crew?
 
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <SectionHeading>Where each unit is at</SectionHeading>
-        <ul className="mt-3 divide-y divide-gray-100">
-          {cards.map((p) => {
-            const l = p.stage && p.stageAt ? { stage: p.stage, at: p.stageAt, by: p.stageBy } : null;
-            return (
-              <li key={p.id} id={`u-${p.id}`} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                <div>
-                  <Link href={`/dashboard/properties/${p.id}`} className="text-sm font-medium text-gray-900 hover:underline">
-                    {p.address}
-                  </Link>
-                  <p className="text-xs text-gray-500">
-                    {l ? `${STAGE_LABEL[l.stage]}${p.stageDate ? `, ${stageDateLine(l.stage, p.stageDate).toLowerCase()}` : ""} · ${fmtWhen(l.at, tz)}${l.by ? ` by ${l.by}` : ""}` : "No stage yet"}
-                  </p>
-                  {p.shootToken && (
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-sky-800">Photographer{p.shootPhotographer ? ` ${p.shootPhotographer}` : ""}: one-time link</span>
-                      <CopyLinkButton path={`/crew/shoot/${p.shootToken}`} label="Copy their link" />
-                      <form action={switchOffShootLink}>
-                        <input type="hidden" name="id" value={p.shootLinkId ?? ""} />
-                        <button type="submit" className="text-xs text-gray-500 underline">Switch off</button>
-                      </form>
-                    </div>
-                  )}
-                </div>
-                <form action={setUnitStage} className="flex gap-2">
-                  <input type="hidden" name="property_id" value={p.id} />
-                  <select name="stage" className={FIELD} defaultValue={l && l.stage !== "rented" ? l.stage : ""}>
-                    <option value="" disabled>Set stage</option>
-                    {landlordStages.map((st) => (
-                      <option key={st} value={st}>{STAGE_LABEL[st]}</option>
-                    ))}
-                  </select>
-                  <input type="date" name="due_date" aria-label="Date, if the stage has one" className={FIELD} />
-                  <button type="submit" className={SECONDARY_ACTION_CLASS}>Save</button>
-                </form>
-              </li>
-            );
-          })}
-        </ul>
+        {/* S792: units in a turnover come first; the rest sit under Other units. */}
+        {inTurnover.length > 0 ? (
+          <ul className="mt-3 divide-y divide-gray-100">{inTurnover.map(unitRow)}</ul>
+        ) : (
+          <p className="mt-3 text-sm text-gray-600">No unit is being turned over right now. Set a stage below, or your crew taps one.</p>
+        )}
+        {otherUnits.length > 0 && (
+          <details className="mt-4" open={inTurnover.length === 0}>
+            <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Other units, {otherUnits.length}
+            </summary>
+            <ul className="mt-2 divide-y divide-gray-100">{otherUnits.map(unitRow)}</ul>
+          </details>
+        )}
       </div>
     </div>
   );

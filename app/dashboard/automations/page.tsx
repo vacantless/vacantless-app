@@ -386,11 +386,29 @@ export default async function AutomationsPage({
           </div>
         </section>
 
-        {families.map((family) => (
-          <section key={family} className="space-y-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-              {notificationFamilyLabel(family)}
-            </h2>
+        {families.map((family, familyIndex) => {
+          // S792: each kind of email folds under its heading, with how many are on.
+          const inFamily = events.filter((e) => e.family === family);
+          const onCount = inFamily.filter((e) => {
+            const a = complianceApplicabilityForEventKey(e.key);
+            if (a != null && !complianceItemEligibleForProperties(e.key, complianceProperties)) return false;
+            const r = byKey.get(e.key) ?? null;
+            return r ? r.enabled : true;
+          }).length;
+          const holdsSaved = inFamily.some((e) => e.key === savedKey);
+          return (
+          <details key={family} className="group" open={holdsSaved || (!savedKey && familyIndex === 0)}>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm hover:bg-gray-50">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-700">
+                {notificationFamilyLabel(family)}
+              </h2>
+              <span className="text-xs text-gray-500">
+                {onCount} of {inFamily.length} on
+                <span className="ml-2 group-open:hidden">Show</span>
+                <span className="ml-2 hidden group-open:inline">Hide</span>
+              </span>
+            </summary>
+          <section className="mt-4 space-y-4">
 
             {events
               .filter((e) => e.family === family)
@@ -624,7 +642,9 @@ export default async function AutomationsPage({
                 );
               })}
           </section>
-        ))}
+          </details>
+          );
+        })}
       </div>
     </div>
   );

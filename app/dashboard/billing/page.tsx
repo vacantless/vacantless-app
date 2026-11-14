@@ -699,7 +699,11 @@ export default async function BillingPage({
                   {formatPlanPrice(tier.priceCents)}
                 </span>
               </p>
-              {tier.yearlyCents ? (
+              {isGrandfatheredCard ? (
+                <p className="text-xs font-medium text-brand">
+                  This is today&apos;s price. You keep your original price. Your next bill is shown above.
+                </p>
+              ) : tier.yearlyCents ? (
                 <p className="text-xs text-gray-500">
                   or {formatAmount(tier.yearlyCents)} a year (two months free)
                 </p>

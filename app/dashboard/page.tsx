@@ -52,6 +52,7 @@ import { ComingVacantCards } from "./coming-vacant-cards";
 import { deriveComingVacant, type ComingVacant } from "@/lib/coming-vacant";
 import { rentalClosesFollowUps } from "@/lib/lead-detail";
 import { latestStages } from "@/lib/unit-progress-latest";
+import { mismatchChip } from "@/lib/screening";
 import { stageChip, STAGE_TONE_CLASS } from "@/lib/unit-progress";
 import { shortAddress } from "@/lib/posting-coverage";
 
@@ -66,6 +67,7 @@ type LeadRow = {
   created_at: string;
   property_id: string | null;
   qualified_out: boolean;
+  qualify_out_reasons?: string[] | null;
   next_action_at?: string | null;
   property: { address: string; status?: string | null } | null;
 };
@@ -201,7 +203,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     supabase
       .from("leads")
       .select(
-        "id, name, email, source, status, created_at, property_id, qualified_out, next_action_at, property:properties(address, status)",
+        "id, name, email, source, status, created_at, property_id, qualified_out, qualify_out_reasons, next_action_at, property:properties(address, status)",
       )
       .eq("organization_id", org.id)
       .order("created_at", { ascending: false }),
@@ -983,7 +985,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
                 </span>
                 <span className="flex shrink-0 items-center gap-2">
                   {l.qualified_out && (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                    <span title={mismatchChip(l.qualify_out_reasons).title} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
                       Possible mismatch
                     </span>
                   )}
