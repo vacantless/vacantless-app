@@ -319,7 +319,7 @@ export default async function LeadDetailPage({
         href="/dashboard/leads"
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
       >
-        ← Inquiries
+        ← Renters
       </Link>
 
       <PageHeader
@@ -327,7 +327,7 @@ export default async function LeadDetailPage({
         title={l.name || l.email || "Unnamed renter"}
         subtitle={
           <>
-            Received {new Date(l.created_at).toLocaleString("en-US", { timeZone })}
+            Received {new Date(l.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone })}
             {sourceDisplay ? (
               <>
                 {" · via "}
@@ -599,7 +599,7 @@ export default async function LeadDetailPage({
         />
         <Field
           label="Desired move-in"
-          value={l.move_in ? new Date(l.move_in).toLocaleDateString("en-CA", { timeZone: "UTC" }) : null}
+          value={l.move_in ? new Date(l.move_in).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : null}
         />
         {l.screen_income_cents != null && (
           <Field

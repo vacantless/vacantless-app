@@ -220,7 +220,7 @@ export function buildSitesSetup(input: SitesSetupInput): SitesSetup {
         ? "Every site is connected. Post a rental and it goes up on each one."
         : needs === 0 && withPosting > 0
           ? "Your free sites are connected. Add Posting and we post to the other three for you."
-          : "Do this once. After it, post a rental and it goes up on every site here. Some sites sign you out every few weeks; we tell you when.";
+          : "Do this once. Some sites sign you out every few weeks, and we tell you when.";
 
   return {
     rows,

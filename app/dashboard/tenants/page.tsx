@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { PageHeader, Card, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
+import { createClient } from "@/lib/supabase/server";
+import { getCurrentOrg } from "@/lib/org";
+import { orgShowsPostLease } from "@/lib/post-lease-surface";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +60,12 @@ const SECTIONS: Section[] = [
   },
 ];
 
-export default function TenantsHubPage() {
+export default async function TenantsHubPage() {
+  // S792: Repairs opens with the first tenancy; until then its card led back to Today.
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  const showRepairs = org ? await orgShowsPostLease(supabase, org.id) : false;
+  const sections = showRepairs ? SECTIONS : SECTIONS.filter((s) => s.href !== "/dashboard/maintenance");
   return (
     <div>
       <PageHeader
@@ -68,7 +76,7 @@ export default function TenantsHubPage() {
       />
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        {SECTIONS.map((s) => {
+        {sections.map((s) => {
           const Icon = Icons[s.icon];
           return (
             <Link key={s.href} href={s.href} className="block">

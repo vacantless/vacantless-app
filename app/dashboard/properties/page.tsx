@@ -757,6 +757,8 @@ export default async function PropertiesPage({
         <ul className="mb-4 divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white shadow-sm">
           {viewRows.map((v) => {
             const p = v.p;
+            // S792: the Marketplace how-to line shows on the first such row only.
+            const firstFacebookRenewId = viewRows.find((r) => r.renew.some((x) => x.portal === "facebook"))?.p.id;
             const detailHref = `/dashboard/properties/${p.id}`;
             const kitHref = `/dashboard/properties/${p.id}#distribute-header`;
             const meta = [
@@ -941,9 +943,11 @@ export default async function PropertiesPage({
                         className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-900 ring-1 ring-amber-200"
                       >
                         <span className="font-semibold">{renewLine(item)}</span>
-                        <span className="text-amber-700">
-                          {item.portal === "facebook" ? FACEBOOK_RENEW_HOW : "Old ads sink lower on the site."}
-                        </span>
+                        {(item.portal !== "facebook" || p.id === firstFacebookRenewId) && (
+                          <span className="text-amber-700">
+                            {item.portal === "facebook" ? FACEBOOK_RENEW_HOW : "Old ads sink lower on the site."}
+                          </span>
+                        )}
                         <span className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
                           {item.portal === "facebook" ? (
                             <a

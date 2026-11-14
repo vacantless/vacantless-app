@@ -155,7 +155,7 @@ function QueueRow({
           {l.source && <span className="text-gray-400"> · via {l.source}</span>}
           <span className="text-gray-400">
             {" · "}
-            {new Date(l.created_at).toLocaleDateString("en-CA", { timeZone })}
+            {new Date(l.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone })}
           </span>
         </p>
         {l.chatOnly && <p className="mt-0.5 text-xs text-blue-700">{CHAT_LEAD_LIST_LINE}</p>}

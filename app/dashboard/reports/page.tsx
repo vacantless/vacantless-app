@@ -177,25 +177,29 @@ export default async function ReportsPage({
                 ? Math.max(4, Math.round((step.count / funnel[0].count) * 100))
                 : 0;
               return (
-                <div key={step.key} className="flex items-center gap-3">
+                <div key={step.key} className="flex items-end gap-3">
                   <div className="w-20 shrink-0 text-right text-sm font-medium text-gray-600">
                     {step.label}
                   </div>
-                  <div className="relative h-8 flex-1 overflow-hidden rounded-md bg-gray-100">
-                    <div
-                      className="h-full rounded-md"
-                      style={{
-                        width: `${widthPct}%`,
-                        backgroundColor: "var(--brand-color)",
-                        opacity: 1 - i * 0.13,
-                      }}
-                    />
-                    <div className="absolute inset-0 flex items-center px-3 text-sm font-semibold text-gray-800">
-                      {step.count}
-                      <span className="ml-2 text-xs font-normal text-gray-500">
-                        {step.ofTotal}% of inquiries
-                        {i > 0 && ` · ${step.ofPrev}% of ${funnel[i - 1].label}`}
-                      </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-sm font-semibold tabular-nums text-gray-900">{step.count}</span>
+                      {i > 0 && (
+                        <span className="truncate text-xs text-gray-500">
+                          {step.ofTotal}% of inquiries
+                          {i > 1 && ` · ${step.ofPrev}% of ${funnel[i - 1].label.toLowerCase()}`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${widthPct}%`,
+                          backgroundColor: "var(--brand-color)",
+                          opacity: 1 - i * 0.13,
+                        }}
+                      />
                     </div>
                   </div>
                 </div>

@@ -835,12 +835,16 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
             description={
               assignedView === "mine"
                 ? "No viewings are assigned to you right now."
-                : "Set your weekly availability so renters can book their own viewings online."
+                : openViewingTimes > 0
+                  ? "Your viewing hours are set. When a renter books, the viewing shows up here."
+                  : "Set your viewing times so renters can book their own viewings online."
             }
             cta={
               assignedView === "mine"
                 ? undefined
-                : { href: "/dashboard/availability", label: "Set availability" }
+                : openViewingTimes > 0
+                  ? { href: "/dashboard/availability", label: "See viewing hours" }
+                  : { href: "/dashboard/availability", label: "Set viewing times" }
             }
           />
         </div>

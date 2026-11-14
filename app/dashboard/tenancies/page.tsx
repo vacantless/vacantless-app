@@ -76,7 +76,7 @@ export default async function TenanciesPage({
         icon={<Icons.key />}
         eyebrow="Leases & tenants"
         title="Tenancies"
-        subtitle="Your active leases. Each tenancy links a tenant to a unit with the signed rent and lease dates. The record rent collection and tenant messaging build on."
+        subtitle="Your active leases. Each tenancy links a tenant to a unit, with the rent and lease dates. Rent collection and tenant messages start from here."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Link
