@@ -50,6 +50,11 @@ function cleanResourceKey(v: string | null): string | null {
 
 /** Which provider a saved photo-folder link points at. */
 export type PhotoSource = "gdrive" | "dropbox" | "other";
+
+/** S791b: folders we pull photos from on our own (Drive since S789, Dropbox since S791). */
+export function pullsFrom(source: PhotoSource | null): boolean {
+  return source === "gdrive" || source === "dropbox";
+}
 export function photoSourceOf(raw: unknown): PhotoSource | null {
   const s = typeof raw === "string" ? raw.trim() : "";
   if (!s) return null;
@@ -187,9 +192,9 @@ export function drivePullLine(r: DrivePullResult): string {
   }
   switch (r.reason) {
     case "badlink":
-      return "The photo folder link is not a Google Drive folder link.";
+      return "The photo folder link is not a Google Drive or Dropbox folder link.";
     case "notshared":
-      return "The photo folder could not be opened. In Google Drive, set it to Anyone with the link can view.";
+      return "The photo folder could not be opened. Share it so Anyone with the link can view.";
     case "empty":
       return "The photo folder has no photos yet.";
     case "nested":

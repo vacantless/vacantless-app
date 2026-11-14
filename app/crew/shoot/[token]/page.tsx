@@ -74,7 +74,7 @@ export default async function ShootPage({
               </div>
             )}
             <p className="mt-4 text-sm text-gray-600">
-              When the photos are ready, paste the link to them and tap Photos are in. A Google Drive folder set to anyone with the link comes in on its own. Any other link goes to {org?.name || "the landlord"} to add. This link works once.
+              When the photos are ready, paste the link to them and tap Photos are in. A Google Drive or Dropbox folder that anyone with the link can view comes in on its own. Any other link goes to {org?.name || "the landlord"} to add. This link works once.
             </p>
             <form action={photosInFromShootLink} className="mt-3 space-y-2">
               <input type="hidden" name="token" value={params.token} />

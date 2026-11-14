@@ -53,7 +53,7 @@ import {
   savePhotoFolderAndPull,
   switchPhotoTouchUp,
 } from "../actions";
-import { drivePullLine, photoSourceOf, type DrivePullReason } from "@/lib/drive-import";
+import { drivePullLine, photoSourceOf, pullsFrom, type DrivePullReason } from "@/lib/drive-import";
 import {
   buildAllListingCopy,
   COPY_PORTAL_KEYS,
@@ -3563,7 +3563,7 @@ export default async function PropertyDetailPage({
         storageUpsell={storageUpsell}
       />
 
-      {/* S789b: the unit's photo folder. Google Drive pulls in on its own when the crew taps Photos are in. */}
+      {/* S789b: the unit's photo folder. Google Drive (and Dropbox, S791b) pull in on their own when the crew taps Photos are in. */}
       {(() => {
         const folderUrl = (property as { photo_source_url?: string | null }).photo_source_url ?? "";
         const source = photoSourceOf(folderUrl);
@@ -3587,7 +3587,7 @@ export default async function PropertyDetailPage({
           <div id="photo-folder" className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
             <h3 className="text-sm font-semibold text-gray-900">Photo folder</h3>
             <p className="mt-1 text-xs text-gray-600">
-              Paste the Google Drive folder with this unit&apos;s photos. Share it so anyone with the link can view. When your crew taps Photos are in, new photos pull in on their own. Other folder links are kept here for you to open.
+              Paste the Google Drive or Dropbox folder with this unit&apos;s photos. Share it so anyone with the link can view. When your crew taps Photos are in, new photos pull in on their own. Other folder links are kept here for you to open.
             </p>
             {outcome && <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-800">{outcome}</p>}
             <form action={savePhotoFolderAndPull} className="mt-3 flex flex-wrap items-center gap-2">
@@ -3601,14 +3601,14 @@ export default async function PropertyDetailPage({
                 className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
               />
               <button type="submit" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                {source === "gdrive" || !folderUrl ? "Save and pull photos" : "Save"}
+                {pullsFrom(source) || !folderUrl ? "Save and pull photos" : "Save"}
               </button>
-              {folderUrl && source !== "gdrive" && (
+              {folderUrl && !pullsFrom(source) && (
                 <a href={folderUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-brand">
                   Open the folder
                 </a>
               )}
-              {(source === "gdrive" || !folderUrl) && (
+              {(pullsFrom(source) || !folderUrl) && (
                 <label className="flex w-full items-center gap-2 text-xs text-gray-700">
                   <input type="checkbox" name="touch_up" defaultChecked />
                   Touch the photos up: brighter and clearer. The originals are kept.

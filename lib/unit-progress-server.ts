@@ -16,8 +16,8 @@ import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 import { notifyWaitingRentersRented } from "@/lib/rented-notice-server";
 import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
-import { cleanPhotoFolderUrl, photoSourceOf, type DrivePullResult } from "@/lib/drive-import";
-import { pullDrivePhotos } from "@/lib/drive-import-server";
+import { cleanPhotoFolderUrl, photoSourceOf, pullsFrom, type DrivePullResult } from "@/lib/drive-import";
+import { pullFolderPhotos } from "@/lib/photo-folder-pull-server";
 import { createShootLink, openShootLinks } from "@/lib/photo-shoot-server";
 
 export type CrewMember = {
@@ -111,7 +111,7 @@ export async function recordCrewTap(args: {
         .eq("organization_id", crew.organization_id);
       if (!linkErr) photoFolder = sent;
     }
-    if (photoFolder && photoSourceOf(photoFolder) === "gdrive") {
+    if (photoFolder && pullsFrom(photoSourceOf(photoFolder))) {
       try {
         // S789e: crew shots are touched up; a photographer's (their link, or a
         // shoot booked for this unit) are left as they are.
@@ -124,13 +124,13 @@ export async function recordCrewTap(args: {
           .gte("created_at", new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString())
           .limit(1);
         const proShoot = crew.role === "photographer" || (booked ?? []).length > 0;
-        photos = await pullDrivePhotos({
+        photos = (await pullFolderPhotos({
           admin,
           organizationId: crew.organization_id,
           propertyId: args.propertyId,
           folderUrl: photoFolder,
           touchUp: !proShoot,
-        });
+        })) ?? undefined;
       } catch (err) {
         console.error("[unit-progress] photo pull failed", err instanceof Error ? err.message : String(err));
         photos = { ok: false, reason: "failed" };

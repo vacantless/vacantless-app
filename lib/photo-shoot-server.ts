@@ -6,8 +6,8 @@
 // org and the unit from the token, so a wrong token sees and changes nothing.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cleanPersonName, photographerLabel, shootLinkExpiry, shootLinkState, type ShootLinkState } from "@/lib/unit-progress";
-import { cleanPhotoFolderUrl, photoSourceOf, type DrivePullResult } from "@/lib/drive-import";
-import { pullDrivePhotos } from "@/lib/drive-import-server";
+import { cleanPhotoFolderUrl, photoSourceOf, pullsFrom, type DrivePullResult } from "@/lib/drive-import";
+import { pullFolderPhotos } from "@/lib/photo-folder-pull-server";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -199,15 +199,15 @@ export async function recordShootPhotosIn(args: { admin: SupabaseClient; shoot: 
   }
   const pullFrom = sent ?? folder;
   let photos: DrivePullResult | undefined;
-  if (pullFrom && photoSourceOf(pullFrom) === "gdrive") {
+  if (pullFrom && pullsFrom(photoSourceOf(pullFrom))) {
     try {
-      photos = await pullDrivePhotos({
+      photos = (await pullFolderPhotos({
         admin,
         organizationId: shoot.organizationId,
         propertyId: shoot.propertyId,
         folderUrl: pullFrom,
         touchUp: false,
-      });
+      })) ?? undefined;
     } catch (err) {
       console.error("[photo-shoot] photo pull failed", err instanceof Error ? err.message : String(err));
       photos = { ok: false, reason: "failed" };

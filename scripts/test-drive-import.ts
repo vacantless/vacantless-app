@@ -14,6 +14,7 @@ import {
   drivePullLine,
   photoUrlsToTry,
   sizedViewThumb,
+  pullsFrom,
 } from "../lib/drive-import";
 
 let pass = 0;
@@ -83,5 +84,9 @@ ok("view image asked for at 2400", sizedViewThumb("https://lh3.googleusercontent
 const tries = photoUrlsToTry({ id: "abc", name: "a.jpg", kind: "file", thumb: "https://lh3.googleusercontent.com/drive-storage/AbC=s190" }, null);
 ok("three routes in order", tries.length === 3 && tries[0].includes("/thumbnail?id=abc") && tries[1].endsWith("=s2400") && tries[2].startsWith("https://drive.usercontent.google.com/download?id=abc"));
 ok("two routes without a view link", photoUrlsToTry({ id: "abc", name: "a.jpg", kind: "file" }, null).length === 2);
+// S791b: Dropbox folders pull too.
+ok("pulls from Drive and Dropbox only", pullsFrom("gdrive") && pullsFrom("dropbox") && !pullsFrom("other") && !pullsFrom(null));
+ok("Dropbox link is a pull source", pullsFrom(photoSourceOf("https://www.dropbox.com/scl/fo/abc/xyz?rlkey=1")));
+ok("bad link names both providers", drivePullLine({ ok: false, reason: "badlink" }).includes("Google Drive or Dropbox"));
 console.log(`drive-import: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

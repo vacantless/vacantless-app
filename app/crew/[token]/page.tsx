@@ -135,8 +135,8 @@ export default async function CrewPage({
                   <input
                     type="url"
                     name="photo_folder"
-                    aria-label="Google Drive folder link, if you have one"
-                    placeholder="Google Drive folder link, if you have one"
+                    aria-label="Google Drive or Dropbox folder link, if you have one"
+                    placeholder="Google Drive or Dropbox folder link, if you have one"
                     className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
                   />
                 )}

@@ -488,7 +488,7 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img?: stri
     points: [
       "Your manager, contractor and cleaner each get their own link. No sign-in, no app",
       "They tap where a unit is: notice given, reno, cleaning, photos in, rented, moved in, with a ready-by date",
-      "Photos are in? New photos come in from your Google Drive folder, brightened, with the originals kept",
+      "Photos are in? New photos come in from your Google Drive or Dropbox folder, brightened, with the originals kept",
       "Tenant gave notice? The unit is on your relist list with the move-out date",
       "Rented takes your ads down. Moved in starts the tenancy",
       "Each unit's stage shows on your rentals, and you hear when one stalls",
@@ -752,6 +752,7 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
     items: [
       { text: "Tenant gave notice? Your crew taps it with the date, and one click relists the unit." },
       { text: "Phone photos come in brighter. One click switches back to the originals." },
+      { text: "Booked a photographer? They get a one-time link for that unit, and their photos come straight in." },
       { text: "Water heater or furnace near the end of its life? You get a reminder." },
       { text: "Move-in, move-out and routine inspections on your calendar, with a reminder." },
       { text: "Smoke alarms, Vacant Home Tax and winterizing on your calendar, with reminders." },

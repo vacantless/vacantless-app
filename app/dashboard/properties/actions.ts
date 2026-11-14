@@ -1,7 +1,8 @@
 "use server";
 
-import { cleanPhotoFolderUrl, photoSourceOf } from "@/lib/drive-import";
-import { pullDrivePhotos } from "@/lib/drive-import-server";
+import { cleanPhotoFolderUrl, photoSourceOf, pullsFrom } from "@/lib/drive-import";
+import { pullFolderPhotos } from "@/lib/photo-folder-pull-server";
+import { dropboxListSharedTree, fetchDropboxSharedFile, getDropboxAccessToken } from "@/lib/dropbox-import-server";
 import { parseGroupSize } from "@/lib/group-viewing";
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { SITES_SETUP_HREF } from "@/lib/sites-setup";
@@ -4494,259 +4495,8 @@ export async function importPropertyPhotosFromUrls(formData: FormData) {
 // list_folder enumeration (+ pagination), and the size/time-capped byte fetch.
 // ---------------------------------------------------------------------------
 
-const DROPBOX_API = "https://api.dropboxapi.com/2";
-const DROPBOX_CONTENT_API = "https://content.dropboxapi.com/2";
-
-/** Escape non-ASCII so a file name is safe inside the Dropbox-API-Arg header. */
-function dropboxApiArg(obj: unknown): string {
-  return JSON.stringify(obj).replace(/[\u0080-\uffff]/g, (c) =>
-    "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"),
-  );
-}
-
-/**
- * Resolve a Dropbox access token for OUR service account. Prefers a long-lived
- * OAuth refresh token (DROPBOX_REFRESH_TOKEN + DROPBOX_APP_KEY/SECRET) exchanged
- * server-side for a short-lived access token; falls back to a directly-supplied
- * DROPBOX_ACCESS_TOKEN (the App-Console token used for the first prove-out).
- * Returns null when unconfigured so the action shows a clean "not set up" note.
- */
-async function getDropboxAccessToken(): Promise<string | null> {
-  const refresh = process.env.DROPBOX_REFRESH_TOKEN;
-  const key = process.env.DROPBOX_APP_KEY;
-  const secret = process.env.DROPBOX_APP_SECRET;
-  if (refresh && key && secret) {
-    try {
-      const auth = Buffer.from(`${key}:${secret}`).toString("base64");
-      const res = await fetch("https://api.dropbox.com/oauth2/token", {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${auth}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          refresh_token: refresh,
-        }),
-      });
-      if (!res.ok) return null;
-      const json = (await res.json()) as { access_token?: string };
-      return json.access_token ?? null;
-    } catch {
-      return null;
-    }
-  }
-  const direct = process.env.DROPBOX_ACCESS_TOKEN;
-  return direct && direct.trim() ? direct.trim() : null;
-}
-
-type DropboxApiEntry = {
-  ".tag"?: string;
-  name?: string;
-  path_lower?: string;
-  path_display?: string;
-  size?: number;
-};
-type DropboxListResponse = {
-  entries?: DropboxApiEntry[];
-  cursor?: string;
-  has_more?: boolean;
-};
-
-function collectDropboxEntries(
-  json: DropboxListResponse,
-  out: DropboxEntry[],
-): void {
-  for (const e of json.entries ?? []) {
-    if (typeof e.name !== "string") continue;
-    out.push({
-      tag: typeof e[".tag"] === "string" ? (e[".tag"] as string) : "",
-      name: e.name,
-      path_lower: e.path_lower,
-      path_display: e.path_display,
-      size: e.size,
-    });
-  }
-}
-
-// Caps so an operator who pastes a huge top-level folder can't make us walk
-// forever. A real single-listing archive is well under both, even across years.
-const DROPBOX_MAX_ENTRIES = 5000;
-const DROPBOX_MAX_FOLDERS = 200; // how many subfolders the tree walk will visit
-const DROPBOX_WALK_CONCURRENCY = 8; // sibling folders listed at once
-
-/**
- * Enumerate the entries directly under one level of a Dropbox shared folder
- * (NON-recursive — `path` is "" for the share root or "/a/b" for a subfolder).
- * Dropbox does not allow `recursive: true` together with a `shared_link`, so the
- * deep walk is done by dropboxListSharedTree calling this per folder. Paginates
- * via list_folder/continue and stops at DROPBOX_MAX_ENTRIES. Null on API error.
- */
-async function dropboxListSharedFolder(
-  token: string,
-  shareUrl: string,
-  path = "",
-): Promise<DropboxEntry[] | null> {
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  };
-  const entries: DropboxEntry[] = [];
-  try {
-    let res = await fetch(`${DROPBOX_API}/files/list_folder`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ path, shared_link: { url: shareUrl } }),
-    });
-    if (!res.ok) return null;
-    let json = (await res.json()) as DropboxListResponse;
-    collectDropboxEntries(json, entries);
-    let guard = 0;
-    while (
-      json.has_more &&
-      json.cursor &&
-      guard < 50 &&
-      entries.length < DROPBOX_MAX_ENTRIES
-    ) {
-      guard += 1;
-      res = await fetch(`${DROPBOX_API}/files/list_folder/continue`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ cursor: json.cursor }),
-      });
-      if (!res.ok) return null;
-      json = (await res.json()) as DropboxListResponse;
-      collectDropboxEntries(json, entries);
-    }
-  } catch {
-    return null;
-  }
-  return entries;
-}
-
-/**
- * Walk a whole Dropbox shared folder breadth-first using the per-level lister
- * above (since Dropbox blocks recursive listing on shared links). Returns every
- * entry found across the tree — files (with their full path_display) and the
- * folders we descended — so the caller can group images by their parent folder.
- * Bounded by DROPBOX_MAX_FOLDERS / DROPBOX_MAX_ENTRIES; sibling folders are
- * listed DROPBOX_WALK_CONCURRENCY at a time to keep wall-time low. Null only
- * when the ROOT listing fails (a private/expired link); a single subfolder that
- * errors mid-walk is skipped best-effort.
- */
-async function dropboxListSharedTree(
-  token: string,
-  shareUrl: string,
-): Promise<DropboxEntry[] | null> {
-  // List one level and stamp every entry with a path we KNOW is relative to the
-  // share root, built from the parent's relative path + the entry name. Dropbox's
-  // own path_display is unreliable for a shared link we don't own (it can be the
-  // owner's absolute account path), so we never trust it for descent/download —
-  // we overwrite it with our computed value and use that everywhere downstream.
-  const visit = async (relParent: string): Promise<DropboxEntry[] | null> => {
-    const entries = await dropboxListSharedFolder(token, shareUrl, relParent);
-    if (entries === null) return null;
-    for (const e of entries) {
-      e.path_display = `${relParent}/${e.name}`; // relParent is "" at the root
-    }
-    return entries;
-  };
-
-  const root = await visit("");
-  if (root === null) return null;
-
-  const all: DropboxEntry[] = [...root];
-  let frontier = root
-    .filter((e) => e.tag === "folder")
-    .map((e) => e.path_display as string);
-  let visited = 0;
-
-  while (
-    frontier.length > 0 &&
-    visited < DROPBOX_MAX_FOLDERS &&
-    all.length < DROPBOX_MAX_ENTRIES
-  ) {
-    const batch = frontier.slice(0, DROPBOX_MAX_FOLDERS - visited);
-    visited += batch.length;
-    const next: string[] = [];
-    for (let i = 0; i < batch.length; i += DROPBOX_WALK_CONCURRENCY) {
-      const chunk = batch.slice(i, i + DROPBOX_WALK_CONCURRENCY);
-      const results = await Promise.all(chunk.map((p) => visit(p)));
-      for (const entries of results) {
-        if (!entries) continue; // best-effort: skip a folder that errors
-        for (const e of entries) {
-          all.push(e);
-          if (e.tag === "folder") next.push(e.path_display as string);
-        }
-      }
-    }
-    frontier = next;
-  }
-  return all;
-}
-
-/**
- * Download one file from under the shared link by its path relative to the share
- * root ("/<name>" for a root file, "/<unit>/<name>" for a unit subfolder).
- * Streams with the same size + timeout caps as the URL importer, then confirms
- * the bytes are a supported image via the magic-byte sniff. Returns null on any
- * failure (best-effort per file).
- */
-async function fetchDropboxSharedFile(
-  token: string,
-  shareUrl: string,
-  filePath: string,
-): Promise<FetchedImage | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), IMPORT_FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(
-      `${DROPBOX_CONTENT_API}/sharing/get_shared_link_file`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Dropbox-API-Arg": dropboxApiArg({ url: shareUrl, path: filePath }),
-        },
-        signal: controller.signal,
-      },
-    );
-    if (!res.ok || !res.body) {
-      clearTimeout(timer);
-      return null;
-    }
-    const reader = res.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        total += value.length;
-        if (total > MAX_PHOTO_BYTES) {
-          await reader.cancel();
-          clearTimeout(timer);
-          return null;
-        }
-        chunks.push(value);
-      }
-    }
-    clearTimeout(timer);
-    if (total <= 0) return null;
-    const bytes = new Uint8Array(total);
-    let off = 0;
-    for (const c of chunks) {
-      bytes.set(c, off);
-      off += c.length;
-    }
-    const type = sniffImageType(bytes);
-    if (!type) return null;
-    return { bytes, type };
-  } catch {
-    clearTimeout(timer);
-    return null;
-  }
-}
+// S791b: the Dropbox token, listing and file fetch live in lib/dropbox-import-server
+// so the crew and photographer links can pull from a Dropbox folder too.
 
 // The shape inspectDropboxFolder hands back to the client island. Real archives
 // nest photos by year/purpose several levels deep, so we recurse the whole share
@@ -6345,7 +6095,7 @@ export async function switchPhotoTouchUp(formData: FormData) {
 }
 
 /**
- * S789b: save a rental's photo folder link and, for Google Drive, pull in the
+ * S789b: save a rental's photo folder link and, for Google Drive or Dropbox (S791b), pull in the
  * photos that are not on the rental yet. An empty field removes the link.
  */
 export async function savePhotoFolderAndPull(formData: FormData) {
@@ -6374,7 +6124,7 @@ export async function savePhotoFolderAndPull(formData: FormData) {
   const url = cleanPhotoFolderUrl(raw);
   if (!url) back("badlink");
   await supabase.from("properties").update({ photo_source_url: url }).eq("id", propertyId).eq("organization_id", org.id);
-  if (photoSourceOf(url) !== "gdrive") {
+  if (!pullsFrom(photoSourceOf(url))) {
     revalidatePath(`/dashboard/properties/${propertyId}`);
     back("saved");
   }
@@ -6382,7 +6132,7 @@ export async function savePhotoFolderAndPull(formData: FormData) {
   const admin = createAdminClient();
   if (!admin) back("failed");
   const touchUp = formData.get("touch_up") === "on";
-  const result = await pullDrivePhotos({ admin: admin!, organizationId: org.id, propertyId, folderUrl: url as string, touchUp });
+  const result = (await pullFolderPhotos({ admin: admin!, organizationId: org.id, propertyId, folderUrl: url as string, touchUp })) ?? { ok: false as const, reason: "badlink" as const };
   if (result.ok && result.added > 0) await followPhotoChange(supabase, propertyId);
   revalidatePath(`/dashboard/properties/${propertyId}`);
   back(result.ok ? `added_${result.added}${result.skipped > 0 ? `_${result.skipped}` : ""}` : result.reason);

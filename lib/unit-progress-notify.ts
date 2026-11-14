@@ -86,7 +86,7 @@ export async function notifyLandlordOfTap(args: {
           ? drivePullLine(args.photos)
           : args.hasPhotoFolder
             ? "Pull them in from the photo folder on the rental page."
-            : "Add the unit's Google Drive photo folder on the rental page. Next time, photos pull in on their own.";
+            : "Add the unit's Google Drive or Dropbox photo folder on the rental page. Next time, photos pull in on their own.";
     const extra = [base ? `${base}.`.replace(/\.\.$/, ".") : "", tenancyAction?.line ?? "", photoLine].filter(Boolean).join(" ");
     await sendOrgNotification({
       client: args.admin,
