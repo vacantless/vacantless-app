@@ -495,10 +495,13 @@ export type RentPaymentSummary = {
   lastPaymentIso: string | null;
   lastPaymentCents: number | null;
   lastPaymentState: RentPaymentState | null;
+  /** Day of the month the subscription bills on (1 to 31), when known. */
+  anchorDay: number | null;
 };
 
 type SummarySub = {
   status?: string | null;
+  billing_cycle_anchor?: number | null;
   current_period_end?: number | null;
   cancel_at_period_end?: boolean | null;
   items?: { data?: Array<{ current_period_end?: number | null }> | null } | null;
@@ -531,8 +534,12 @@ export function summarizeRentPayments(
     lastPaymentIso: null,
     lastPaymentCents: null,
     lastPaymentState: null,
+    anchorDay: null,
   };
   const status = typeof sub?.status === "string" ? sub.status : null;
+  if (typeof sub?.billing_cycle_anchor === "number" && sub.billing_cycle_anchor > 0) {
+    out.anchorDay = new Date(sub.billing_cycle_anchor * 1000).getUTCDate();
+  }
   if (sub && subscriptionIsLive(status) && sub.cancel_at_period_end !== true) {
     const item = sub.items?.data?.[0]?.current_period_end;
     const end = typeof item === "number" ? item : typeof sub.current_period_end === "number" ? sub.current_period_end : null;
@@ -553,6 +560,35 @@ export function summarizeRentPayments(
       out.lastPaymentIso = unixToIsoDate(last.created);
       out.lastPaymentCents = last.amount_due ?? null;
     }
+  }
+  return out;
+}
+
+/**
+ * S796c: the upcoming monthly payment dates, starting with the next one, so a
+ * landlord can pick the LAST payment ahead of time. Pure. Stripe bills on the
+ * anchor day each month and uses the month's last day when the month is
+ * shorter (anchor 31 bills Feb 28, then Mar 31).
+ */
+export function upcomingChargeDates(
+  nextChargeIso: string | null | undefined,
+  anchorDay: number | null | undefined,
+  count = 12,
+): string[] {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((nextChargeIso ?? "").trim());
+  if (!m) return [];
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const firstDay = Number(m[3]);
+  const day = anchorDay && anchorDay >= firstDay && anchorDay <= 31 ? anchorDay : firstDay;
+  const out: string[] = [m[0]];
+  for (let i = 1; i < Math.max(1, Math.min(count, 36)); i++) {
+    const monthIndex = mo + i;
+    const yy = y + Math.floor(monthIndex / 12);
+    const mm = ((monthIndex % 12) + 12) % 12;
+    const lastDay = new Date(Date.UTC(yy, mm + 1, 0)).getUTCDate();
+    const dd = Math.min(day, lastDay);
+    out.push(`${yy}-${String(mm + 1).padStart(2, "0")}-${String(dd).padStart(2, "0")}`);
   }
   return out;
 }

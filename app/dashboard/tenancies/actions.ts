@@ -758,25 +758,20 @@ export async function endTenancy(formData: FormData) {
 
   // S796: never leave a live monthly bank debit running unattended on an
   // ended tenancy. The landlord picks one of:
-  //   rent=after_next  take the next payment, then stop (S796b; the rent-stop
-  //                    sweep cancels the debit once that payment clears)
-  //   rent=keep        a stop after the last payment is already scheduled
-  //   anything else    stop the debit now
+  //   a last payment date  keep collecting through that payment, then stop
+  //                        (S796b/c; the rent-stop sweep cancels the debit
+  //                        once that payment clears)
+  //   stop now             cancel the debit right away
   // If Stripe can't confirm, the tenancy is not ended.
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
-  const rentChoice = s(formData, "rent");
+  // last_payment = a payment date (take payments up to and including it,
+  // then stop) or "now" / empty (stop the debit now).
+  const lastPayment = s(formData, "last_payment");
   let stopAfterIso: string | null = null;
   let stoppedNow = false;
-  if (rentChoice === "keep") {
-    const { data: keepRow } = await supabase
-      .from("tenancies")
-      .select("rent_stop_after")
-      .eq("id", id)
-      .maybeSingle();
-    stopAfterIso = (keepRow as { rent_stop_after: string | null } | null)?.rent_stop_after ?? null;
-  } else if (rentChoice === "after_next") {
-    const sched = await scheduleTenancyRentStopAfterNext(supabase, org.id, id);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(lastPayment)) {
+    const sched = await scheduleTenancyRentStopAfterNext(supabase, org.id, id, lastPayment);
     if (sched.ok) stopAfterIso = sched.dateIso;
     else if (sched.code !== "nolive") redirect(`/dashboard/tenancies/${id}?striperent=endnonext`);
   }

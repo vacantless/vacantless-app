@@ -51,6 +51,9 @@ export type TenancyStripeRentView = {
   lastPaymentState: "paid" | "processing" | "failed" | null;
   // S796b: a stop is scheduled for after the payment on this date.
   stopAfterLabel: string | null;
+  stopAfterIso: string | null;
+  // S796c: upcoming payment dates the landlord can pick as the last one.
+  lastPaymentOptions: { iso: string; label: string }[];
 };
 
 function lastPaymentText(view: TenancyStripeRentView): string {
@@ -195,22 +198,43 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
                   )}
                   <details className="text-sm">
                     <summary className="inline-flex cursor-pointer select-none list-none items-center rounded-lg border border-red-200 bg-white px-4 py-2 font-semibold text-red-600 transition hover:bg-red-50 [&::-webkit-details-marker]:hidden">
-                      {view.stopAfterLabel ? "Stop rent now" : "Stop monthly rent"}
+                      {view.stopAfterLabel ? "Change or stop now" : "Stop monthly rent"}
                     </summary>
                     <div className="mt-2 space-y-3 rounded-lg border border-red-100 bg-red-50 p-3">
-                      {!view.stopAfterLabel && view.nextChargeLabel && (
+                      {view.lastPaymentOptions.length > 0 && (
                         <form action={scheduleStripeRentStop} className="space-y-2">
                           <input type="hidden" name="tenancy_id" value={view.tenancyId} />
-                          <p className="text-sm text-gray-700">
-                            Take one last {view.rentLabel} payment on {view.nextChargeLabel}, then stop.
-                            Rent stops on its own once that payment goes through.
-                          </p>
-                          <SubmitButton
-                            pendingLabel="Saving…"
-                            className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          <label
+                            htmlFor="stripe-rent-last-payment"
+                            className="block text-sm text-gray-700"
                           >
-                            Stop after the {view.nextChargeLabel} payment
-                          </SubmitButton>
+                            Pick the last {view.rentLabel} payment. Rent keeps collecting
+                            through it, then stops on its own once it goes through.
+                          </label>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <select
+                              id="stripe-rent-last-payment"
+                              name="last_payment"
+                              defaultValue={
+                                view.stopAfterIso && view.lastPaymentOptions.some((o) => o.iso === view.stopAfterIso)
+                                  ? view.stopAfterIso
+                                  : view.lastPaymentOptions[0].iso
+                              }
+                              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                            >
+                              {view.lastPaymentOptions.map((o) => (
+                                <option key={o.iso} value={o.iso}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                            <SubmitButton
+                              pendingLabel="Saving…"
+                              className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {view.stopAfterLabel ? "Change the last payment" : "Stop after this payment"}
+                            </SubmitButton>
+                          </div>
                         </form>
                       )}
                       <form action={stopStripeRentSubscription} className="space-y-2">

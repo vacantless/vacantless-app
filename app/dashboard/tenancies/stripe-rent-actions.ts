@@ -417,7 +417,12 @@ export async function scheduleStripeRentStop(formData: FormData) {
   await requireCapability("manage_rent", `${tenancyPath(tenancyId)}?striperent=forbidden`);
 
   const supabase = createClient();
-  const result = await scheduleTenancyRentStopAfterNext(supabase, org.id, tenancyId);
+  const result = await scheduleTenancyRentStopAfterNext(
+    supabase,
+    org.id,
+    tenancyId,
+    String(formData.get("last_payment") ?? "").trim() || null,
+  );
   if (!result.ok) {
     redirect(`${tenancyPath(tenancyId)}?striperent=${result.code === "nolive" ? "nothingtostop" : result.code}`);
   }

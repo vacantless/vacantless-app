@@ -39,7 +39,7 @@ import TenancyStripeRentSection, {
   type TenancyStripeRentView,
 } from "@/components/tenancy-stripe-rent-section";
 import { getStripe } from "@/lib/stripe";
-import { shouldPromptRentRailSync, subscriptionIsLive } from "@/lib/stripe-connect";
+import { shouldPromptRentRailSync, subscriptionIsLive, upcomingChargeDates } from "@/lib/stripe-connect";
 import { fetchRentPaymentSummary } from "@/lib/stripe-rent-stop";
 import { recordPayment, deletePayment } from "../payment-actions";
 import { reportTenancyIssue, generateTenantReportLink } from "../maintenance-actions";
@@ -379,7 +379,7 @@ const STRIPE_RENT_SUCCESS: Record<string, string> = {
   subsynced: "Subscription status refreshed.",
   stopped: "Monthly rent stopped. No more debits will run. The bank authorization is kept, so you can restart rent any time.",
   nothingtostop: "There was no active monthly rent to stop.",
-  stopscheduled: "Done. Rent takes one last payment, then stops on its own once that payment goes through.",
+  stopscheduled: "Done. Rent keeps collecting through the last payment you picked, then stops on its own once that payment goes through.",
   stopcleared: "The scheduled stop is cancelled. Monthly rent carries on.",
 };
 const STRIPE_RENT_ERROR: Record<string, string> = {
@@ -404,6 +404,7 @@ const STRIPE_RENT_ERROR: Record<string, string> = {
   nosub: "Set up the monthly rent subscription before refreshing.",
   stopfail: "Stripe couldn't stop the monthly rent just now. Nothing changed. Try again.",
   endstopfail: "This tenancy was not ended. Stripe couldn't stop its monthly rent debit, and we won't end a tenancy while the debit is still running. Try again.",
+  badlastdate: "That last payment date isn't one of this tenancy's upcoming payment dates. Nothing changed. Pick one from the list.",
   nonext: "We couldn't read the next payment date from Stripe just now. Nothing changed. Try again, or stop rent now.",
   endnonext: "This tenancy was not ended. We couldn't read the next payment date from Stripe to set the last payment. Try again, or choose to stop rent now.",
   keepended: "This tenancy has ended, so rent can't go back to collecting every month. It takes the last payment and stops, or you can stop it now.",
@@ -533,6 +534,10 @@ export default async function TenancyDetailPage({
       rentSummary?.lastPaymentCents != null ? formatRentCents(rentSummary.lastPaymentCents) : null,
     lastPaymentState: rentSummary?.lastPaymentState ?? null,
     stopAfterLabel: t.rent_stop_after ? formatProcessDate(t.rent_stop_after) : null,
+    stopAfterIso: t.rent_stop_after,
+    lastPaymentOptions: upcomingChargeDates(rentSummary?.nextChargeIso, rentSummary?.anchorDay, 12).map(
+      (iso) => ({ iso, label: formatProcessDate(iso) }),
+    ),
   };
   const todayIso = new Date().toISOString().slice(0, 10);
   const defaultProcessDate = defaultFirstProcessDate(todayIso);
@@ -1457,7 +1462,7 @@ export default async function TenancyDetailPage({
         : FLASH.created)) ||
     (searchParams.ended &&
       (searchParams.rentstopafter && /^\d{4}-\d{2}-\d{2}$/.test(searchParams.rentstopafter)
-        ? `Tenancy marked ended. Rent takes one last payment on ${formatProcessDate(searchParams.rentstopafter)}, then stops on its own.`
+        ? `Tenancy marked ended. The last rent payment is ${formatProcessDate(searchParams.rentstopafter)}. Rent stops on its own after it goes through.`
         : searchParams.rentstopped
           ? "Tenancy marked ended. Its automatic monthly rent debit was stopped too."
           : FLASH.ended)) ||
@@ -3235,29 +3240,33 @@ export default async function TenancyDetailPage({
                   className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
               </div>
-              <p className="text-sm text-gray-700">
-                This tenancy has an automatic {formatRentCents(t.rent_cents)} monthly rent debit. Choose what happens to it.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                {stripeRentView.stopAfterLabel ? (
-                  <button name="rent" value="keep" className={SECONDARY_ACTION_CLASS}>
-                    End tenancy (last payment {stripeRentView.stopAfterLabel}, then rent stops)
-                  </button>
-                ) : (
-                  stripeRentView.nextChargeLabel && (
-                    <button name="rent" value="after_next" className={SECONDARY_ACTION_CLASS}>
-                      End tenancy, take the {stripeRentView.nextChargeLabel} payment, then stop rent
-                    </button>
-                  )
-                )}
-                <button
-                  name="rent"
-                  value="now"
-                  className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 shadow-sm transition hover:bg-red-50"
+              <div>
+                <label htmlFor="end-tenancy-last-payment" className="mb-1 block text-xs font-medium text-gray-600">
+                  Last rent payment ({formatRentCents(t.rent_cents)} automatic monthly debit)
+                </label>
+                <select
+                  id="end-tenancy-last-payment"
+                  name="last_payment"
+                  defaultValue={
+                    stripeRentView.stopAfterIso &&
+                    stripeRentView.lastPaymentOptions.some((o) => o.iso === stripeRentView.stopAfterIso)
+                      ? stripeRentView.stopAfterIso
+                      : "now"
+                  }
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 >
-                  End tenancy and stop rent now
-                </button>
+                  <option value="now">No more payments. Stop rent now.</option>
+                  {stripeRentView.lastPaymentOptions.map((o) => (
+                    <option key={o.iso} value={o.iso}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-xs text-gray-500">
+                  Pick a date and rent keeps collecting through that payment, then stops on its own.
+                </span>
               </div>
+              <button className={SECONDARY_ACTION_CLASS}>End tenancy</button>
             </form>
           </details>
         )}

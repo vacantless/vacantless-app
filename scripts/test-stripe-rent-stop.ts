@@ -7,6 +7,7 @@ import {
   summarizeRentPayments,
   subscriptionStatusLabel,
   decideScheduledRentStop,
+  upcomingChargeDates,
 } from "../lib/stripe-connect";
 
 let passed = 0;
@@ -130,6 +131,21 @@ const DEC18 = Date.UTC(2026, 11, 18, 12) / 1000;
     "grace is before the next monthly debit (Feb, shortest month)",
     decideScheduledRentStop({ stopAfterIso: "2027-02-01", todayIso: "2027-02-15", nextChargeIso: "2027-03-01", lastPaymentIso: null, lastPaymentState: null }).stop,
   );
+}
+
+// upcomingChargeDates
+{
+  const d = upcomingChargeDates("2026-11-18", 18, 4);
+  ok("monthly from the next date", JSON.stringify(d) === JSON.stringify(["2026-11-18", "2026-12-18", "2027-01-18", "2027-02-18"]));
+  const e = upcomingChargeDates("2027-01-31", 31, 4);
+  ok("anchor 31 uses the month's last day, then returns to 31", JSON.stringify(e) === JSON.stringify(["2027-01-31", "2027-02-28", "2027-03-31", "2027-04-30"]));
+  const f = upcomingChargeDates("2027-02-28", 31, 2);
+  ok("next on a short month still returns to the anchor day", f[1] === "2027-03-31");
+  ok("no anchor falls back to the next date's day", upcomingChargeDates("2026-12-01", null, 2)[1] === "2027-01-01");
+  ok("default is 12 dates", upcomingChargeDates("2026-12-01", 1).length === 12);
+  ok("no next date -> empty", upcomingChargeDates(null, 1).length === 0);
+  const s2 = summarizeRentPayments({ status: "active", current_period_end: NOV18, billing_cycle_anchor: NOV18 }, []);
+  ok("summary carries the anchor day", s2.anchorDay === 18);
 }
 
 console.log(`\nstripe-rent-stop: ${passed} passed, ${failed} failed`);

@@ -12,6 +12,7 @@ import {
   summarizeRentPayments,
   subscriptionIsLive,
   decideScheduledRentStop,
+  upcomingChargeDates,
   type RentPaymentSummary,
 } from "@/lib/stripe-connect";
 
@@ -165,18 +166,20 @@ export async function fetchRentPaymentSummary(
 
 export type ScheduleStopResult =
   | { ok: true; dateIso: string }
-  | { ok: false; code: "nolive" | "notconnected" | "nonext" };
+  | { ok: false; code: "nolive" | "notconnected" | "nonext" | "badlastdate" };
 
 /**
- * S796b: schedule the stop for after the NEXT payment. Reads the next charge
- * date from Stripe (never from the form) and stores it as rent_stop_after.
- * Nothing changes at Stripe: the rent-stop sweep cancels the debit once that
- * payment clears.
+ * S796b/c: schedule the stop for after a chosen LAST payment. The upcoming
+ * payment dates are read from Stripe; the chosen date must be one of them
+ * (never trusted from the form). No date = the next payment. Stored as
+ * rent_stop_after. Nothing changes at Stripe: the rent-stop sweep cancels the
+ * debit once that payment clears.
  */
 export async function scheduleTenancyRentStopAfterNext(
   supabase: SupabaseClient,
   orgId: string,
   tenancyId: string,
+  chosenIso?: string | null,
 ): Promise<ScheduleStopResult> {
   const { data: tData } = await supabase
     .from("tenancies")
@@ -202,12 +205,16 @@ export async function scheduleTenancyRentStopAfterNext(
   const summary = await fetchRentPaymentSummary(stripeAccount, tenancy.stripe_subscription_id);
   if (!summary?.nextChargeIso) return { ok: false, code: "nonext" };
 
+  const wanted = (chosenIso ?? "").trim() || summary.nextChargeIso;
+  const allowed = upcomingChargeDates(summary.nextChargeIso, summary.anchorDay, 24);
+  if (!allowed.includes(wanted)) return { ok: false, code: "badlastdate" };
+
   const { error } = await supabase
     .from("tenancies")
-    .update({ rent_stop_after: summary.nextChargeIso, updated_at: new Date().toISOString() })
+    .update({ rent_stop_after: wanted, updated_at: new Date().toISOString() })
     .eq("id", tenancyId);
   if (error) return { ok: false, code: "nonext" };
-  return { ok: true, dateIso: summary.nextChargeIso };
+  return { ok: true, dateIso: wanted };
 }
 
 /**
