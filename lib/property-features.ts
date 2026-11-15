@@ -508,6 +508,9 @@ export function feedPropertyType(
 export type UnitFeatures = {
   available_date?: string | null; // ISO date "YYYY-MM-DD"
   sqft?: number | null;
+  // S799c: true when the size is our bedroom-count estimate, not the
+  // landlord's own number (lib/sqft-estimate). Renters then read "about".
+  sqft_estimated?: boolean | null;
   floor?: string | null;
   parking?: string | null;
   // Kijiji autopilot field map (S550): listing category + who is listing.
@@ -606,9 +609,14 @@ export function isAvailableNow(
 
 // --- Specs + amenities ------------------------------------------------------
 
-export function formatSqft(sqft: number | null | undefined): string | null {
+export function formatSqft(
+  sqft: number | null | undefined,
+  estimated?: boolean | null,
+): string | null {
   if (sqft == null || !Number.isFinite(sqft) || sqft <= 0) return null;
-  return `${Math.round(sqft).toLocaleString()} sq ft`;
+  const size = `${Math.round(sqft).toLocaleString()} sq ft`;
+  // S799c: an estimated size was shown to renters as a measured fact.
+  return estimated ? `about ${size}` : size;
 }
 
 /**
@@ -621,7 +629,7 @@ export function buildSpecLine(
   const out: string[] = [];
   if (f.beds != null) out.push(`${f.beds} bed${f.beds === 1 ? "" : "s"}`);
   if (f.baths != null) out.push(`${f.baths} bath${f.baths === 1 ? "" : "s"}`);
-  const sq = formatSqft(f.sqft);
+  const sq = formatSqft(f.sqft, f.sqft_estimated);
   if (sq) out.push(sq);
   if (f.floor && f.floor.trim()) {
     const floor = f.floor.trim();

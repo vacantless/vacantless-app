@@ -2840,6 +2840,7 @@ type PublishPostRow = {
 type AutoCopyPropertyRow = PublishPropertyRow & {
   available_date: string | null;
   sqft: number | null;
+  sqft_estimated?: boolean | null;
   floor: string | null;
   parking: string | null;
   laundry: string | null;
@@ -2918,7 +2919,9 @@ function autoCopyFacts(prop: AutoCopyPropertyRow): DraftFacts {
     rent_cents: prop.rent_cents,
     parking: prop.parking,
     available_date: prop.available_date,
-    sqft: prop.sqft,
+    // S799c: the drafted ad said "The unit is 650 square feet" from our own
+    // estimate. An estimated size is left out of the wording.
+    sqft: prop.sqft_estimated ? null : prop.sqft,
     floor: prop.floor,
     laundry: prop.laundry,
     air_conditioning: prop.air_conditioning,
@@ -2986,7 +2989,7 @@ async function maybePrepareAvailableListing(
   const { data: propRow } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, status, address, rent_cents, beds, baths, description, parking, available_date, sqft, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included",
+      "id, organization_id, status, address, rent_cents, beds, baths, description, parking, available_date, sqft, sqft_estimated, floor, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included",
     )
     .eq("id", propertyId)
     .maybeSingle();

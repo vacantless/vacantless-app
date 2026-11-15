@@ -57,6 +57,7 @@ type Listing = {
   status: string;
   available_date: string | null;
   sqft: number | null;
+  sqft_estimated?: boolean | null;
   floor: string | null;
   laundry: string | null;
   air_conditioning: boolean;

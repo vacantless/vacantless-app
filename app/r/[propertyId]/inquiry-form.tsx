@@ -358,6 +358,9 @@ export function InquiryForm({
         {(!hasSlots || skipTime) && (
           <input type="hidden" name="no_suitable_time" value="1" />
         )}
+        {/* S799c: tells the landlord's email which it was: no times open at
+            all, or times open and none suited. */}
+        {!hasSlots && <input type="hidden" name="no_times_open" value="1" />}
 
         {/* STEP 1 — Choose a viewing time (primary action, first) ------------ */}
         {hasSlots && (

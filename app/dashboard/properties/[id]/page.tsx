@@ -3587,7 +3587,7 @@ export default async function PropertyDetailPage({
           <div id="photo-folder" className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
             <h3 className="text-sm font-semibold text-gray-900">Photo folder</h3>
             <p className="mt-1 text-xs text-gray-600">
-              Paste the Google Drive or Dropbox folder with this unit&apos;s photos. Share it so anyone with the link can view. When your crew taps Photos are in, new photos pull in on their own. Other folder links are kept here for you to open.
+              Photos already in a Google Drive or Dropbox folder? Paste the link and we pull them in. Share the folder so anyone with the link can view. Crew on unit progress links? New photos also pull in when they tap Photos are in. Other folder links are kept here for you to open.
             </p>
             {outcome && <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-800">{outcome}</p>}
             <form action={savePhotoFolderAndPull} className="mt-3 flex flex-wrap items-center gap-2">
@@ -4621,15 +4621,15 @@ export default async function PropertyDetailPage({
             Standard policy
           </legend>
           <p className="mb-3 text-xs text-gray-400">
-            These show the value this unit inherits from your{" "}
+            &ldquo;Your usual&rdquo; is what you set in your{" "}
             <Link
               href="/dashboard/properties/standard-policy"
               className="underline hover:text-gray-600"
             >
               standard policy
             </Link>{" "}
-            (building override, falling back to the organization default). Only
-            change one here if THIS unit differs.
+            for the building, or for all your rentals. Change one here only if
+            this unit differs.
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">

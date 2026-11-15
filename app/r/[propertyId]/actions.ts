@@ -243,7 +243,7 @@ async function attemptBooking(
 // supplies the default audience + the {{token}} values.
 async function notifyOperatorsOfNewLead(
   payload: AutoReplyPayload,
-  extra: { phone: string; moveIn: string; noSuitableTime: boolean },
+  extra: { phone: string; moveIn: string; noSuitableTime: boolean; noTimesOpen?: boolean },
 ): Promise<void> {
   try {
     const admin = createAdminClient();
@@ -310,9 +310,13 @@ async function notifyOperatorsOfNewLead(
         lead_email: payload.renter_email?.trim() || "(no email)",
         lead_phone: extra.phone.trim() || "(no phone)",
         move_in: extra.moveIn.trim() || "(not specified)",
-        no_suitable_time_note: extra.noSuitableTime
-          ? "This renter could not find a workable viewing time. Offer other times."
-          : "",
+        // S799c: a landlord with no hours set was told the renter "could not
+        // find a workable time", which hid the real cause.
+        no_suitable_time_note: extra.noTimesOpen
+          ? "No viewing times were open, so this renter could not book one. Open your times and they can pick."
+          : extra.noSuitableTime
+            ? "This renter could not find a workable viewing time. Offer other times."
+            : "",
         screening,
         renter_message: "",
         dashboard_url: `${APP_URL}/dashboard/leads/${payload.lead_id}`,
@@ -362,6 +366,7 @@ export async function submitLead(formData: FormData) {
   const notes = String(formData.get("notes") ?? "").trim();
   const slot = String(formData.get("slot") ?? "").trim();
   const noSuitableTime = formData.get("no_suitable_time") === "1";
+  const noTimesOpen = formData.get("no_times_open") === "1";
   // Source-tracking: a per-post tracked link carries ?p=<listing_post_id>. The
   // RPC validates it belongs to this property before stamping the lead's
   // source; an absent/foreign value safely falls back to 'website'.
@@ -519,6 +524,7 @@ export async function submitLead(formData: FormData) {
       phone,
       moveIn: moveInRaw,
       noSuitableTime,
+      noTimesOpen,
     });
   }
 
