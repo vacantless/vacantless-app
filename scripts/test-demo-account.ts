@@ -8,6 +8,7 @@ import {
   maskEmail,
   maskPhone,
   scrubContactText,
+  isPrefetch,
 } from "../lib/demo-account";
 
 let passed = 0;
@@ -113,6 +114,21 @@ ok("scrub removes the email", !/nmuscovitch|hotmail/i.test(scrubbed));
 ok("scrub removes the numbers", !/519-555-0724|226\) 555-0718|416-555-0721/.test(scrubbed));
 ok("scrub keeps the sentence", scrubbed.startsWith("Hi Sarah, we wrote to"));
 ok("scrub of null is null", scrubContactText(null) === null);
+
+// --- S800b: a prefetch never signs the demo out ---
+const h = (o: Record<string, string>) => ({ get: (k: string) => o[k.toLowerCase()] ?? null });
+ok("Next router prefetch is a prefetch", isPrefetch(h({ "next-router-prefetch": "1" })));
+ok("RSC fetch is a prefetch", isPrefetch(h({ rsc: "1" })));
+ok("Purpose: prefetch is a prefetch", isPrefetch(h({ purpose: "prefetch" })));
+ok("Sec-Purpose: prefetch;prerender is a prefetch", isPrefetch(h({ "sec-purpose": "prefetch;prerender" })));
+ok("a plain click is not a prefetch", !isPrefetch(h({})));
+{
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  const layout = readFileSync("app/dashboard/layout.tsx", "utf8");
+  ok("Leave the demo is not a Next Link", !/<Link[^>]*\/demo\/exit/.test(layout));
+  const exit = readFileSync("app/demo/exit/route.ts", "utf8");
+  ok("exit route checks for a prefetch first", exit.indexOf("isPrefetch(") > -1 && exit.indexOf("isPrefetch(") < exit.indexOf("signOut("));
+}
 
 console.log(`\ntest-demo-account: ${passed} passed, ${failed} failed (${passed + failed} total)`);
 process.exit(failed ? 1 : 0);

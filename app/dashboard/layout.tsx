@@ -152,7 +152,8 @@ export default async function DashboardLayout({
             </p>
             <p className="flex items-center gap-4">
               <Link href="/signup" className="font-semibold underline">Make your own account</Link>
-              <Link href="/demo/exit" className="underline">Leave the demo</Link>
+              {/* A plain link: a Next Link is prefetched, and a prefetch of /demo/exit signed the demo out (S800b). */}
+              <a href="/demo/exit" className="underline">Leave the demo</a>
             </p>
           </div>
         </div>

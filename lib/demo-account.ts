@@ -99,3 +99,13 @@ export function scrubContactText(text: string | null | undefined): string | null
     .replace(EMAIL_IN_TEXT, (m) => maskEmail(m) ?? "")
     .replace(PHONE_IN_TEXT, (m) => maskPhone(m) ?? "");
 }
+
+/** S800b: true for a browser or Next.js prefetch, which must never sign anyone out. */
+export function isPrefetch(headers: { get(name: string): string | null }): boolean {
+  const purpose = (headers.get("purpose") ?? headers.get("sec-purpose") ?? "").toLowerCase();
+  return (
+    headers.get("next-router-prefetch") != null ||
+    headers.get("rsc") != null ||
+    purpose.includes("prefetch")
+  );
+}
