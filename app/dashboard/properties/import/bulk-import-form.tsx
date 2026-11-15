@@ -74,7 +74,8 @@ export function BulkImportForm({ existingAddresses }: { existingAddresses: strin
           <p className="mt-1 text-sm text-gray-600">
             {sum.ready} to save{sum.skipped > 0 ? `, ${sum.skipped} left out` : ""}.{" "}
             {sum.withTenancy > 0 ? `${sum.withTenancy} with a tenant. ` : ""}
-            {sum.drafts > 0 ? `${sum.drafts} as private drafts. ` : ""}
+            {sum.leasedNoTenancy > 0 ? `${sum.leasedNoTenancy} rented, tenant to add later. ` : ""}
+            {sum.drafts > 0 ? `${sum.drafts} as a private ${sum.drafts === 1 ? "draft" : "drafts"}. `.replace(/ as a private drafts/, " as private drafts") : ""}
             All of them stay private until you set one live.
           </p>
           {!result.hadHeader && (
