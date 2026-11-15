@@ -166,9 +166,14 @@ function Hero() {
               {CONTACT_LABEL}
             </SecondaryButton>
             {process.env.DEMO_ACCOUNT_EMAIL ? (
-              <SecondaryButton href="https://app.vacantless.com/demo">
+              /* S800d: a plain link. A Next Link is prefetched on the app host, and a
+                 prefetch of /demo signed every visitor in to the demo. */
+              <a
+                href="https://app.vacantless.com/demo"
+                className="inline-flex min-h-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-[#d9e1dc] bg-white px-5 font-semibold text-[#15211d] hover:border-[#9fb3a9]"
+              >
                 See a live account
-              </SecondaryButton>
+              </a>
             ) : null}
           </div>
           <p className="max-w-[34rem] text-[0.86rem] font-semibold leading-snug text-[#59655f]">

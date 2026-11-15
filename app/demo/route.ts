@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DEMO_ORG_ID, demoEmail } from "@/lib/demo-account";
+import { DEMO_ORG_ID, demoEmail, isPrefetch } from "@/lib/demo-account";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
   const home = NextResponse.redirect(new URL("/", origin));
   const configured = demoEmail(process.env);
   if (!configured) return home;
+  // S800d: a prefetch is not a click. Never sign anyone in on one.
+  if (isPrefetch(request.headers)) return new NextResponse(null, { status: 204 });
 
   const supabase = createClient();
   const {

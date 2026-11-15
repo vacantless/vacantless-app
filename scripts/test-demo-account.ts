@@ -128,6 +128,11 @@ ok("a plain click is not a prefetch", !isPrefetch(h({})));
   ok("Leave the demo is not a Next Link", !/<Link[^>]*\/demo\/exit/.test(layout));
   const exit = readFileSync("app/demo/exit/route.ts", "utf8");
   ok("exit route checks for a prefetch first", exit.indexOf("isPrefetch(") > -1 && exit.indexOf("isPrefetch(") < exit.indexOf("signOut("));
+  const enter = readFileSync("app/demo/route.ts", "utf8");
+  ok("demo route checks for a prefetch before signing in", enter.indexOf("isPrefetch(") > -1 && enter.indexOf("isPrefetch(") < enter.indexOf("verifyOtp("));
+  const home = readFileSync("app/page.tsx", "utf8");
+  ok("See a live account is a plain link", /<a\s+href="https:\/\/app\.vacantless\.com\/demo"/.test(home));
+  ok("no Next Link or button points at /demo anywhere on the homepage", !/(SecondaryButton|PrimaryButton|<Link)[^>]*\/demo"/.test(home));
 }
 
 console.log(`\ntest-demo-account: ${passed} passed, ${failed} failed (${passed + failed} total)`);
