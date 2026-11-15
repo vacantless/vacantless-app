@@ -9,6 +9,7 @@ import {
   PageHeader,
   SectionHeading,
   PRIMARY_ACTION_CLASS,
+  SECONDARY_ACTION_CLASS,
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { rentalRowReadiness, type ReadinessSignal } from "@/lib/rental-readiness";
@@ -561,13 +562,19 @@ export default async function PropertiesPage({
         subtitle="Your rentals and their marketing status."
         action={
           addPropertyV2Enabled ? (
-            <Link
-              href="/dashboard/properties/new"
-              className={PRIMARY_ACTION_CLASS}
-              style={{ background: "var(--brand-gradient, var(--brand-color))" }}
-            >
-              Add rental
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* S799d: many rentals at once, pasted from a spreadsheet. */}
+              <Link href="/dashboard/properties/import" className={SECONDARY_ACTION_CLASS}>
+                Add several
+              </Link>
+              <Link
+                href="/dashboard/properties/new"
+                className={PRIMARY_ACTION_CLASS}
+                style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+              >
+                Add rental
+              </Link>
+            </div>
           ) : undefined
         }
       />

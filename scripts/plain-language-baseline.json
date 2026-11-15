@@ -1,8 +1,8 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-11-13",
-  "checksum": "63b30190046bafc7b87db462327b77d2617e693c315b937308ca9918bd913cd3",
+  "generated": "2026-11-15",
+  "checksum": "742dbcda4790347ca484ae7cd4be8b9af2ed92ba426db735cb82c22ecf75178d",
   "surfaces": [
     "app/agent/[token]/marketplace/[propertyId]/page.tsx",
     "app/crew/[token]/page.tsx",
@@ -35,6 +35,8 @@
     "app/dashboard/properties/[id]/posted-results-card.tsx",
     "app/dashboard/properties/[id]/publish-everywhere.tsx",
     "app/dashboard/properties/[id]/renter-sources-card.tsx",
+    "app/dashboard/properties/import/bulk-import-form.tsx",
+    "app/dashboard/properties/import/page.tsx",
     "app/dashboard/properties/new/add-property-form.tsx",
     "app/dashboard/properties/new/page.tsx",
     "app/dashboard/properties/page.tsx",
@@ -97,10 +99,10 @@
     "app/dashboard/dashboard-nav.tsx\u0000banned_word": 1,
     "app/dashboard/link-portals/connect-tiles.tsx\u0000all_caps": 1,
     "app/dashboard/properties/[id]/lifecycle-rail.tsx\u0000banned_word": 1,
-    "app/dashboard/properties/[id]/page.tsx\u0000all_caps": 2,
+    "app/dashboard/properties/[id]/page.tsx\u0000all_caps": 1,
     "app/dashboard/properties/[id]/page.tsx\u0000ampersand_or_slash": 7,
     "app/dashboard/properties/[id]/page.tsx\u0000banned_word": 65,
-    "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 19,
+    "app/dashboard/properties/[id]/page.tsx\u0000parentheses": 10,
     "app/dashboard/properties/[id]/page.tsx\u0000sentence_length": 28,
     "app/dashboard/properties/new/add-property-form.tsx\u0000ampersand_or_slash": 2,
     "app/dashboard/properties/new/add-property-form.tsx\u0000banned_word": 1,
@@ -164,14 +166,14 @@
   },
   "strings": {
     "app/agent/[token]/marketplace/[propertyId]/page.tsx": 8,
-    "app/crew/[token]/page.tsx": 12,
+    "app/crew/[token]/page.tsx": 34,
     "app/crew/invalid/page.tsx": 2,
     "app/dashboard/(wizard)/getting-started/page.tsx": 25,
     "app/dashboard/add-details/page.tsx": 2,
     "app/dashboard/add-details/question-sheet-form.tsx": 2,
     "app/dashboard/after-live/page.tsx": 3,
-    "app/dashboard/automations/page.tsx": 65,
-    "app/dashboard/crew/page.tsx": 28,
+    "app/dashboard/automations/page.tsx": 67,
+    "app/dashboard/crew/page.tsx": 36,
     "app/dashboard/dashboard-nav.tsx": 33,
     "app/dashboard/facebook-connect/page.tsx": 7,
     "app/dashboard/getting-started-card.tsx": 6,
@@ -190,13 +192,15 @@
     "app/dashboard/properties/[id]/marketing-kit-card.tsx": 25,
     "app/dashboard/properties/[id]/marketplace-row.tsx": 29,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
-    "app/dashboard/properties/[id]/page.tsx": 458,
+    "app/dashboard/properties/[id]/page.tsx": 477,
     "app/dashboard/properties/[id]/posted-results-card.tsx": 8,
     "app/dashboard/properties/[id]/publish-everywhere.tsx": 134,
     "app/dashboard/properties/[id]/renter-sources-card.tsx": 3,
+    "app/dashboard/properties/import/bulk-import-form.tsx": 36,
+    "app/dashboard/properties/import/page.tsx": 20,
     "app/dashboard/properties/new/add-property-form.tsx": 112,
     "app/dashboard/properties/new/page.tsx": 5,
-    "app/dashboard/properties/page.tsx": 111,
+    "app/dashboard/properties/page.tsx": 113,
     "app/dashboard/properties/readiness-chips.tsx": 14,
     "app/dashboard/properties/standard-policy/page.tsx": 65,
     "app/dashboard/replies/page.tsx": 10,
@@ -353,12 +357,6 @@
       "rule": "banned_word",
       "file": "app/dashboard/properties/[id]/lifecycle-rail.tsx",
       "text": "Fully leased",
-      "count": 1
-    },
-    {
-      "rule": "all_caps",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "(building override, falling back to the organization default). Only change one here if THIS unit differs.",
       "count": 1
     },
     {
@@ -700,12 +698,6 @@
     {
       "rule": "parentheses",
       "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "(building override, falling back to the organization default). Only change one here if THIS unit differs.",
-      "count": 1
-    },
-    {
-      "rule": "parentheses",
-      "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "(overrides your default arrival phone for this building)",
       "count": 1
     },
@@ -726,12 +718,6 @@
       "file": "app/dashboard/properties/[id]/page.tsx",
       "text": "Approximate (street + city only)",
       "count": 1
-    },
-    {
-      "rule": "parentheses",
-      "file": "app/dashboard/properties/[id]/page.tsx",
-      "text": "Inherit (",
-      "count": 8
     },
     {
       "rule": "parentheses",

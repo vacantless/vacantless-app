@@ -57,6 +57,9 @@ const SURFACES: Surface[] = [
   { file: "app/dashboard/properties/[id]/marketplace-row.tsx", mode: "ui" },
   { file: "components/marketplace-kit-steps.tsx", mode: "ui" },
   { file: "app/agent/[token]/marketplace/[propertyId]/page.tsx", mode: "ui" },
+  // S799d: add several rentals at once.
+  { file: "app/dashboard/properties/import/page.tsx", mode: "ui" },
+  { file: "app/dashboard/properties/import/bulk-import-form.tsx", mode: "ui" },
   // S788b: unit progress, the landlord page and the crew link pages.
   { file: "app/dashboard/crew/page.tsx", mode: "ui" },
   { file: "app/crew/[token]/page.tsx", mode: "ui" },
