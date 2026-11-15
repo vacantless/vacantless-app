@@ -163,6 +163,11 @@ function Hero() {
             <SecondaryButton href={CONTACT_HREF}>
               {CONTACT_LABEL}
             </SecondaryButton>
+            {process.env.DEMO_ACCOUNT_EMAIL ? (
+              <SecondaryButton href="https://app.vacantless.com/demo">
+                See a live account
+              </SecondaryButton>
+            ) : null}
           </div>
           <p className="max-w-[34rem] text-[0.86rem] font-semibold leading-snug text-[#59655f]">
             <span className="text-[var(--color-accent-strong)]">Free for one rental.</span>{" "}

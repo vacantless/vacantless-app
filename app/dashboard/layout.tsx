@@ -8,6 +8,7 @@ import { orgShowsPostLease } from "@/lib/post-lease-surface";
 import { VacantlessMark } from "@/components/vacantless-mark";
 import { adTagConfig, adTagsOn, conversionsToFire, type ConversionEvent } from "@/lib/ad-conversions";
 import { isOwnAddress } from "@/lib/new-account-watch";
+import { isDemoEmail } from "@/lib/demo-account";
 import { planLabelOf, type PlanKey } from "@/lib/billing";
 import { AdConversionFire } from "@/components/ad-tags";
 import { recordAdConversions } from "./ad-conversion-actions";
@@ -32,6 +33,9 @@ export default async function DashboardLayout({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // S800: the shared demo login sees a read-only account (lib/demo-account.ts).
+  const isDemo = isDemoEmail(user.email, process.env.DEMO_ACCOUNT_EMAIL);
 
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
@@ -116,7 +120,15 @@ export default async function DashboardLayout({
               <h1 className="text-lg font-bold">{org.name}</h1>
             </div>
           </div>
-          <DashboardNav
+          {isDemo ? (
+            <nav className="flex flex-wrap items-center gap-1 text-sm">
+              <Link href="/dashboard" className="rounded-lg px-3 py-1.5 font-medium hover:bg-white/15">Today</Link>
+              <Link href="/dashboard/properties" className="rounded-lg px-3 py-1.5 font-medium hover:bg-white/15">Rentals</Link>
+              <Link href="/dashboard/leads" className="rounded-lg px-3 py-1.5 font-medium hover:bg-white/15">Renters</Link>
+              <Link href="/dashboard/showings" className="rounded-lg px-3 py-1.5 font-medium hover:bg-white/15">Viewings</Link>
+            </nav>
+          ) : (
+            <DashboardNav
             orgName={org.name}
             orgs={orgs}
             currentOrgId={org.id}
@@ -129,8 +141,22 @@ export default async function DashboardLayout({
             postLeaseEnabled={postLeaseEnabled}
             userEmail={user.email ?? null}
           />
+          )}
         </div>
       </header>
+      {isDemo && (
+        <div className="relative z-20 border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900 print:hidden">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2">
+            <p>
+              <span className="font-semibold">Demo account.</span> Read only. The renters are made up. No messages leave this account.
+            </p>
+            <p className="flex items-center gap-4">
+              <Link href="/signup" className="font-semibold underline">Make your own account</Link>
+              <Link href="/demo/exit" className="underline">Leave the demo</Link>
+            </p>
+          </div>
+        </div>
+      )}
       <main className="relative z-10 mx-auto max-w-5xl px-6 py-8">{children}</main>
       {adEvents.length > 0 && (
         <AdConversionFire cfg={adCfg} events={adEvents} record={recordAdConversions} />

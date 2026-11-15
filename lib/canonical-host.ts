@@ -26,6 +26,7 @@ export const ACCOUNT_PATH_PREFIXES = [
   "/reset-password",
   "/auth",
   "/account-closed",
+  "/demo",
 ] as const;
 
 export function isAccountPath(pathname: string): boolean {

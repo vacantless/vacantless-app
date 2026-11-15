@@ -4,6 +4,8 @@ import Link from "next/link";
 import { listingUrl, scrubEmDashes } from "@/lib/email";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isDemoSession } from "@/lib/demo-account-server";
+import { maskEmail, maskPhone, scrubContactText } from "@/lib/demo-account";
 import { getCurrentOrg } from "@/lib/org";
 import { statusLabel, type LeadStatus } from "@/lib/pipeline";
 import { incomeRequirementMagnitude } from "@/lib/screening";
@@ -150,7 +152,17 @@ export default async function LeadDetailPage({
     .maybeSingle();
 
   if (!lead) notFound();
-  const l = lead as unknown as Lead;
+  // S800: the shared demo login sees masked contact details (lib/demo-account.ts).
+  const demo = await isDemoSession();
+  const rawLead = lead as unknown as Lead;
+  const l: Lead = demo
+    ? {
+        ...rawLead,
+        email: maskEmail(rawLead.email),
+        phone: maskPhone(rawLead.phone),
+        notes: scrubContactText(rawLead.notes),
+      }
+    : rawLead;
 
   // S726: is this renter's email on Brevo's blocklist (unsubscribed, spam, bounce)?
   let emailBlock: { since: string; reason: string | null } | null = null;
@@ -169,7 +181,9 @@ export default async function LeadDetailPage({
     .select("id, channel, direction, body, created_at")
     .eq("lead_id", l.id)
     .order("created_at", { ascending: false });
-  const messages = (msgs ?? []) as Message[];
+  const messages = ((msgs ?? []) as Message[]).map((m) =>
+    demo ? { ...m, body: scrubContactText(m.body) } : m,
+  );
 
   const { data: showingData } = await supabase
     .from("showings")

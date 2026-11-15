@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { nextParamFor } from "@/lib/safe-next";
+import { demoDecision, isDemoEmail } from "@/lib/demo-account";
 
 // Refreshes the Supabase auth session on every request and guards
 // authenticated routes.
@@ -51,6 +52,21 @@ export async function updateSession(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname;
+
+  // S800: the shared demo login may only read, and only four pages
+  // (lib/demo-account.ts, scripts/test-demo-account.ts).
+  if (user && isDemoEmail(user.email, process.env.DEMO_ACCOUNT_EMAIL)) {
+    const decision = demoDecision({ method: request.method, pathname: path });
+    if (decision.kind === "deny") {
+      return new NextResponse("This is a read-only demo.", { status: 403 });
+    }
+    if (decision.kind === "redirect") {
+      const url = request.nextUrl.clone();
+      url.pathname = decision.to;
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+  }
   const isProtected =
     path.startsWith("/dashboard") || path.startsWith("/onboarding");
 
