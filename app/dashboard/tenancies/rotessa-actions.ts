@@ -13,6 +13,11 @@ import {
   validateScheduleInput,
   createSchedule,
 } from "@/lib/rotessa";
+import {
+  linkRotessaCustomerByEmail,
+  stopTenancyRotessaRent,
+  scheduleTenancyRotessaStop,
+} from "@/lib/rotessa-rent";
 
 // Rotessa customer-creation action for a tenancy (platform pivot step 2,
 // increment 2, S211).
@@ -194,4 +199,97 @@ export async function createRotessaSchedule(formData: FormData) {
 
   revalidatePath(tenancyPath(tenancyId));
   redirect(`${tenancyPath(tenancyId)}?rotessa=scheduled`);
+}
+
+// ===========================================================================
+// S798 — link an existing Rotessa customer by email, stop rent now, stop after
+// a chosen last payment, undo that. Rotessa calls live in lib/rotessa-rent.ts.
+// ===========================================================================
+
+export async function linkRotessaCustomer(formData: FormData) {
+  const tenancyId = String(formData.get("tenancy_id") ?? "").trim();
+  if (!tenancyId) redirect("/dashboard/tenancies");
+  const email = String(formData.get("email") ?? "").trim();
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_rotessa", `${tenancyPath(tenancyId)}?rotessa=forbidden`);
+
+  const supabase = createClient();
+  const { data: tRow } = await supabase
+    .from("tenancies")
+    .select("id, rotessa_customer_id")
+    .eq("id", tenancyId)
+    .maybeSingle();
+  if (!tRow) redirect("/dashboard/tenancies");
+  if ((tRow as { rotessa_customer_id: string | null }).rotessa_customer_id) {
+    redirect(`${tenancyPath(tenancyId)}?rotessa=already`);
+  }
+
+  const result = await linkRotessaCustomerByEmail(supabase, org.id, tenancyId, email);
+  if (!result.ok) redirect(`${tenancyPath(tenancyId)}?rotessa=link${result.code}`);
+
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(`${tenancyPath(tenancyId)}?rotessa=${result.scheduleId ? "linkedsched" : "linked"}`);
+}
+
+export async function stopRotessaRent(formData: FormData) {
+  const tenancyId = String(formData.get("tenancy_id") ?? "").trim();
+  if (!tenancyId) redirect("/dashboard/tenancies");
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_rotessa", `${tenancyPath(tenancyId)}?rotessa=forbidden`);
+
+  const supabase = createClient();
+  const result = await stopTenancyRotessaRent(supabase, org.id, tenancyId, { archive: false });
+  if (!result.ok) {
+    const reason = result.reason ? `&reason=${encodeURIComponent(result.reason)}` : "";
+    redirect(`${tenancyPath(tenancyId)}?rotessa=${result.code}${reason}`);
+  }
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(`${tenancyPath(tenancyId)}?rotessa=${result.stopped ? "stopped" : "nothingtostop"}`);
+}
+
+export async function scheduleRotessaRentStop(formData: FormData) {
+  const tenancyId = String(formData.get("tenancy_id") ?? "").trim();
+  if (!tenancyId) redirect("/dashboard/tenancies");
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_rotessa", `${tenancyPath(tenancyId)}?rotessa=forbidden`);
+
+  const supabase = createClient();
+  const result = await scheduleTenancyRotessaStop(
+    supabase,
+    org.id,
+    tenancyId,
+    String(formData.get("last_payment") ?? "").trim() || null,
+  );
+  if (!result.ok) {
+    redirect(`${tenancyPath(tenancyId)}?rotessa=${result.code === "nolive" ? "nothingtostop" : result.code}`);
+  }
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(`${tenancyPath(tenancyId)}?rotessa=stopscheduled`);
+}
+
+export async function cancelScheduledRotessaRentStop(formData: FormData) {
+  const tenancyId = String(formData.get("tenancy_id") ?? "").trim();
+  if (!tenancyId) redirect("/dashboard/tenancies");
+
+  const org = await getCurrentOrg();
+  if (!org) redirect("/login");
+  await requireCapability("manage_rotessa", `${tenancyPath(tenancyId)}?rotessa=forbidden`);
+
+  const supabase = createClient();
+  const { data: stRow } = await supabase.from("tenancies").select("status").eq("id", tenancyId).maybeSingle();
+  if ((stRow as { status: string | null } | null)?.status === "ended") {
+    redirect(`${tenancyPath(tenancyId)}?rotessa=keepended`);
+  }
+  await supabase
+    .from("tenancies")
+    .update({ rent_stop_after: null, updated_at: new Date().toISOString() })
+    .eq("id", tenancyId);
+  revalidatePath(tenancyPath(tenancyId));
+  redirect(`${tenancyPath(tenancyId)}?rotessa=stopcleared`);
 }

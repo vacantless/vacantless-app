@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { stopTenancyStripeRent, scheduleTenancyRentStopAfterNext } from "@/lib/stripe-rent-stop";
+import { stopTenancyRotessaRent, scheduleTenancyRotessaStop } from "@/lib/rotessa-rent";
 import { canCreateRentSubscription } from "@/lib/stripe-connect";
 import { requireCapability } from "@/lib/membership";
 import {
@@ -775,12 +776,40 @@ export async function endTenancy(formData: FormData) {
     if (sched.ok) stopAfterIso = sched.dateIso;
     else if (sched.code !== "nolive") redirect(`/dashboard/tenancies/${id}?striperent=endnonext`);
   }
+  // S798: the same choice for rent on Rotessa. The Rotessa customer is
+  // archived when the tenancy ends (now, or by the sweep after the last
+  // payment), so nothing new can be scheduled on it.
+  const { data: rRow } = await supabase
+    .from("tenancies")
+    .select("rotessa_customer_id, rotessa_schedule_id")
+    .eq("id", id)
+    .maybeSingle();
+  const rot = rRow as { rotessa_customer_id: string | null; rotessa_schedule_id: string | null } | null;
+  let rotessaStopAfter = false;
+  if (rot?.rotessa_schedule_id && /^\d{4}-\d{2}-\d{2}$/.test(lastPayment)) {
+    const rs = await scheduleTenancyRotessaStop(supabase, org.id, id, lastPayment);
+    if (rs.ok) {
+      stopAfterIso = rs.dateIso;
+      rotessaStopAfter = true;
+    } else if (rs.code !== "nolive") {
+      redirect(`/dashboard/tenancies/${id}?rotessa=endnonext`);
+    }
+  }
+  if (rot?.rotessa_customer_id && !rotessaStopAfter) {
+    const rstop = await stopTenancyRotessaRent(supabase, org.id, id, { archive: true });
+    if (!rstop.ok) {
+      const reason = rstop.reason ? `&reason=${encodeURIComponent(rstop.reason)}` : "";
+      redirect(`/dashboard/tenancies/${id}?rotessa=endstopfail${reason}`);
+    }
+    if (rstop.stopped) stoppedNow = true;
+  }
+
   if (!stopAfterIso) {
     const stop = await stopTenancyStripeRent(supabase, org.id, id);
     if (!stop.ok) {
       redirect(`/dashboard/tenancies/${id}?striperent=endstopfail`);
     }
-    stoppedNow = stop.stopped;
+    stoppedNow = stoppedNow || stop.stopped;
   }
 
   await supabase
@@ -816,6 +845,15 @@ export async function deleteTenancy(formData: FormData) {
     .eq("id", id)
     .maybeSingle();
   const live = liveRow as { stripe_subscription_id: string | null; stripe_subscription_status: string | null } | null;
+  // S798: same for a Rotessa rent schedule.
+  const { data: rotLive } = await supabase
+    .from("tenancies")
+    .select("rotessa_schedule_id")
+    .eq("id", id)
+    .maybeSingle();
+  if ((rotLive as { rotessa_schedule_id: string | null } | null)?.rotessa_schedule_id) {
+    redirect(`/dashboard/tenancies/${id}?rotessa=stopfirst`);
+  }
   if (
     live &&
     !canCreateRentSubscription({

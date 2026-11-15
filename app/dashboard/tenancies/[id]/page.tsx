@@ -33,7 +33,15 @@ import {
   serveN1,
   fileN1Pdf,
 } from "../actions";
-import { createRotessaCustomer, createRotessaSchedule } from "../rotessa-actions";
+import {
+  createRotessaCustomer,
+  createRotessaSchedule,
+  linkRotessaCustomer,
+  stopRotessaRent,
+  scheduleRotessaRentStop,
+  cancelScheduledRotessaRentStop,
+} from "../rotessa-actions";
+import { loadRotessaConn, fetchRotessaRentSummary, rotessaLastPaymentOptions } from "@/lib/rotessa-rent";
 import { defaultFirstProcessDate, minProcessDate, formatProcessDate } from "@/lib/rotessa";
 import TenancyStripeRentSection, {
   type TenancyStripeRentView,
@@ -359,6 +367,12 @@ const ROTESSA_SUCCESS: Record<string, string> = {
   already: "This tenancy already has a Rotessa customer.",
   scheduled: "Monthly rent schedule created in Rotessa. Payments will run automatically on the schedule.",
   schedalready: "This tenancy already has a rent schedule.",
+  linked: "Linked to the existing Rotessa customer. They have no single rent schedule in Rotessa yet, so set one up below.",
+  linkedsched: "Linked to the existing Rotessa customer and their rent schedule.",
+  stopped: "Rotessa rent stopped. The schedule was deleted in Rotessa, so no more payments will be pulled.",
+  nothingtostop: "There is no Rotessa rent schedule running on this tenancy.",
+  stopscheduled: "Last payment saved. Rotessa rent stops on its own once that payment is taken.",
+  stopcleared: "Rent keeps collecting on Rotessa as before.",
 };
 const ROTESSA_ERROR: Record<string, string> = {
   notconnected: "Connect your Rotessa account in Settings before creating a customer.",
@@ -371,6 +385,21 @@ const ROTESSA_ERROR: Record<string, string> = {
   norent: "Set a monthly rent amount on this tenancy before scheduling rent.",
   baddate: "Pick a first payment date at least 2 business days from today.",
   schedfail: "Rotessa couldn't create the rent schedule. The tenant may still need to authorize their bank in Rotessa. Check Settings and try again.",
+  linkbademail: "Enter the email the tenant uses in Rotessa.",
+  linknomatch: "No Rotessa customer has that email. Check it in your Rotessa customers list.",
+  linkmany: "More than one Rotessa customer has that email. Archive the extra one in Rotessa, then try again.",
+  linkarchived: "That Rotessa customer is archived. Unarchive them in Rotessa first.",
+  linktaken: "That Rotessa customer is already linked to another tenancy.",
+  linklistfail: "We couldn't read your Rotessa customers. Re-test the connection in Settings.",
+  linknotconnected: "Connect your Rotessa account in Settings first.",
+  stopfail: "Rotessa didn't delete the schedule, so rent is still running. A payment already in progress can't be stopped.",
+  archivefail: "Rotessa didn't archive the customer.",
+  nonext: "We couldn't read the next Rotessa payment date. Try again.",
+  badlastdate: "Pick one of the listed payment dates.",
+  keepended: "This tenancy has ended, so rent can't go back to collecting with no end.",
+  endnonext: "We couldn't save that last payment with Rotessa, so the tenancy was not ended.",
+  endstopfail: "Rotessa didn't stop the rent, so the tenancy was not ended.",
+  stopfirst: "Stop the Rotessa rent schedule before deleting this tenancy.",
 };
 // Stripe Connect rent outcomes (?striperent=...). `synced` is success-toned.
 const STRIPE_RENT_SUCCESS: Record<string, string> = {
@@ -493,6 +522,14 @@ export default async function TenancyDetailPage({
     | undefined;
   const rotessaConnected = !!rotessaRow?.api_key_encrypted;
   const rotessaStatus = rotessaRow?.connection_status ?? "not_connected";
+  // S798: Amount / Last payment / Next payment for Rotessa, read live.
+  const rotessaConn = t.rotessa_customer_id && rotessaConnected ? await loadRotessaConn(supabase, org.id) : null;
+  const rotessaSummary = await fetchRotessaRentSummary(rotessaConn, t.rotessa_customer_id, t.rotessa_schedule_id);
+  const rotessaLive = !!t.rotessa_schedule_id;
+  const rotessaLastOptions = rotessaLastPaymentOptions(rotessaSummary, 12).map((iso) => ({
+    iso,
+    label: formatProcessDate(iso),
+  }));
 
   // The selected org's Stripe Connect rent rail state (sibling of Rotessa).
   // Drives the Stripe rent-collection section below.
@@ -539,6 +576,7 @@ export default async function TenancyDetailPage({
       (iso) => ({ iso, label: formatProcessDate(iso) }),
     ),
   };
+  const endLastPaymentOptions = rentLive ? stripeRentView.lastPaymentOptions : rotessaLastOptions;
   const todayIso = new Date().toISOString().slice(0, 10);
   const defaultProcessDate = defaultFirstProcessDate(todayIso);
   const minProcDate = minProcessDate(todayIso);
@@ -1476,7 +1514,9 @@ export default async function TenancyDetailPage({
     null;
   const errMsg =
     tenancyErrorMessage(searchParams.err) ||
-    (searchParams.rotessa ? ROTESSA_ERROR[searchParams.rotessa] ?? null : null) ||
+    (searchParams.rotessa && !ROTESSA_SUCCESS[searchParams.rotessa] && ROTESSA_ERROR[searchParams.rotessa]
+      ? `${ROTESSA_ERROR[searchParams.rotessa]}${searchParams.reason ? ` (${searchParams.reason})` : ""}`
+      : null) ||
     (searchParams.striperent && !STRIPE_RENT_SUCCESS[searchParams.striperent]
       ? (STRIPE_RENT_ERROR[searchParams.striperent] ?? null) &&
         `${STRIPE_RENT_ERROR[searchParams.striperent]}${
@@ -2598,31 +2638,112 @@ export default async function TenancyDetailPage({
             {/* Monthly rent schedule (increment 3) ------------------------ */}
             <div className="border-t border-gray-100 pt-4">
               {t.rotessa_schedule_id ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusChip tone="success">Rent schedule active</StatusChip>
-                    <span className="text-sm text-gray-600">
-                      {formatRentCents(t.rent_cents)}/mo, billed monthly to the primary tenant.
-                    </span>
+                    <span className="text-sm text-gray-600">Billed monthly to the primary tenant through Rotessa.</span>
                   </div>
-                  <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                  <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
                     <div>
-                      <dt className="text-gray-500">Rotessa schedule ID</dt>
-                      <dd className="font-mono text-xs text-gray-700">{t.rotessa_schedule_id}</dd>
+                      <dt className="text-gray-500">Amount</dt>
+                      <dd className="font-medium text-gray-900">
+                        {formatRentCents(rotessaSummary?.amountCents ?? t.rent_cents)}/mo
+                      </dd>
                     </div>
                     <div>
-                      <dt className="text-gray-500">Set up</dt>
+                      <dt className="text-gray-500">Last payment</dt>
                       <dd className="font-medium text-gray-900">
-                        {t.rotessa_schedule_synced_at
-                          ? new Date(t.rotessa_schedule_synced_at).toLocaleString("en-US", { timeZone: DEFAULT_TIME_ZONE })
-                          : "-"}
+                        {rotessaSummary?.lastPaymentIso
+                          ? `${rotessaSummary.lastPaymentCents != null ? `${formatRentCents(rotessaSummary.lastPaymentCents)} on ` : ""}${formatProcessDate(rotessaSummary.lastPaymentIso)}${
+                              rotessaSummary.lastPaymentState === "processing"
+                                ? " (processing at the bank)"
+                                : rotessaSummary.lastPaymentState === "failed"
+                                  ? " (did not go through)"
+                                  : ""
+                            }`
+                          : rotessaSummary
+                            ? "None yet"
+                            : "-"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-500">Next payment</dt>
+                      <dd className="font-medium text-gray-900">
+                        {rotessaSummary?.nextChargeIso ? formatProcessDate(rotessaSummary.nextChargeIso) : "-"}
                       </dd>
                     </div>
                   </dl>
+                  {!rotessaSummary && (
+                    <p className="text-xs text-gray-500">We couldn&apos;t read this schedule from Rotessa just now.</p>
+                  )}
+                  {rotessaSummary && !rotessaSummary.scheduleFound && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      Rotessa no longer shows this schedule. It may have been removed in Rotessa.
+                    </p>
+                  )}
                   <p className="text-xs text-gray-400">
-                    Payments run automatically. Manage or cancel the schedule from
-                    your Rotessa dashboard.
+                    Rotessa schedule <span className="font-mono">{t.rotessa_schedule_id}</span>.
                   </p>
+                  {t.rent_stop_after && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      Last payment: {formatProcessDate(t.rent_stop_after)}. Rent stops on its own once that payment is taken.
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-start gap-3">
+                    {t.rent_stop_after && (
+                      <form action={cancelScheduledRotessaRentStop}>
+                        <input type="hidden" name="tenancy_id" value={t.id} />
+                        <button className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60">Keep collecting instead</button>
+                      </form>
+                    )}
+                    <details className="text-sm">
+                      <summary className="inline-flex cursor-pointer select-none list-none items-center rounded-lg border border-red-200 bg-white px-4 py-2 font-semibold text-red-600 transition hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+                        {t.rent_stop_after ? "Change or stop now" : "Stop monthly rent"}
+                      </summary>
+                      <div className="mt-2 space-y-3 rounded-lg border border-red-100 bg-red-50 p-3">
+                        {rotessaLastOptions.length > 0 && (
+                          <form action={scheduleRotessaRentStop} className="space-y-2">
+                            <input type="hidden" name="tenancy_id" value={t.id} />
+                            <label htmlFor="rotessa-last-payment" className="block text-sm text-gray-700">
+                              Pick the last payment. Rent keeps collecting through it, then stops on its own.
+                            </label>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <select
+                                id="rotessa-last-payment"
+                                name="last_payment"
+                                defaultValue={
+                                  t.rent_stop_after && rotessaLastOptions.some((o) => o.iso === t.rent_stop_after)
+                                    ? t.rent_stop_after
+                                    : rotessaLastOptions[0].iso
+                                }
+                                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                              >
+                                {rotessaLastOptions.map((o) => (
+                                  <option key={o.iso} value={o.iso}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <button className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60">
+                                {t.rent_stop_after ? "Change the last payment" : "Stop after this payment"}
+                              </button>
+                            </div>
+                          </form>
+                        )}
+                        <form action={stopRotessaRent} className="space-y-2">
+                          <input type="hidden" name="tenancy_id" value={t.id} />
+                          <p className="text-sm text-gray-700">
+                            Or stop now. The schedule is deleted in Rotessa and no more payments are
+                            pulled. A payment already in progress at the bank can&apos;t be stopped. The
+                            tenant stays a Rotessa customer, so you can set rent up again later.
+                          </p>
+                          <button className="inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700">
+                            Yes, stop rent now
+                          </button>
+                        </form>
+                      </div>
+                    </details>
+                  </div>
                 </div>
               ) : t.rent_cents == null ? (
                 <p className="text-sm text-gray-600">
@@ -2701,6 +2822,24 @@ export default async function TenancyDetailPage({
               >
                 Create Rotessa customer
               </button>
+            </form>
+            <form action={linkRotessaCustomer} className="space-y-2 border-t border-gray-100 pt-3">
+              <input type="hidden" name="tenancy_id" value={t.id} />
+              <label htmlFor="rotessa-link-email" className="block text-sm text-gray-600">
+                Already collecting from this tenant in Rotessa? Link them by the email on their
+                Rotessa customer. Nothing changes in Rotessa.
+              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  id="rotessa-link-email"
+                  type="email"
+                  name="email"
+                  required
+                  defaultValue={primary?.email ?? ""}
+                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                <button className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60">Link existing customer</button>
+              </div>
             </form>
           </div>
         )}
@@ -3215,13 +3354,13 @@ export default async function TenancyDetailPage({
 
       {/* Lifecycle actions ----------------------------------------------- */}
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        {t.status !== "ended" && !rentLive && (
+        {t.status !== "ended" && !rentLive && !rotessaLive && (
           <form action={endTenancy}>
             <input type="hidden" name="id" value={t.id} />
             <button className={SECONDARY_ACTION_CLASS}>End tenancy</button>
           </form>
         )}
-        {t.status !== "ended" && rentLive && (
+        {t.status !== "ended" && (rentLive || rotessaLive) && (
           <details className="w-full sm:w-auto">
             <summary className={`${SECONDARY_ACTION_CLASS} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}>
               End tenancy
@@ -3248,15 +3387,14 @@ export default async function TenancyDetailPage({
                   id="end-tenancy-last-payment"
                   name="last_payment"
                   defaultValue={
-                    stripeRentView.stopAfterIso &&
-                    stripeRentView.lastPaymentOptions.some((o) => o.iso === stripeRentView.stopAfterIso)
-                      ? stripeRentView.stopAfterIso
+                    t.rent_stop_after && endLastPaymentOptions.some((o) => o.iso === t.rent_stop_after)
+                      ? t.rent_stop_after
                       : "now"
                   }
                   className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 >
                   <option value="now">No more payments. Stop rent now.</option>
-                  {stripeRentView.lastPaymentOptions.map((o) => (
+                  {endLastPaymentOptions.map((o) => (
                     <option key={o.iso} value={o.iso}>
                       {o.label}
                     </option>
@@ -3264,6 +3402,7 @@ export default async function TenancyDetailPage({
                 </select>
                 <span className="mt-1 block text-xs text-gray-500">
                   Pick a date and rent keeps collecting through that payment, then stops on its own.
+                  {t.rotessa_customer_id && " The tenant's Rotessa customer is archived once rent stops."}
                 </span>
               </div>
               <button className={SECONDARY_ACTION_CLASS}>End tenancy</button>
@@ -3278,7 +3417,7 @@ export default async function TenancyDetailPage({
         </form>
         <p className="text-xs text-gray-400">
           Ending keeps the record; deleting removes it and its tenants permanently.
-          {rentLive && " A tenancy with automatic rent running can't be deleted until the rent has stopped."}
+          {(rentLive || rotessaLive) && " A tenancy with automatic rent running can't be deleted until the rent has stopped."}
         </p>
       </div>
     </div>

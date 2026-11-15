@@ -15,6 +15,7 @@ import {
   upcomingChargeDates,
   type RentPaymentSummary,
 } from "@/lib/stripe-connect";
+import { runRotessaScheduledStop } from "@/lib/rotessa-rent";
 
 export type StopRentResult =
   | { ok: true; stopped: boolean }
@@ -227,7 +228,9 @@ export async function runScheduledRentStops(opts: { admin: SupabaseClient; today
   const out = { ok: true, checked: 0, stopped: 0, waiting: 0, cleared: 0, failed: 0 };
   const { data, error } = await opts.admin
     .from("tenancies")
-    .select("id, organization_id, rent_stop_after, stripe_subscription_id, stripe_subscription_status")
+    .select(
+      "id, organization_id, status, rent_stop_after, stripe_subscription_id, stripe_subscription_status, rotessa_customer_id, rotessa_schedule_id",
+    )
     .not("rent_stop_after", "is", null)
     .limit(100);
   if (error) return { ...out, ok: false, error: error.message };
@@ -237,10 +240,27 @@ export async function runScheduledRentStops(opts: { admin: SupabaseClient; today
     rent_stop_after: string;
     stripe_subscription_id: string | null;
     stripe_subscription_status: string | null;
+    status: string | null;
+    rotessa_customer_id: string | null;
+    rotessa_schedule_id: string | null;
   };
   for (const row of (data ?? []) as Row[]) {
     out.checked++;
-    if (!row.stripe_subscription_id || !subscriptionIsLive(row.stripe_subscription_status)) {
+    const stripeLive = !!row.stripe_subscription_id && subscriptionIsLive(row.stripe_subscription_status);
+    // S798: rent on Rotessa (no live Stripe subscription) is stopped by the
+    // Rotessa step: delete the schedule once the last payment is taken.
+    if (!stripeLive && row.rotessa_schedule_id) {
+      const r = await runRotessaScheduledStop(opts.admin, row, todayIso);
+      if (r === "stopped") out.stopped++;
+      else if (r === "waiting") out.waiting++;
+      else if (r === "cleared") out.cleared++;
+      else {
+        out.failed++;
+        out.ok = false;
+      }
+      continue;
+    }
+    if (!stripeLive) {
       // Nothing live any more (stopped by hand, or canceled at Stripe).
       await opts.admin.from("tenancies").update({ rent_stop_after: null }).eq("id", row.id);
       out.cleared++;
