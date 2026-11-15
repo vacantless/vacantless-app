@@ -56,6 +56,7 @@ export default async function Home() {
         <LittleThings />
         <Pricing />
         <FounderBand />
+        <Questions />
         <ClosingCta />
       </main>
       <SiteFooter />
@@ -143,7 +144,7 @@ function Hero() {
     <section className="relative isolate border-b border-[#d9e1dc] bg-gradient-to-b from-white to-[#edf5f0]/90">
       <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-12 py-14 sm:py-20 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <div className="max-w-[590px]">
-          <Eyebrow>For landlords and property managers</Eyebrow>
+          <Eyebrow>For Canadian landlords and property managers</Eyebrow>
           <h1 className="mb-[16px] max-w-[19ch] text-[clamp(2.2rem,4.6vw,3.4rem)] font-extrabold leading-[1.04] tracking-tight">
             <span className="block">Fill the vacancy.{" "}</span>
             <span className="block">Then the rental runs itself.</span>
@@ -165,7 +166,12 @@ function Hero() {
           </div>
           <p className="max-w-[34rem] text-[0.86rem] font-semibold leading-snug text-[#59655f]">
             <span className="text-[var(--color-accent-strong)]">Free for one rental.</span>{" "}
-            Paid plans from CA$29 a month. No card to start.
+            Paid plans from CA$29 a month. No card to start. Cancel any time.
+          </p>
+          {/* S799: say the Canadian fit in the first screen; the tools a
+              visitor compares us with cannot post to Kijiji or fill an N4. */}
+          <p className="mt-2 max-w-[34rem] text-[0.86rem] leading-snug text-[#59655f]">
+            Made for Canada: Kijiji, Rentals.ca, Zumper and Ontario&apos;s LTB forms.
           </p>
         </div>
         <ProductPreview />
@@ -415,8 +421,8 @@ function HowItWorks() {
     <section id="how" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
       <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
         <SectionHead title="Set up in one sitting.">
-          No new habits. Keep posting where you post today. Vacantless takes
-          over once a renter clicks your link.
+          One form, your hours, one button. Already have ads up? Put your
+          booking link in them and Vacantless takes over from the first click.
         </SectionHead>
         <ol className="grid list-none gap-4 p-0 sm:grid-cols-2 lg:grid-cols-4">
           {HOW_STEPS.map((step, i) => (
@@ -445,7 +451,7 @@ const HOW_STEPS: { title: string; body: string }[] = [
   },
   {
     title: "Press Set Live",
-    body: "Your rental goes up on your Facebook Page and Marketplace. On Free, we post your one rental to Kijiji, Rentals.ca and Zumper too. With Posting, we post every rental. Every renter lands in the same place.",
+    body: "Your rental goes up on your Facebook Page and Marketplace. On Free, we post your one rental to Rentals.ca and Zumper too. Kijiji charges its own ad fee. With Posting, we post every rental. Every renter lands in the same place.",
   },
   {
     title: "Show up",
@@ -771,6 +777,27 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
   },
 ];
 
+// S799: the page ran about 15,000 pixels on a phone. Each group shows its
+// first three lines; the rest fold under "Show N more" (a plain <details>, so
+// every line stays in the page for search engines and needs no script).
+const LITTLE_THINGS_SHOWN = 3;
+
+function LittleThingList({ items }: { items: LittleThing[] }) {
+  return (
+    <ul className="grid list-none gap-2.5 p-0">
+      {items.map((t) => (
+        <li key={t.text} className="flex items-start gap-2 text-[0.9rem] leading-snug text-[#273832]">
+          <CheckMark />
+          <span>
+            {t.text}
+            {t.plan ? <span className="ml-1 text-xs text-[#5a6b64]">({t.plan})</span> : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function LittleThings() {
   return (
     <section id="little-things" className="border-b border-[#d9e1dc] bg-[#f4f7f5] py-16 sm:py-[76px]">
@@ -782,17 +809,18 @@ function LittleThings() {
           {LITTLE_THING_GROUPS.map((g) => (
             <div key={g.head} className="rounded-lg border border-[#d9e1dc] bg-white p-5">
               <h3 className="mb-3 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">{g.head}</h3>
-              <ul className="grid list-none gap-2.5 p-0">
-                {g.items.map((t) => (
-                  <li key={t.text} className="flex items-start gap-2 text-[0.9rem] leading-snug text-[#273832]">
-                    <CheckMark />
-                    <span>
-                      {t.text}
-                      {t.plan ? <span className="ml-1 text-xs text-[#5a6b64]">({t.plan})</span> : null}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <LittleThingList items={g.items.slice(0, LITTLE_THINGS_SHOWN)} />
+              {g.items.length > LITTLE_THINGS_SHOWN ? (
+                <details className="group mt-2.5">
+                  <summary className="cursor-pointer list-none text-[0.88rem] font-bold text-[var(--color-accent)] hover:underline [&::-webkit-details-marker]:hidden">
+                    <span className="group-open:hidden">Show {g.items.length - LITTLE_THINGS_SHOWN} more</span>
+                    <span className="hidden group-open:inline">Show fewer</span>
+                  </summary>
+                  <div className="mt-2.5">
+                    <LittleThingList items={g.items.slice(LITTLE_THINGS_SHOWN)} />
+                  </div>
+                </details>
+              ) : null}
             </div>
           ))}
         </div>
@@ -1051,6 +1079,63 @@ function FounderBand() {
             Read the story &rarr;
           </Link>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ Questions */
+
+/* S799 (REVIEW-S799 item 4): the questions a landlord who has never heard of
+   us asks before signing up. Every answer is checked: renters use links only
+   (app/r, app/showing); the booking link works in any ad (Quick replies);
+   Billing says "cancel anytime, no contract" and a cancelled plan runs to the
+   period end (lib/billing cancel_at_period_end); Close this account is on
+   Settings, Plan & admin; Free is TIERS.free; the LTB forms, Standard Lease
+   and guideline are Ontario's; app/privacy says we do not sell personal
+   information. */
+const QUESTIONS: { q: string; a: string }[] = [
+  {
+    q: "Do renters need an app or an account?",
+    a: "No. They tap your link, pick a time and get reminders by email, and by text on paid plans.",
+  },
+  {
+    q: "I already have ads up. Do I start over?",
+    a: "No. Put your booking link in the ads you have. Every renter who taps it lands in your list. When you are ready, we post the ads and keep them up for you.",
+  },
+  {
+    q: "What does Free include?",
+    a: "One live rental with its own page, instant replies with a booking link, self-booked viewings and email reminders. No card needed.",
+  },
+  {
+    q: "Can I leave?",
+    a: "Yes. There is no contract. Cancel a paid plan from your Billing page and it runs to the end of the time you paid for. You can close your account from Settings.",
+  },
+  {
+    q: "Is it only for Ontario?",
+    a: "No. Ads, replies, viewings, repairs and rent work anywhere in Canada. The LTB notices, the Standard Lease and the rent increase guideline are Ontario's.",
+  },
+  {
+    q: "Who sees my renters' details?",
+    a: "You and the teammates you add. We do not sell personal information.",
+  },
+];
+
+function Questions() {
+  return (
+    <section id="questions" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="Questions landlords ask first.">
+          Short answers. For anything else, write to hello@vacantless.com.
+        </SectionHead>
+        <dl className="grid gap-4 md:grid-cols-2">
+          {QUESTIONS.map((item) => (
+            <div key={item.q} className="rounded-lg border border-[#d9e1dc] bg-white p-5">
+              <dt className="mb-1.5 text-[1.02rem] font-bold">{item.q}</dt>
+              <dd className="text-[0.92rem] leading-relaxed text-[#59655f]">{item.a}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </section>
   );
