@@ -8,6 +8,8 @@ import {
   subscriptionStatusLabel,
   decideScheduledRentStop,
   upcomingChargeDates,
+  connectAccountController,
+  connectAccountBillsPlatform,
 } from "../lib/stripe-connect";
 
 let passed = 0;
@@ -146,6 +148,24 @@ const DEC18 = Date.UTC(2026, 11, 18, 12) / 1000;
   ok("no next date -> empty", upcomingChargeDates(null, 1).length === 0);
   const s2 = summarizeRentPayments({ status: "active", current_period_end: NOV18, billing_cycle_anchor: NOV18 }, []);
   ok("summary carries the anchor day", s2.anchorDay === 18);
+}
+
+// S796d: landlord accounts must not bill Connect fees to the platform.
+{
+  const c = connectAccountController();
+  ok("landlord pays Stripe directly", c.fees.payer === "account");
+  ok("Stripe carries payment losses", c.losses.payments === "stripe");
+  ok("light Express dashboard kept", c.stripe_dashboard.type === "express");
+  ok("Stripe collects requirements", c.requirement_collection === "stripe");
+  ok("new setup does not bill the platform", !connectAccountBillsPlatform(c.fees.payer));
+  ok("old express accounts do", connectAccountBillsPlatform("application_express"));
+  ok("unknown payer is not flagged", !connectAccountBillsPlatform(null));
+}
+{
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  const src = readFileSync("app/dashboard/settings/stripe-connect-actions.ts", "utf8");
+  ok("account creation uses the controller settings", /controller: connectAccountController\(\)/.test(src));
+  ok("account creation no longer passes type express", !/type: "express"/.test(src));
 }
 
 console.log(`\nstripe-rent-stop: ${passed} passed, ${failed} failed`);

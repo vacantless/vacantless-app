@@ -565,6 +565,40 @@ export function summarizeRentPayments(
 }
 
 /**
+ * S796d: how a landlord's connected account is set up, so Vacantless pays
+ * Stripe nothing. Pure.
+ *   * fees.payer "account": the landlord pays Stripe's payment fee directly.
+ *     Stripe charges no Connect fees (the per-account and per-payout fees) to
+ *     the landlord or to the platform. type "express" set this to
+ *     "application_express", which bills those Connect fees to the platform.
+ *   * losses.payments "stripe": Stripe, not the platform, carries a negative
+ *     balance the landlord can't repay.
+ *   * stripe_dashboard "express": keeps the light, Stripe-hosted onboarding
+ *     with no separate full-dashboard login (the reason Express was chosen).
+ * Never pass `type` with these: the controller settings replace it.
+ * Stripe: docs.stripe.com/connect/migrate-to-controller-properties
+ */
+export function connectAccountController(): {
+  fees: { payer: "account" };
+  losses: { payments: "stripe" };
+  requirement_collection: "stripe";
+  stripe_dashboard: { type: "express" };
+} {
+  return {
+    fees: { payer: "account" },
+    losses: { payments: "stripe" },
+    requirement_collection: "stripe",
+    stripe_dashboard: { type: "express" },
+  };
+}
+
+/** Does this connected account bill Connect fees to the platform? Pure.
+ *  True for accounts made the old way (type "express"). */
+export function connectAccountBillsPlatform(feesPayer: unknown): boolean {
+  return typeof feesPayer === "string" && feesPayer.startsWith("application");
+}
+
+/**
  * S796c: the upcoming monthly payment dates, starting with the next one, so a
  * landlord can pick the LAST payment ahead of time. Pure. Stripe bills on the
  * anchor day each month and uses the month's last day when the month is

@@ -9,6 +9,7 @@ import {
   rentCapabilityRequest,
   normalizeConnectCountry,
   summarizeStripeAccount,
+  connectAccountController,
 } from "@/lib/stripe-connect";
 
 // Stripe Connect rent-collection actions (platform pivot step 2, ALT provider; S215).
@@ -96,6 +97,11 @@ async function saveSnapshot(
 // hosted onboarding. Returning lands back on Settings, where they hit "Refresh
 // status".
 //
+// S796d: accounts are now created with controller settings (Express dashboard,
+// landlord pays Stripe directly) instead of type "express", which billed
+// Stripe's Connect fees to the platform. The onboarding reasons below still
+// hold, since the dashboard stays Express.
+//
 // Why Express (not Standard): Standard accounts force the holder to sign into a
 // FULL Stripe Dashboard account with mandatory 2FA, which made onboarding collide
 // with the operator's existing Stripe login + authenticator at every turn. Express
@@ -118,7 +124,10 @@ export async function startStripeConnect(formData: FormData) {
     const country = normalizeConnectCountry(String(formData.get("country") ?? "CA"));
     try {
       const account = await stripe!.accounts.create({
-        type: "express",
+        // S796d: controller settings, not type "express". The landlord pays
+        // Stripe's fees directly and Stripe bills the platform nothing (see
+        // connectAccountController). Same light, Stripe-hosted onboarding.
+        controller: connectAccountController(),
         country,
         // NOTE: deliberately NOT prefilling the operator's email — Express
         // onboarding collects the account holder's own contact details, and
