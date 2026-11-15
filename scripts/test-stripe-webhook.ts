@@ -604,7 +604,13 @@ async function runS713() {
   }
 }
 
-run().then(runS712).then(runS713).then(() => {
+function runS797() {
+  const src = readFileSync("app/api/stripe/webhook/route.ts", "utf8");
+  ok("S797b: connected-account bank authorization updates the mandate", src.includes("reconcileMandate(admin, stripe, event)") && src.includes("stripe_setup_session_id\", session.id"));
+  ok("S797b: mandate reconcile reads the session on the connected account", src.includes("stripeAccount: event.account"));
+}
+
+run().then(runS797).then(runS712).then(runS713).then(() => {
   console.log(`\nstripe-webhook: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 });

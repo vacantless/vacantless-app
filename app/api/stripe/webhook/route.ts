@@ -24,6 +24,7 @@ import {
 } from "@/lib/billing";
 import {
   isRentReconcileEvent,
+  parseSetupSession,
   rentStatusFromEvent,
   shouldApplyRentStatus,
   type RawStripeInvoice,
@@ -428,6 +429,49 @@ async function reconcileRent(
   return { matched: true as const, tenancyId: tenancy.id, status: nextStatus };
 }
 
+// S797b: a tenant finishing the bank authorization on a landlord's connected
+// account. The event is checkout.session.completed with event.account set. We
+// match the tenancy by its stored setup session id, re-read the session (with
+// its SetupIntent) on that account, and store the payment method + mandate
+// status, exactly what "Refresh status" does by hand. Idempotent: a plain
+// status write, so a Stripe retry is harmless.
+async function reconcileMandate(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  stripe: NonNullable<ReturnType<typeof getStripe>>,
+  event: Stripe.Event,
+) {
+  const session = event.data.object as Stripe.Checkout.Session;
+  if (session.mode !== "setup" || typeof session.id !== "string" || !event.account) {
+    return { matched: false as const, reason: "not_setup_session" };
+  }
+  const { data: rows } = await admin
+    .from("tenancies")
+    .select("id")
+    .eq("stripe_setup_session_id", session.id)
+    .limit(1);
+  const tenancyId = (rows?.[0] as { id?: string } | undefined)?.id;
+  if (!tenancyId) return { matched: false as const, reason: "no_tenancy" };
+
+  const full = await stripe.checkout.sessions.retrieve(
+    session.id,
+    { expand: ["setup_intent"] },
+    { stripeAccount: event.account },
+  );
+  const parsed = parseSetupSession(full as Parameters<typeof parseSetupSession>[0]);
+  if (!parsed.ok) return { matched: false as const, reason: "unparsed" };
+
+  await admin
+    .from("tenancies")
+    .update({
+      stripe_payment_method_id: parsed.paymentMethodId,
+      stripe_mandate_status: parsed.mandateStatus,
+      stripe_rent_synced_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", tenancyId);
+  return { matched: true as const, tenancyId, mandate: parsed.mandateStatus };
+}
+
 export async function POST(req: NextRequest) {
   const stripe = getStripe();
   // Two webhook surfaces, two destinations, two signing secrets:
@@ -491,6 +535,13 @@ export async function POST(req: NextRequest) {
     // return BEFORE the platform switch — a rent event must never be read as a
     // platform-billing event.
     if (event.account) {
+      if (event.type === "checkout.session.completed") {
+        const m = await reconcileMandate(admin, stripe, event);
+        return NextResponse.json(
+          { ok: true, type: event.type, account: event.account, mandate: m },
+          { status: 200 },
+        );
+      }
       const r = await reconcileRent(admin, event);
       return NextResponse.json(
         { ok: true, type: event.type, account: event.account, rent: r },
