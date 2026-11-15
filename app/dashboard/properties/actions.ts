@@ -524,7 +524,7 @@ export async function addProperty(formData: FormData) {
     } catch {
       // best-effort
     }
-    redirect(`/dashboard/properties/${newId}?created=1#rental-details`);
+    redirect(`/dashboard/properties/${newId}?created=1`);
   }
   redirect(`/dashboard/properties?added=${Date.now().toString(36)}`);
 }
@@ -982,7 +982,7 @@ export async function createPropertyV2(formData: FormData) {
     revalidatePath(`/dashboard/properties/${newId}`);
     if (result.ok) {
       redirect(
-        `/dashboard/properties/${newId}?created=1&photos=${result.uploaded}#rental-details`,
+        `/dashboard/properties/${newId}?created=1&photos=${result.uploaded}`,
       );
     }
     redirect(
@@ -997,7 +997,7 @@ export async function createPropertyV2(formData: FormData) {
     // best-effort; the landlord can still add photos
   }
   revalidatePath(`/dashboard/properties/${newId}`);
-  redirect(`/dashboard/properties/${newId}?created=1#rental-details`);
+  redirect(`/dashboard/properties/${newId}?created=1`);
 }
 
 /**

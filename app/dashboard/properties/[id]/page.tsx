@@ -339,7 +339,8 @@ function detailTabFromParam(tab: string | undefined): DetailTabId | null {
 }
 
 // Inherit-hint helpers for the per-unit tri-state utilities/pets selects (0050).
-// The empty option reads "Inherit (<building-effective value>)".
+// The empty option reads "Your usual: <building-effective value>" (S799b;
+// it read "Inherit (...)", which a new landlord could not parse).
 function boolToSelect(v: boolean | null | undefined): string {
   return v == null ? "" : v ? "true" : "false";
 }
@@ -3444,7 +3445,7 @@ export default async function PropertyDetailPage({
 
       <PageHeader
         icon={<Icons.building />}
-        eyebrow="Property"
+        eyebrow="Rental"
         title={p.address}
         action={
           <div className="flex flex-wrap items-center gap-2">
@@ -4497,7 +4498,7 @@ export default async function PropertyDetailPage({
           >
             <p className="mb-2 text-xs font-medium text-gray-600">Pets welcome</p>
             <p className="mb-3 text-xs text-gray-400">
-              Leave a field on &ldquo;Inherit&rdquo; to use your{" "}
+              Leave a field on &ldquo;Your usual&rdquo; to use your{" "}
               <Link
                 href="/dashboard/properties/standard-policy"
                 className="underline hover:text-gray-600"
@@ -4515,7 +4516,7 @@ export default async function PropertyDetailPage({
                   className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
                 >
                   <option value="">
-                    Inherit ({petInheritWord(policyProfile?.pets_cats)})
+                    Your usual: {petInheritWord(policyProfile?.pets_cats)}
                   </option>
                   <option value="true">Welcome</option>
                   <option value="false">Not welcome</option>
@@ -4529,7 +4530,7 @@ export default async function PropertyDetailPage({
                   className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
                 >
                   <option value="">
-                    Inherit ({petInheritWord(policyProfile?.pets_dogs)})
+                    Your usual: {petInheritWord(policyProfile?.pets_dogs)}
                   </option>
                   <option value="true">Welcome</option>
                   <option value="false">Not welcome</option>
@@ -4545,7 +4546,7 @@ export default async function PropertyDetailPage({
                   className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
                 >
                   <option value="">
-                    Inherit ({dogSizeLabel(policyProfile?.pets_dog_size) ?? "no limit"})
+                    Your usual: {dogSizeLabel(policyProfile?.pets_dog_size) ?? "no limit"}
                   </option>
                   {DOG_SIZE_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
@@ -4579,7 +4580,7 @@ export default async function PropertyDetailPage({
             Utilities included in rent
           </legend>
           <p className="mb-3 text-xs text-gray-400">
-            Leave a utility on &ldquo;Inherit&rdquo; to use your{" "}
+            Leave a utility on &ldquo;Your usual&rdquo; to use your{" "}
             <Link
               href="/dashboard/properties/standard-policy"
               className="underline hover:text-gray-600"
@@ -4604,7 +4605,7 @@ export default async function PropertyDetailPage({
                   className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm"
                 >
                   <option value="">
-                    Inherit ({utilInheritWord(inherited)})
+                    Your usual: {utilInheritWord(inherited)}
                   </option>
                   <option value="true">Included</option>
                   <option value="false">Tenant pays</option>
@@ -4641,7 +4642,7 @@ export default async function PropertyDetailPage({
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
               >
                 <option value="">
-                  Inherit ({leaseTermLabel(policyProfile?.lease_term) ?? "1-year lease"})
+                  Your usual: {leaseTermLabel(policyProfile?.lease_term) ?? "1-year lease"}
                 </option>
                 {LEASE_TERM_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -4660,13 +4661,12 @@ export default async function PropertyDetailPage({
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
               >
                 <option value="">
-                  Inherit (
+                  Your usual:{" "}
                   {acTypeLabel(policyProfile?.ac_type)
                     ? acTypeLabel(policyProfile?.ac_type)
                     : policyProfile?.ac_type === "none"
                       ? "no A/C"
                       : "not set"}
-                  )
                 </option>
                 {AC_TYPE_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -4685,7 +4685,7 @@ export default async function PropertyDetailPage({
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
               >
                 <option value="">
-                  Inherit ({smokingLabel(policyProfile?.smoking) ?? "not set"})
+                  Your usual: {smokingLabel(policyProfile?.smoking) ?? "not set"}
                 </option>
                 {SMOKING_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -4710,13 +4710,12 @@ export default async function PropertyDetailPage({
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
               >
                 <option value="">
-                  Inherit (
+                  Your usual:{" "}
                   {policyProfile?.on_site_management == null
                     ? "not set"
                     : policyProfile.on_site_management
                       ? "Yes"
                       : "No"}
-                  )
                 </option>
                 <option value="true">Yes</option>
                 <option value="false">No</option>
