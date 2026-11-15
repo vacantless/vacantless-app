@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -10,6 +10,7 @@ import {
   AUTH_BUTTON_CLASS,
   AUTH_INPUT_CLASS,
 } from "@/components/auth-shell";
+import { GoogleSignIn } from "@/components/google-sign-in";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,6 +18,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // S800: where Google returns to, the same ?next= as the password login.
+  const [googleNext, setGoogleNext] = useState("/dashboard");
+  useEffect(() => {
+    setGoogleNext(safeNextPath(new URLSearchParams(window.location.search).get("next")));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,7 +61,8 @@ export default function LoginPage() {
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <GoogleSignIn next={googleNext} label="Log in with Google" />
+      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
         <div>
           <label
             htmlFor="login-email"

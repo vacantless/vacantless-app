@@ -17,6 +17,8 @@ import {
   signupSubtitle,
 } from "@/lib/signup-copy";
 import { VisitBeacon } from "@/components/visit-beacon";
+import { GoogleSignIn } from "@/components/google-sign-in";
+import { signupNext } from "@/lib/google-sign-in";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -36,7 +38,10 @@ export default function SignupPage() {
   const [signedInAs, setSignedInAs] = useState<string | null>(null);
   const [existingAccount, setExistingAccount] = useState(false);
 
+  // S800: where a Google sign-up goes after Google (lib/google-sign-in).
+  const [googleNext, setGoogleNext] = useState("/onboarding");
   useEffect(() => {
+    setGoogleNext(signupNext(window.location.search));
     setPlan(new URLSearchParams(window.location.search).get("plan"));
     createClient()
       .auth.getUser()
@@ -214,7 +219,8 @@ export default function SignupPage() {
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <GoogleSignIn next={googleNext} label="Sign up with Google" />
+      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
         <div>
           <label
             htmlFor="signup-email"
@@ -243,8 +249,8 @@ export default function SignupPage() {
             id="signup-password"
             type="password"
             required
-            minLength={6}
-            placeholder="At least 6 characters"
+            minLength={8}
+            placeholder="At least 8 characters"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className={AUTH_INPUT_CLASS}

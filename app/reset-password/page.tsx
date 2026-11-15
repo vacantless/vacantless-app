@@ -99,8 +99,8 @@ export default function ResetPasswordPage() {
               id="reset-password"
               type="password"
               required
-              minLength={6}
-              placeholder="At least 6 characters"
+              minLength={8}
+              placeholder="At least 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className={AUTH_INPUT_CLASS}
@@ -117,7 +117,7 @@ export default function ResetPasswordPage() {
               id="reset-password-confirm"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               placeholder="Re-enter your new password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
