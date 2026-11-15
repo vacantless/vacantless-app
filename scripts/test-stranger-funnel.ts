@@ -9,7 +9,7 @@ import {
   distinctVisitors,
   isBot,
 } from "../lib/stranger-funnel";
-import type { AccountCounts } from "../lib/new-account-watch";
+import { isOwnAddress, type AccountCounts } from "../lib/new-account-watch";
 
 let passed = 0;
 let failed = 0;
@@ -85,6 +85,10 @@ ok("pages home and signup only", cleanPage("home") === "home" && cleanPage("sign
 ok("bots are not people", isBot("Googlebot/2.1") && isBot("facebookexternalhit/1.1") && isBot("") && isBot(null) && isBot("curl/8.0"));
 ok("a phone browser is a person", !isBot("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1"));
 
+// S800e: the stranger-walk login is ours
+ok("stranger-walk gmail is ours", isOwnAddress("noammuscovitch+s799@gmail.com") && isOwnAddress("NoamMuscovitch@gmail.com"));
+ok("someone else's gmail is not ours", !isOwnAddress("landlord@gmail.com") && !isOwnAddress("noammuscovitch@gmail.com.evil.ca"));
+
 // wiring
 const route = readFileSync("app/api/funnel/visit/route.ts", "utf8");
 ok("route skips signed-in visitors", /if \(user\) return res/.test(route));
@@ -98,6 +102,7 @@ const cron = readFileSync("app/api/cron/new-account-watch/route.ts", "utf8");
 ok("daily email uses the shared loader", /loadOutsideAccounts\(/.test(cron));
 const mig = readFileSync("supabase/migrations/0297_funnel_visits.sql", "utf8");
 ok("visits table holds no names or emails", !/email|name/i.test(mig.split("\n").filter((l) => !l.startsWith("--")).join("\n")));
+ok("server key may write and read visits", /grant select, insert on public\.funnel_visits to service_role/.test(mig));
 ok("visits table is closed to the public", /enable row level security/.test(mig) && /revoke all/.test(mig));
 
 console.log(`\ntest-stranger-funnel: ${passed} passed, ${failed} failed (${passed + failed} total)`);

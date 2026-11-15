@@ -14,3 +14,6 @@ create table if not exists public.funnel_visits (
 
 alter table public.funnel_visits enable row level security;
 revoke all on public.funnel_visits from anon, authenticated;
+-- S800e: the server writes and the admin console reads with the service key;
+-- the table was made without a grant for it, so nothing was stored at first.
+grant select, insert on public.funnel_visits to service_role;

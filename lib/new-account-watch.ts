@@ -19,6 +19,8 @@ const OWN_ADDRESS_PATTERNS: readonly RegExp[] = [
   /^nmuscovitch(\+[^@]*)?@hotmail\.com$/i,
   /^noam(\+[^@]*)?@royallepage\.ca$/i,
   /^thadmusco(\+[^@]*)?@gmail\.com$/i,
+  // S800e: the S799 stranger walk signed up as noammuscovitch+s799@gmail.com.
+  /^noammuscovitch(\+[^@]*)?@gmail\.com$/i,
   /^[^@]+@vacantless\.com$/i,
 ];
 
