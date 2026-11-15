@@ -16,6 +16,7 @@ import {
   signupHitExistingAccount,
   signupSubtitle,
 } from "@/lib/signup-copy";
+import { VisitBeacon } from "@/components/visit-beacon";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -198,6 +199,8 @@ export default function SignupPage() {
   }
 
   return (
+    <>
+    <VisitBeacon page="signup" />
     <AuthShell
       eyebrow={signupEyebrow(plan)}
       title="Create your login"
@@ -276,5 +279,6 @@ export default function SignupPage() {
         </p>
       </form>
     </AuthShell>
+    </>
   );
 }

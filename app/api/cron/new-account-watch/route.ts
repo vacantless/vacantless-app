@@ -1,16 +1,13 @@
-import { describeSource, parseSourceValue } from "@/lib/signup-source";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotificationEmail } from "@/lib/email";
 import { adminEmails } from "@/lib/provisioning-server";
-import { QUIET_NOTIFICATION_ORGANIZATION_IDS } from "@/lib/quiet-orgs";
+import { loadOutsideAccounts } from "@/lib/account-counts-server";
 import {
   FIRST_LIVE_MEDIAN_DAYS,
   buildWatchEmail,
   firstLiveFooter,
   buildWatchRows,
-  isOwnTestAccount,
-  type AccountCounts,
 } from "@/lib/new-account-watch";
 
 // S702: the daily new-account email to Noam. Run once a day from
@@ -46,70 +43,10 @@ export async function GET(req: NextRequest) {
   // still shows the last 14 (buildWatchRows).
   const since = new Date(now.getTime() - (FIRST_LIVE_MEDIAN_DAYS + 1) * 86_400_000).toISOString();
 
-  const { data: orgs, error } = await admin
-    .from("organizations")
-    .select("id, name, plan, subscription_status, created_at, closed_at, signup_source, first_live_at")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false });
+  // S800: the loader is shared with the admin funnel (lib/account-counts-server).
+  const { accounts, excluded: exclude, error } = await loadOutsideAccounts(admin, since);
   if (error) {
-    return NextResponse.json({ ok: false, reason: `orgs:${error.message}` });
-  }
-
-  const exclude = new Set(QUIET_NOTIFICATION_ORGANIZATION_IDS);
-  const count = async (table: string, orgId: string, notDraft = false) => {
-    let q = admin
-      .from(table)
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", orgId);
-    if (notDraft) q = q.neq("status", "draft");
-    const { count: c } = await q;
-    return c ?? 0;
-  };
-
-  const accounts: AccountCounts[] = [];
-  // S722: leave out accounts whose every login is one of Noam's own addresses.
-  const memberEmails = async (orgId: string): Promise<string[]> => {
-    const { data: members } = await admin
-      .from("memberships")
-      .select("user_id")
-      .eq("organization_id", orgId);
-    const emails: string[] = [];
-    for (const m of members ?? []) {
-      const { data } = await admin.auth.admin.getUserById(m.user_id);
-      emails.push(data?.user?.email ?? "");
-    }
-    return emails;
-  };
-
-  for (const o of orgs ?? []) {
-    if (exclude.has(o.id)) continue;
-    if (isOwnTestAccount(await memberEmails(o.id))) {
-      exclude.add(o.id);
-      continue;
-    }
-    const [rentals, liveRentals, rules, overrides, enquiries, bookings] = await Promise.all([
-      count("properties", o.id),
-      count("properties", o.id, true),
-      count("availability_rules", o.id),
-      count("availability_overrides", o.id),
-      count("leads", o.id),
-      count("showings", o.id),
-    ]);
-    accounts.push({
-      id: o.id,
-      name: o.name,
-      createdAt: o.created_at,
-      plan: o.plan,
-      subscriptionStatus: o.subscription_status,
-      closedAt: o.closed_at,
-      rentals,
-      liveRentals,
-      viewingTimes: rules + overrides,
-      enquiries,
-      bookings,
-      source: describeSource(parseSourceValue(o.signup_source)),
-      firstLiveAt: o.first_live_at ?? null,
-    });
+    return NextResponse.json({ ok: false, reason: error });
   }
 
   const rows = buildWatchRows(accounts, now, exclude);

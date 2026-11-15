@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { VacantlessMark } from "../components/vacantless-mark";
+import { VisitBeacon } from "@/components/visit-beacon";
 
 export const metadata = {
   // S790b: the title and description say the whole job, not only showings:
@@ -45,6 +46,7 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-white text-[#15211d]">
       <MarketingHeader active="home" />
+      <VisitBeacon page="home" />
       <main>
         <Hero />
         <StopDoing />

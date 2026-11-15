@@ -8,6 +8,7 @@ import { HandoffLandlordForm } from "./handoff-form";
 import { GuidelineForm } from "./guideline-form";
 import { setOrgFeatureFlagAsAdmin } from "./actions";
 import { PlatformSwitchesSection } from "./platform-switches-section";
+import { StrangerFunnelSection } from "./stranger-funnel-section";
 import { OrgSmsNumbersSection } from "./org-sms-numbers-section";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import {
@@ -144,6 +145,8 @@ export default async function AdminConsolePage({
             Node security release can be checked against production. */}
         <p className="text-xs text-slate-400">Node.js on this server: {process.version}</p>
       </header>
+
+      <StrangerFunnelSection admin={admin} />
 
       <OnboardLandlordForm />
 
