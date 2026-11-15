@@ -97,10 +97,10 @@ async function saveSnapshot(
 // hosted onboarding. Returning lands back on Settings, where they hit "Refresh
 // status".
 //
-// S796d: accounts are now created with controller settings (Express dashboard,
+// S796d: accounts are now created with controller settings (full dashboard,
 // landlord pays Stripe directly) instead of type "express", which billed
 // Stripe's Connect fees to the platform. The onboarding reasons below still
-// hold, since the dashboard stays Express.
+// hold. Stripe refuses an Express dashboard with those settings.
 //
 // Why Express (not Standard): Standard accounts force the holder to sign into a
 // FULL Stripe Dashboard account with mandatory 2FA, which made onboarding collide
@@ -126,7 +126,7 @@ export async function startStripeConnect(formData: FormData) {
       const account = await stripe!.accounts.create({
         // S796d: controller settings, not type "express". The landlord pays
         // Stripe's fees directly and Stripe bills the platform nothing (see
-        // connectAccountController). Same light, Stripe-hosted onboarding.
+        // connectAccountController). Full dashboard: the landlord signs in to Stripe.
         controller: connectAccountController(),
         country,
         // NOTE: deliberately NOT prefilling the operator's email — Express

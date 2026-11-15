@@ -155,7 +155,7 @@ const DEC18 = Date.UTC(2026, 11, 18, 12) / 1000;
   const c = connectAccountController();
   ok("landlord pays Stripe directly", c.fees.payer === "account");
   ok("Stripe carries payment losses", c.losses.payments === "stripe");
-  ok("light Express dashboard kept", c.stripe_dashboard.type === "express");
+  ok("full dashboard (Stripe refuses express when the landlord pays fees)", c.stripe_dashboard.type === "full");
   ok("Stripe collects requirements", c.requirement_collection === "stripe");
   ok("new setup does not bill the platform", !connectAccountBillsPlatform(c.fees.payer));
   ok("old express accounts do", connectAccountBillsPlatform("application_express"));

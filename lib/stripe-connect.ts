@@ -573,8 +573,11 @@ export function summarizeRentPayments(
  *     "application_express", which bills those Connect fees to the platform.
  *   * losses.payments "stripe": Stripe, not the platform, carries a negative
  *     balance the landlord can't repay.
- *   * stripe_dashboard "express": keeps the light, Stripe-hosted onboarding
- *     with no separate full-dashboard login (the reason Express was chosen).
+ *   * stripe_dashboard "full": Stripe rejects "express" with these settings
+ *     ("your platform must collect fees and be liable for negative balances"
+ *     - checked live 2026-11-15), so the landlord gets the full Stripe
+ *     dashboard and signs in to Stripe themselves. That is the price of the
+ *     platform paying nothing.
  * Never pass `type` with these: the controller settings replace it.
  * Stripe: docs.stripe.com/connect/migrate-to-controller-properties
  */
@@ -582,13 +585,13 @@ export function connectAccountController(): {
   fees: { payer: "account" };
   losses: { payments: "stripe" };
   requirement_collection: "stripe";
-  stripe_dashboard: { type: "express" };
+  stripe_dashboard: { type: "full" };
 } {
   return {
     fees: { payer: "account" },
     losses: { payments: "stripe" },
     requirement_collection: "stripe",
-    stripe_dashboard: { type: "express" },
+    stripe_dashboard: { type: "full" },
   };
 }
 
