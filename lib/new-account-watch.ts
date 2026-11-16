@@ -34,6 +34,24 @@ export function isOwnTestAccount(memberEmails: readonly (string | null | undefin
   return memberEmails.length > 0 && memberEmails.every(isOwnAddress);
 }
 
+/**
+ * S802 (REVIEW-S799 item 18): which accounts are ours. Ours = listed as quiet
+ * or test (lib/quiet-orgs.ts), or every login is one of our addresses.
+ * memberEmailsByOrg holds each org's login emails (an org with no logins
+ * counts as ours only when listed).
+ */
+export function ownOrgIds(
+  orgIds: readonly string[],
+  memberEmailsByOrg: ReadonlyMap<string, readonly (string | null | undefined)[]>,
+  listedOurs: ReadonlySet<string>,
+): Set<string> {
+  const out = new Set<string>();
+  for (const id of orgIds) {
+    if (listedOurs.has(id) || isOwnTestAccount(memberEmailsByOrg.get(id) ?? [])) out.add(id);
+  }
+  return out;
+}
+
 export type AccountCounts = {
   id: string;
   name: string | null;

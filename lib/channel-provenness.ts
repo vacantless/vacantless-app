@@ -284,12 +284,11 @@ export const NON_PRODUCTION_ORGANIZATION_IDS = [
   // closed its own account on 2026-10-09; listed so it never counts as a
   // customer or reaches a real Page.
   "3a7f13dc-139a-4a82-8eb9-941be3f3dae4", // Stranger Three Rentals
-  // NOT LISTED, AND IT IS A REAL QUESTION: Maple Door Rentals
-  // (a0e2e45c-f2be-427e-b8db-30535a821daa), plan `pilot`, 3 properties, 6
-  // leads. It reads like a real pilot customer, and excluding a real customer
-  // suppresses true evidence, so it is left counting as production. It holds no
-  // verifications and no live posts either, so nothing turns on it today. Ask
-  // Noam before moving it.
+  // S802: Maple Door Rentals is ours, Noam confirmed 2026-11-15 (REVIEW-S799
+  // item 18). It never had a login, sits on the retired pilot plan, and its 3
+  // rentals and 6 renters were all made the day the account was made. Its two
+  // available rentals were set Off market the same day.
+  "a0e2e45c-f2be-427e-b8db-30535a821daa", // Maple Door Rentals
 ] as const;
 
 /** The channel keys a landlord may see. Unproven channels are simply absent. */

@@ -6,7 +6,7 @@ ok("Growth Test is quiet", isQuietNotificationOrg("8ea1da48-0cd2-45a4-bfba-023b3
 ok("Rehearsal is quiet", isQuietNotificationOrg("695ebb66-273c-4261-b6e2-2cea9643987e"));
 ok("Abbas demo is quiet", isQuietNotificationOrg("b2cb4eab-9a29-4972-8fca-564dc8ca6a61"));
 ok("Davis Muscovitch Rentals is quiet", isQuietNotificationOrg("9315e41e-1c03-43e3-9c8f-78563512f302"));
-ok("Maple Door (possible real pilot) is NOT quiet", !isQuietNotificationOrg("a0e2e45c-f2be-427e-b8db-30535a821daa"));
+ok("Maple Door is ours and quiet (S802, Noam confirmed)", isQuietNotificationOrg("a0e2e45c-f2be-427e-b8db-30535a821daa"));
 ok("null is not quiet", !isQuietNotificationOrg(null));
 ok("no duplicates", new Set(QUIET_NOTIFICATION_ORGANIZATION_IDS).size === QUIET_NOTIFICATION_ORGANIZATION_IDS.length);
 console.log(`quiet-orgs: ${failed ? "FAIL " + failed : "all passed"}`);

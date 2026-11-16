@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describeSource, parseSourceValue } from "@/lib/signup-source";
 import { QUIET_NOTIFICATION_ORGANIZATION_IDS } from "@/lib/quiet-orgs";
-import { isOwnTestAccount, type AccountCounts } from "@/lib/new-account-watch";
+import { isOwnTestAccount, ownOrgIds, type AccountCounts } from "@/lib/new-account-watch";
 
 // S800: one loader for "outside accounts made since X and how far each got",
 // shared by the daily new-account email (S702) and the admin funnel (S800).
@@ -73,4 +73,27 @@ export async function loadOutsideAccounts(
     });
   }
   return { accounts, excluded, error: null };
+}
+
+/** S802: the admin console's "Ours" tag. One read of logins, not one per account. */
+export async function loadOwnOrgIds(admin: SupabaseClient, orgIds: readonly string[]): Promise<Set<string>> {
+  const listed = new Set<string>(QUIET_NOTIFICATION_ORGANIZATION_IDS);
+  if (orgIds.length === 0) return new Set();
+  try {
+    const [{ data: members }, { data: users }] = await Promise.all([
+      admin.from("memberships").select("organization_id, user_id").in("organization_id", orgIds as string[]),
+      admin.auth.admin.listUsers({ perPage: 1000 }),
+    ]);
+    const emailById = new Map<string, string>();
+    for (const u of users?.users ?? []) emailById.set(u.id, u.email ?? "");
+    const byOrg = new Map<string, string[]>();
+    for (const m of (members ?? []) as { organization_id: string; user_id: string }[]) {
+      const list = byOrg.get(m.organization_id) ?? [];
+      list.push(emailById.get(m.user_id) ?? "");
+      byOrg.set(m.organization_id, list);
+    }
+    return ownOrgIds(orgIds, byOrg, listed);
+  } catch {
+    return ownOrgIds(orgIds, new Map(), listed);
+  }
 }

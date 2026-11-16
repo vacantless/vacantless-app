@@ -1,3 +1,4 @@
+import { loadOwnOrgIds } from "@/lib/account-counts-server";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -108,6 +109,8 @@ export default async function AdminConsolePage({
     : "Service role is not configured, so client feature access cannot be read.";
   let orgRows: AdminOrgRow[] = [];
   let featureFlagsByOrg = new Map<string, OrganizationFeatureFlag[]>();
+  // S802: "Ours" tag on our own and test accounts (lib/new-account-watch ownOrgIds).
+  let ownOrgs = new Set<string>();
   if (admin) {
     const { data: orgData, error: orgError } = await admin
       .from("organizations")
@@ -118,6 +121,7 @@ export default async function AdminConsolePage({
       featureAccessError = orgError.message;
     } else {
       orgRows = ((orgData ?? []) as AdminOrgRow[]).filter((org) => !!org.id);
+      ownOrgs = await loadOwnOrgIds(admin, orgRows.map((org) => org.id));
       featureFlagsByOrg = await loadOrganizationFeatureFlagsByOrg(
         admin,
         orgRows.map((org) => org.id),
@@ -198,6 +202,11 @@ export default async function AdminConsolePage({
                         <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                           {org.plan ?? "trial"}
                         </span>
+                        {ownOrgs.has(org.id) && (
+                          <span className="ml-1 mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                            Ours
+                          </span>
+                        )}
                       </th>
                       {SETTINGS_ORG_FEATURES.map((feature) => {
                         const orgForResolver = { ...org, featureFlags };
