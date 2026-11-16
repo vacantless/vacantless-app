@@ -11,10 +11,16 @@ import type { createClient } from "@/lib/supabase/server";
 
 type ServerClient = ReturnType<typeof createClient>;
 
+// S807 (Noam, 2026-11-16: "move forward on all your recos"): the wall is
+// retired. It hid Money, Rent, Expenses and Repairs from every account with no
+// tenancy (Agile included, which keeps its tenancies in Buildium), while the
+// homepage sells rent collection, repairs and Books & Tax. Every account now
+// sees every section; an empty one starts with "Add your first tenant". The
+// env var is ignored so a stale LEASING_ONLY_NAV=1 in Vercel cannot hide them.
 export function leasingOnlyNavEnabled(
-  env: Record<string, string | undefined> = process.env,
+  _env: Record<string, string | undefined> = process.env,
 ): boolean {
-  return env.LEASING_ONLY_NAV === "1";
+  return false;
 }
 
 const POST_LEASE_TABLES = [

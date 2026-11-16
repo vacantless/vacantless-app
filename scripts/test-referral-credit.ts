@@ -32,7 +32,7 @@ const good: ReferralInviteRow = {
 const decide = (invite: ReferralInviteRow | null, amountPaidCents: number | null = 9900) =>
   referralCreditDecision({ amountPaidCents, refereeOrgId: REFEREE, invite });
 
-ok("credit is one month of Growth", REFERRAL_CREDIT_CENTS === 9900);
+ok("credit is one month of Growth", REFERRAL_CREDIT_CENTS === 7900);
 const g = decide(good);
 ok("accepted paid referral grants", g.grant && g.inviteId === "inv-1" && g.referrerOrgId === REFERRER, g);
 ok("$0 invoice never grants", !decide(good, 0).grant);
@@ -48,7 +48,7 @@ ok("already credited once only", (decide({ ...good, referral_credit_at: "2026-11
 ok("referrer line names the friend", creditDescription("referrer", "Lakeview Rentals").includes("Lakeview Rentals"));
 ok("referee line names the referrer", creditDescription("referee", "Agile").startsWith("Welcome credit"));
 ok("blank names still read", creditDescription("referrer", "  ").length > 10 && creditDescription("referee", null).length > 10);
-ok("copy carries the number once", REFERRAL_CREDIT_COPY.body.includes("$99") && !REFERRAL_CREDIT_COPY.body.includes("—"));
+ok("copy carries the number once", REFERRAL_CREDIT_COPY.body.includes("$79") && !REFERRAL_CREDIT_COPY.body.includes("—"));
 
 // wiring
 const webhook = readFileSync("app/api/stripe/webhook/route.ts", "utf8");

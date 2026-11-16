@@ -949,9 +949,13 @@ export default async function TenancyDetailPage({
         beds,
         unitClass: "purpose_built",
       },
-      benchmarks: benchmarkRows,
+      // S807: own history only. The CMHC/TRREB averages covered three areas
+      // and read low for a vacant unit; with fewer than 3 similar units of
+      // the landlord's own, nothing shows (honest-null).
+      benchmarks: [],
       own,
     });
+    void benchmarkRows;
   }
   const marketContext = deriveRentIncreaseMarketContext({
     rentIncrease,

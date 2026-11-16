@@ -31,7 +31,7 @@ export default async function ReferralsPage() {
 
   const rows = (data as ReferralRow[] | null) ?? [];
   const views = shapeReferralRows(rows);
-  // S746b: which referrals have paid out the $99 credit to both sides.
+  // S746b: which referrals have paid out the referral credit to both sides.
   const credited = new Set(
     ((data as Array<{ id: string; referral_credit_at: string | null }> | null) ?? [])
       .filter((r) => r.referral_credit_at)

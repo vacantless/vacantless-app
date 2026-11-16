@@ -17,6 +17,7 @@ import { setLiveSiteNote, type SetLiveSiteNote } from "@/lib/set-live-cost-line"
 import { EMPTY_COST_CAP } from "@/lib/distribution-channels";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { revalidatePath } from "next/cache";
+import { SISTER_FILL_FIELDS, sameBuilding, sisterFillPatch, type UnitFacts } from "@/lib/sister-unit-fill";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { tabFromReferer } from "@/lib/return-tab";
@@ -6142,6 +6143,46 @@ export async function savePhotoFolderAndPull(formData: FormData) {
   revalidatePath(`/dashboard/properties/${propertyId}`);
   back(pullResultParam(result));
 }
+
+/**
+ * S807: "Fill from a unit in this building". Copies a sister unit's facts into
+ * this rental's EMPTY fields only (lib/sister-unit-fill). Both rentals must be
+ * this account's and in the same building; nothing typed is overwritten.
+ */
+export async function fillFromSisterUnit(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const sourceId = String(formData.get("source_id") ?? "");
+  if (!id || !sourceId || id === sourceId) return;
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const cols = ["id", "address", ...SISTER_FILL_FIELDS].join(", ");
+  const { data: rows } = await supabase
+    .from("properties")
+    .select(cols)
+    .eq("organization_id", org.id)
+    .in("id", [id, sourceId]);
+  const list = (rows ?? []) as unknown as Array<UnitFacts & { id: string; address: string | null }>;
+  const target = list.find((r) => r.id === id);
+  const source = list.find((r) => r.id === sourceId);
+  if (!target || !source || !sameBuilding(target.address, source.address)) {
+    redirect(`/dashboard/properties/${id}?filled=0`);
+  }
+  const patch = sisterFillPatch(target, source);
+  const n = Object.keys(patch).length;
+  if (n > 0) {
+    const { error } = await supabase
+      .from("properties")
+      .update(patch)
+      .eq("id", id)
+      .eq("organization_id", org.id);
+    if (error) redirect(`/dashboard/properties/${id}?filled=error`);
+  }
+  revalidatePath(`/dashboard/properties/${id}`);
+  redirect(`/dashboard/properties/${id}?filled=${n}`);
+}
+
 
 export async function saveQuestionSheet(
   propertyId: string,

@@ -370,16 +370,33 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   // S792: units in a turnover, with the same stage chip the Rentals list shows.
   const { data: turnoverProps } = await supabase
     .from("properties")
-    .select("id, address")
+    .select("id, address, status")
     .eq("organization_id", org.id)
     .is("archived_at", null)
     .limit(300);
-  const turnoverRows = (turnoverProps ?? []) as { id: string; address: string | null }[];
+  const turnoverRows = (turnoverProps ?? []) as { id: string; address: string | null; status: string | null }[];
   const turnoverStages = await latestStages(supabase, org.id, turnoverRows.map((r) => r.id));
   const chipNow = new Date();
   const unitsInProgress = turnoverRows
     .map((r) => ({ id: r.id, address: r.address ?? "A unit", chip: stageChip(turnoverStages.get(r.id), chipNow) }))
     .filter((u): u is { id: string; address: string; chip: NonNullable<ReturnType<typeof stageChip>> } => u.chip !== null);
+
+  // S807: a unit the crew marked "Ready to post" (or "Photos are in") that is
+  // still a private draft waits on whoever posts. One card each on Today.
+  const readyToPostCards = turnoverRows
+    .filter((r) => r.status === "draft")
+    .map((r) => ({ r, latest: turnoverStages.get(r.id) }))
+    .filter(({ latest }) => latest && (latest.stage === "ready_to_post" || latest.stage === "photos_in"))
+    .slice(0, 5)
+    .map(({ r, latest }) => ({
+      key: `ready-${r.id}`,
+      title: `${shortAddress(r.address ?? "A unit")} is ready to post`,
+      line:
+        latest!.stage === "ready_to_post"
+          ? "Your crew marked it ready. Check the rent and details, then set it live."
+          : "Photos are in. Add the rent and details, then set it live.",
+      action: { href: `/dashboard/properties/${r.id}`, label: "Open it" },
+    }));
 
   // Rent-increase rollup (N1 v1, S282): the only actionable statuses surface
   // here, most-urgent first. "Today" uses the org's timezone (Ontario default).
@@ -681,7 +698,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         </div>
       )}
 
-      <NeedsYouCards notices={[...needsYou, ...droppedAds, ...renterEmailCards]} />
+      <NeedsYouCards notices={[...needsYou, ...droppedAds, ...readyToPostCards, ...renterEmailCards]} />
       <ComingVacantCards items={comingVacant} />
 
       {presetNotice && (

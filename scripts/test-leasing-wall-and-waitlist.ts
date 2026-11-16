@@ -89,7 +89,7 @@ const cron = read("app/api/cron/landlord-campaign/route.ts");
 ok("cron: reads the wall flag", cron.includes("leasingOnlyNavEnabled(deps.env)"));
 ok("cron: passes postLeaseWalled to the live path and the dry path",
   (cron.match(/postLeaseWalled: isPostLeaseWalled\(org\.id\)/g) ?? []).length === 2);
-ok("wall flag: env param", leasingOnlyNavEnabled({ LEASING_ONLY_NAV: "1" }) && !leasingOnlyNavEnabled({}));
+ok("wall retired (S807): the env var no longer walls", !leasingOnlyNavEnabled({ LEASING_ONLY_NAV: "1" }) && !leasingOnlyNavEnabled({}));
 
 // ---- 1a. Lead page tenancy links -------------------------------------------
 // S758: every account sees Create / Convert to tenancy (forms and the online

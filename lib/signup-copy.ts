@@ -17,6 +17,7 @@ export function signupEyebrow(plan: string | null | undefined): string {
   if (plan === "portfolio") return "Portfolio plan";
   if (plan === "premium") return "Premium plan";
   if (plan === "posting") return "Start free, add Posting";
+  if (plan === "rent") return "Start free, collect rent";
   return "Start free";
 }
 
@@ -26,6 +27,9 @@ export function signupSubtitle(plan: string | null | undefined): string {
   }
   if (plan === "posting") {
     return "First, set up your sign-in details. Next you'll name your business, then add Posting on your Billing page. No credit card to start.";
+  }
+  if (plan === "rent") {
+    return "First, set up your sign-in details. Next you'll name your business, then add your first tenant. No credit card to start.";
   }
   return "First, set up your sign-in details. Next you'll name your business. No credit card to start.";
 }
@@ -50,5 +54,6 @@ export function signupHitExistingAccount(input: {
 /** S714d: the business-setup page names the real next step for a paid pick. */
 export function onboardingNextStep(plan: string | null | undefined): string {
   if (plan === "starter" || plan === "growth" || plan === "portfolio" || plan === "premium") return "Next: choose how to pay, then add your first rental.";
+  if (plan === "rent") return "Next: add your first tenant and connect Stripe or Rotessa.";
   return "Next: add your first rental.";
 }

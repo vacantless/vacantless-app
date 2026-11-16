@@ -209,7 +209,7 @@ export default async function CrewPage({
       {buildings.length > 0 && (
         <details className="mt-6 rounded-2xl border border-gray-200 bg-white p-4">
           <summary className="cursor-pointer text-sm font-medium text-gray-800">Add a unit</summary>
-          <p className="mt-2 text-xs text-gray-500">For a unit that is not on this list yet. It stays private until the landlord posts it.</p>
+          <p className="mt-2 text-xs text-gray-500">For a unit that is not on this list yet. It stays private until the landlord posts it. A building that is not in the list? Ask the landlord to add one unit there first.</p>
           <form action={addUnitFromCrewLink} className="mt-3 space-y-2">
             <input type="hidden" name="token" value={params.token} />
             <label className="block text-xs font-medium text-gray-600" htmlFor="add-street">Building</label>

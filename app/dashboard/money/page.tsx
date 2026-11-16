@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { redirect } from "next/navigation";
 import { isRentCollectionActive } from "@/lib/rent-status";
+import { RentCostTable } from "@/components/rent-cost-table";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +101,7 @@ export default async function MoneyHubPage() {
   const accounting = canUseBooks(org);
   // Select only the current org's status fields needed to decide whether a rent
   // rail is connected.
-  const [{ data: stripeRows }, { data: rotessaRows }] = await Promise.all([
+  const [{ data: stripeRows }, { data: rotessaRows }, { count: tenancyCount }] = await Promise.all([
     supabase
       .from("stripe_connect_accounts")
       .select("charges_enabled")
@@ -111,7 +112,14 @@ export default async function MoneyHubPage() {
       .select("connection_status")
       .eq("organization_id", org.id)
       .limit(1),
+    // S807: an account with no tenancy yet starts here (the leasing-only wall
+    // is gone, so every account sees Money).
+    supabase
+      .from("tenancies")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id),
   ]);
+  const noTenancy = (tenancyCount ?? 0) === 0;
   const rentActive = isRentCollectionActive({
     stripeChargesEnabled: (stripeRows?.[0] as { charges_enabled?: boolean } | undefined)
       ?.charges_enabled ?? null,
@@ -144,6 +152,28 @@ export default async function MoneyHubPage() {
           </Link>
           .
         </p>
+      )}
+
+      {noTenancy && (
+        <Card className="mt-6">
+          <h2 className="font-semibold text-gray-900">Collect rent in two steps</h2>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-gray-700">
+            <li>
+              <Link href="/dashboard/tenancies/new" className="font-semibold text-brand hover:underline">Add your first tenant</Link>
+              . Have the signed lease? Drop it in and the form fills itself.
+            </li>
+            <li>
+              Connect your own{" "}
+              <Link href="/dashboard/settings?tab=banking#stripe-rent" className="font-semibold text-brand hover:underline">Stripe</Link> or{" "}
+              <Link href="/dashboard/settings?tab=banking#rotessa" className="font-semibold text-brand hover:underline">Rotessa</Link>{" "}
+              account. Your tenant gets a link to set up pre-authorized debit, and rent comes in on the day you pick.
+            </li>
+          </ol>
+          <p className="mt-2 text-sm text-gray-600">Free on every plan, for every rental. What each one costs you:</p>
+          <div className="mt-3 max-w-xl">
+            <RentCostTable compact />
+          </div>
+        </Card>
       )}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">

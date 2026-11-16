@@ -36,10 +36,10 @@ export function RentIncreaseMarketNote({
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h4 className="text-sm font-semibold text-gray-900">
-            Market rent for this unit
+            What your similar units rent for
           </h4>
           <p className="text-xs text-gray-500">
-            How the guideline-capped renewal rent compares to the open market.
+            From your own units with the same bedrooms in this city, rented or listed now.
           </p>
         </div>
         <span
@@ -52,7 +52,7 @@ export function RentIncreaseMarketNote({
       <div className="grid gap-3 sm:grid-cols-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
-            Market range
+            Your range
           </p>
           <p className="mt-1 text-base font-semibold text-gray-900">
             {formatMoney(context.marketLowCents)} - {formatMoney(context.marketHighCents)}
@@ -60,7 +60,7 @@ export function RentIncreaseMarketNote({
         </div>
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
-            Market midpoint
+            Your midpoint
           </p>
           <p className="mt-1 text-base font-semibold text-gray-900">
             {formatMoney(context.marketMidCents)}

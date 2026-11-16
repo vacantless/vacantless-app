@@ -561,6 +561,9 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "We post it to Kijiji, Rentals.ca and Zumper for you. Kijiji charges its own ad fee",
       // S790b: unit progress links are on every plan (S788/S789).
       "Turnover links for your crew: each unit's stage, Drive photos pulled in",
+      // S807: rent collection was always on Free (rent_collection: true, no
+      // rental limit) but the card never said so.
+      "Collect rent on every rental by pre-authorized debit, through your own Stripe or Rotessa",
     ],
   },
   // S779: door bands. Every paid plan gets every feature (PAID_FEATURE_GROUPS);
@@ -656,6 +659,7 @@ export const PAID_FEATURE_GROUPS: { head: string; items: string[] }[] = [
       "Repairs: tenants report and pick times; emergencies alert you at once; find trades other landlords rated; your trade accepts, quotes and books from a link",
       "Ontario LTB notices filled for you: N4, N5, N8, N12, L1 and more",
       "Rent increase reminders with the N1 filled in",
+      "Drop in a signed lease and the tenancy fills itself: rent, dates and tenants",
       // S790b: unit progress (S788/S789), on every plan; named here too.
       "Turnover links for your crew: each unit's stage, Drive photos pulled in, ads down when rented",
     ],

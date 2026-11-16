@@ -144,5 +144,8 @@ export async function createOrganization(formData: FormData) {
   // S742g: "Start free, add Posting" from the pricing page lands on Billing,
   // where the Posting card is, instead of losing the intent.
   if (planIntent === "posting") redirect("/dashboard/billing#posting-addon");
+  // S807: "Just collecting rent?" on the pricing page lands on Money, which
+  // starts with "Add your first tenant" and the Stripe or Rotessa costs.
+  if (planIntent === "rent") redirect("/dashboard/money?start=rent");
   redirect(isPaidPlan(planIntent) ? `/dashboard/billing?plan=${planIntent}` : "/dashboard/getting-started");
 }

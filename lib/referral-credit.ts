@@ -10,9 +10,9 @@
 // PURE: the decision and the copy. The Stripe and database calls live in
 // lib/referral-credit-server.ts. Tests: scripts/test-referral-credit.ts.
 
-/** One month of Growth, CA$99. */
-export const REFERRAL_CREDIT_CENTS = 9900;
-export const REFERRAL_CREDIT_LABEL = "$99";
+/** One month of Growth: CA$79 since the S779 door bands (S807 fix; was $99). */
+export const REFERRAL_CREDIT_CENTS = 7900;
+export const REFERRAL_CREDIT_LABEL = "$79";
 export const REFERRAL_CREDIT_CURRENCY = "cad";
 
 export type ReferralInviteRow = {

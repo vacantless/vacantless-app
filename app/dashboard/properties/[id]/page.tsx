@@ -51,6 +51,7 @@ import {
   updateProperty,
   relistLeasedProperty,
   duplicateProperty,
+  fillFromSisterUnit,
   blastPriceDrop,
   savePhotoFolderAndPull,
   switchPhotoTouchUp,
@@ -109,7 +110,6 @@ import {
   storageUpsellNote,
   canUseListingMarketing,
   canUseWaitlist,
-  canUseMarketRent,
   conciergeMonthlyCap,
   conciergeUsedLeaseUps,
   POSTING_ADDON_NOTE,
@@ -127,18 +127,8 @@ import {
 import {
   vacancyStripModel,
 } from "@/lib/vacancy-cost";
-import {
-  benchmarksFor,
-  cityFromBenchmarkAddress,
-} from "@/lib/rent-benchmarks";
-import {
-  ownComps,
-  suggestRentRange,
-  benchmarkClassForUnitType,
-  type ActiveListingComp,
-  type LeasedOutcomeComp,
-  type MarketRentSuggestion,
-} from "@/lib/market-rent";
+import { demandCheck, daysSince, type DemandCheck } from "@/lib/demand-check";
+import { needsSisterFill, sameBuilding, type UnitFacts } from "@/lib/sister-unit-fill";
 import {
   LAUNDRY_OPTIONS,
   laundryLabel,
@@ -192,7 +182,7 @@ import { AdsStillUpCard } from "./ads-still-up-card";
 import { adsStillUp, isUnavailableStatus, rentalsCaCapNote, statusPhrase as adsStatusPhrase } from "@/lib/ads-still-up";
 import { CollapsibleSection } from "./collapsible-section";
 import { TabbedSections, TabPanel } from "./tabbed-sections";
-import { MarketRentPanel } from "./market-rent-panel";
+import { DemandCheckPanel } from "./demand-check-panel";
 import {
   DISTRIBUTION_CHANNELS,
   CHANNEL_COST_CENTS,
@@ -1010,6 +1000,8 @@ export default async function PropertyDetailPage({
     posterr?: string;
     photos?: string;
     waitlist?: string;
+    /** S807: result of "Fill from a unit in this building" (count, 0 or error). */
+    filled?: string;
     photoskipped?: string;
     /** S789b: the photo folder pull outcome. */
     folder?: string;
@@ -1848,57 +1840,41 @@ export default async function PropertyDetailPage({
   // — the card renders a locked upsell for ungated plans, so we always build the
   // kit (cheap, pure) and let the entitlement decide what the card reveals.
   const marketingEnabled = canUseListingMarketing(org?.plan ?? null);
-  const marketRentEnabled =
-    canUseMarketRent(org?.plan ?? null) &&
-    process.env.MARKET_RENT_ENABLED === "true";
-  const marketRentCity = cityFromBenchmarkAddress(p.address);
-  let marketRentSuggestion: MarketRentSuggestion | null = null;
-  if (marketRentEnabled) {
-    const benchmarkRows = benchmarksFor({
-      country: "CA",
-      city: marketRentCity,
-      beds: p.beds,
-    });
-    let leasedRows: LeasedOutcomeComp[] = [];
-    let activeRows: ActiveListingComp[] = [];
-    if (marketRentCity && p.beds != null) {
-      const { data: leasedData } = await supabase
-        .from("leased_outcomes")
-        .select(
-          "asking_rent_cents, beds, sqft, city, address, days_on_market, leased_at, available_since",
-        )
-        .eq("organization_id", propertyOrgId)
-        .order("leased_at", { ascending: false })
-        .limit(50);
-      leasedRows = (leasedData ?? []) as LeasedOutcomeComp[];
+  // S807: a draft (often one Narayan added from his crew link) can fill its
+  // empty facts from a sister unit in the same building (lib/sister-unit-fill).
+  let sisterUnits: Array<{ id: string; address: string }> = [];
+  if (p.status === "draft" && needsSisterFill(p as unknown as UnitFacts)) {
+    const { data: sib } = await supabase
+      .from("properties")
+      .select("id, address, rent_cents")
+      .eq("organization_id", p.organization_id)
+      .is("archived_at", null)
+      .neq("id", p.id)
+      .not("rent_cents", "is", null)
+      .limit(500);
+    sisterUnits = ((sib ?? []) as Array<{ id: string; address: string | null }>)
+      .filter((r) => sameBuilding(r.address, p.address))
+      .map((r) => ({ id: r.id, address: r.address ?? "" }))
+      .sort((a, b) => a.address.localeCompare(b.address, undefined, { numeric: true }));
+  }
 
-      const { data: activeData } = await supabase
-        .from("properties")
-        .select("address, rent_cents, beds, sqft, status")
-        .eq("organization_id", propertyOrgId)
-        .eq("status", "available")
-        .is("archived_at", null)
-        .neq("id", p.id)
-        .limit(100);
-      activeRows = (activeData ?? []) as ActiveListingComp[];
-    }
-    const own = ownComps(
-      { city: marketRentCity, beds: p.beds },
-      leasedRows,
-      activeRows,
-    );
-    const marketRentClass = benchmarkClassForUnitType(p.unit_type);
-    marketRentSuggestion = suggestRentRange({
-      subject: {
-        country: "CA",
-        city: marketRentCity,
-        beds: p.beds,
-        unitClass: marketRentClass.unitClass,
-        benchmarkCovers: marketRentClass.covers,
-        unitTypeLabel: p.unit_type ? (unitTypeLabel(p.unit_type) ?? "").toLowerCase() || null : null,
-      },
-      benchmarks: benchmarkRows,
-      own,
+  // S807: the demand check replaces "Suggested market rent" (CMHC averages for
+  // three areas only, read low for a vacant unit). It reads this rental's own
+  // renters and booked viewings, so it works in every city (lib/demand-check).
+  let demand: DemandCheck | null = null;
+  if (p.status === "available") {
+    const since14 = new Date(Date.now() - 14 * 86_400_000).toISOString();
+    const since7 = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const [r14, r7, b14] = await Promise.all([
+      supabase.from("leads").select("id", { count: "exact", head: true }).eq("property_id", p.id).gte("created_at", since14),
+      supabase.from("leads").select("id", { count: "exact", head: true }).eq("property_id", p.id).gte("created_at", since7),
+      supabase.from("showings").select("id", { count: "exact", head: true }).eq("property_id", p.id).gte("created_at", since14),
+    ]);
+    demand = demandCheck({
+      daysLive: daysSince(p.available_since ?? null),
+      renters14: r14.count ?? 0,
+      renters7: r7.count ?? 0,
+      booked14: b14.count ?? 0,
     });
   }
 
@@ -3529,6 +3505,38 @@ export default async function PropertyDetailPage({
         }
       />
 
+      {searchParams.filled != null && (
+        <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
+          {searchParams.filled === "error"
+            ? "That did not save. Try again."
+            : searchParams.filled === "0"
+              ? "This unit already had every detail the other one has."
+              : `Filled ${searchParams.filled} details from the other unit. Check the rent and description before posting.`}
+        </p>
+      )}
+      {sisterUnits.length > 0 && (
+        <form
+          action={fillFromSisterUnit}
+          className="mb-4 flex flex-wrap items-end gap-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+        >
+          <input type="hidden" name="id" value={p.id} />
+          <div className="min-w-0 flex-1">
+            <label htmlFor="sister-source" className="block text-sm font-semibold text-gray-900">
+              Fill from a unit in this building
+            </label>
+            <p className="text-xs text-gray-500">
+              Copies rent, beds, size, description and building details into the empty fields only. Floor, balcony, date and photos stay this unit&apos;s.
+            </p>
+            <select id="sister-source" name="source_id" className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm sm:w-80">
+              {sisterUnits.map((u) => (
+                <option key={u.id} value={u.id}>{u.address}</option>
+              ))}
+            </select>
+          </div>
+          <button type="submit" className={SECONDARY_ACTION_CLASS}>Fill it in</button>
+        </form>
+      )}
+
       {/* S710 audit: a draft, paused or leased rental showed four status
           messages that disagreed. Rental sites only matter once the rental
           is live, so this card shows only then; the draft banner above is
@@ -3898,12 +3906,7 @@ export default async function PropertyDetailPage({
         </div>
         </section>
 
-        {marketRentEnabled && (
-          <MarketRentPanel
-            suggestion={marketRentSuggestion}
-            city={marketRentCity}
-          />
-        )}
+        {demand && <DemandCheckPanel check={demand} />}
 
         {/* S724 (V251-24): viewing rules for this rental (an occupied unit needs
             24 hours' notice to the tenant, and often a later first date). */}

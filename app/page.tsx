@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RentCostTable } from "@/components/rent-cost-table";
 import { MarketingHeader } from "@/components/marketing-chrome";
 import { OPERATOR_LINE } from "@/lib/operator-line";
 import { LEASING_PROOF_STATS, POSTING_PROOF } from "@/lib/proof-stats";
@@ -780,7 +781,7 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
     head: "Tenants and money",
     items: [
       { text: "90 days before a lease ends, you get a link to ask the tenant: staying or leaving?" },
-      { text: "At renewal, see the market rent next to the legal cap.", plan: "paid plans" },
+      { text: "Have the signed lease? Drop it in and the tenancy fills itself. ID numbers are never saved.", plan: "paid plans" },
       { text: "Log your tenant's insurance. Turn on the alert and you hear before it lapses." },
       { text: "Keep each tenant's files in one place. Share them by a link that expires." },
       { text: "A rent receipt for your tenant in one click." },
@@ -926,6 +927,7 @@ function Pricing() {
           </p>
         </div>
         <PostingAddonCard />
+        <RentOnlyCard />
         <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-[#6ca58d] bg-[#f4f7f5] p-[18px] sm:flex-row sm:items-center">
           <div>
             <strong className="block text-[1rem]">Want a hand setting up?</strong>
@@ -942,6 +944,41 @@ function Pricing() {
         </p>
       </div>
     </section>
+  );
+}
+
+/* S807 (Noam, 2026-11-16: "do we explain pricing for landlords to collect rent
+   per unit and make it easy for them to sign up for even just this?"). Rent
+   collection is on Free with no rental limit (lib/billing.ts rent_collection);
+   the landlord pays Stripe or Rotessa directly and we add no fee
+   (lib/rent-rail-costs.ts). /signup?plan=rent lands on Money, which starts
+   with "Add your first tenant". */
+function RentOnlyCard() {
+  return (
+    <article
+      id="rent-only"
+      className="mt-4 grid gap-4 rounded-lg border border-[#d9e1dc] bg-white p-[22px] md:grid-cols-[minmax(0,240px)_1fr] md:items-start"
+    >
+      <div>
+        <p className="mb-1 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">
+          Just collecting rent?
+        </p>
+        <h3 className="mb-1 text-[1.08rem] font-semibold">Rent collection</h3>
+        <span className="block text-[1.9rem] font-extrabold leading-tight">
+          Free
+          <small className="text-[0.86rem] font-bold text-[#59655f]"> on every rental</small>
+        </span>
+        <div className="mt-4">
+          <PrimaryButton href="/signup?plan=rent">Start collecting rent</PrimaryButton>
+        </div>
+      </div>
+      <div>
+        <p className="mb-3 text-[0.9rem] leading-snug text-[#273832]">
+          Your tenants pay by pre-authorized debit into your own Stripe or Rotessa account. Add a tenant, send them the link, and rent comes in on the day you pick. You see who paid and who owes. No Vacantless plan needed, for any number of rentals.
+        </p>
+        <RentCostTable compact />
+      </div>
+    </article>
   );
 }
 

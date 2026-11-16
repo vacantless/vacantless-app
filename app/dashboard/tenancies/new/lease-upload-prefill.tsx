@@ -5,8 +5,8 @@
 // (same approach as the MLS PDF-drop import), send that text to the
 // extractLeaseFromText server action (which calls the model + runs the PII
 // guard), and fill the sibling form fields with the returned draft. Nothing is
-// uploaded or stored; the lease bytes never leave the device (only the extracted
-// text goes to the model, transiently). Review-first: every field stays editable
+// uploaded or stored. S807: the located pages (as images, or their text) DO go
+// to the model to be read, transiently; the copy says so instead of "on your device". Review-first: every field stays editable
 // and the operator submits the unchanged createTenancy action.
 //
 // The clause digest (deposit type, lease type, pets/smoking/utilities/parking/
@@ -301,7 +301,7 @@ export function LeaseUploadPrefill({
       <p className="text-sm font-semibold text-gray-700">Have the signed lease? Pre-fill from it</p>
       <p className="mb-3 mt-0.5 text-xs text-gray-500">
         Drop the lease PDF and we&apos;ll read the key terms into the form below for you to review.
-        We read it on your device; the lease is never stored, and private IDs (SIN, banking, licence) are never captured.
+        We find the lease pages on your device and send only those pages to be read. The file is not stored, and private numbers (SIN, banking, licence) are never saved.
       </p>
 
       <div
@@ -326,7 +326,7 @@ export function LeaseUploadPrefill({
         } ${busy ? "pointer-events-none opacity-60" : ""}`}
       >
         <p className="text-sm font-medium text-gray-700">Drop the lease PDF here, or click to choose</p>
-        <p className="mt-1 text-xs text-gray-500">We find the lease inside the file (even in a big package) and read its key pages on your device.</p>
+        <p className="mt-1 text-xs text-gray-500">We find the lease inside the file, even in a big package, and read only its key pages.</p>
         <input
           ref={inputRef}
           type="file"

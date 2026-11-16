@@ -95,11 +95,7 @@ sourceHas(
   "property publish warning count excludes archived rows",
   /\.select\("id", \{ count: "exact", head: true \}\)\s*(\.eq\("organization_id", p\.organization_id\)\s*)?\.eq\("status", "available"\)\s*\.is\("archived_at", null\)\s*\.neq\("id", p\.id\)/,
 );
-sourceHas(
-  "app/dashboard/properties/[id]/page.tsx",
-  "property market-rent active comps exclude archived rows",
-  /\.select\("address, rent_cents, beds, sqft, status"\)\s*\.eq\("organization_id", propertyOrgId\)\s*\.eq\("status", "available"\)\s*\.is\("archived_at", null\)/,
-);
+// S807: the property page no longer reads market-rent comps (demand check instead).
 sourceHas(
   "app/dashboard/tenancies/[id]/page.tsx",
   "tenancy market-rent active comps exclude archived rows",
