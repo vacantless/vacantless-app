@@ -72,15 +72,20 @@ export async function recordCrewTap(args: {
   let photoFolder = (prop as { photo_source_url: string | null }).photo_source_url ?? null;
 
   const dueDate = stageTakesDate(stage) ? cleanDate(args.dueDate) : null;
-  const { error } = await admin.from("unit_progress_events").insert({
-    organization_id: crew.organization_id,
-    property_id: args.propertyId,
-    stage,
-    crew_member_id: crew.id,
-    note: cleanNote(args.note),
-    due_date: dueDate,
-  });
+  const { data: inserted, error } = await admin
+    .from("unit_progress_events")
+    .insert({
+      organization_id: crew.organization_id,
+      property_id: args.propertyId,
+      stage,
+      crew_member_id: crew.id,
+      note: cleanNote(args.note),
+      due_date: dueDate,
+    })
+    .select("id")
+    .single();
   if (error) return { ok: false, reason: "error" };
+  const eventId = (inserted as { id: string } | null)?.id ?? null;
 
   // S791a: a booked shoot gets its own one-time link for the photographer.
   let shootToken: string | null | undefined;
@@ -153,6 +158,7 @@ export async function recordCrewTap(args: {
     effect,
     photos,
     hasPhotoFolder: !!photoFolder,
+    eventId,
   });
   return { ok: true, stage, photos, shootToken };
 }

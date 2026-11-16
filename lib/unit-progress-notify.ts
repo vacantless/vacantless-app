@@ -15,6 +15,7 @@ import type { NotifyMember } from "@/lib/incident-reports";
 import { drivePullLine, type DrivePullResult } from "@/lib/drive-import";
 import { STAGE_LABEL, isCrewRole, stageDateLine, tenancyEffectAction, type Stage, type TenancyEffect } from "@/lib/unit-progress";
 import { unitCardsForOrg } from "@/lib/unit-progress-server";
+import { digestCountLabel, photosAlreadyLine, readyDigests, tapLine, type PendingTap } from "@/lib/unit-progress-digest";
 import {
   emailFromContact,
   escalationsDue,
@@ -50,6 +51,11 @@ async function operatorFallback(admin: SupabaseClient, org: OrgRow): Promise<str
   return resolveLeadNotifyEmails(members, [org.reply_to_email, org.public_contact_email]).slice(0, MAX_RECIPIENTS);
 }
 
+async function photoCount(admin: SupabaseClient, propertyId: string): Promise<number> {
+  const { count } = await admin.from("property_photos").select("id", { count: "exact", head: true }).eq("property_id", propertyId);
+  return count ?? 0;
+}
+
 /** Tell the landlord about a tap that needs them. Never throws. */
 export async function notifyLandlordOfTap(args: {
   admin: SupabaseClient;
@@ -63,6 +69,8 @@ export async function notifyLandlordOfTap(args: {
   hasPhotoFolder?: boolean;
   /** S791a: the link a photographer sent with their one-time link. */
   deliveryUrl?: string | null;
+  /** S803: the tap's event row. With it, the email waits for the sweep's batch (not for Rented). */
+  eventId?: string | null;
 }): Promise<void> {
   if (!TAP_NOTIFY_STAGES.includes(args.stage)) return;
   try {
@@ -73,6 +81,9 @@ export async function notifyLandlordOfTap(args: {
     const tenancyAction = args.effect ? tenancyEffectAction(args.effect, args.propertyId, APP_URL) : null;
     const base =
       args.stage === "rented" ? "Its ads are coming down. If that was a mistake, relist it from the rental page." : stageDateLine(args.stage, args.dueDate);
+    // S803: a unit that already has photos and no folder says so, not "add a folder".
+    const havePhotos =
+      args.stage === "photos_in" && !args.photos && !args.hasPhotoFolder ? await photoCount(args.admin, args.propertyId) : 0;
     const deliveryLine =
       args.stage === "photos_in" && args.deliveryUrl && !(args.photos && args.photos.ok && args.photos.skipped === 0)
         ? `The photographer's photos are here: ${args.deliveryUrl}. Add them on the rental page.`
@@ -86,8 +97,19 @@ export async function notifyLandlordOfTap(args: {
           ? drivePullLine(args.photos, "email")
           : args.hasPhotoFolder
             ? "Pull them in from the photo folder on the rental page."
-            : "Add the unit's Google Drive or Dropbox photo folder on the rental page. Next time, photos pull in on their own.";
+            : havePhotos > 0
+              ? photosAlreadyLine(havePhotos)
+              : "Add the unit's Google Drive or Dropbox photo folder on the rental page. Next time, photos pull in on their own.";
     const extra = [base ? `${base}.`.replace(/\.\.$/, ".") : "", tenancyAction?.line ?? "", photoLine].filter(Boolean).join(" ");
+    // S803: hold the line for the sweep's one-email batch (lib/unit-progress-digest).
+    if (args.eventId && args.stage !== "rented") {
+      const line = tapLine(address, STAGE_LABEL[args.stage], extra);
+      const { error: holdErr } = await args.admin
+        .from("unit_progress_events")
+        .update({ notify_line: line, notify_pending: true })
+        .eq("id", args.eventId);
+      if (!holdErr) return;
+    }
     await sendOrgNotification({
       client: args.admin,
       org,
@@ -112,12 +134,78 @@ export async function notifyLandlordOfTap(args: {
   }
 }
 
-export type UnitProgressSweepSummary = { ok: boolean; orgs: number; reminders: number; escalations: number; errors: number };
+/**
+ * S803: send the held tap lines, one email per crew member once they stopped
+ * tapping (lib/unit-progress-digest). A batch that fails to send stays held
+ * and is tried again on the next sweep. Never throws; returns emails sent.
+ */
+export async function sendTapDigests(admin: SupabaseClient, now: Date): Promise<number> {
+  let sent = 0;
+  try {
+    const { data } = await admin
+      .from("unit_progress_events")
+      .select("id, organization_id, crew_member_id, property_id, notify_line, created_at")
+      .eq("notify_pending", true)
+      .order("created_at", { ascending: true })
+      .limit(500);
+    const rows: PendingTap[] = ((data ?? []) as Array<{
+      id: string; organization_id: string; crew_member_id: string | null; property_id: string; notify_line: string | null; created_at: string;
+    }>).map((r) => ({
+      id: r.id, organizationId: r.organization_id, crewMemberId: r.crew_member_id, propertyId: r.property_id,
+      line: r.notify_line ?? "", createdAt: r.created_at,
+    }));
+    for (const batch of readyDigests(rows, now)) {
+      try {
+        const org = await loadOrg(admin, batch.organizationId);
+        if (!org) continue;
+        let crewName = "Your crew";
+        if (batch.crewMemberId) {
+          const { data: c } = await admin.from("crew_members").select("name").eq("id", batch.crewMemberId).maybeSingle();
+          crewName = (c as { name: string | null } | null)?.name?.trim() || crewName;
+        }
+        const single = batch.propertyIds.length === 1;
+        const res = await sendOrgNotification({
+          client: admin,
+          org,
+          eventKey: "leasing.unit_progress_update",
+          vars: {
+            org_name: org.name ?? "",
+            property_address: single ? batch.lines[0].split(":")[0] : digestCountLabel(batch.propertyIds.length),
+            crew_name: crewName,
+            stage_label: "updated",
+            date_line: "\n\n" + batch.lines.join("\n\n"),
+            dashboard_url: `${APP_URL}/dashboard/crew`,
+          },
+          operatorFallback: await operatorFallback(admin, org),
+          action: single
+            ? { label: "Open the rental", url: `${APP_URL}/dashboard/properties/${batch.propertyIds[0]}` }
+            : { label: "See every unit", url: `${APP_URL}/dashboard/crew` },
+        });
+        // Quiet test accounts and a switched-off email also clear, so nothing piles up.
+        if (res.delivered || (res.skipped && res.skipped !== "threw")) {
+          await admin
+            .from("unit_progress_events")
+            .update({ notify_pending: false, notified_at: now.toISOString() })
+            .in("id", batch.eventIds);
+          if (res.delivered) sent++;
+        }
+      } catch (err) {
+        console.error("[unit-progress] digest failed", err instanceof Error ? err.message : String(err));
+      }
+    }
+  } catch (err) {
+    console.error("[unit-progress] digest read failed", err instanceof Error ? err.message : String(err));
+  }
+  return sent;
+}
+
+export type UnitProgressSweepSummary = { ok: boolean; orgs: number; reminders: number; escalations: number; errors: number; digests?: number };
 
 export async function runUnitProgressSweep(args: { admin: SupabaseClient; now?: Date }): Promise<UnitProgressSweepSummary> {
   const now = args.now ?? new Date();
   const summary: UnitProgressSweepSummary = { ok: true, orgs: 0, reminders: 0, escalations: 0, errors: 0 };
   const { admin } = args;
+  summary.digests = await sendTapDigests(admin, now);
   const { data: crewRows, error } = await admin
     .from("crew_members")
     .select("id, organization_id, name, role, contact, link_token, active")
