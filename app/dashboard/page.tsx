@@ -35,8 +35,9 @@ import { deriveRentIncrease } from "@/lib/rent-increase";
 import { loadGuidelineLookup } from "@/lib/guideline-server";
 import { RentIncreaseRow } from "@/components/rent-increase-card";
 import { buildTodayLane, weekHint } from "@/lib/dashboard-today";
-import { VIEWING_PRESETS, presetOpenedNotice } from "@/lib/viewing-presets";
-import { openViewingPreset } from "./availability/actions";
+import { VIEWING_PRESETS, presetOpenedNotice, repeatSummary } from "@/lib/viewing-presets";
+import { openLastWeekTimes, openViewingPreset } from "./availability/actions";
+import { loadBuildingDays, loadLastWeekTimes } from "@/lib/last-week-times";
 import { TodayLane } from "./today-lane";
 import {
   resolveAssignedView,
@@ -450,6 +451,11 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       !!l.created_at &&
       Date.now() - new Date(l.created_at).getTime() <= 14 * 24 * 60 * 60 * 1000,
   ).length;
+  // S804: offer the account's own last week before the fixed presets.
+  const lastWeekTimes =
+    openViewingTimes === 0 ? await loadLastWeekTimes(supabase, org.id, timeZone) : [];
+  const lastWeekSummary =
+    lastWeekTimes.length > 0 ? repeatSummary(lastWeekTimes, await loadBuildingDays(supabase, org.id)) : null;
   const presetNotice = presetOpenedNotice(
     searchParams?.opened ?? null,
     searchParams?.added != null ? Number(searchParams.added) : null,
@@ -652,6 +658,18 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
           <div>
             <p className="mb-2 text-sm text-gray-700">Open times in one tap. You can change them any time.</p>
             <div className="flex flex-wrap gap-2">
+              {lastWeekSummary && (
+                <form action={openLastWeekTimes}>
+                  <button
+                    type="submit"
+                    title={lastWeekSummary}
+                    className="rounded-lg border border-brand bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
+                  >
+                    Same as last week
+                    <span className="ml-1 font-normal text-white/80">{lastWeekSummary}</span>
+                  </button>
+                </form>
+              )}
               {VIEWING_PRESETS.map((p) => (
                 <form key={p.key} action={openViewingPreset}>
                   <input type="hidden" name="preset" value={p.key} />

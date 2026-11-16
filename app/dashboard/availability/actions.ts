@@ -5,9 +5,15 @@ import { BOOKING_TIMEZONES } from "@/lib/timezone-label";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
+import { loadLastWeekTimes } from "@/lib/last-week-times";
 import { requireCapability } from "@/lib/membership";
 import { parseBuildingWeekdays, timeStrToMinutes } from "@/lib/booking";
-import { isViewingPresetKey, presetWindowsToAdd, type PresetWindow } from "@/lib/viewing-presets";
+import {
+  LAST_WEEK_KEY,
+  isViewingPresetKey,
+  presetWindowsToAdd,
+  type PresetWindow,
+} from "@/lib/viewing-presets";
 
 const COMMON_TZ = new Set(BOOKING_TIMEZONES);
 
@@ -200,6 +206,34 @@ export async function openViewingPreset(formData: FormData) {
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard");
   redirect(`/dashboard?opened=${key}&added=${added}`);
+}
+
+// S804: "Same as last week" on Today (lib/last-week-times.ts).
+export async function openLastWeekTimes() {
+  const org = await getCurrentOrg();
+  if (!org) return;
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
+  const supabase = createClient();
+  const toAdd = await loadLastWeekTimes(supabase, org.id, org.booking_timezone || "America/Toronto");
+  let added = 0;
+  if (toAdd.length > 0) {
+    const { data, error } = await supabase
+      .from("availability_overrides")
+      .upsert(
+        toAdd.map((w) => ({ organization_id: org.id, ...w })),
+        { onConflict: "organization_id,day,start_minute,end_minute", ignoreDuplicates: true },
+      )
+      .select("id");
+    if (error) {
+      console.error(`[availability-reopen] org=${org.id} last_week_insert_failed=${error.message}`);
+      redirect("/dashboard/availability?error=override_invalid");
+    }
+    added = (data ?? []).length;
+    if (added > 0) await stampAvailabilityReopened(supabase, org.id);
+  }
+  revalidatePath("/dashboard/availability");
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?opened=${LAST_WEEK_KEY}&added=${added}`);
 }
 
 export async function deleteAvailabilityWindow(formData: FormData) {
