@@ -14,7 +14,14 @@ export type SiteLight = {
   live: boolean;
   /** The saved ad link when live; null when there is none to open. */
   url: string | null;
+  /** S805: not live, and one more ad here is the landlord's choice: the short reason to show. */
+  choice?: string | null;
 };
+
+/** S805: the few words a choice chip adds after the site's name. */
+export function choiceWords(reason: "fee" | "full"): string {
+  return reason === "fee" ? "paid ad" : "free ads used";
+}
 
 export type RowRenew = { portal: string; label: string; days: number | null };
 
@@ -41,15 +48,25 @@ export function publicAdUrl(portal: string, url: string): string {
  * A site the rental is live on stays lit even when the account no longer
  * offers it (the ad is still up).
  */
-export function siteLights(row: Pick<CoverageRow, "live" | "missing">, adUrls: Map<string, string>): SiteLight[] {
-  const keys = Array.from(new Set([...row.live, ...row.missing])).sort((a, b) => siteIndex(a) - siteIndex(b));
+export function siteLights(
+  row: Pick<CoverageRow, "live" | "missing"> & Partial<Pick<CoverageRow, "optional">>,
+  adUrls: Map<string, string>,
+): SiteLight[] {
+  const choices = new Map((row.optional ?? []).map((o) => [o.channel, o.reason]));
+  const keys = Array.from(new Set([...row.live, ...row.missing, ...choices.keys()])).sort(
+    (a, b) => siteIndex(a) - siteIndex(b),
+  );
   const live = new Set(row.live);
-  return keys.map((key) => ({
-    key,
-    label: coverageLabel(key),
-    live: live.has(key),
-    url: live.has(key) ? siteLightUrl(key, adUrls.get(key)) : null,
-  }));
+  return keys.map((key) => {
+    const reason = live.has(key) ? undefined : choices.get(key);
+    return {
+      key,
+      label: coverageLabel(key),
+      live: live.has(key),
+      url: live.has(key) ? siteLightUrl(key, adUrls.get(key)) : null,
+      ...(reason ? { choice: choiceWords(reason) } : {}),
+    };
+  });
 }
 
 function siteLightUrl(key: string, url: string | undefined): string | null {

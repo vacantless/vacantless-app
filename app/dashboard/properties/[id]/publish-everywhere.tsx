@@ -50,6 +50,7 @@ import { postingInFlight } from "@/lib/posting-in-flight";
 import { LiveRefresh } from "./live-refresh";
 import { siteMark } from "@/lib/site-row-facts";
 import { forYouRowState, needsYouSentence } from "@/lib/for-you-row-state";
+import type { SiteRowNote } from "@/lib/site-row-notes";
 import { SITES_SETUP_HREF, SITE_WORD_CLASS } from "@/lib/sites-setup";
 import {
   authorizeAutopilotSubmit,
@@ -415,6 +416,7 @@ export function PublishEverywhere({
   capNotes = {},
   roomNotes = {},
   siteFacts = {},
+  siteNotes = {},
   adPreview = null,
 }: {
   propertyId: string;
@@ -458,6 +460,8 @@ export function PublishEverywhere({
   roomNotes?: Readonly<Record<string, string>>;
   /** S786c: per live site, "4 renters · 30 days left · seen live 2 hours ago". */
   siteFacts?: Readonly<Record<string, string>>;
+  /** S805: per-site choice and took-it-down notes (lib/site-row-notes). */
+  siteNotes?: Readonly<Record<string, SiteRowNote>>;
   /** S724 (V251-29): the ad's facts, shown in the approval box. */
   adPreview?: AdPreview | null;
 }) {
@@ -576,6 +580,7 @@ export function PublishEverywhere({
         postingBlocked: Boolean(postingBlocker),
         hasMarketplaceKit: row.key === "facebook" && Boolean(marketplaceKit),
         madeRoom: Boolean(roomNotes[row.key]),
+        choice: Boolean(siteNotes[row.key]?.choice),
       }).word === "Needs you",
   );
   const firstNeedsYou = needsYouRows[0] ?? null;
@@ -825,6 +830,7 @@ export function PublishEverywhere({
             capNotes={capNotes}
             roomNotes={roomNotes}
             siteFacts={siteFacts}
+            siteNotes={siteNotes}
             adPreview={adPreview}
             otherRows={[...(copilotEnabled ? [] : forYou), ...instantRows, ...setupRows].filter(isSiteRow)}
             liveStateFor={liveStateFor}
@@ -884,6 +890,7 @@ function ForYouHandoff({
   capNotes = {},
   roomNotes = {},
   siteFacts = {},
+  siteNotes = {},
   adPreview = null,
   otherRows = [],
   liveStateFor,
@@ -893,6 +900,8 @@ function ForYouHandoff({
   roomNotes?: Readonly<Record<string, string>>;
   /** S786c: per live site, "4 renters · 30 days left · seen live 2 hours ago". */
   siteFacts?: Readonly<Record<string, string>>;
+  /** S805: per-site choice and took-it-down notes (lib/site-row-notes). */
+  siteNotes?: Readonly<Record<string, SiteRowNote>>;
   adPreview?: AdPreview | null;
   /** S734: the one-line rows (connected sites, sign-in sites), partitioned
    *  with the for-you rows so a locked Rentals.ca or Zumper row sits under
@@ -959,6 +968,7 @@ function ForYouHandoff({
             capNote={capNotes[row.key] ?? null}
             roomNote={roomNotes[row.key] ?? null}
             siteFact={siteFacts[row.key] ?? null}
+            siteNote={siteNotes[row.key] ?? null}
             adPreview={adPreview}
           />
         );
@@ -1034,11 +1044,13 @@ function ForYouRow({
   capNote = null,
   roomNote = null,
   siteFact = null,
+  siteNote = null,
   adPreview = null,
 }: {
   capNote?: string | null;
   roomNote?: string | null;
   siteFact?: string | null;
+  siteNote?: SiteRowNote | null;
   adPreview?: AdPreview | null;
   marketplaceKit?: MarketplaceKitData | null;
   /** S713: a robot site and the org has no Posting add-on. */
@@ -1081,6 +1093,7 @@ function ForYouRow({
     postingBlocked: Boolean(postingBlockedProp),
     hasMarketplaceKit: Boolean(marketplaceKit),
     madeRoom: Boolean(roomNote),
+    choice: Boolean(siteNote?.choice),
   });
   const paid = row.mode === "paid_optin";
   const stateChip =
@@ -1193,10 +1206,17 @@ function ForYouRow({
           {/* S740: the free-cap warning showed only inside the approval
               popup, so "Post it again" on Unit 3 gave no sign Agile already
               had all 3 free Rentals.ca listings in use. */}
+          {siteNote?.dropLine ? (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-base leading-relaxed text-amber-950">
+              {siteNote.dropLine}
+            </p>
+          ) : null}
           {capNote ? (
             <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-base leading-relaxed text-amber-950">
               {capNote}
             </p>
+          ) : siteNote?.choiceLine && !roomNote ? (
+            <p className="mt-2 text-base leading-relaxed text-gray-600">{siteNote.choiceLine}</p>
           ) : null}
           <form
             action={startSitePost}
@@ -1207,12 +1227,18 @@ function ForYouRow({
             <button
               type="submit"
               className={
-                roomNote
+                roomNote || (siteNote?.choice && !siteNote?.dropLine)
                   ? "inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto border border-gray-300 bg-white px-4 py-2.5 text-base font-semibold text-gray-700 hover:bg-gray-50"
                   : "inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto bg-indigo-600 px-4 py-2.5 text-base font-semibold text-white hover:bg-indigo-700"
               }
             >
-              {repostable ? "Post it again →" : "Post here →"}
+              {siteNote?.dropLine || repostable
+                ? siteNote?.choiceButton
+                  ? `Post it again, ${siteNote.choiceButton.replace(/^Post here, /, "")} →`
+                  : "Post it again →"
+                : siteNote?.choiceButton
+                  ? `${siteNote.choiceButton} →`
+                  : "Post here →"}
             </button>
           </form>
           </>

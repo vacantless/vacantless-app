@@ -89,14 +89,21 @@ eq("3b planned + selfPost (Marketplace) -> self_post", channelTileStatus("facebo
   const unprobed = channelTileStatus("zumper", connected(), fresh({ alive: null, last_checked_at: null, last_check_code: null, stale: true }), NOW);
   eq("6 row never probed -> checking", unprobed.state, "checking");
   ok("6 never probed needsCheck", unprobed.needsCheck === true);
-  const stale = channelTileStatus("zumper", connected(), fresh({ stale: true, check_pending: false }), NOW);
-  eq("6 stale -> checking", stale.state, "checking");
-  ok("6 stale + not pending needsCheck", stale.needsCheck === true);
-  const pending = channelTileStatus("zumper", connected(), fresh({ stale: true, check_pending: true }), NOW);
-  eq("6 stale + pending -> checking", pending.state, "checking");
+  // S805: a sign-in that passed its last check keeps its state while a fresh check is due.
+  const stale = channelTileStatus("zumper", connected(), fresh({ stale: true, check_pending: false, last_checked_at: new Date(NOW - 25 * 3600_000).toISOString() }), NOW);
+  eq("6 stale after a pass -> stays linked", stale.state, "linked");
+  ok("6 stale after a pass asks for a check", stale.needsCheck === true);
+  const pending = channelTileStatus("zumper", connected(), fresh({ stale: true, check_pending: true, last_checked_at: new Date(NOW - 25 * 3600_000).toISOString() }), NOW);
+  eq("6 stale after a pass + pending -> stays linked", pending.state, "linked");
   ok("6 pending does not re-request", pending.needsCheck === false);
   const derived = channelTileStatus("zumper", connected(), fresh({ stale: null, last_checked_at: new Date(NOW - 25 * 3600_000).toISOString() }), NOW);
-  eq("6 stale derived from last_checked_at when view column absent", derived.state, "checking");
+  eq("6 stale derived from last_checked_at -> stays linked", derived.state, "linked");
+  ok("6 derived stale asks for a check", derived.needsCheck === true);
+  const old = channelTileStatus("zumper", connected(), fresh({ stale: true, last_checked_at: new Date(NOW - 80 * 3600_000).toISOString() }), NOW);
+  eq("6 last pass over three days old -> checking", old.state, "checking");
+  ok("6 old pass needsCheck", old.needsCheck === true);
+  const freshRow = channelTileStatus("zumper", connected(), fresh(), NOW);
+  ok("6 fresh row asks for nothing", freshRow.state === "linked" && freshRow.needsCheck === false);
   ok("6 stale session still shows label", stale.accountLabel === "Noam");
 }
 {
@@ -151,7 +158,8 @@ eq("3b planned + selfPost (Marketplace) -> self_post", channelTileStatus("facebo
 eq("cap_reached outranks connected_needs_authorization", channelTileStatus("rentals_ca", connected({ automation_authorized: false }), fresh({ cap_used: 3 }), NOW).state, "cap_reached");
 eq("dead_session outranks cap_reached", channelTileStatus("rentals_ca", connected(), fresh({ alive: false, cap_used: 3 }), NOW).state, "dead_session");
 eq("dead_session outranks checking", channelTileStatus("rentals_ca", connected(), fresh({ alive: false, stale: true }), NOW).state, "dead_session");
-eq("checking outranks cap_reached", channelTileStatus("rentals_ca", connected(), fresh({ stale: true, cap_used: 3 }), NOW).state, "checking");
+eq("checking outranks cap_reached", channelTileStatus("rentals_ca", connected(), fresh({ stale: true, cap_used: 3, last_checked_at: new Date(NOW - 80 * 3600_000).toISOString() }), NOW).state, "checking");
+eq("S805 stale after a pass keeps cap_reached", channelTileStatus("rentals_ca", connected(), fresh({ stale: true, cap_used: 3, last_checked_at: new Date(NOW - 25 * 3600_000).toISOString() }), NOW).state, "cap_reached");
 
 // --- legacy callers (session undefined = model off) --------------------------
 {

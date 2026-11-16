@@ -823,6 +823,9 @@ export function firstRunIsFree(channelKey: unknown): boolean {
 
 export const SESSION_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
+/** S805: how long a passed check keeps a sign-in's state while a fresh check is due. */
+export const SESSION_PASS_HOLDS_MS = 72 * 3600_000;
+
 // Same rule as the 0225 view's `stale` column, for callers that pass a row
 // without it (or tests that pin `now`).
 export function isSessionStale(
@@ -947,6 +950,9 @@ export function channelTileStatus(
     lastCheckCode: session?.last_check_code ?? null,
     capLine,
     costLine,
+    // S805: set when a sign-in that passed its last check is due a fresh one;
+    // the row stays as it was and the page asks for the check.
+    needsCheck: false as boolean,
   };
 
   // A verdict is current only if the worker looked AFTER the last session
@@ -987,13 +993,25 @@ export function channelTileStatus(
         : isSessionStale(session.last_checked_at, now)) || !verdictCurrent;
     if (stale) {
       const pending = session?.check_pending === true;
-      return {
-        ...base,
-        ...known,
-        state: "checking",
-        headline: `Checking your ${channel.label} account...`,
-        needsCheck: !pending,
-      };
+      // S805: a sign-in that passed its last check, within three days, keeps
+      // its state while it is checked again. Before this, a healthy site read
+      // "Checking" on the first visit of each day (Agile, 2026-11-16).
+      const lastOkMs = session.last_checked_at ? Date.parse(session.last_checked_at) : NaN;
+      const passedRecently =
+        session.alive === true &&
+        verdictCurrent &&
+        Number.isFinite(lastOkMs) &&
+        now - lastOkMs < SESSION_PASS_HOLDS_MS;
+      if (!passedRecently) {
+        return {
+          ...base,
+          ...known,
+          state: "checking",
+          headline: `Checking your ${channel.label} account...`,
+          needsCheck: !pending,
+        };
+      }
+      known.needsCheck = !pending;
     }
   }
 

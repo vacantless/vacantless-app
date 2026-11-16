@@ -242,9 +242,10 @@ export function orgHasConnectedSite(
   return SITE_SIGNIN_ORDER.some((k) => tileStateByChannel[k] != null && !signinNeeded(tileStateByChannel[k]) && tileStateByChannel[k] !== "checking");
 }
 
-/** The four words a site can read on a rental's Get online tab. */
-export type SiteWord = "On" | "Posting" | "Needs you" | "Off";
+/** The words a site can read on a rental's Get online tab (S805 added Your choice). */
+export type SiteWord = "On" | "Posting" | "Needs you" | "Your choice" | "Off";
 export const SITE_WORD_CLASS: Record<SiteWord, string> = {
+  "Your choice": "bg-gray-100 text-gray-700",
   On: "bg-green-50 text-green-700",
   Posting: "bg-sky-50 text-sky-700",
   "Needs you": "bg-amber-50 text-amber-800",

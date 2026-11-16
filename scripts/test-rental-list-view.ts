@@ -53,6 +53,18 @@ check(() => {
   assert.equal(lights[0].label, "Marketplace");
 });
 check(() => assert.deepEqual(siteLights({ live: [], missing: [] }, new Map()), []));
+// S805: a paid or full site shows as a choice chip, never as live, and keeps site order.
+check(() => {
+  const lights = siteLights(
+    { live: ["facebook", "kijiji"], missing: ["zumper"], optional: [{ channel: "rentals_ca", reason: "full" }, { channel: "kijiji", reason: "fee" }] },
+    new Map(),
+  );
+  assert.deepEqual(lights.map((l) => l.key), ["facebook", "kijiji", "rentals_ca", "zumper"]);
+  assert.equal(lights.find((l) => l.key === "rentals_ca")?.choice, "free ads used");
+  assert.equal(lights.find((l) => l.key === "kijiji")?.choice, undefined, "a live site is never a choice");
+  assert.equal(lights.find((l) => l.key === "zumper")?.choice, undefined);
+});
+check(() => assert.equal(siteLights({ live: [], missing: [], optional: [{ channel: "kijiji", reason: "fee" }] }, new Map())[0].choice, "paid ad"));
 // A live site the account no longer offers still shows, lit.
 check(() => {
   const lights = siteLights({ live: ["kijiji"], missing: ["facebook"] }, new Map());

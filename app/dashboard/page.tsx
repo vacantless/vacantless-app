@@ -46,6 +46,8 @@ import {
 import { leaseTermShiftEnabled } from "@/lib/rent-adjustments-server";
 import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
 import { isHiddenForOrg } from "@/lib/posting-lanes";
+import { droppedAdNotices, type DroppedAdNotice } from "@/lib/site-row-notes";
+import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { needsYouNotices } from "@/lib/needs-you";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { NeedsYouCards } from "./needs-you-cards";
@@ -579,6 +581,26 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     tileStateByChannel: siteStateByChannel,
     hiddenFor: (c) => isHiddenForOrg(c, org.id),
   });
+  // S805: an ad a site took down while the rental is still available.
+  let droppedAds: DroppedAdNotice[] = [];
+  if (robotAccess.setup) {
+    const dropCoverage = await loadPostingCoverage(supabase, org.id, robotAccess.allowed);
+    const gapIds = dropCoverage.rows.filter((r) => r.missingRobot.length > 0).map((r) => r.propertyId);
+    if (gapIds.length > 0) {
+      const { data: removedPosts } = await supabase
+        .from("listing_posts")
+        .select("property_id, portal, status, notes, created_at")
+        .eq("organization_id", org.id)
+        .eq("status", "removed")
+        .in("property_id", gapIds);
+      droppedAds = droppedAdNotices({
+        rows: dropCoverage.rows,
+        posts: (removedPosts ?? []) as Parameters<typeof droppedAdNotices>[0]["posts"],
+        shortAddress,
+        nowISO: new Date().toISOString(),
+      });
+    }
+  }
   const onboardingWizardState = onboardingWizardEnabled
     ? computeOnboardingState({
         hasConnectedSite: onboardingHasConnectedSite,
@@ -639,7 +661,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         </div>
       )}
 
-      <NeedsYouCards notices={needsYou} />
+      <NeedsYouCards notices={[...needsYou, ...droppedAds]} />
       <ComingVacantCards items={comingVacant} />
 
       {presetNotice && (

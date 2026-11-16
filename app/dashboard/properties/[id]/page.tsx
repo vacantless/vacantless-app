@@ -1,3 +1,5 @@
+import { buildSiteRowNotes } from "@/lib/site-row-notes";
+import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { GROUP_SIZE_MAX, accountGroupRule } from "@/lib/group-viewing";
 import { latestStages } from "@/lib/unit-progress-latest";
 import { stageChip, STAGE_TONE_CLASS } from "@/lib/unit-progress";
@@ -193,6 +195,7 @@ import { TabbedSections, TabPanel } from "./tabbed-sections";
 import { MarketRentPanel } from "./market-rent-panel";
 import {
   DISTRIBUTION_CHANNELS,
+  CHANNEL_COST_CENTS,
   computeChannelStatus,
 } from "@/lib/distribution-channels";
 import {
@@ -1268,6 +1271,21 @@ export default async function PropertyDetailPage({
   // S713: Kijiji, Rentals.ca and Zumper are the paid Posting add-on. Without
   // it their rows show the add-on note instead of a post or sign-in button.
   const robotPostingAccess = await readRobotPostingAccess(supabase, org?.id, { rental: p.id });
+  // S805: per-site notes for the Get online rows: a paid or full site is the
+  // landlord's choice, and a site that took the ad down says so.
+  const siteNotesOpen = p.status === "available" && !(p as { archived_at?: string | null }).archived_at;
+  const siteNotesCoverage =
+    siteNotesOpen
+      ? await loadPostingCoverage(supabase, p.organization_id, robotPostingAccess.allowed)
+      : null;
+  const kijijiPriceCents = CHANNEL_COST_CENTS.kijiji ?? null;
+  const siteNotes = buildSiteRowNotes({
+    posts: postRows,
+    optional: siteNotesCoverage?.rows.find((r) => r.propertyId === p.id)?.optional ?? [],
+    priceByChannel: kijijiPriceCents ? { kijiji: `$${(kijijiPriceCents / 100).toFixed(2)}` } : {},
+    rentalAvailable: siteNotesOpen,
+    nowISO: new Date().toISOString(),
+  });
   // S724 (V251-24): the account's viewing notice, for this rental's "blank =
   // account setting" hints.
   const { data: bookingCfg } = org
@@ -5036,6 +5054,7 @@ export default async function PropertyDetailPage({
           rentalsSlotChoice={rentalsSlotChoice}
           roomNotes={roomNotes}
           siteFacts={siteFacts}
+          siteNotes={siteNotes}
           adPreview={adPreview}
           moreOpen={typeof searchParams.pageposts === "string"}
           more={

@@ -37,9 +37,15 @@ export type ForYouRowStateInput = {
   hasMarketplaceKit: boolean;
   /** S786: this rental gave its slot on this site to another (Rentals.ca switch). */
   madeRoom?: boolean;
+  /**
+   * S805: one more ad on this site is the landlord's choice (a fee, or the
+   * free ads are all in use; lib/posting-coverage optionalSiteReason). A row
+   * that only waits on that choice reads "Your choice", not "Needs you".
+   */
+  choice?: boolean;
 };
 
-export type ForYouRowWord = "On" | "Posting" | "Needs you" | "Off" | "addon";
+export type ForYouRowWord = "On" | "Posting" | "Needs you" | "Your choice" | "Off" | "addon";
 
 export type ForYouRowState = {
   isLive: boolean;
@@ -120,13 +126,22 @@ export function forYouRowState(input: ForYouRowStateInput): ForYouRowState {
           ? "Posting"
         : payAtCheckout && item?.paidPressed === true && !item?.captureNote
           ? "Posting"
-        : payAtCheckout || siteSetup || needsApproval || needsConnect || signinFirst || repostable
+        : payAtCheckout || siteSetup || needsApproval || needsConnect || signinFirst
           ? "Needs you"
+          : repostable
+            ? input.choice === true
+              ? "Your choice"
+              : "Needs you"
           : preparing || working
             ? "Posting"
             : input.alreadySignedIn === true && isRobotPostedChannel(input.rowKey) && item != null
               ? "Posting"
-              : "Needs you";
+              : input.choice === true
+                ? "Your choice"
+                : "Needs you";
+  // S805: nothing is queued and the only thing between this rental and an ad
+  // here is a fee or a full free limit: that is a choice, not a problem. A
+  // sign-in, an approval or a checkout already under way still reads Needs you.
   // S770 (REVIEW-S770 section 3 item 1): signed in but nothing queued means the
   // row shows a "Post here" button, so the word is "Needs you", not "Posting".
   // Before S770 Assumption 9 read "Posting" above a "Post here" button.

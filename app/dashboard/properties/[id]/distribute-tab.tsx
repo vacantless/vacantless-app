@@ -13,6 +13,7 @@
 // gone; Connect / Disconnect Facebook Page lives in Settings. What remains below
 // Publish Everywhere is the live-ad-link list.
 
+import type { SiteRowNote } from "@/lib/site-row-notes";
 import { slotIsStuck, type RentalsSlotChoice } from "@/lib/rentals-slots";
 import { captureNote, paidPressedAt } from "@/lib/paid-capture-note";
 import { Icons } from "@/components/icons";
@@ -306,6 +307,7 @@ export function DistributeTab({
   rentalsSlotChoice = null,
   roomNotes = {},
   siteFacts = {},
+  siteNotes = {},
   adPreview = null,
   more = null,
   moreOpen = false,
@@ -347,6 +349,8 @@ export function DistributeTab({
   roomNotes?: Readonly<Record<string, string>>;
   /** S786c: one line per live site (renters, days left, last seen live). */
   siteFacts?: Readonly<Record<string, string>>;
+  /** S805: per-site choice and took-it-down notes (lib/site-row-notes), passed through. */
+  siteNotes?: Readonly<Record<string, SiteRowNote>>;
   /** S724 (V251-29): the ad's facts, shown in the approval box. */
   adPreview?: AdPreview | null;
   /** S762 (REVIEW-S761 item 4): Keep it fresh and Relist, shown under More. */
@@ -470,6 +474,7 @@ export function DistributeTab({
         capNotes={capNotes}
         roomNotes={roomNotes}
         siteFacts={siteFacts}
+        siteNotes={siteNotes}
         adPreview={adPreview}
       />
     </div>

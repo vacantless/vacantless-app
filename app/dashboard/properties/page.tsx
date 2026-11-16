@@ -856,6 +856,15 @@ export default async function PropertiesPage({
                               >
                                 + {l.label}
                               </Link>
+                            ) : l.choice ? (
+                              <Link
+                                key={l.key}
+                                href={`/dashboard/properties/${p.id}?tab=distribute#distribute-header`}
+                                title={`Not on ${l.label}: ${l.choice}. Your choice. Open the rental to post it.`}
+                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[11px] font-medium text-gray-400 transition hover:border-gray-400 hover:text-gray-600"
+                              >
+                                {l.label}: {l.choice}
+                              </Link>
                             ) : (
                               <span
                                 key={l.key}

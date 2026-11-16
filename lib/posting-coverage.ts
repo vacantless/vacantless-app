@@ -40,7 +40,32 @@ export type CoverageInput = {
   postingAddon: boolean;
   /** S786: rentals that gave their Rentals.ca slot to another (lib/rentals-slots loadMadeRoom): property id -> that rental's short address. */
   madeRoom?: ReadonlyMap<string, string>;
+  /** S805: sites where one more ad is the landlord's choice (optionalSiteReason): channel -> why. */
+  optional?: ReadonlyMap<string, OptionalSiteReason>;
 };
+
+/**
+ * S805 (REVIEW-S805 items 3 and 4): a site with no ad on a rental is not a gap
+ * when one more ad there costs money ("fee") or the account's free ads are all
+ * in use ("full"). It is the landlord's choice, made on the rental's own page.
+ * Before this, Agile's rentals list read "Need you 4" and "3 rentals are
+ * missing a site" when the only thing left was paying Kijiji $33.84 an ad, and
+ * one row's main button offered Rentals.ca with 3 of 3 free ads used.
+ */
+export type OptionalSiteReason = "fee" | "full";
+
+/** The slice of a tile's cost and cap this rule reads (lib/distribution-channels ChannelCostCap). */
+export type OptionalSiteCost = { cost?: { key?: string | null } | null; capReached?: boolean | null } | null | undefined;
+
+export function optionalSiteReason(channel: string, costCap: OptionalSiteCost): OptionalSiteReason | null {
+  if (!costCap) return null;
+  if (channel === "kijiji") {
+    const key = costCap.cost?.key ?? null;
+    return key === "kijijiPerAd" || key === "kijijiPerExtraAd" ? "fee" : null;
+  }
+  if (channel === "rentals_ca" || channel === "zumper") return costCap.capReached === true ? "full" : null;
+  return null;
+}
 
 export type CoverageRow = {
   propertyId: string;
@@ -53,6 +78,8 @@ export type CoverageRow = {
   offered: number;
   /** S786: Rentals.ca was switched off to make room for this rental (short address); not counted as missing. */
   madeRoomFor?: string | null;
+  /** S805: offered sites with no live ad that are the landlord's choice (a fee, or free ads all used); not counted as missing. */
+  optional: { channel: string; reason: OptionalSiteReason }[];
 };
 
 export type Coverage = {
@@ -93,7 +120,12 @@ export function postingCoverage(input: CoverageInput): Coverage {
     if (prop.status !== "available") continue;
     const live = liveByProperty.get(prop.id) ?? new Set<string>();
     const madeRoomFor = input.madeRoom?.get(prop.id) ?? null;
-    const missing = offered.filter((k) => !live.has(k) && !(k === "rentals_ca" && madeRoomFor));
+    const open = offered.filter((k) => !live.has(k) && !(k === "rentals_ca" && madeRoomFor));
+    const optional = open.flatMap((k) => {
+      const reason = input.optional?.get(k);
+      return reason ? [{ channel: k as string, reason }] : [];
+    });
+    const missing = open.filter((k) => !input.optional?.has(k));
     rows.push({
       propertyId: prop.id,
       address: prop.address,
@@ -102,6 +134,7 @@ export function postingCoverage(input: CoverageInput): Coverage {
       missingRobot: missing.filter((k) => isRobotPostedChannel(k)),
       offered: offered.length,
       madeRoomFor,
+      optional,
     });
   }
   return { rows, signInToAdd: [...signInToAdd], gaps: rows.filter((r) => r.missing.length > 0).length };
