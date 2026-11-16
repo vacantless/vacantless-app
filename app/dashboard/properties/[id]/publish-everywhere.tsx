@@ -51,6 +51,7 @@ import { LiveRefresh } from "./live-refresh";
 import { siteMark } from "@/lib/site-row-facts";
 import { forYouRowState, needsYouSentence } from "@/lib/for-you-row-state";
 import type { SiteRowNote } from "@/lib/site-row-notes";
+import { FacebookRenewLink } from "@/components/facebook-renew-link";
 import { SITES_SETUP_HREF, SITE_WORD_CLASS } from "@/lib/sites-setup";
 import {
   authorizeAutopilotSubmit,
@@ -212,7 +213,6 @@ type ResolvedRow = {
 
 // S770 (REVIEW-S770 section 3 item 2): Facebook keeps Renew inside each ad's
 // "..." menu on Your listings; the helper (1.2.0+) records the press.
-const FACEBOOK_YOUR_LISTINGS = "https://www.facebook.com/marketplace/you/selling";
 
 type InstantDestination = {
   key: string;
@@ -1164,14 +1164,12 @@ function ForYouRow({
                 {FACEBOOK_RENEW_HOW}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <a
-                  href={FACEBOOK_YOUR_LISTINGS}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <FacebookRenewLink
+                  adUrl={liveUrl}
                   className="inline-flex w-full items-center justify-center gap-1 rounded-lg sm:w-auto bg-indigo-600 px-4 py-2.5 text-base font-semibold text-white hover:bg-indigo-700"
                 >
                   {FACEBOOK_RENEW_CHECK} ↗
-                </a>
+                </FacebookRenewLink>
                 <form action={markAdsRenewed}>
                   <input type="hidden" name="property_id" value={propertyId} />
                   <input type="hidden" name="portal" value="facebook" />

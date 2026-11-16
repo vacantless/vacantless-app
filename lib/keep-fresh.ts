@@ -25,6 +25,8 @@ export type KeepFreshRow = {
   line: string;
   /** true: show Renew on <site> and "I already renewed it". */
   renew: boolean;
+  /** S805: the live ad's link, so a phone can open the ad itself to renew. */
+  url?: string | null;
 };
 
 const FACEBOOK_RENEW_DAYS = 9;
@@ -105,7 +107,7 @@ export function keepFreshRows(
       default:
         line = age === null ? "Live." : `Posted ${age === 0 ? "today" : `${plural(age, "day")} ago`}.`;
     }
-    rows.push({ key: c.key, label: c.label, line, renew });
+    rows.push({ key: c.key, label: c.label, line, renew, url: c.liveUrl ?? null });
   }
   return rows;
 }

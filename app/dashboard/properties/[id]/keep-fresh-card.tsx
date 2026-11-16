@@ -1,8 +1,8 @@
+import { FacebookRenewLink } from "@/components/facebook-renew-link";
 import { markAdsRenewed, setPageWeeklyPosts } from "../actions";
 import type { KeepFreshRow } from "@/lib/keep-fresh";
 import { FACEBOOK_RENEW_CHECK, oldAdsCount } from "@/lib/facebook-renew";
 
-const FACEBOOK_YOUR_LISTINGS = "https://www.facebook.com/marketplace/you/selling";
 
 /**
  * S739 (review item 10): one "Keep it fresh" card on Get online. It replaces
@@ -91,14 +91,12 @@ export function KeepFreshCard({
                   // marked the ad renewed on the click, then opened the ad page,
                   // which has no Renew button (walked live 2026-10-28). The helper
                   // notes the real press; "I already renewed it" is the fallback.
-                  <a
-                    href={FACEBOOK_YOUR_LISTINGS}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <FacebookRenewLink
+                    adUrl={r.url ?? null}
                     className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
                   >
                     {FACEBOOK_RENEW_CHECK}
-                  </a>
+                  </FacebookRenewLink>
                 ) : (
                 <form action={markAdsRenewed}>
                   <input type="hidden" name="property_id" value={propertyId} />

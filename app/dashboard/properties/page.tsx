@@ -1,3 +1,4 @@
+import { FacebookRenewLink } from "@/components/facebook-renew-link";
 import { FACEBOOK_RENEW_CHECK, FACEBOOK_RENEW_HOW } from "@/lib/facebook-renew";
 import Link from "next/link";
 import { countViewingTimes } from "@/lib/viewing-times-count";
@@ -74,7 +75,6 @@ type ListingPostRef = {
 
 // Facebook lists every Marketplace ad the person posted on one page, each
 // with its own Renew. Only the person can press it (no API for Marketplace).
-const FACEBOOK_YOUR_LISTINGS = "https://www.facebook.com/marketplace/you/selling";
 
 type RentalLaunchState = {
   label: string;
@@ -642,14 +642,7 @@ export default async function PropertiesPage({
           {renewItems.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               {renewItems.some((i) => i.portal === "facebook") && (
-                <a
-                  href={FACEBOOK_YOUR_LISTINGS}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={PRIMARY_ROW_BUTTON}
-                >
-                  Open all my Marketplace ads
-                </a>
+                <FacebookRenewLink className={PRIMARY_ROW_BUTTON}>Open all my Marketplace ads</FacebookRenewLink>
               )}
               {renewItems.length > 1 && (
                 <form action={markAllAdsRenewed}>
@@ -966,14 +959,9 @@ export default async function PropertiesPage({
                         )}
                         <span className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
                           {item.portal === "facebook" ? (
-                            <a
-                              href={FACEBOOK_YOUR_LISTINGS}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={PRIMARY_ROW_BUTTON}
-                            >
+                            <FacebookRenewLink adUrl={adUrls.get(p.id)?.get("facebook") ?? null} className={PRIMARY_ROW_BUTTON}>
                               {FACEBOOK_RENEW_CHECK}
-                            </a>
+                            </FacebookRenewLink>
                           ) : (
                             <form action={markAdsRenewed}>
                               <input type="hidden" name="property_id" value={p.id} />

@@ -31,3 +31,18 @@ export function oldAdsCount(renew: number, marketplace: number): string {
   if (marketplace > 0) parts.push(marketplace === 1 ? "1 Marketplace ad to check" : `${marketplace} Marketplace ads to check`);
   return parts.join(" · ");
 }
+
+/** Facebook's Your listings page: Renew is in each ad's "..." menu. Works on a computer. */
+export const FACEBOOK_YOUR_LISTINGS = "https://www.facebook.com/marketplace/you/selling";
+
+/**
+ * S805: where "Check Renew on Marketplace" goes. On a phone, Your listings
+ * opens the Facebook app's Marketplace search ("No results found"), so a phone
+ * gets the ad itself, which opens in the Facebook app. Only a facebook.com
+ * Marketplace item link is used; anything else on a phone gives null.
+ */
+export function facebookRenewHref(adUrl: string | null | undefined, onPhone: boolean): string | null {
+  if (!onPhone) return FACEBOOK_YOUR_LISTINGS;
+  const url = (adUrl ?? "").trim();
+  return /^https:\/\/(www\.|m\.)?facebook\.com\/marketplace\/item\/\d+/i.test(url) ? url : null;
+}

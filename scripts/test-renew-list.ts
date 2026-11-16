@@ -50,7 +50,7 @@ ok("already renewed stays on the list", page.includes('name="back" value="list"'
 const actions = readFileSync("app/dashboard/properties/actions.ts", "utf8");
 ok("renew all action exists", actions.includes("export async function markAllAdsRenewed"));
 ok("renew all button", page.includes("I renewed them all"));
-ok("all Marketplace ads in one page", page.includes("facebook.com/marketplace/you/selling"));
+ok("all Marketplace ads in one page (S805: shared link, Your listings on a computer)", page.includes("<FacebookRenewLink") && page.includes("Open all my Marketplace ads"));
 ok("action returns to the list", actions.includes('formData.get("back") === "list"'));
 
 const cron = readFileSync("app/api/cron/distribution-freshness/route.ts", "utf8");
