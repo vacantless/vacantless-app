@@ -15,8 +15,10 @@
 export const FACEBOOK_RENEW_CHECK = "Check Renew on Marketplace";
 
 /** Where Renew lives and who decides. No claim that it is open. */
-export const FACEBOOK_RENEW_HOW =
-  "Facebook decides when Renew opens. On your Marketplace ads, press ... on this ad: Renew is there, or it shows the days left.";
+export const FACEBOOK_RENEW_HOW = "Open your Marketplace ads. If Facebook shows Renew, press it.";
+
+/** S806 (REVIEW-S805 finding 5): the one chip a rental row carries for Marketplace. */
+export const FACEBOOK_RENEW_CHIP = "Marketplace: check renew";
 
 /** "Marketplace ad is 12 days old, Renew may be open". */
 export function facebookRenewLine(days: number | null): string {

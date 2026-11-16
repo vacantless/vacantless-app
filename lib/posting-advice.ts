@@ -53,7 +53,7 @@ export function buildPostingAdvice(rows: ChannelRow[]): Advice[] {
   if (best) {
     out.push({
       tone: "good",
-      text: `${best.site} brings you the most booked viewings: ${best.booked} from ${plural(best.enquiries, "inquiry", "inquiries")}. Keep that ad fresh.`,
+      text: `${best.site} brings you the most booked viewings: ${best.booked} from ${plural(best.enquiries, "renter", "renters")}. Keep that ad fresh.`,
     });
   }
 
@@ -63,7 +63,7 @@ export function buildPostingAdvice(rows: ChannelRow[]): Advice[] {
   if (dud) {
     out.push({
       tone: "fix",
-      text: `${dud.site} sent ${plural(dud.enquiries, "inquiry", "inquiries")} but no bookings. Check the price and photos on that ad. Make sure your ad links to your booking page.`,
+      text: `${dud.site} sent ${plural(dud.enquiries, "renter", "renters")} but no bookings. Check the price and photos on that ad. Make sure your ad links to your booking page.`,
     });
   }
 
@@ -78,7 +78,8 @@ export function buildPostingAdvice(rows: ChannelRow[]): Advice[] {
   if (missing.length > 0) {
     out.push({
       tone: "try",
-      text: `No renters came from ${missing.join(" or ")} yet. ${missing.length === 1 ? "It is" : "They are"} free, and many renters in Canada look there.`,
+      // S806 (REVIEW-S805 finding 14): no "free" here; Kijiji is free only for an unused personal ad.
+      text: `No renters came from ${missing.join(" or ")} yet. Many renters in Canada look there.`,
     });
   }
 

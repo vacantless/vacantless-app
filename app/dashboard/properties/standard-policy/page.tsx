@@ -92,7 +92,7 @@ function FeatureTriSelect({
   return (
     <select name={name} defaultValue={boolToSelect(value)} className={SELECT_CLASS}>
       <option value="">
-        {isBuilding ? `Inherit (${emptyWord(base)})` : "Not set"}
+        {isBuilding ? `Your usual (${emptyWord(base)})` : "Not set"}
       </option>
       <option value="true">{trueLabel}</option>
       <option value="false">{falseLabel}</option>
@@ -174,7 +174,7 @@ function FeaturePolicyFields({
           >
             <option value="">
               {isBuilding
-                ? `Inherit (${dogSizeLabel(base!.policy_pets_dog_size) ?? "no limit"})`
+                ? `Your usual (${dogSizeLabel(base!.policy_pets_dog_size) ?? "no limit"})`
                 : "Not set"}
             </option>
             {DOG_SIZE_OPTIONS.map((opt) => (
@@ -291,7 +291,7 @@ export default async function StandardPolicyPage({
       <BrandBanner
         eyebrow="Rentals"
         title="Building standard policy"
-        subtitle="Set your standard policy once. Every unit inherits it on its listings, copy, and rental-site feed, so you only re-enter a value where a building or unit genuinely differs."
+        subtitle="Set your standard policy once. Every unit uses it on its listings, ads and rental sites. Change a value only where a building or unit is different."
         icon={<Icons.building className="h-6 w-6" />}
       />
 
@@ -325,8 +325,8 @@ export default async function StandardPolicyPage({
             </h3>
           </div>
           <p className="mt-1 text-sm text-gray-500">
-            Your portfolio-wide baseline. Every unit inherits these unless a
-            building (below) or the unit&apos;s own page overrides them.
+            Your usual policy. Every unit uses it unless a building (below) or
+            the unit&apos;s own page says otherwise.
           </p>
 
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -420,10 +420,9 @@ export default async function StandardPolicyPage({
             </h3>
           </div>
           <p className="mt-1 text-sm text-gray-500">
-            When a building&apos;s policy differs from your defaults, set it once
-            here. Every unit in that building inherits the building value (unless
-            the unit&apos;s own page overrides it). Leave a field on
-            &ldquo;Inherit&rdquo; to keep the organization default.
+            When a building&apos;s policy is different, set it once here. Every
+            unit in that building uses it, unless the unit&apos;s own page says
+            otherwise. Leave a field on &ldquo;Your usual&rdquo; to keep your usual policy.
           </p>
 
           {buildings.length === 0 ? (
@@ -475,7 +474,7 @@ export default async function StandardPolicyPage({
                             className={SELECT_CLASS}
                           >
                             <option value="">
-                              Inherit ({leaseTermLabel(org.policy_lease_term) ?? "1-year lease"})
+                              Your usual ({leaseTermLabel(org.policy_lease_term) ?? "1-year lease"})
                             </option>
                             {LEASE_TERM_OPTIONS.map((opt) => (
                               <option key={opt} value={opt}>
@@ -494,7 +493,7 @@ export default async function StandardPolicyPage({
                             className={SELECT_CLASS}
                           >
                             <option value="">
-                              Inherit ({acInheritLabel(org.policy_ac_type)})
+                              Your usual ({acInheritLabel(org.policy_ac_type)})
                             </option>
                             {AC_TYPE_OPTIONS.map((opt) => (
                               <option key={opt} value={opt}>
@@ -515,7 +514,7 @@ export default async function StandardPolicyPage({
                             className={SELECT_CLASS}
                           >
                             <option value="">
-                              Inherit ({smokingLabel(org.policy_smoking) ?? "not set"})
+                              Your usual ({smokingLabel(org.policy_smoking) ?? "not set"})
                             </option>
                             {SMOKING_OPTIONS.map((opt) => (
                               <option key={opt} value={opt}>
@@ -540,7 +539,7 @@ export default async function StandardPolicyPage({
                             className={SELECT_CLASS}
                           >
                             <option value="">
-                              Inherit ({onSiteInheritLabel(org.policy_on_site_management)})
+                              Your usual ({onSiteInheritLabel(org.policy_on_site_management)})
                             </option>
                             <option value="true">Yes</option>
                             <option value="false">No</option>

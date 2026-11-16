@@ -154,7 +154,9 @@ function QueueRow({
         </div>
         <p className="mt-1 text-sm text-gray-500 sm:truncate">
           {l.property?.address ?? "No rental linked"}
-          {l.source && <span className="text-gray-400"> · via {l.source}</span>}
+          {l.source && (
+            <span className="text-gray-400"> · via {l.source === "website" ? "your Vacantless page" : l.source}</span>
+          )}
           <span className="text-gray-400">
             {" · "}
             {new Date(l.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone })}

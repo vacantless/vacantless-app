@@ -23,7 +23,7 @@ const r = keepFreshRows(
   { today, rentalsRobotRenews: true },
 );
 // S775: Facebook runs its own Renew clock; the app never counts down to it.
-ok("S775: marketplace day 8 gives its age, no countdown, no button", row(r, "facebook")?.line.startsWith("Posted 8 days ago. Facebook decides when Renew opens.") === true && !row(r, "facebook")?.line.includes("Renew opens in") && !row(r, "facebook")?.renew, row(r, "facebook"));
+ok("S775: marketplace day 8 gives its age, no countdown, no button", row(r, "facebook")?.line.startsWith("Posted 8 days ago. Open your Marketplace ads.") === true && !row(r, "facebook")?.line.includes("Renew opens in") && !row(r, "facebook")?.renew, row(r, "facebook"));
 ok("kijiji end date", row(r, "kijiji")?.line === "Ad ends Nov 12." && !row(r, "kijiji")?.renew, row(r, "kijiji"));
 ok("rentals.ca renews itself", row(r, "rentals_ca")?.line.startsWith("We renew this free ad") === true && !row(r, "rentals_ca")?.renew);
 ok("zumper stays up", row(r, "zumper")?.line === "Stays up while the rental is open." && !row(r, "zumper")?.renew);
@@ -52,7 +52,7 @@ ok("same actions as before", cardSrc.includes("markAdsRenewed") && cardSrc.inclu
 
 // S740: Facebook's button opens Your listings and records nothing; Kijiji keeps renew-and-open.
 ok("S740: facebook button is a link to Your listings (S805: shared link)", cardSrc.includes("<FacebookRenewLink") && cardSrc.includes('r.key === "facebook"'));
-ok("S740/S775: facebook row tells where Renew is", due[0].line.includes("press ... on this ad"), due);
+ok("S740/S775: facebook row tells where Renew is", due[0].line.includes("If Facebook shows Renew, press it"), due);
 const notif = readFileSync("lib/notifications.ts", "utf8");
 ok("S740/S775: email says Facebook decides, not that Renew is open", !notif.includes("Press Renew there") && !notif.includes("then Renew listing") && notif.includes("Facebook decides when Renew opens"));
 ok("S775: card says check for Marketplace", cardSrc.includes("FACEBOOK_RENEW_CHECK") && !cardSrc.includes("Open my Marketplace ads"));

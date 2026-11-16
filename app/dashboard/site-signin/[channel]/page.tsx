@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ensureIngestAddress } from "@/lib/ingest-address-server";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -33,6 +34,13 @@ const ERR: Record<string, string> = {
   config: "This is not set up yet. Please contact us.",
   save: "Something went wrong. Please try again.",
 };
+
+/** "today", "yesterday" or "3 days ago". */
+function checkedAgo(iso: string): string {
+  const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
+  if (!Number.isFinite(days) || days <= 0) return "today";
+  return days === 1 ? "yesterday" : `${days} days ago`;
+}
 
 export default async function SiteSigninPage({
   params,
@@ -102,14 +110,34 @@ export default async function SiteSigninPage({
   const access = await readRobotPostingAccess(supabase, org.id);
   const canStart =
     access.setup && (!recent || !siteSigninIsOpen(recent.status as string));
-  // S806: a new site account uses the Vacantless address, so renters come in
-  // with no mail rule; the site's other emails are passed on to the owner.
-  const vacantlessAddress = canStart ? await ensureIngestAddress(supabase, org.id) : null;
   const autoOpen = shouldAutoOpenSignin({
     openParam: searchParams.open,
     canStart,
     recentStatus: (recent?.status as string | undefined) ?? null,
   });
+  // S806: a new site account uses the Vacantless address, so renters come in
+  // with no mail rule; the site's other emails are passed on to the owner.
+  const vacantlessAddress = canStart ? await ensureIngestAddress(supabase, org.id) : null;
+  // S806 (REVIEW-S805 finding 9): a connected site led with "You need a Kijiji
+  // account" and the sign-up form. Signed in, the page says so first and
+  // folds the rest.
+  const tileRows = chainOn ? null : await listChannelTileStatuses(org.id);
+  const tile = (tileRows ?? []).find((t) => t.channel === channel) ?? null;
+  const signedIn = !chainOn && tile?.state === "linked" && !autoOpen && !(recent && siteSigninIsOpen(recent.status as string));
+  const signedInLine = signedIn
+    ? `You are signed in to ${name}${tile?.accountLabel ? ` as ${tile.accountLabel}` : ""}.${
+        tile?.lastCheckedAt ? ` Checked ${checkedAgo(tile.lastCheckedAt)}.` : ""
+      }`
+    : null;
+  const Fold = ({ children }: { children: ReactNode }) =>
+    signedIn ? (
+      <details className="rounded-2xl border border-gray-200 bg-white p-4">
+        <summary className="cursor-pointer text-sm font-medium text-gray-700">Sign in again or use a different account</summary>
+        <div className="mt-4 space-y-5">{children}</div>
+      </details>
+    ) : (
+      <>{children}</>
+    );
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 py-6">
@@ -181,6 +209,13 @@ export default async function SiteSigninPage({
         />
       )}
 
+      {signedInLine && (
+        <p className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
+          ✓ {signedInLine} We post, renew and take down your ads here.
+        </p>
+      )}
+
+      <Fold>
       {canStart && (
         <form id="site-signin-start" action={startSiteSignin} className="rounded-2xl border border-gray-200 bg-white p-5">
           <input type="hidden" name="channel" value={channel} />
@@ -202,7 +237,7 @@ export default async function SiteSigninPage({
           <ul className="space-y-1.5 text-sm text-gray-700">
             <li>1. We open {name} in a secure window. It stays open for {SIGNIN_WINDOW_MINUTES} minutes.</li>
             <li>2. You sign in yourself. If {name} asks you to prove you are a person, you do that too.</li>
-            <li>3. We keep you signed in, locked with encryption, and close the window.</li>
+            <li>3. We keep you signed in, kept private, and close the window.</li>
           </ul>
           <p className="mt-3 text-xs text-gray-500">
             By signing in, you let us post the ads you approve on this {name} account. Your password stays with you. You can stop any time.
@@ -272,6 +307,7 @@ export default async function SiteSigninPage({
           </button>
         </form>
       )}
+      </Fold>
     </div>
   );
 }

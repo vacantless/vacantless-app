@@ -132,8 +132,10 @@ export type PublishEverywherePostingBlocker = {
 // S760: the same four words as the for-you rows (On, Posting, Needs you).
 const MODE_CHIP: Record<PublishMode, { label: string; cls: string }> = {
   instant_auto: { label: "On", cls: "bg-green-50 text-green-700" },
-  copilot_fill: { label: "Posting", cls: "bg-sky-50 text-sky-700" },
-  paid_optin: { label: "Posting", cls: "bg-sky-50 text-sky-700" },
+  // S806 (REVIEW-S805 finding 8): "Posting" on a draft where nothing posts.
+  // Before an ad is up the row reads Ready: it posts when the rental goes live.
+  copilot_fill: { label: "Ready", cls: "bg-sky-50 text-sky-700" },
+  paid_optin: { label: "Ready", cls: "bg-sky-50 text-sky-700" },
   needs_connection: { label: "Needs you", cls: "bg-amber-50 text-amber-800" },
   brokerage_gated: { label: "Via brokerage", cls: "bg-gray-100 text-gray-600" },
   planned: { label: "Coming soon", cls: "bg-gray-100 text-gray-600" },
@@ -712,41 +714,11 @@ export function PublishEverywhere({
           </section>
         ) : (
           <section className="relative overflow-hidden rounded-2xl border border-emerald-900 bg-gradient-to-b from-emerald-900 to-emerald-950 p-7 text-center text-white shadow-sm">
-            <div className="mx-auto mb-5 grid max-w-2xl gap-2 text-left sm:grid-cols-3">
-              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
-                <span className="mb-2 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-300 text-xs font-black text-emerald-950">
-                  1
-                </span>
-                <b className="block text-[12.5px] text-emerald-50">
-                  Press Post
-                </b>
-                <small className="text-[11px] text-emerald-200">
-                  Your Vacantless page and your sites turn on.
-                </small>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
-                <span className="mb-2 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-300 text-xs font-black text-emerald-950">
-                  2
-                </span>
-                <b className="block text-[12.5px] text-emerald-50">
-                  Approve each post
-                </b>
-                <small className="text-[11px] text-emerald-200">
-                  We post it for you. You pay a site only if it charges.
-                </small>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
-                <span className="mb-2 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-300 text-xs font-black text-emerald-950">
-                  3
-                </span>
-                <b className="block text-[12.5px] text-emerald-50">
-                  Confirm the live link
-                </b>
-                <small className="text-[11px] text-emerald-200">
-                  A site counts as Live after the link to your ad is saved.
-                </small>
-              </div>
-            </div>
+            {/* S806 (REVIEW-S805 finding 8): one line instead of three steps that
+                named a Post button, approvals and a link to confirm a landlord never sees. */}
+            <p className="mx-auto mb-5 max-w-xl text-sm text-emerald-100">
+              Your Vacantless page goes up and we post it to every site you connected. You pay a site only if it charges.
+            </p>
 
             {canPublish ? (
               <button

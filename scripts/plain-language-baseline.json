@@ -2,7 +2,7 @@
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
   "generated": "2026-11-16",
-  "checksum": "742dbcda4790347ca484ae7cd4be8b9af2ed92ba426db735cb82c22ecf75178d",
+  "checksum": "d19ac9169a98a719291ce7fff159c5bc3349419c50c81f7586a46d5adefc42e6",
   "surfaces": [
     "app/agent/[token]/marketplace/[propertyId]/page.tsx",
     "app/crew/[token]/page.tsx",
@@ -114,9 +114,8 @@
     "app/dashboard/properties/readiness-chips.tsx\u0000banned_word": 3,
     "app/dashboard/properties/standard-policy/page.tsx\u0000all_caps": 1,
     "app/dashboard/properties/standard-policy/page.tsx\u0000ampersand_or_slash": 2,
-    "app/dashboard/properties/standard-policy/page.tsx\u0000banned_word": 1,
-    "app/dashboard/properties/standard-policy/page.tsx\u0000parentheses": 9,
-    "app/dashboard/properties/standard-policy/page.tsx\u0000sentence_length": 4,
+    "app/dashboard/properties/standard-policy/page.tsx\u0000parentheses": 8,
+    "app/dashboard/properties/standard-policy/page.tsx\u0000sentence_length": 2,
     "app/dashboard/send-live/page.tsx\u0000banned_word": 2,
     "app/dashboard/settings/page.tsx\u0000all_caps": 2,
     "app/dashboard/settings/page.tsx\u0000ampersand_or_slash": 7,
@@ -195,9 +194,9 @@
     "app/dashboard/properties/[id]/marketing-kit-card.tsx": 25,
     "app/dashboard/properties/[id]/marketplace-row.tsx": 29,
     "app/dashboard/properties/[id]/next-action-card.tsx": 3,
-    "app/dashboard/properties/[id]/page.tsx": 478,
+    "app/dashboard/properties/[id]/page.tsx": 480,
     "app/dashboard/properties/[id]/posted-results-card.tsx": 8,
-    "app/dashboard/properties/[id]/publish-everywhere.tsx": 135,
+    "app/dashboard/properties/[id]/publish-everywhere.tsx": 130,
     "app/dashboard/properties/[id]/renter-sources-card.tsx": 3,
     "app/dashboard/properties/import/bulk-import-form.tsx": 38,
     "app/dashboard/properties/import/page.tsx": 20,
@@ -211,7 +210,7 @@
     "app/dashboard/send-live/page.tsx": 4,
     "app/dashboard/settings/facebook-page-card.tsx": 10,
     "app/dashboard/settings/page.tsx": 318,
-    "app/dashboard/site-signin/[channel]/page.tsx": 31,
+    "app/dashboard/site-signin/[channel]/page.tsx": 37,
     "app/dashboard/site-signin/[channel]/window-panel.tsx": 14,
     "app/dashboard/site-signin/page.tsx": 12,
     "app/dashboard/sites/page.tsx": 15,
@@ -234,7 +233,7 @@
     "lib/distribution-run.ts": 62,
     "lib/distribution-stuck-sweep.ts": 9,
     "lib/distribution-verification.ts": 20,
-    "lib/facebook-renew.ts": 8,
+    "lib/facebook-renew.ts": 9,
     "lib/group-viewing.ts": 4,
     "lib/keep-fresh.ts": 26,
     "lib/listing-copy.ts": 60,
@@ -1004,12 +1003,6 @@
       "count": 1
     },
     {
-      "rule": "banned_word",
-      "file": "app/dashboard/properties/standard-policy/page.tsx",
-      "text": "Set your standard policy once. Every unit inherits it on its listings, copy, and rental-site feed, so you only re-enter a value where a building or unit genuinely differs.",
-      "count": 1
-    },
-    {
       "rule": "parentheses",
       "file": "app/dashboard/properties/standard-policy/page.tsx",
       "text": "Applies to dogs when they're welcome. In Ontario a \"no pets\" lease clause is void (RTA s.14), this is a listing/screening preference, not an enforceable rule.",
@@ -1018,25 +1011,19 @@
     {
       "rule": "parentheses",
       "file": "app/dashboard/properties/standard-policy/page.tsx",
-      "text": "Inherit (",
+      "text": "Your usual (",
       "count": 4
     },
     {
       "rule": "parentheses",
       "file": "app/dashboard/properties/standard-policy/page.tsx",
-      "text": "Inherit ( {value} )",
+      "text": "Your usual ( {value} )",
       "count": 2
     },
     {
       "rule": "parentheses",
       "file": "app/dashboard/properties/standard-policy/page.tsx",
-      "text": "When a building's policy differs from your defaults, set it once here. Every unit in that building inherits the building value (unless the unit's own page overrides it). Leave a field on \"Inherit\" to keep the organization default.",
-      "count": 1
-    },
-    {
-      "rule": "parentheses",
-      "file": "app/dashboard/properties/standard-policy/page.tsx",
-      "text": "Your portfolio-wide baseline. Every unit inherits these unless a building (below) or the unit's own page overrides them.",
+      "text": "Your usual policy. Every unit uses it unless a building (below) or the unit's own page says otherwise.",
       "count": 1
     },
     {
@@ -1048,19 +1035,7 @@
     {
       "rule": "sentence_length",
       "file": "app/dashboard/properties/standard-policy/page.tsx",
-      "text": "Set your standard policy once. Every unit inherits it on its listings, copy, and rental-site feed, so you only re-enter a value where a building or unit genuinely differs.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/standard-policy/page.tsx",
-      "text": "When a building's policy differs from your defaults, set it once here. Every unit in that building inherits the building value (unless the unit's own page overrides it). Leave a field on \"Inherit\" to keep the organization default.",
-      "count": 1
-    },
-    {
-      "rule": "sentence_length",
-      "file": "app/dashboard/properties/standard-policy/page.tsx",
-      "text": "Your portfolio-wide baseline. Every unit inherits these unless a building (below) or the unit's own page overrides them.",
+      "text": "Your usual policy. Every unit uses it unless a building (below) or the unit's own page says otherwise.",
       "count": 1
     },
     {

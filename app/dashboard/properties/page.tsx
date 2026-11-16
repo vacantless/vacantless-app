@@ -1,5 +1,5 @@
 import { FacebookRenewLink } from "@/components/facebook-renew-link";
-import { FACEBOOK_RENEW_CHECK, FACEBOOK_RENEW_HOW } from "@/lib/facebook-renew";
+import { FACEBOOK_RENEW_CHECK, FACEBOOK_RENEW_CHIP, FACEBOOK_RENEW_HOW } from "@/lib/facebook-renew";
 import Link from "next/link";
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { headers } from "next/headers";
@@ -559,7 +559,7 @@ export default async function PropertiesPage({
         icon={<Icons.building />}
         eyebrow="Portfolio"
         title="Rentals"
-        subtitle="Your rentals and their marketing status."
+        subtitle="Your rentals and where each one is posted."
         action={
           addPropertyV2Enabled ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -595,7 +595,7 @@ export default async function PropertiesPage({
             <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{headline.live}</p>
           </div>
           <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Inquiries</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Renters</p>
             <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">
               {headline.inquiries.toLocaleString()}
             </p>
@@ -637,7 +637,9 @@ export default async function PropertiesPage({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-2.5">
           <p className="text-sm text-amber-900">
             <span className="font-semibold">{todo}</span>
-            <span className="ml-2 text-xs text-amber-800">Each one is marked on its row.</span>
+            <span className="ml-2 text-xs text-amber-800">
+              {renewItems.some((i) => i.portal === "facebook") ? `${FACEBOOK_RENEW_HOW} ` : ""}Each one is marked on its row.
+            </span>
           </p>
           {renewItems.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
@@ -757,14 +759,12 @@ export default async function PropertiesPage({
         <ul className="mb-4 divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white shadow-sm">
           {viewRows.map((v) => {
             const p = v.p;
-            // S792: the Marketplace how-to line shows on the first such row only.
-            const firstFacebookRenewId = viewRows.find((r) => r.renew.some((x) => x.portal === "facebook"))?.p.id;
             const detailHref = `/dashboard/properties/${p.id}`;
             const kitHref = `/dashboard/properties/${p.id}#distribute-header`;
             const meta = [
               p.beds != null ? `${p.beds} bd` : null,
               p.baths != null ? `${p.baths} ba` : null,
-              v.leadCount > 0 ? `${v.leadCount} ${v.leadCount === 1 ? "inquiry" : "inquiries"}` : null,
+              v.leadCount > 0 ? `${v.leadCount} ${v.leadCount === 1 ? "renter" : "renters"}` : null,
             ]
               .filter(Boolean)
               .join(" · ");
@@ -949,13 +949,21 @@ export default async function PropertiesPage({
                     {v.renew.map((item) => (
                       <div
                         key={item.portal}
-                        className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-900 ring-1 ring-amber-200"
+                        className={
+                          item.portal === "facebook"
+                            ? "flex flex-wrap items-center gap-2 text-xs text-gray-600"
+                            : "flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-900 ring-1 ring-amber-200"
+                        }
                       >
-                        <span className="font-semibold">{renewLine(item)}</span>
-                        {(item.portal !== "facebook" || p.id === firstFacebookRenewId) && (
-                          <span className="text-amber-700">
-                            {item.portal === "facebook" ? FACEBOOK_RENEW_HOW : "Old ads sink lower on the site."}
-                          </span>
+                        {/* S806 (REVIEW-S805 finding 5): Marketplace is one quiet chip
+                            on the row; the bar at the top of the page explains it once. */}
+                        {item.portal === "facebook" ? (
+                          <span className="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-700">{FACEBOOK_RENEW_CHIP}</span>
+                        ) : (
+                          <>
+                            <span className="font-semibold">{renewLine(item)}</span>
+                            <span className="text-amber-700">Old ads sink lower on the site.</span>
+                          </>
                         )}
                         <span className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
                           {item.portal === "facebook" ? (
@@ -1020,7 +1028,7 @@ export default async function PropertiesPage({
           <Link href="/dashboard/properties/standard-policy" className="font-medium text-brand hover:underline">
             Building standard policy
           </Link>
-          : set lease term, air conditioning, smoking and on-site management once. Every unit inherits it.
+          : set lease term, air conditioning, smoking and on-site management once. Every unit uses it as its usual.
         </p>
       )}
 

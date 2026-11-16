@@ -861,12 +861,12 @@ function SyndicationFirstCard({
     : needsListingWork
       ? "Post shows what your listing still needs. It then opens only the steps that need your sign-in or the link to your ad."
     : expiredOnly
-      ? "An older ad on a rental site is down. Post it again and it counts as On."
+      ? "An older ad on a rental site is down. Post it again to put it back up."
       : liveOutsideCount > 0
         ? `${totalInquiryCount} ${
-            totalInquiryCount === 1 ? "inquiry is" : "inquiries are"
-          } tied to this rental so far.`
-        : "Rental sites still need posting. Each one counts as live once the link to your ad is saved.";
+            totalInquiryCount === 1 ? "renter has" : "renters have"
+          } come in for this rental so far.`
+        : "Some rental sites still need this ad.";
   // S770: "due a renew" sends the landlord to the site's own row, where the
   // Renew button now is, not to the top of the tab.
   const renewRowHref =
@@ -962,8 +962,8 @@ function SyndicationFirstCard({
           {!packetBlocked ? (
             <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-400">
               {robotPostingAllowed
-                ? "We post your ad on each site as soon as it is ready. A site counts as On once the link to your ad is saved."
-                : "Your Facebook Page posts from here, free. The Marketplace kit gives you the ad to paste. With the Posting add-on we post Kijiji, Rentals.ca and Zumper for you. A site counts as On once the link to your ad is saved."}
+                ? "We post your ad on each site as soon as it is ready."
+                : "Your Facebook Page posts from here, free. The Marketplace kit gives you the ad to paste. With the Posting add-on we post Kijiji, Rentals.ca and Zumper for you."}
             </p>
           ) : null}
         </div>
@@ -3604,9 +3604,16 @@ export default async function PropertyDetailPage({
         return (
           <div id="photo-folder" className="mb-6 rounded-2xl border border-gray-200 bg-white p-5">
             <h3 className="text-sm font-semibold text-gray-900">Photo folder</h3>
+            {/* S806 (REVIEW-S805 finding 15): one line; the rest folds. */}
             <p className="mt-1 text-xs text-gray-600">
-              Photos already in a Google Drive or Dropbox folder? Paste the link and we pull them in. Share the folder so anyone with the link can view. Crew on unit progress links? New photos also pull in when they tap Photos are in. Other folder links are kept here for you to open.
+              Photos in Google Drive or Dropbox? Paste the folder link and we pull them in.
             </p>
+            <details className="mt-1 text-xs text-gray-500">
+              <summary className="cursor-pointer">More</summary>
+              <p className="mt-1">
+                Share the folder so anyone with the link can view. When your crew taps Photos are in, new photos pull in too. A link to another kind of folder is kept here for you to open.
+              </p>
+            </details>
             {outcome && <p className="mt-2 rounded-lg bg-gray-50 p-2 text-xs text-gray-800">{outcome}</p>}
             <form action={savePhotoFolderAndPull} className="mt-3 flex flex-wrap items-center gap-2">
               <input type="hidden" name="property_id" value={p.id} />
