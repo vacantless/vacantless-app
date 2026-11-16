@@ -76,6 +76,7 @@ const SURFACES: Surface[] = [
   { file: "app/dashboard/sites/sites-rows.tsx", mode: "ui" },
   { file: "lib/sites-setup.ts", mode: "ui" },
   { file: "lib/renter-emails.ts", mode: "ui" },
+  { file: "lib/site-mail-pass.ts", mode: "ui" },
   { file: "lib/marketplace-phone-email.ts", mode: "ui" },
   // S736: the email when a site signs a landlord out.
   { file: "lib/signin-lost.ts", mode: "ui" },

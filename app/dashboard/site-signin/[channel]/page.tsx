@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ensureIngestAddress } from "@/lib/ingest-address-server";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
@@ -101,6 +102,9 @@ export default async function SiteSigninPage({
   const access = await readRobotPostingAccess(supabase, org.id);
   const canStart =
     access.setup && (!recent || !siteSigninIsOpen(recent.status as string));
+  // S806: a new site account uses the Vacantless address, so renters come in
+  // with no mail rule; the site's other emails are passed on to the owner.
+  const vacantlessAddress = canStart ? await ensureIngestAddress(supabase, org.id) : null;
   const autoOpen = shouldAutoOpenSignin({
     openParam: searchParams.open,
     canStart,
@@ -227,6 +231,11 @@ export default async function SiteSigninPage({
             We open the {name} sign-up page and fill in these details. You choose a password and finish there.
           </p>
           <p className="mt-1 text-xs text-gray-500">{SITE_SIGNUP_NOTE[channel]}</p>
+          {vacantlessAddress ? (
+            <p className="mt-1 text-xs text-gray-500">
+              The email is your Vacantless address, so renters who write on {name} come straight in. Anything else {name} sends there, like a code or a link, we pass on to {user?.email ?? "you"}.
+            </p>
+          ) : null}
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <label className="text-xs text-gray-600">
               First name
@@ -241,7 +250,7 @@ export default async function SiteSigninPage({
               <input
                 name="email"
                 type="email"
-                defaultValue={user?.email ?? ""}
+                defaultValue={vacantlessAddress ?? user?.email ?? ""}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
               />
             </label>

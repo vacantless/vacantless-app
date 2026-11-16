@@ -22,6 +22,8 @@ import { sourceLabelForPost } from "@/lib/listing-distribution";
 import { notifyOperatorsOfNewLeadById } from "@/lib/notify-new-lead-server";
 import { autoReplyIngestedLead, fileAiEnquiry, type ReadEnquiry } from "@/lib/ai-enquiry-ingest";
 import type { AutoReplyPayload } from "@/lib/email";
+import { isTrustedSiteMail, siteMailName } from "@/lib/site-mail-pass";
+import { passSiteMailToOwners } from "@/lib/site-mail-pass-server";
 import {
   isTrustedPortalSender,
   isKnownPortalSender,
@@ -107,6 +109,8 @@ type InboundLeadDeps = {
   recordPortalEvent?: RecordPortalEvent;
   /** S702: the AI enquiry reader (injected in tests). */
   readEnquiry?: ReadEnquiry;
+  /** S806: pass a rental site's own email on to the account owners (injected in tests). */
+  passSiteMail?: typeof passSiteMailToOwners;
 };
 
 export type PortalEventRow = {
@@ -440,6 +444,7 @@ export async function handleInboundLeadPost(
   const now = deps.now ?? Date.now;
   const notifyOperators = deps.notifyOperators ?? notifyOperatorsOfNewLeadById;
   const recordPortalEvent = deps.recordPortalEvent ?? recordPortalEventInDb;
+  const passSiteMail = deps.passSiteMail ?? passSiteMailToOwners;
   // Unconfigured => dark. Don't reveal the endpoint exists; don't act.
   if (!secret || !admin) {
     return new NextResponse("Not found", { status: 404 });
@@ -560,6 +565,30 @@ export async function handleInboundLeadPost(
     return NextResponse.json({ ok: true, handled: "forward_confirmation" });
   }
 
+  // ---- S806: a rental site's own email, not a renter --------------------------
+  // When the site account uses this address (S806 "Make my account"), the site
+  // also sends its sign-up link, codes, password resets and receipts here.
+  // Those come from a site domain but not from a renter-lead sender; checked
+  // BEFORE the loop guard, which drops every "noreply" sender. Trusted only
+  // with aligned authentication for that site's domain.
+  const passOn = async (): Promise<NextResponse | null> => {
+    const trust = isTrustedSiteMail(from, headers);
+    if (!trust.ok) return null;
+    const res = await passSiteMail(admin, {
+      orgId: orgId as string,
+      siteName: siteMailName(trust.domain),
+      from,
+      subject: str(payload.Subject),
+      html: str(payload.HtmlBody) || null,
+      text: str(payload.TextBody) || null,
+    });
+    return NextResponse.json({ ok: true, handled: "site_mail_passed", sent: res.sent });
+  };
+  if (!isKnownPortalSender(from)) {
+    const passed = await passOn();
+    if (passed) return passed;
+  }
+
   // ---- Layer 3: per-org verified-sender allow-list + loop detection ---------
   // NOTE: deliberately NOT gated on the capture email-in plan entitlement. That
   // gate belongs to the Premium document-capture feature; inbound leads are the
@@ -647,6 +676,9 @@ export async function handleInboundLeadPost(
   // it are deliberately two decisions.
   if (portalKey && !portalIngestEnabled(portalKey)) {
     console.warn("inbound/lead: site ingest is off", { portal: portalKey });
+    // S806: never lose it; the account owner gets the site's email instead.
+    const passed = await passOn();
+    if (passed) return passed;
     return NextResponse.json({ ok: true, handled: "portal_disabled", portal: portalKey });
   }
   if (knownPortal) {
@@ -696,6 +728,10 @@ export async function handleInboundLeadPost(
     if (ai) return ai;
     console.warn("inbound/lead: not parsed", { reason: parsed.reason });
     await note("not_parsed");
+    // S806: a site email that is not a renter (a code, a notice) also goes to
+    // the account owner instead of nowhere.
+    const passed = await passOn();
+    if (passed) return passed;
     return NextResponse.json({ ok: true, handled: "not_parsed", reason: parsed.reason });
   }
   const lead = parsed.lead;

@@ -39,7 +39,8 @@ ok("action never takes a password field", !/formData\.get\("password/.test(actio
 const page = readFileSync("app/dashboard/site-signin/[channel]/page.tsx", "utf8");
 ok("page offers Make my account", page.includes("Make my {name} account") && page.includes('name="mode" value="signup"'));
 ok("page has no password box", !/type="password"/.test(page));
-ok("page fills email from the login", page.includes("defaultValue={user?.email"));
+// S806: the Vacantless address first, the login email when there is none.
+ok("page fills email from the login", page.includes("defaultValue={vacantlessAddress ?? user?.email"));
 const migration = readFileSync("supabase/migrations/0261_signin_window_signup_mode.sql", "utf8");
 ok("migration adds mode and prefill", migration.includes("add column if not exists mode") && migration.includes("prefill jsonb"));
 

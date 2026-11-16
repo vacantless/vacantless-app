@@ -115,6 +115,12 @@ export async function PortalInboxCard({ orgId }: { orgId: string }) {
       </div>
 
       {address && (
+        <p className="text-[length:var(--vl-type-guided-body)] leading-relaxed text-[var(--vl-text-primary)]">
+          {t("siteAccountTip")}
+        </p>
+      )}
+
+      {address && (
         <div className="space-y-3">
           <h3 className="text-lg font-bold text-[var(--vl-text-primary)]">{t("howTitle")}</h3>
           <ol className="list-decimal space-y-3 pl-5 text-[length:var(--vl-type-guided-body)] leading-relaxed text-[var(--vl-text-primary)]">

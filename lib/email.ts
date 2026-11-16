@@ -3042,3 +3042,76 @@ export async function sendNotificationEmail(
     return { sent: false, reason: `fetch_error:${(e as Error).message}` };
   }
 }
+
+// ---------------------------------------------------------------------------
+// S806: a rental site's own email (sign-up link, code, password reset,
+// receipt) that arrived at the landlord's Vacantless address, passed on to
+// the landlord. Only mail that passed lib/site-mail-pass isTrustedSiteMail
+// reaches here. The site's HTML is kept so its buttons and links still work.
+
+export type SiteMailCopyPayload = {
+  to_email: string;
+  org_name: string | null;
+  site_name: string;
+  subject: string;
+  lead_line: string;
+  original_from: string;
+  html: string | null;
+  text: string | null;
+};
+
+function autolinkEscaped(text: string): string {
+  // Split on links in the RAW text, then escape each piece, so a tag after a
+  // link never becomes part of it.
+  const re = /https?:\/\/[^\s<>"']+/g;
+  let out = "";
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    const i = m.index ?? 0;
+    out += escapeHtml(text.slice(last, i));
+    const u = escapeHtml(m[0]);
+    out += `<a href="${u}" style="color:#4f46e5;">${u}</a>`;
+    last = i + m[0].length;
+  }
+  return out + escapeHtml(text.slice(last));
+}
+
+export function siteMailCopyHtml(p: SiteMailCopyPayload): string {
+  const banner = `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px 14px;margin:0 0 16px;font-size:14px;color:#1e1b4b;">${escapeHtml(
+    p.lead_line,
+  )}<br><span style="color:#6b7280;font-size:12px;">From: ${escapeHtml(p.original_from)}</span></div>`;
+  const original = p.html && p.html.trim()
+    ? p.html.replace(/<script[\s\S]*?<\/script>/gi, "")
+    : `<div style="white-space:pre-wrap;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#18181b;">${autolinkEscaped(
+        (p.text ?? "").slice(0, 20000),
+      )}</div>`;
+  return `${banner}${original}`;
+}
+
+export async function sendSiteMailCopy(p: SiteMailCopyPayload): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.to_email) return { sent: false, reason: "no_recipient" };
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [{ email: p.to_email }],
+    subject: p.subject,
+    htmlContent: siteMailCopyHtml(p),
+    tags: ["kind:site_mail_copy"],
+  };
+  try {
+    const res = await brevoFetch({
+      method: "POST",
+      headers: { "api-key": apiKey, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject: p.subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}

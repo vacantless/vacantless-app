@@ -284,6 +284,8 @@ async function post(
     recordPortalEvent: async (_admin, row) => {
       events.push(row);
     },
+    // S806: a trusted site email that is not a renter is passed on (no real send here).
+    passSiteMail: async () => ({ sent: 1, attempted: 1 }),
   });
   return response.json() as Promise<Record<string, unknown>>;
 }
@@ -495,7 +497,8 @@ async function main() {
     TextBody: "Nothing a parser can use.",
     Headers: [{ Name: "Authentication-Results", Value: "mx; dmarc=pass header.from=rentals.ca" }],
   }, events);
-  ok("unreadable site mail recorded as not_parsed", res.handled === "not_parsed" && events[0]?.outcome === "not_parsed", { res, events });
+  // S806: still recorded as not_parsed for the card, and passed on to the owner.
+  ok("unreadable site mail recorded as not_parsed", res.handled === "site_mail_passed" && events[0]?.outcome === "not_parsed", { res, events });
   }
 
   ok(
@@ -555,7 +558,8 @@ async function main() {
   seed(offAdmin);
   const offEvents: PortalEventRow[] = [];
   const off = await post(offAdmin, zumperPayload("mid-z-off"), offEvents);
-  ok("zumper off refuses, files nothing", off.handled === "portal_disabled" && off.portal === "zumper" && offAdmin.leads.length === 0, off);
+  // S806: with Zumper's reader off, a trusted Zumper email is passed on to the owner, never filed.
+  ok("zumper off refuses, files nothing", (off.handled === "portal_disabled" || off.handled === "site_mail_passed") && offAdmin.leads.length === 0, off);
 
   process.env.ZUMPER_LEAD_INGEST_ENABLED = "true";
   const admin = new FakeAdmin();

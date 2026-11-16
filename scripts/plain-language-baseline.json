@@ -84,6 +84,7 @@
     "lib/renter-emails.ts",
     "lib/renter-sources.ts",
     "lib/signin-lost.ts",
+    "lib/site-mail-pass.ts",
     "lib/site-signin.ts",
     "lib/sites-setup.ts",
     "lib/tenant-emergency.ts",
@@ -210,7 +211,7 @@
     "app/dashboard/send-live/page.tsx": 4,
     "app/dashboard/settings/facebook-page-card.tsx": 10,
     "app/dashboard/settings/page.tsx": 318,
-    "app/dashboard/site-signin/[channel]/page.tsx": 28,
+    "app/dashboard/site-signin/[channel]/page.tsx": 31,
     "app/dashboard/site-signin/[channel]/window-panel.tsx": 14,
     "app/dashboard/site-signin/page.tsx": 12,
     "app/dashboard/sites/page.tsx": 15,
@@ -248,13 +249,14 @@
     "lib/renter-emails.ts": 4,
     "lib/renter-sources.ts": 1,
     "lib/signin-lost.ts": 9,
+    "lib/site-mail-pass.ts": 5,
     "lib/site-signin.ts": 39,
     "lib/sites-setup.ts": 40,
     "lib/tenant-emergency.ts": 23,
     "lib/trade-ratings.ts": 8,
     "lib/two-step.ts": 2,
-    "messages/en.json": 211,
-    "messages/fr.json": 211
+    "messages/en.json": 212,
+    "messages/fr.json": 212
   },
   "entries": [
     {
