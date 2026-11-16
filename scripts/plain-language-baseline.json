@@ -54,6 +54,7 @@
     "app/dashboard/sites/sites-rows.tsx",
     "app/dashboard/today-lane.tsx",
     "app/kit/[token]/page.tsx",
+    "app/login/code/page.tsx",
     "components/marketplace-kit-steps.tsx",
     "components/page-help.tsx",
     "lib/brokerage-request.ts",
@@ -87,6 +88,7 @@
     "lib/sites-setup.ts",
     "lib/tenant-emergency.ts",
     "lib/trade-ratings.ts",
+    "lib/two-step.ts",
     "messages/en.json",
     "messages/fr.json"
   ],
@@ -216,6 +218,7 @@
     "app/dashboard/sites/sites-rows.tsx": 9,
     "app/dashboard/today-lane.tsx": 5,
     "app/kit/[token]/page.tsx": 12,
+    "app/login/code/page.tsx": 10,
     "components/marketplace-kit-steps.tsx": 28,
     "components/page-help.tsx": 11,
     "lib/brokerage-request.ts": 14,
@@ -249,6 +252,7 @@
     "lib/sites-setup.ts": 39,
     "lib/tenant-emergency.ts": 23,
     "lib/trade-ratings.ts": 8,
+    "lib/two-step.ts": 2,
     "messages/en.json": 211,
     "messages/fr.json": 211
   },

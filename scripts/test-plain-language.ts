@@ -170,6 +170,9 @@ const SURFACES: Surface[] = [
   { file: "app/dashboard/(wizard)/getting-started/page.tsx", mode: "ui" },
   { file: "app/dashboard/properties/new/page.tsx", mode: "ui" },
   { file: "app/dashboard/properties/standard-policy/page.tsx", mode: "ui" },
+  // S803: two-step sign-in (the code page and its wording; the My settings card sits in the excused app/dashboard/me).
+  { file: "app/login/code/page.tsx", mode: "ui" },
+  { file: "lib/two-step.ts", mode: "ui" },
 ];
 
 /**

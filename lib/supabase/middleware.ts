@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { nextParamFor } from "@/lib/safe-next";
 import { demoDecision, isDemoEmail } from "@/lib/demo-account";
 import { quietDeadRefreshTokenLogs } from "@/lib/quiet-dead-token";
+import { CODE_PAGE, isGatedPath, twoStepDecision } from "@/lib/two-step";
 
 // S801: stop one dead sign-in cookie from filling the error log (lib/quiet-dead-token.ts).
 quietDeadRefreshTokenLogs();
@@ -84,6 +85,26 @@ export async function updateSession(request: NextRequest) {
     const next = nextParamFor(path, request.nextUrl.search);
     if (next) url.searchParams.set("next", next);
     return NextResponse.redirect(url);
+  }
+
+  // S803: a login that turned on two-step sign-in types its phone code before
+  // any account page opens (lib/two-step.ts). Reads the session token only.
+  if (user && isGatedPath(path)) {
+    const { data: aal } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const decision = twoStepDecision({
+      pathname: path,
+      currentLevel: aal?.currentLevel,
+      nextLevel: aal?.nextLevel,
+    });
+    if (decision === "verify") {
+      const url = request.nextUrl.clone();
+      url.pathname = CODE_PAGE;
+      url.search = "";
+      const next = nextParamFor(path, request.nextUrl.search);
+      if (next) url.searchParams.set("next", next);
+      return NextResponse.redirect(url);
+    }
   }
 
   return supabaseResponse;

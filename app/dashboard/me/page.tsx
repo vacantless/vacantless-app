@@ -11,6 +11,9 @@ import { Icons } from "@/components/icons";
 import { RENTAL_SHAPE_LABEL, RENTAL_SHAPE_TYPES } from "@/lib/showing-agents";
 import type { AssignedView } from "@/lib/dashboard-assigned";
 import { updateMyCoverage, updateMyDashboardDefaults } from "./actions";
+import { TwoStepCard } from "./two-step-card";
+import { isRentCollectionActive } from "@/lib/rent-status";
+import { twoStepPitch } from "@/lib/two-step";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +75,17 @@ export default async function MySettingsPage({
   }
   const flash = searchParams.me ? FLASH[searchParams.me] : null;
 
+  // S803: two-step sign-in is offered to everyone; an account that collects
+  // rent gets the stronger line (lib/two-step.ts twoStepPitch).
+  const [{ data: stripeRows }, { data: rotessaRows }] = await Promise.all([
+    supabase.from("stripe_connect_accounts").select("charges_enabled").eq("organization_id", org.id).limit(1),
+    supabase.from("rotessa_accounts").select("connection_status").eq("organization_id", org.id).limit(1),
+  ]);
+  const collectsRent = isRentCollectionActive({
+    stripeChargesEnabled: (stripeRows?.[0] as { charges_enabled?: boolean } | undefined)?.charges_enabled ?? null,
+    rotessaConnectionStatus: (rotessaRows?.[0] as { connection_status?: string } | undefined)?.connection_status ?? null,
+  });
+
   return (
     <div>
       <PageHeader
@@ -111,6 +125,7 @@ export default async function MySettingsPage({
             </Link>
           </div>
         </div>
+        <TwoStepCard pitch={twoStepPitch(collectsRent)} />
         {hasLinkedAgent ? (
           <>
             <MyCoverageCard me={me} />

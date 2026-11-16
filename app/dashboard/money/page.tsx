@@ -119,6 +119,14 @@ export default async function MoneyHubPage() {
       ?.connection_status ?? null,
   });
 
+  // S803: a quiet offer of two-step sign-in where the money is, only when
+  // rent is connected and this login has not turned it on (lib/two-step.ts).
+  let offerTwoStep = false;
+  if (rentActive) {
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    offerTwoStep = !(factors?.totp ?? []).some((f) => f.status === "verified");
+  }
+
   return (
     <div>
       <PageHeader
@@ -127,6 +135,16 @@ export default async function MoneyHubPage() {
         subtitle="Collect the rent, track what each unit costs, and see how the portfolio is doing - all in one place. Open any rental to work a single unit end-to-end."
         icon={<Icons.card className="h-6 w-6" />}
       />
+
+      {offerTwoStep && (
+        <p className="mt-4 text-sm text-gray-600">
+          You collect rent here. Protect your login with a code from your phone:{" "}
+          <Link href="/dashboard/me#two-step" className="font-semibold text-brand hover:underline">
+            turn on two-step sign-in
+          </Link>
+          .
+        </p>
+      )}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         {/* Rent - always shown; a not-yet-connected rail gets a set-it-up state
