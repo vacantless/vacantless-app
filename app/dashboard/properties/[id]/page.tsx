@@ -3608,6 +3608,13 @@ export default async function PropertyDetailPage({
                   Open the folder
                 </a>
               )}
+              {/* S803: a rental that already has its photos links the folder without copying them again. */}
+              {!folderUrl && photoRows.length > 0 && (
+                <label className="flex w-full items-center gap-2 text-xs text-gray-700">
+                  <input type="checkbox" name="already_here" defaultChecked />
+                  These photos are already on this rental. Only pull photos added to the folder later.
+                </label>
+              )}
               {(pullsFrom(source) || !folderUrl) && (
                 <label className="flex w-full items-center gap-2 text-xs text-gray-700">
                   <input type="checkbox" name="touch_up" defaultChecked />

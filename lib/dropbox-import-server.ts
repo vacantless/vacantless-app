@@ -10,6 +10,7 @@ import { photoCapForPlan } from "@/lib/billing";
 import { touchUpPhoto } from "@/lib/photo-touchup";
 import { groupImagesByParentPath, parseDropboxFolderUrl, sortGalleryEntries, type DropboxEntry } from "@/lib/dropbox-import";
 import type { DrivePullResult } from "@/lib/drive-import";
+import { mergeSeenRefs } from "@/lib/drive-import";
 
 const IMPORT_FETCH_TIMEOUT_MS = 10_000;
 const PHOTO_BUCKET = "property-photos";
@@ -288,6 +289,8 @@ export async function pullDropboxPhotos(args: {
   propertyId: string;
   folderUrl: string;
   touchUp?: boolean;
+  /** S803: only remember what is in the folder now (the rental already has these photos). */
+  markOnly?: boolean;
 }): Promise<DrivePullResult> {
   const { admin, organizationId, propertyId } = args;
   const parsed = parseDropboxFolderUrl(args.folderUrl);
@@ -317,6 +320,19 @@ export async function pullDropboxPhotos(args: {
     .eq("organization_id", organizationId);
   const rows = (existing ?? []) as Array<PhotoLike & { source_ref: string | null }>;
   const pulled = new Set(rows.map((r) => r.source_ref).filter((s): s is string => !!s));
+  // S803: photos counted as already on the rental when its folder was linked.
+  const { data: seenRow } = await admin.from("properties").select("photo_source_seen").eq("id", propertyId).maybeSingle();
+  const seen = ((seenRow as { photo_source_seen: string[] | null } | null)?.photo_source_seen ?? []) as string[];
+  for (const r of seen) pulled.add(r);
+  if (args.markOnly) {
+    const refs = images.map((e) => dropboxSourceRef(e.path_display ?? `/${e.name}`));
+    await admin
+      .from("properties")
+      .update({ photo_source_seen: mergeSeenRefs(seen, refs) })
+      .eq("id", propertyId)
+      .eq("organization_id", organizationId);
+    return { ok: true, added: 0, skipped: 0, alreadyIn: images.length, marked: images.length };
+  }
   const refOf = (e: DropboxEntry) => dropboxSourceRef(e.path_display ?? `/${e.name}`);
   const alreadyIn = images.filter((e) => pulled.has(refOf(e))).length;
   const room = Math.max(0, photoCapForPlan(plan) - rows.length);

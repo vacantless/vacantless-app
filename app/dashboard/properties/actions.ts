@@ -6135,7 +6135,9 @@ export async function savePhotoFolderAndPull(formData: FormData) {
   const admin = createAdminClient();
   if (!admin) back("failed");
   const touchUp = formData.get("touch_up") === "on";
-  const result = (await pullFolderPhotos({ admin: admin!, organizationId: org.id, propertyId, folderUrl: url as string, touchUp })) ?? { ok: false as const, reason: "badlink" as const };
+  // S803: the rental already has these photos; remember the folder's photos, copy nothing.
+  const markOnly = formData.get("already_here") === "on";
+  const result = (await pullFolderPhotos({ admin: admin!, organizationId: org.id, propertyId, folderUrl: url as string, touchUp, markOnly })) ?? { ok: false as const, reason: "badlink" as const };
   if (result.ok && result.added > 0) await followPhotoChange(supabase, propertyId);
   revalidatePath(`/dashboard/properties/${propertyId}`);
   back(pullResultParam(result));

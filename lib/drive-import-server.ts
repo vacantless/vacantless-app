@@ -20,6 +20,7 @@ import {
   type DriveEntry,
   type DriveFolderRef,
   type DrivePullResult,
+  mergeSeenRefs,
 } from "@/lib/drive-import";
 
 const PHOTO_BUCKET = "property-photos";
@@ -111,6 +112,8 @@ export async function pullDrivePhotos(args: {
   folderUrl: string;
   /** S789e: touch the photos up (crew shots), keeping each original. Pro photos skip it. */
   touchUp?: boolean;
+  /** S803: only remember what is in the folder now (the rental already has these photos). */
+  markOnly?: boolean;
 }): Promise<DrivePullResult> {
   const { admin, organizationId, propertyId } = args;
   const ref = parseDriveFolderUrl(args.folderUrl);
@@ -143,6 +146,19 @@ export async function pullDrivePhotos(args: {
     .eq("organization_id", organizationId);
   const rows = (existing ?? []) as Array<PhotoLike & { source_ref: string | null }>;
   const pulled = new Set(rows.map((r) => r.source_ref).filter((s): s is string => !!s));
+  // S803: photos counted as already on the rental when its folder was linked.
+  const { data: seenRow } = await admin.from("properties").select("photo_source_seen").eq("id", propertyId).maybeSingle();
+  const seen = ((seenRow as { photo_source_seen: string[] | null } | null)?.photo_source_seen ?? []) as string[];
+  for (const r of seen) pulled.add(r);
+  if (args.markOnly) {
+    const refs = images.map((e) => driveSourceRef(e.id));
+    await admin
+      .from("properties")
+      .update({ photo_source_seen: mergeSeenRefs(seen, refs) })
+      .eq("id", propertyId)
+      .eq("organization_id", organizationId);
+    return { ok: true, added: 0, skipped: 0, alreadyIn: images.length, marked: images.length };
+  }
   const alreadyIn = images.filter((e) => pulled.has(driveSourceRef(e.id))).length;
   const room = photoCapForPlan(plan) - rows.length;
   const todo = photosToPull(images, pulled, room);

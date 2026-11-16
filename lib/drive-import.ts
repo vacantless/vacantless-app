@@ -180,7 +180,7 @@ export function photosToPull(images: readonly DriveEntry[], alreadyPulled: Reado
 export type DrivePullReason = "badlink" | "notshared" | "empty" | "nested" | "full" | "failed";
 
 export type DrivePullResult =
-  | { ok: true; added: number; skipped: number; alreadyIn: number }
+  | { ok: true; added: number; skipped: number; alreadyIn: number; marked?: number }
   | { ok: false; reason: DrivePullReason; subfolders?: string[] };
 
 /** S792: how to try the photos that could not be read, by where the line shows. */
@@ -194,6 +194,7 @@ export const PULL_RETRY: Record<PullRetryWhere, string> = {
 
 /** S792: the pull result for a page link: added_N, added_N_M (M missed) or the reason. */
 export function pullResultParam(r: DrivePullResult): string {
+  if (r.ok && r.marked != null) return `marked_${r.marked}`;
   return r.ok ? `added_${r.added}${r.skipped > 0 ? `_${r.skipped}` : ""}` : r.reason;
 }
 
@@ -202,6 +203,8 @@ const PULL_REASONS: readonly DrivePullReason[] = ["badlink", "notshared", "empty
 /** S792: read pullResultParam back; null for anything else. */
 export function pullResultFromParam(raw: string | null | undefined): DrivePullResult | null {
   if (!raw) return null;
+  const mk = raw.match(/^marked_(\d{1,4})$/);
+  if (mk) return { ok: true, added: 0, skipped: 0, alreadyIn: Number(mk[1]), marked: Number(mk[1]) };
   const m = raw.match(/^added_(\d{1,3})(?:_(\d{1,3}))?$/);
   if (m) return { ok: true, added: Number(m[1]), skipped: Number(m[2] ?? 0), alreadyIn: Number(m[1]) === 0 ? 1 : 0 };
   return (PULL_REASONS as readonly string[]).includes(raw) ? { ok: false, reason: raw as DrivePullReason } : null;
@@ -210,6 +213,8 @@ export function pullResultFromParam(raw: string | null | undefined): DrivePullRe
 /** One plain line for the landlord's email or the page. */
 export function drivePullLine(r: DrivePullResult, where?: PullRetryWhere): string {
   if (r.ok) {
+    // S803: a folder linked on a rental that already has its photos.
+    if (r.marked != null) return markedLine(r.marked);
     if (r.added === 0) return r.alreadyIn > 0 ? "Every photo in the folder is already on the rental." : "No new photos in the folder.";
     const skip = r.skipped > 0 ? ` ${r.skipped} could not be read.${where ? ` ${PULL_RETRY[where]}` : ""}` : "";
     return `${r.added} photo${r.added === 1 ? "" : "s"} pulled in from the folder.${skip}`;
@@ -228,4 +233,16 @@ export function drivePullLine(r: DrivePullResult, where?: PullRetryWhere): strin
     default:
       return "None of the photos could be pulled in. Check the folder is shared with Anyone with the link.";
   }
+}
+
+/** S803: the folder's current photos are counted as already on the rental. */
+export function markedLine(n: number): string {
+  if (n === 0) return "Folder linked. New photos added to it will pull in.";
+  return `Folder linked. Its ${n} photo${n === 1 ? " is" : "s are"} counted as already on the rental, so only new ones pull in.`;
+}
+
+/** S803: the refs to remember as already on the rental (no duplicates, capped). */
+export function mergeSeenRefs(seen: readonly string[] | null | undefined, add: readonly string[], cap = 2000): string[] {
+  const out = [...new Set([...(seen ?? []), ...add])];
+  return out.length > cap ? out.slice(out.length - cap) : out;
 }

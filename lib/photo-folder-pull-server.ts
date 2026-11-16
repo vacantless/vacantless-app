@@ -13,6 +13,8 @@ export async function pullFolderPhotos(args: {
   propertyId: string;
   folderUrl: string;
   touchUp?: boolean;
+  /** S803: only remember what is in the folder now (lib/drive-import markedLine). */
+  markOnly?: boolean;
 }): Promise<DrivePullResult | null> {
   const source = photoSourceOf(args.folderUrl);
   if (source === "gdrive") return pullDrivePhotos(args);
