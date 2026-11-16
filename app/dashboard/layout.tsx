@@ -13,6 +13,7 @@ import { planLabelOf, type PlanKey } from "@/lib/billing";
 import { AdConversionFire } from "@/components/ad-tags";
 import { recordAdConversions } from "./ad-conversion-actions";
 import { MarketplaceHelperSync } from "@/components/marketplace-helper-sync";
+import { PageHelp } from "@/components/page-help";
 import {
   helperAdList,
   helperSaveCapturedAds,
@@ -120,6 +121,9 @@ export default async function DashboardLayout({
               <h1 className="text-lg font-bold">{org.name}</h1>
             </div>
           </div>
+          <div className="flex items-center gap-2">
+          {/* S802: help for the page you are on (lib/page-help.ts). */}
+          <PageHelp />
           {isDemo ? (
             <nav className="flex flex-wrap items-center gap-1 text-sm">
               <Link href="/dashboard" className="rounded-lg px-3 py-1.5 font-medium hover:bg-white/15">Today</Link>
@@ -142,6 +146,7 @@ export default async function DashboardLayout({
             userEmail={user.email ?? null}
           />
           )}
+          </div>
         </div>
       </header>
       {isDemo && (

@@ -1,7 +1,7 @@
 {
   "version": 4,
   "note": "Copy that already breaks the word contract, per file, with how many times each string appears. The gate fails when any of these gets more frequent, or when a new one appears, and tightens itself whenever copy improves. Written by scripts/test-plain-language.ts only: a hand edit fails the checksum.",
-  "generated": "2026-11-15",
+  "generated": "2026-11-16",
   "checksum": "742dbcda4790347ca484ae7cd4be8b9af2ed92ba426db735cb82c22ecf75178d",
   "surfaces": [
     "app/agent/[token]/marketplace/[propertyId]/page.tsx",
@@ -55,6 +55,7 @@
     "app/dashboard/today-lane.tsx",
     "app/kit/[token]/page.tsx",
     "components/marketplace-kit-steps.tsx",
+    "components/page-help.tsx",
     "lib/brokerage-request.ts",
     "lib/distribution-analytics.ts",
     "lib/distribution-capabilities.ts",
@@ -196,7 +197,7 @@
     "app/dashboard/properties/[id]/posted-results-card.tsx": 8,
     "app/dashboard/properties/[id]/publish-everywhere.tsx": 134,
     "app/dashboard/properties/[id]/renter-sources-card.tsx": 3,
-    "app/dashboard/properties/import/bulk-import-form.tsx": 36,
+    "app/dashboard/properties/import/bulk-import-form.tsx": 38,
     "app/dashboard/properties/import/page.tsx": 20,
     "app/dashboard/properties/new/add-property-form.tsx": 112,
     "app/dashboard/properties/new/page.tsx": 5,
@@ -216,6 +217,7 @@
     "app/dashboard/today-lane.tsx": 5,
     "app/kit/[token]/page.tsx": 12,
     "components/marketplace-kit-steps.tsx": 28,
+    "components/page-help.tsx": 11,
     "lib/brokerage-request.ts": 14,
     "lib/distribution-analytics.ts": 8,
     "lib/distribution-capabilities.ts": 21,
