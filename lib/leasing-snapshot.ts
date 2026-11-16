@@ -455,7 +455,8 @@ export function buildSnapshotBlock(
   const viewings = [...b.showingsToday, ...b.showingsWeek];
   const adCount = listingHealth?.adCount ?? 0;
   const summary = [
-    plural(b.newLeads.length, "new inquiry", "new inquiries"),
+    // S806 (REVIEW-S805 finding 12): renters, not inquiries.
+    plural(b.newLeads.length, "new renter", "new renters"),
     plural(viewings.length, "viewing this week", "viewings this week"),
     plural(b.noShowing.length, "waiting for a viewing", "waiting for a viewing"),
     ...(adCount > 0 ? [plural(adCount, "ad to refresh", "ads to refresh")] : []),
@@ -498,7 +499,7 @@ export function snapshotAction(
 ): { label: string; path: string } {
   if (health?.status === "black") return { label: "Add viewing times", path: "/dashboard/availability" };
   if (b.newLeads.length === 0 && adCount > 0) return { label: "See your old ads", path: "/dashboard/properties#renew-ads" };
-  return { label: "Open your inquiries", path: "/dashboard/leads" };
+  return { label: "Open your renters", path: "/dashboard/leads" };
 }
 
 /** Subject-friendly date, e.g. "Thursday, June 25". */

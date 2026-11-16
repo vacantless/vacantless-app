@@ -16,6 +16,9 @@ export const QUIET_NOTIFICATION_ORGANIZATION_IDS: readonly string[] = [
   "b6fdceb7-e7f6-4f54-bbab-107ae5d3254a", // Lakeview Rentals (S712, nmuscovitch+s712)
   "1d6a9dde-7fd7-46ac-ad36-6823dacaa2cf", // Stranger Five Rentals (noam+stranger5)
   "ad03ea5d-17ab-4b89-b030-345af1e0479d", // S731 Founding Test (nmuscovitch+s713)
+  // S806: Noam's S799 stranger-walk sign-up (noammuscovitch+s799 is the only
+  // member [verified 2026-11-16 via SQL]); its 4 pm leasing snapshot reached him.
+  "f06d6b49-b9b3-416d-b52b-11ac11f92584", // S799 Stranger Test Rentals
 ];
 
 const QUIET = new Set(QUIET_NOTIFICATION_ORGANIZATION_IDS);

@@ -148,7 +148,7 @@ const block = buildSnapshotBlock(
   { newLeads: [lead()], showingsToday: [showing()], showingsWeek: [], noShowing: [] },
   TZ,
 );
-ok("block: count line first", block.startsWith("1 new inquiry · 1 viewing this week · 0 waiting for a viewing"));
+ok("block: count line first", block.startsWith("1 new renter · 1 viewing this week · 0 waiting for a viewing"));
 ok("block: new header with count", block.includes("NEW IN THE LAST 24 HOURS (1)"));
 ok("block: lead name+unit line", block.includes("• Jane Doe, 22 King St W #602"));
 ok("block: lead detail line", block.includes("519-555-1234 · Kijiji · move-in Jul 1"));
@@ -192,7 +192,7 @@ const named = buildSnapshotBlock(empty, TZ, null, {
 ok("block: ads grouped by unit with sites", named.includes("• 1195 Bruce Ave, Unit 303: Facebook Marketplace, posted 19 days ago, Zumper, old\nhttps://x/p1"));
 ok("block: expired ad named", named.includes("• 833 Pillette Rd, Unit 3: Kijiji, no longer up\nhttps://x/p2"));
 ok("block: ads header counts ads", named.includes("ADS TO REFRESH (3)"));
-ok("block: ads count in summary", named.startsWith("0 new inquiries · 0 viewings this week · 0 waiting for a viewing · 3 ads to refresh"));
+ok("block: ads count in summary", named.startsWith("0 new renters · 0 viewings this week · 0 waiting for a viewing · 3 ads to refresh"));
 
 // missing fields degrade gracefully (no name/phone/unit)
 const sparse = buildSnapshotBlock(
