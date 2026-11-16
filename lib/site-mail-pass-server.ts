@@ -23,7 +23,7 @@ export async function passSiteMailToOwners(
   try {
     const { data: org } = await admin
       .from("organizations")
-      .select("name, reply_to_email")
+      .select("name, reply_to_email, closed_by")
       .eq("id", opts.orgId)
       .maybeSingle();
     const { data: memberRows } = await admin
@@ -36,6 +36,16 @@ export async function passSiteMailToOwners(
       const { data: u } = await getUserByIdCached(admin, m.user_id);
       const e = u?.user?.email?.trim().toLowerCase();
       if (e && !emails.includes(e)) emails.push(e);
+    }
+    // A closed account has no logins left (closeAccount deletes memberships).
+    // Its site accounts may still use this address, so the person who closed
+    // it keeps getting the sites' emails (password resets included) until the
+    // stored data is deleted.
+    const closedBy = (org as { closed_by: string | null } | null)?.closed_by ?? null;
+    if (emails.length === 0 && closedBy) {
+      const { data: u } = await getUserByIdCached(admin, closedBy);
+      const e = u?.user?.email?.trim().toLowerCase();
+      if (e) emails.push(e);
     }
     const fallback = (org as { reply_to_email: string | null } | null)?.reply_to_email?.trim().toLowerCase();
     if (emails.length === 0 && fallback) emails.push(fallback);

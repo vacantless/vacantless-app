@@ -14,6 +14,11 @@ export default function AccountClosedPage() {
         We will delete your stored data within 30 days.
       </p>
       <p className="mt-4">
+        If your Kijiji, Rentals.ca or Zumper account uses your Vacantless
+        email address, change it on that site to your own email. Until then we
+        send you what those sites send there.
+      </p>
+      <p className="mt-4">
         Changed your mind? Email{" "}
         <a href="mailto:hello@vacantless.com" className="font-medium underline">
           hello@vacantless.com

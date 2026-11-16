@@ -75,10 +75,15 @@ const TOKEN = "abcdefghijklmnopqrstuvwx";
 const ORG = "8ea1da48-0000-0000-0000-000000000001";
 const TO = ingestAddressFromToken(TOKEN, DEFAULT_INGEST_DOMAIN);
 
+let addressActive = true;
 class Chain {
+  private active: unknown = undefined;
   constructor(private table: string) {}
   select() { return this; }
-  eq() { return this; }
+  eq(col?: string, val?: unknown) {
+    if (col === "active") this.active = val;
+    return this;
+  }
   neq() { return this; }
   not() { return this; }
   is() { return this; }
@@ -88,7 +93,8 @@ class Chain {
   order() { return this; }
   limit() { return this; }
   async maybeSingle() {
-    return { data: this.table === "org_ingest_addresses" ? { organization_id: ORG } : null, error: null };
+    if (this.table !== "org_ingest_addresses") return { data: null, error: null };
+    return { data: this.active === addressActive ? { organization_id: ORG } : null, error: null };
   }
   then(resolve: (v: unknown) => unknown) {
     return Promise.resolve({ data: [], error: null }).then(resolve);
@@ -135,6 +141,14 @@ async function main() {
   ok("zumper dmarc passed on", c.body.handled === "site_mail_passed" && c.passedOn[0]?.siteName === "Zumper", c.body);
   const d = await post("pat@gmail.com", { "Authentication-Results": "mx; dkim=pass header.d=gmail.com" });
   ok("a stranger is never passed on", d.passedOn.length === 0, d.body);
+
+  // Rotated address: nothing is filed, but a trusted site email still reaches the owner.
+  addressActive = false;
+  const e = await post("Kijiji <noreply@mail.kijiji.ca>", DKIM("kijiji.ca"));
+  ok("rotated address passes site mail on", e.body.handled === "site_mail_passed" && e.body.rotated === true && e.passedOn.length === 1, e.body);
+  const f = await post("pat@gmail.com", {});
+  ok("rotated address drops a stranger", f.body.handled === "rotated_address" && f.passedOn.length === 0, f.body);
+  addressActive = true;
 }
 
 // --- wiring ----------------------------------------------------------------------
@@ -148,6 +162,9 @@ const en = JSON.parse(read("messages/en.json"));
 ok("card says the easiest way", typeof en.portalInbox.siteAccountTip === "string" && en.portalInbox.howTitle === "Or set up a rule in your email");
 const server = read("lib/site-mail-pass-server.ts");
 ok("copies go to owners", server.includes('.eq("role", "owner_admin")'));
+ok("a closed account's closer still gets them", server.includes("closed_by") && server.includes("emails.length === 0 && closedBy"));
+ok("closed page says to change the site email", read("app/account-closed/page.tsx").includes("change it on that site to your own email"));
+ok("rotate says to change site accounts", read("app/dashboard/captures/page.tsx").includes("change that account to the new one"));
 
 main().then(() => {
   console.log(`\nsite-mail-pass: ${passed} passed, ${failed} failed`);

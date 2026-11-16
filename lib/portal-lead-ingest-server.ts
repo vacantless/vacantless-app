@@ -518,6 +518,9 @@ export async function handleInboundLeadPost(
 
   // ---- Layer 2: resolve the org from the token ------------------------------
   let orgId: string | null = null;
+  // S806: a rotated (inactive) address no longer files anything, but a rental
+  // site account may still use it; its trusted site emails are passed on.
+  let rotatedOrgId: string | null = null;
   if (token) {
     const { data: addr } = await admin
       .from("org_ingest_addresses")
@@ -526,6 +529,29 @@ export async function handleInboundLeadPost(
       .eq("active", true)
       .maybeSingle();
     orgId = (addr?.organization_id as string | undefined) ?? null;
+    if (!orgId) {
+      const { data: old } = await admin
+        .from("org_ingest_addresses")
+        .select("organization_id")
+        .eq("token", token)
+        .eq("active", false)
+        .limit(1)
+        .maybeSingle();
+      rotatedOrgId = (old?.organization_id as string | undefined) ?? null;
+    }
+  }
+  if (!orgId && rotatedOrgId) {
+    const trust = isTrustedSiteMail(from, headers);
+    if (!trust.ok) return NextResponse.json({ ok: true, handled: "rotated_address" });
+    const res = await passSiteMail(admin, {
+      orgId: rotatedOrgId,
+      siteName: siteMailName(trust.domain),
+      from,
+      subject: str(payload.Subject),
+      html: str(payload.HtmlBody) || null,
+      text: str(payload.TextBody) || null,
+    });
+    return NextResponse.json({ ok: true, handled: "site_mail_passed", rotated: true, sent: res.sent });
   }
   if (!orgId) {
     console.warn("inbound/lead: org not resolved", { hasToken: token != null });

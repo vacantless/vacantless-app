@@ -180,7 +180,8 @@ export default async function CapturesPage({
             </div>
             <p className="mt-2 text-xs text-slate-500">
               Forward photos here from a verified sender. Keep it private, if it
-              ever leaks, rotate it.
+              ever leaks, rotate it. If a rental site account uses this address,
+              change that account to the new one after you rotate.
             </p>
             <form action={rotateIngestAddress} className="mt-3">
               <button className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
