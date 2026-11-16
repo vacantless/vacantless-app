@@ -11,7 +11,7 @@ function ok(name: string, cond: boolean) {
   }
 }
 const r = readFileSync("app/r/[propertyId]/page.tsx", "utf8");
-ok("public page reads the org's closed_at", r.includes("organizations(closed_at)"));
+ok("public page reads the org's closed_at", r.includes("closed_at") && r.includes("orgClosed = Boolean(orgRow?.closed_at)"));
 ok("closed org shows no waiting list", r.includes("!isAvailable && orgClosed ?") && r.indexOf("orgClosed ?") < r.indexOf("joinWaitlist}"));
 const page = readFileSync("app/dashboard/settings/page.tsx", "utf8");
 ok("feature panel is staff only", page.includes("canManageOwnerSettings && isPlatformAdmin &&"));

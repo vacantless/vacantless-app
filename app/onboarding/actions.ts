@@ -1,5 +1,6 @@
 "use server";
 
+import { sendWelcomeNow } from "@/lib/onboarding-email-send";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
@@ -130,6 +131,10 @@ export async function createOrganization(formData: FormData) {
       await acceptReferral(ref, orgId, user.id).catch(() => {});
     }
   }
+
+  // S801: the welcome email goes out now, not when the next 30-minute sweep runs.
+  // Best-effort: sendWelcomeNow never throws, and the sweep still covers a failure.
+  await sendWelcomeNow(orgId);
 
   // Paid-plan intent from the pricing CTA (/signup?plan=growth|premium): the new
   // org is created on 'free'; route the operator to billing to subscribe to the

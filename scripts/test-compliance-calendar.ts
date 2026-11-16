@@ -439,7 +439,7 @@ function eligibleKeysFor(
   ok(
     "selected-org shape includes compliance_calendar_enabled",
     orgSource.includes("compliance_calendar_enabled: boolean") &&
-      orgSource.includes("landlord_campaign_email, compliance_calendar_enabled, showing_arrival_phone"),
+      orgSource.includes("browse_listed, compliance_calendar_enabled, showing_arrival_phone"),
   );
 
   const settingsAction = readFileSync("app/dashboard/settings/actions.ts", "utf8");

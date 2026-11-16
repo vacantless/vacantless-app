@@ -139,7 +139,7 @@ ok("welcome: default email is safe",
   decideOnboardingEmail({ stage: "signed_up", daysSinceSignup: 0, stepSent: 0 })?.actionPath === "/dashboard/properties#add-rental");
 ok("nudge: same gated link",
   decideOnboardingEmail({ stage: "signed_up", daysSinceSignup: 1, stepSent: 1, addPropertyV2Enabled: true })?.actionPath === "/dashboard/properties/new");
-ok("welcome cron: passes the flag", read("app/api/cron/onboarding-emails/route.ts").includes("addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED)"));
+ok("welcome cron: passes the flag", read("lib/onboarding-email-send.ts").includes("addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED)"));
 
 console.log(`\nleasing-wall-and-waitlist: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

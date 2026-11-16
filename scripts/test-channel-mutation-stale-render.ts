@@ -269,12 +269,9 @@ ok(
 );
 ok(
   "authorize failures that know the channel redirect with channel",
-  authorize.includes(
-    'channelAutomationBackTo(propertyId, "channel_auto_connectfirst", channel)',
-  ) &&
-    authorize.includes(
-      'channelAutomationBackTo(propertyId, "channel_auto_error", channel)',
-    ),
+  authorize.includes("channelAutomationBackTo(propertyId, result.reason, channel)") &&
+    authorize.includes('reason: "channel_auto_connectfirst"') &&
+    authorize.includes('reason: "channel_auto_error"'),
 );
 ok(
   "revoke success and error redirects with channel",
@@ -306,7 +303,7 @@ ok(
 );
 ok(
   "top publish confirm refreshes destinations on open and fails closed",
-  confirmButton.includes("await readInstantPublishDestinations(propertyId)") &&
+  confirmButton.includes("readInstantPublishDestinations(propertyId)") &&
     confirmButton.includes(
       "disabled={loadingDestinations || Boolean(destinationError)}",
     ) &&

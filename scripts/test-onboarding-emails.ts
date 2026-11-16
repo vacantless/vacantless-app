@@ -43,12 +43,20 @@ for (const e of [w, n, busy]) {
 const route = readFileSync("app/api/cron/onboarding-emails/route.ts", "utf8");
 ok("route needs CRON_SECRET", route.includes("CRON_SECRET"));
 ok("route skips old accounts", route.includes("ONBOARDING_EMAILS_START"));
-ok("route skips quiet test orgs", route.includes("isQuietNotificationOrg"));
+// S801: the per-account send lives in lib/onboarding-email-send.ts so sign-up can call it too.
+const send = readFileSync("lib/onboarding-email-send.ts", "utf8");
+ok("route uses the shared send", route.includes("processOnboardingOrg(admin, o, { now, dry, replyTo })"));
+ok("send skips quiet test orgs", send.includes("isQuietNotificationOrg"));
 ok("route skips closed accounts", route.includes('.is("closed_at", null)'));
 // S742c: the step is claimed BEFORE the send (one runner wins), not stamped after.
-ok("route claims the step before sending", route.includes('claimStep(admin, "organizations", { id: o.id }, "onboarding_email_step", email.step'));
-ok("route releases the claim on a failed send", route.includes("releaseClaim(admin, \"organizations\""));
-ok("route passes the add-page flag", route.includes("addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED)"));
+ok("send claims the step before sending", send.includes('claimStep(admin, "organizations", { id: o.id }, "onboarding_email_step", email.step'));
+ok("send releases the claim on a failed send", send.includes('releaseClaim(admin, "organizations"'));
+ok("send passes the add-page flag", send.includes("addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED)"));
+// S801: the welcome goes out at sign-up, and the sweep stays as the safety net.
+const onboarding = readFileSync("app/onboarding/actions.ts", "utf8");
+ok("sign-up sends the welcome at once", onboarding.includes("await sendWelcomeNow(orgId);") && onboarding.indexOf("sendWelcomeNow(orgId)") < onboarding.indexOf('redirect("/dashboard/billing#posting-addon")'));
+ok("welcome at sign-up only for a new open account", send.includes('.is("closed_at", null)') && send.includes('.lt("onboarding_email_step", 1)'));
+ok("welcome at sign-up never throws", send.includes("catch (e)") && send.includes("The 30-minute sweep sends it if this fails."));
 
 // S751: the welcome email and the getting-started page point to the Chrome helper.
 ok("welcome links the Chrome helper", (w?.body ?? "").includes("chromewebstore.google.com/detail/vacantless-helper/"));

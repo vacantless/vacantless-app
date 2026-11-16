@@ -23,13 +23,14 @@ ok("org timezone date", body.includes("localDateString(") && body.includes("book
 ok("only posted_on changes", body.includes(".update({ posted_on: today })"));
 
 const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
-ok("card only lists old ads", page.includes('c.status.value === "needs_refresh" && c.status.liveUrl'));
+ok("card only lists old ads", page.includes('card.status.value === "needs_refresh"') && page.includes("if (card.status.liveUrl) refresh.set("));
 ok("page ages blank dates from created_at", page.includes("rawPosts[i].created_at.slice(0, 10)"));
 ok("renewed flash", page.includes('searchParams.post === "renewed"'));
 
-const card = readFileSync("app/dashboard/properties/[id]/renew-ads-card.tsx", "utf8");
+// S739f folded the old renew-ads-card into the one "Keep it fresh" card (S801: test follows the file).
+const card = readFileSync("app/dashboard/properties/[id]/keep-fresh-card.tsx", "utf8");
 ok("no em dash", !card.includes("—"));
-ok("renew-and-open button", card.includes('name="then" value="open"') && card.includes("Renew on {item.label}"));
+ok("renew-and-open button", card.includes('name="then" value="open"') && card.includes("Renew on {r.label}"));
 ok("already-renewed button", card.includes("I already renewed it"));
 ok("redirect uses the saved ad url, not the form", body.includes('.select("url")') && !body.includes('formData.get("url")'));
 ok("redirect only to facebook or kijiji", body.includes("facebook") && body.includes("kijiji"));

@@ -151,7 +151,7 @@ ok(
 );
 ok(
   "page: exact label and help copy present",
-  has(page, "Open-house booking — allow multiple bookings per time") &&
+  has(page, "Open-house booking, allow multiple bookings per time") &&
     has(
       page,
       "When on, a viewing time stays bookable even after someone books it,",

@@ -8,11 +8,11 @@ const v = (pv: ReturnType<typeof buildAdPreview>, label: string) => pv.facts.fin
 const manitoba = buildAdPreview({
   title: "3 Bed Town House, 251 Manitoba St",
   rentCents: 200000, beds: 3, baths: 1.5, description: "Bright townhouse.", photoCount: 9,
-  features: { available_date: "2026-11-01", pets_cats: false, pets_dogs: false, heat_included: true, hydro_included: false, water_included: null, parking_type: "outdoor", parking_count: 2 },
+  features: { available_date: "2099-11-01", pets_cats: false, pets_dogs: false, heat_included: true, hydro_included: false, water_included: null, parking_type: "outdoor", parking_count: 2 },
 });
 ok("rent", v(manitoba, "Rent")?.value === "$2,000/month", v(manitoba, "Rent"));
 ok("size", v(manitoba, "Size")?.value === "3 bedrooms, 1.5 bathrooms", v(manitoba, "Size"));
-ok("date", v(manitoba, "Available")?.value === "Nov 1");
+ok("date", v(manitoba, "Available")?.value === "Nov 1, 2099");
 ok("no pets", v(manitoba, "Pets")?.value === "No pets");
 ok("heat only", v(manitoba, "Included")?.value === "Heat");
 ok("parking", v(manitoba, "Parking")?.value?.endsWith(", 2 spots") === true, v(manitoba, "Parking"));

@@ -88,11 +88,11 @@ ok("draft: includes move-in as a friendly date (S724)", draft.body.includes("des
     renterName: "James Park",
     orgName: "Lakeview Rentals",
     inquiryText: "Is this available? Could I see it on a weekend?",
-    listing: { address: "100 Lakeview Ave", rentCents: 150000, beds: 1, baths: 1, availableDate: "2026-11-01" },
+    listing: { address: "100 Lakeview Ave", rentCents: 150000, beds: 1, baths: 1, availableDate: "2099-11-01" },
     bookingUrl: "https://app.vacantless.com/r/abc",
   });
   ok("S724 draft: booking link", withLink.body.includes("pick a time yourself here: https://app.vacantless.com/r/abc"));
-  ok("S724 draft: available as Nov 1", withLink.body.includes("available Nov 1") && !withLink.body.includes("2026-11-01"));
+  ok("S724 draft: available as Nov 1", withLink.body.includes("available Nov 1, 2099") && !withLink.body.includes("2099-11-01"));
   ok("S724 draft: no em dash", !withLink.body.includes("\u2014"));
 }
 ok("draft: includes slot offer", draft.slotOffer === "I will look for an evening viewing time for you.");
@@ -138,7 +138,7 @@ if (failed > 0) {
     orgName: "Lakeview Rentals",
     inquiryText: "Hi, is this still available? I work evenings, could I see it on a weekend?",
     noSuitableTime: true,
-    listing: { address: "100 Lakeview Ave", rentCents: 150000, beds: 1, baths: 1, availableDate: "2026-11-01" },
+    listing: { address: "100 Lakeview Ave", rentCents: 150000, beds: 1, baths: 1, availableDate: "2099-11-01" },
     bookingUrl: "https://app.vacantless.com/r/x",
   });
   ok("S726: still available answers yes", d.body.includes("Yes, it is still available."));
@@ -146,7 +146,7 @@ if (failed > 0) {
   ok("S726: no generic read-your-note after a yes", !d.body.includes("I read your note"));
   ok("S726: named weekend is offered back", d.body.includes("I will look for a weekend time."));
   ok("S726: no three-way window question", !d.body.includes("weekday evening, weekend, or daytime"));
-  ok("S726: date reads Nov 1", d.body.includes("available Nov 1"));
+  ok("S726: date reads Nov 1", d.body.includes("available Nov 1, 2099"));
   ok("S726: closing does not re-ask the window", d.body.includes("Or reply here, and I will confirm the time.") && !d.body.includes("window that works best"));
 }
 ok("S726: work evenings is not an evening window", preferredWindow("I work evenings") === null);

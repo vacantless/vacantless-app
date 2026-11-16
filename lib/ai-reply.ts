@@ -114,7 +114,7 @@ function listingFacts(listing: AiReplyListing | null): string[] {
     bedsBaths(listing),
     cleanText(listing.parking) ? `parking: ${cleanText(listing.parking)}` : null,
     cleanText(listing.availableDate)
-      ? formatAvailability(cleanText(listing.availableDate)).toLowerCase() // S728: a past date reads "available now"
+      ? formatAvailability(cleanText(listing.availableDate)).replace(/^Available/, "available") // S728: a past date reads "available now"; S801: only the first word is lowercased, so the month keeps its capital
       : null,
     laundryLabel(listing.laundry),
     petLabel(listing),

@@ -2,6 +2,10 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { nextParamFor } from "@/lib/safe-next";
 import { demoDecision, isDemoEmail } from "@/lib/demo-account";
+import { quietDeadRefreshTokenLogs } from "@/lib/quiet-dead-token";
+
+// S801: stop one dead sign-in cookie from filling the error log (lib/quiet-dead-token.ts).
+quietDeadRefreshTokenLogs();
 
 // Refreshes the Supabase auth session on every request and guards
 // authenticated routes.
