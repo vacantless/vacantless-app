@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
   }[]) {
     if (!isSiteSigninChannel(r.channel)) continue;
     const org = r.organization;
-    const url = `${APP_URL}${siteSigninLinksOn() ? siteSigninOpenHref(r.channel) : "/dashboard/link-portals"}`;
+    const url = `${APP_URL}${siteSigninLinksOn() ? siteSigninOpenHref(r.channel) : "/dashboard/sites"}`;
 
     // S762: the text, decided on its own stamp so a quiet-hours wait or a
     // later-saved mobile still gets one text per sign-out.

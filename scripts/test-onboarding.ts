@@ -136,7 +136,7 @@ const ALL: ChecklistInput = {
 
   // Wizard enabled → drives Stage 1 of the guided wizard.
   const live = getOnlineOf(buildLaunchChecklist({ ...EMPTY, wizardEnabled: true }));
-  ok("get-online drives the wizard when enabled", live.href === "/dashboard/link-portals");
+  ok("get-online drives the wizard when enabled", live.href === "/dashboard/sites");
 
   // Done once a listing is actually live somewhere.
   const posted = getOnlineOf(

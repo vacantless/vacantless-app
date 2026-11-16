@@ -89,7 +89,7 @@ export async function marketUnitForClient(
   if (!property || property.length === 0) redirect("/agent");
 
   writeSelectedOrgCookie(orgId);
-  redirect(`/dashboard/link-portals?property=${propertyId}`);
+  redirect(`/dashboard/sites?property=${propertyId}`);
 }
 
 // Same org-switch guard as marketUnitForClient, but routes to the existing

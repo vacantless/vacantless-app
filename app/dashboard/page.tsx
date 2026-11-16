@@ -50,6 +50,9 @@ import { droppedAdNotices, type DroppedAdNotice } from "@/lib/site-row-notes";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { needsYouNotices } from "@/lib/needs-you";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { hasRenterEmails, renterEmailNotices, type RenterEmailNotice } from "@/lib/renter-emails";
+import { readLiveEmailSites, readRenterEmailEvents } from "@/lib/renter-emails-read";
+import { portalInboxSites } from "@/lib/portal-inbox";
 import { NeedsYouCards } from "./needs-you-cards";
 import { ComingVacantCards } from "./coming-vacant-cards";
 import { deriveComingVacant, type ComingVacant } from "@/lib/coming-vacant";
@@ -601,9 +604,26 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       });
     }
   }
+  // S806 (REVIEW-S805 finding 7): a site with a live ad whose renter emails
+  // have never reached Vacantless.
+  let renterEmailCards: RenterEmailNotice[] = [];
+  let onboardingRenterEmails: boolean | undefined;
+  if (robotAccess.setup) {
+    const [emailEvents, liveEmailSites] = await Promise.all([
+      readRenterEmailEvents(supabase, org.id),
+      readLiveEmailSites(supabase, org.id),
+    ]);
+    onboardingRenterEmails = hasRenterEmails(emailEvents);
+    renterEmailCards = renterEmailNotices({
+      liveSites: liveEmailSites,
+      enabledSites: portalInboxSites().map((s) => s.key),
+      events: emailEvents,
+    });
+  }
   const onboardingWizardState = onboardingWizardEnabled
     ? computeOnboardingState({
         hasConnectedSite: onboardingHasConnectedSite,
+        hasRenterEmails: onboardingRenterEmails,
         postLeaseEnabled: onboardingPostLease,
         addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED),
         hasProperty: (propertyCount ?? 0) > 0,
@@ -661,7 +681,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         </div>
       )}
 
-      <NeedsYouCards notices={[...needsYou, ...droppedAds]} />
+      <NeedsYouCards notices={[...needsYou, ...droppedAds, ...renterEmailCards]} />
       <ComingVacantCards items={comingVacant} />
 
       {presetNotice && (

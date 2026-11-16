@@ -146,7 +146,7 @@ export default async function SendLivePage({
           title={tStage3("onlyLinked")}
           action={
             <ButtonLink
-              href={withPropertyParam("/dashboard/link-portals", ownedPropertyId)}
+              href={withPropertyParam("/dashboard/sites", ownedPropertyId)}
               size="lg"
             >
               {tStages("s1")}

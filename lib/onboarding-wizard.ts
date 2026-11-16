@@ -2,6 +2,7 @@ export type OnboardingWizardStepKey =
   | "property"
   | "viewing_times"
   | "connect_sites"
+  | "renter_emails"
   | "get_online"
   | "see_it_work"
   | "tenancy"
@@ -70,6 +71,13 @@ export type OnboardingWizardInput = {
    */
   hasConnectedSite?: boolean;
   /**
+   * S806 (REVIEW-S805 finding 7): a renter email from Kijiji, Rentals.ca or
+   * Zumper has reached Vacantless at least once (lib/renter-emails). When the
+   * caller passes it (accounts that post to those sites), a "Get renter emails
+   * here" step follows "Connect your rental sites". Omitted = not shown.
+   */
+  hasRenterEmails?: boolean;
+  /**
    * S770 (REVIEW-S770 section 3 item 4): the org has at least one renter.
    * When the caller passes it, a "See it work" step follows Set Live: open the
    * rental page, send yourself an inquiry, watch the reply and the viewing
@@ -106,6 +114,14 @@ const STEP_DEFS: StepDef[] = [
       "Connect your Facebook Page, install the helper for Marketplace, and sign in to Kijiji, Rentals.ca and Zumper. After this, Set Live posts each rental on every connected site. If a site signs you out, we tell you.",
     href: "/dashboard/sites?from=getting-started",
     cta: "Connect sites",
+  },
+  {
+    key: "renter_emails",
+    label: "Get renter emails here",
+    description:
+      "Kijiji, Rentals.ca and Zumper email you when a renter writes. Send those emails to your Vacantless address once. Each renter then lands on Today and gets your booking link. Done when the first one comes in.",
+    href: "/dashboard/sites?from=getting-started#renter-emails",
+    cta: "Set it up",
   },
   {
     key: "get_online",
@@ -151,6 +167,7 @@ export function computeOnboardingState(
     property: input.hasProperty,
     viewing_times: input.hasViewingTimes === true,
     connect_sites: input.hasConnectedSite === true || input.hasLiveListing || input.hasTenancy,
+    renter_emails: input.hasRenterEmails === true || input.hasTenancy,
     // A tenanted unit has nothing to advertise; do not resurrect the checklist
     // for every org that finished the old three steps (reviewer S691 #3).
     get_online: input.hasLiveListing || input.hasTenancy,
@@ -163,6 +180,7 @@ export function computeOnboardingState(
   const defs = STEP_DEFS.filter((def) => {
     if (def.key === "viewing_times" && input.hasViewingTimes === undefined) return false;
     if (def.key === "connect_sites" && input.hasConnectedSite === undefined) return false;
+    if (def.key === "renter_emails" && input.hasRenterEmails === undefined) return false;
     if (def.key === "see_it_work" && input.hasLead === undefined) return false;
     if (input.postLeaseEnabled === false && (def.key === "tenancy" || def.key === "rent_rail")) {
       return false;
@@ -193,7 +211,7 @@ export function computeOnboardingState(
       return { ...def, href: `/r/${encodeURIComponent(input.liveRentalId)}`, status };
     }
     if (def.key === "get_online" && input.wizardEnabled) {
-      return { ...def, href: "/dashboard/link-portals", status };
+      return { ...def, href: "/dashboard/sites", status };
     }
     return { ...def, status };
   });

@@ -60,10 +60,10 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
       })
     : null;
   const here = (href: string) => (chain ? withQuery(href, "chain", "1") : href);
-  if (!isSiteSigninChannel(channel)) redirect("/dashboard/link-portals");
+  if (!isSiteSigninChannel(channel)) redirect("/dashboard/sites");
   const who = await allowed();
-  if (!who) redirect("/dashboard/link-portals");
-  if (isHiddenForOrg(channel, who.orgId)) redirect("/dashboard/link-portals");
+  if (!who) redirect("/dashboard/sites");
+  if (isHiddenForOrg(channel, who.orgId)) redirect("/dashboard/sites");
   // S713: signing in is for robot posting, which is the paid Posting add-on.
   // No window (and no worker run) without it.
   const access = await readRobotPostingAccess(createClient(), who.orgId);

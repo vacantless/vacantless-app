@@ -229,7 +229,7 @@
     "badgeRemoved": "Retirée"
   },
   "portalInbox": {
-    "title": "Recevez vos demandes ici",
+    "title": "Recevez ici les courriels des locataires",
     "sub": "{sites} vous écrivent quand un locataire pose une question. Envoyez-nous une copie. Chaque locataire apparaît alors dans Vacantless.",
     "addressLabel": "Votre adresse courriel Vacantless",
     "getAddress": "Obtenir mon adresse",
@@ -242,13 +242,13 @@
     "gmailTip": "Gmail peut refuser une règle de transfert. Ce n'est pas grave. Transférez chaque courriel de locataire à la main. Nous ajoutons le locataire et lui envoyons votre lien de réservation.",
     "voicemailTip": "Votre téléphone vous envoie peut-être vos messages vocaux par courriel. Transférez-les ici aussi. Nous ajoutons la personne comme locataire. Si les textos sont activés, nous lui envoyons votre lien de réservation.",
     "gmailCode": "Votre code Gmail est {code}. Entrez-le dans Gmail pour terminer.",
-    "statusTitle": "Ce qui est arrivé",
-    "ready": "Prêt",
+    "statusTitle": "Est-ce que ça marche?",
+    "ready": "Ça marche",
     "needsYou": "À vous",
     "notYet": "Pas encore",
-    "readyLine": "Votre dernière demande est arrivée {ago}.",
+    "readyLine": "Le dernier locataire est arrivé {ago}.",
     "unreadableLine": "Un courriel arrivé {ago} n'a pas pu être lu.",
     "unverifiedLine": "Un courriel arrivé {ago} a été transféré à la main. Utilisez une règle.",
-    "notYetLine": "Aucune demande pour l'instant."
+    "notYetLine": "Aucun courriel de locataire de ce site pour l'instant."
   }
 }

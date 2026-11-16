@@ -75,6 +75,7 @@ const SURFACES: Surface[] = [
   { file: "app/dashboard/sites/page.tsx", mode: "ui" },
   { file: "app/dashboard/sites/sites-rows.tsx", mode: "ui" },
   { file: "lib/sites-setup.ts", mode: "ui" },
+  { file: "lib/renter-emails.ts", mode: "ui" },
   { file: "lib/marketplace-phone-email.ts", mode: "ui" },
   // S736: the email when a site signs a landlord out.
   { file: "lib/signin-lost.ts", mode: "ui" },
@@ -113,7 +114,6 @@ const SURFACES: Surface[] = [
   // S715: the dashboard's own "not found" page.
   { file: "app/dashboard/not-found.tsx", mode: "ui" },
   // The wizard.
-  { file: "app/dashboard/link-portals/page.tsx", mode: "ui" },
   { file: "app/dashboard/link-portals/connect-tiles.tsx", mode: "ui" },
   { file: "app/dashboard/add-details/page.tsx", mode: "ui" },
   { file: "app/dashboard/add-details/question-sheet-form.tsx", mode: "ui" },
@@ -210,6 +210,8 @@ const OUT_OF_SCOPE_DIRS: Record<string, string> = {
  * with clean copy passes discovery silently and is never listed here.
  */
 const OUT_OF_SCOPE: Record<string, string> = {
+  // S806. Renders nothing: asks the worker for a sign-in check and refreshes.
+  "app/dashboard/sites/site-checks.tsx": "renders no copy, only a fetch and a refresh",
   // S744. Server actions only: redirect URLs with a ?team= flash key, no copy.
   "app/dashboard/settings/team-actions.ts": "server actions, redirect urls only, renders no landlord copy",
   // The property page's other tabs. Real landlord copy, but not syndication:

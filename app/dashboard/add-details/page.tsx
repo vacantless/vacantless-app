@@ -270,7 +270,7 @@ export default async function AddDetailsPage({
       )}
 
       <BackNext
-        backHref={withPropertyParam("/dashboard/link-portals", ownedPropertyId)}
+        backHref={withPropertyParam("/dashboard/sites", ownedPropertyId)}
         nextHref={withPropertyParam("/dashboard/send-live", ownedPropertyId)}
         backLabel={tCommon("back")}
         nextLabel={tCommon("next")}

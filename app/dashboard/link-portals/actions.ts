@@ -60,7 +60,7 @@ export async function setKijijiTier(
     .eq("channel", "kijiji");
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/dashboard/link-portals");
+  revalidatePath("/dashboard/sites");
   return { ok: true, tier: tier as KijijiTier };
 }
 
@@ -93,7 +93,7 @@ export async function forgetSiteSignin(
     .eq("channel", channel);
   if (updErr) return { ok: false, error: updErr.message };
 
-  revalidatePath("/dashboard/link-portals");
+  revalidatePath("/dashboard/sites");
   return { ok: true };
 }
 
@@ -123,9 +123,10 @@ export async function provisionInquiryAddress(): Promise<void> {
     });
     if (error) console.warn("link-portals: inquiry address not created", { message: error.message });
   }
-  revalidatePath("/dashboard/link-portals");
+  revalidatePath("/dashboard/sites");
   // A new query string, not just the hash: a hash-only redirect to the page the
   // landlord is already on is treated as an in-page jump and never re-renders,
   // so the button looked dead until a manual reload (seen live S697c).
-  redirect("/dashboard/link-portals?address=ready#inquiries");
+  // S806: the card lives on the one sites page now.
+  redirect("/dashboard/sites?address=ready#renter-emails");
 }

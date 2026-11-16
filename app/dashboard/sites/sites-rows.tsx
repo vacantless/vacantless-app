@@ -1,12 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   isHelperPong,
   MARKETPLACE_HELPER_APP_SOURCE,
 } from "@/lib/marketplace-helper";
 import { buildSitesSetup, type SitesSetupInput } from "@/lib/sites-setup";
 import { setFacebookPageSkipped } from "./actions";
+import { ForgetSignin, KijijiTierPicker } from "@/app/dashboard/link-portals/connect-tiles";
+import type { LinkPortalTileVM } from "@/app/dashboard/link-portals/view-model";
+
+/**
+ * S806 (REVIEW-S805 finding 6): what the older sites page showed per site,
+ * now folded under "Details" on each row: the account, when it was last
+ * checked, Kijiji's account type and "Forget this sign-in".
+ */
+export type SiteRowDetails = Pick<LinkPortalTileVM, "accountLine" | "checkedLine" | "forget" | "kijijiTier" | "capLine">;
 
 // S760: the five site rows. The helper lives only in this browser, so the row
 // for Marketplace asks it (the same ping the dashboard sync uses) and reads
@@ -22,10 +32,14 @@ const STATE_CHIP: Record<string, { label: string; cls: string }> = {
 export function SitesRows({
   input,
   signinAllHref,
+  details = {},
 }: {
   input: Omit<SitesSetupInput, "helperInstalled" | "hiddenFor">;
   signinAllHref: string | null;
+  details?: Record<string, SiteRowDetails>;
 }) {
+  const router = useRouter();
+  const refresh = async () => router.refresh();
   const [helperInstalled, setHelperInstalled] = useState<boolean | null>(null);
   useEffect(() => {
     // A phone has no Chrome extension: say so instead of waiting for a pong.
@@ -106,6 +120,27 @@ export function SitesRows({
                 </a>
               ) : null}
               {row.note ? <p className="mt-2 text-xs text-gray-500">{row.note}</p> : null}
+              {(() => {
+                const d = details[row.key];
+                if (!d || !(d.accountLine || d.checkedLine || d.forget || d.kijijiTier || d.capLine)) return null;
+                return (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">Details</summary>
+                    <div className="mt-2 space-y-3 text-sm text-gray-600">
+                      {d.accountLine || d.checkedLine ? (
+                        <p>
+                          {d.accountLine ? <span className="font-semibold text-gray-900">{d.accountLine}</span> : null}
+                          {d.accountLine && d.checkedLine ? <span aria-hidden> · </span> : null}
+                          {d.checkedLine ? <span>{d.checkedLine}</span> : null}
+                        </p>
+                      ) : null}
+                      {d.capLine ? <p>{d.capLine}</p> : null}
+                      {d.kijijiTier ? <KijijiTierPicker copy={d.kijijiTier} onSaved={refresh} /> : null}
+                      {d.forget ? <ForgetSignin channel={row.key} copy={d.forget} onDone={refresh} /> : null}
+                    </div>
+                  </details>
+                );
+              })()}
               {row.secondary?.kind === "skip_facebook_page" ? (
                 // S770: no Page is a fine answer; the row leaves the list.
                 <form action={setFacebookPageSkipped} className="mt-2">

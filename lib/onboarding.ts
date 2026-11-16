@@ -180,7 +180,7 @@ export function buildLaunchChecklist(input: ChecklistInput): LaunchChecklist {
     // when dark it keeps its default Properties-list href so the operator opens
     // a listing's Get online tab. Honest either way — never a broken link.
     if (def.key === "getonline" && input.wizardEnabled) {
-      return { ...def, href: "/dashboard/link-portals", status };
+      return { ...def, href: "/dashboard/sites", status };
     }
 
     // Once a property exists, the "intake" step deep-links straight to that

@@ -30,7 +30,7 @@ ok(
   "step order is property,get_online,tenancy,rent_rail",
   fresh.steps.map((step) => step.key).join(",") === "property,get_online,tenancy,rent_rail",
 );
-ok("get_online step is not optional and links to the wizard", fresh.steps[1].optional !== true && fresh.steps[1].href === "/dashboard/link-portals");
+ok("get_online step is not optional and links to the wizard", fresh.steps[1].optional !== true && fresh.steps[1].href === "/dashboard/sites");
 // S734: with a rental in hand the step opens that rental's sites view.
 {
   const withRental = computeOnboardingState({ ...freshInput, postRentalPropertyId: "abc-123" });

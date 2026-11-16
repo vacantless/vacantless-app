@@ -229,8 +229,8 @@
     "badgeRemoved": "Taken down"
   },
   "portalInbox": {
-    "title": "Get your inquiries here",
-    "sub": "{sites} email you when a renter writes. Send us a copy. Each renter then shows up in Vacantless.",
+    "title": "Get renter emails here",
+    "sub": "{sites} email you when a renter writes. Send those emails to your Vacantless address. Each renter then lands on Today and gets your booking link.",
     "addressLabel": "Your Vacantless email address",
     "getAddress": "Get my address",
     "copy": "Copy",
@@ -242,13 +242,13 @@
     "gmailTip": "Gmail may not let you add a forwarding rule. That is fine. Forward each renter email by hand. We add the renter and send them your booking link.",
     "voicemailTip": "Your phone may email you voicemails. Forward those here too. We add the caller as a renter. If renter texts are on, we text them your booking link.",
     "gmailCode": "Your Gmail code is {code}. Type it into Gmail to finish.",
-    "statusTitle": "What came in",
-    "ready": "Ready",
+    "statusTitle": "Is it working?",
+    "ready": "Working",
     "needsYou": "Needs you",
     "notYet": "Not yet",
-    "readyLine": "Your last inquiry came in {ago}.",
+    "readyLine": "The last renter came in {ago}.",
     "unreadableLine": "An email came in {ago} that we could not read.",
     "unverifiedLine": "An email came in {ago} forwarded by hand. Use a rule instead.",
-    "notYetLine": "No inquiry has come in yet."
+    "notYetLine": "No renter email from this site yet."
   }
 }

@@ -193,7 +193,8 @@ function ConnectTile({
 }
 
 // S709: two-step, in-page confirm (no browser dialog).
-function ForgetSignin({
+// S806: also used on the one sites page's Details fold.
+export function ForgetSignin({
   channel,
   copy,
   onDone,
@@ -259,7 +260,7 @@ function ForgetSignin({
   );
 }
 
-function KijijiTierPicker({
+export function KijijiTierPicker({
   copy,
   onSaved,
 }: {

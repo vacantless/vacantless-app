@@ -14,10 +14,10 @@ ok("clean id", cleanPropertyId(` ${id.toUpperCase()} `) === id);
 ok("withQuery joins", withQuery(siteSigninHref("rentals_ca", id), "err", "save").endsWith("&err=save"));
 ok("withQuery first", withQuery("/a", "err", "save") === "/a?err=save");
 const signinPage = read("app/dashboard/site-signin/[channel]/page.tsx");
-ok("back link keeps the rental", /link-portals\?property=\$\{propertyId\}/.test(signinPage));
+ok("back link keeps the rental", /sites\?property=\$\{propertyId\}/.test(signinPage));
 ok("form carries the rental", /name="property" value=\{propertyId\}/.test(signinPage));
 ok("tiles pass the rental", /siteSigninHref\(row\.channel, propertyId\)/.test(read("app/dashboard/link-portals/view-model.ts")));
-ok("link-portals passes it in", /buildLinkPortalsViewModel\(org\.id, locale, ownedPropertyId\)/.test(read("app/dashboard/link-portals/page.tsx")));
+ok("sites page passes it in", /buildLinkPortalsViewModel\(org\.id, locale, propertyId\)/.test(read("app/dashboard/sites/page.tsx")));
 
 // 23: a closed window re-renders the page so Try again shows.
 const panel = read("app/dashboard/site-signin/[channel]/window-panel.tsx");

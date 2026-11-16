@@ -1189,7 +1189,7 @@ export default async function SettingsPage({
                   : "With the Posting add-on you sign in to Kijiji, Rentals.ca and Zumper once. Then we post your ads there for you. We never see your password."}
               </p>
               <Link
-                href={robotPostingAccess.setup ? "/dashboard/link-portals" : POSTING_ADDON_HREF}
+                href={robotPostingAccess.setup ? "/dashboard/sites" : POSTING_ADDON_HREF}
                 className="mt-4 inline-block rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm"
               >
                 {robotPostingAccess.setup ? "Go to your site accounts →" : "See the Posting add-on →"}

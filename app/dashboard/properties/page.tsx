@@ -141,7 +141,7 @@ function rentalLaunchState({
   // is the right screen. Wizard dark = control room, never a broken link.
   const distributionHref =
     wizardEnabled && livePostCount === 0
-      ? `/dashboard/link-portals?property=${encodeURIComponent(row.id)}`
+      ? `/dashboard/sites?property=${encodeURIComponent(row.id)}`
       : controlRoomHref;
   const missing = missingBasics(row);
 

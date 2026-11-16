@@ -37,7 +37,7 @@ export default async function SiteSigninChainPage({
     data: { user },
   } = await supabase.auth.getUser();
   const isPlatformAdmin = isAdminEmail(user?.email ?? null, adminEmails());
-  if (!siteSigninEnabled({ isPlatformAdmin })) redirect("/dashboard/link-portals");
+  if (!siteSigninEnabled({ isPlatformAdmin })) redirect("/dashboard/sites");
 
   let propertyId: string | null = null;
   const wanted = cleanPropertyId(searchParams.property);
@@ -60,7 +60,7 @@ export default async function SiteSigninChainPage({
   const chain = buildSigninChain(stateByChannel, (c) => isHiddenForOrg(c, org.id));
   const first = nextSigninChannel(chain, null);
   const shown = chain.filter((s) => s.state !== "off");
-  const backHref = propertyId ? `/dashboard/link-portals?property=${propertyId}` : "/dashboard/link-portals";
+  const backHref = propertyId ? `/dashboard/sites?property=${propertyId}` : "/dashboard/sites";
 
   return (
     <div className="mx-auto max-w-2xl space-y-5 py-6">

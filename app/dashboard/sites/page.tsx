@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { getLocale } from "next-intl/server";
 import { PageHeader } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { getCurrentOrg } from "@/lib/org";
@@ -11,7 +12,11 @@ import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { cleanPropertyId } from "@/lib/site-signin";
 import { signinChainHref } from "@/lib/sites-setup";
 import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
-import { SitesRows } from "./sites-rows";
+import { SitesRows, type SiteRowDetails } from "./sites-rows";
+import { SiteChecks } from "./site-checks";
+import { buildLinkPortalsViewModel } from "@/app/dashboard/link-portals/view-model";
+import { PortalInboxCard } from "@/app/dashboard/link-portals/portal-inbox-card";
+import { RENTER_EMAILS_ANCHOR } from "@/lib/renter-emails";
 import { SubmitButton } from "@/components/submit-button";
 import { emailSitesComputerLink } from "./actions";
 import {
@@ -26,8 +31,11 @@ export const dynamic = "force-dynamic";
 
 // S760: "Connect your rental sites", the one-time setup step. Five rows, one
 // state each (On, Needs you, Checking, With Posting), one progress line, one
-// button that chains the three sign-in windows. The detailed per-site page
-// (/dashboard/link-portals) stays for account settings and checks.
+// button that chains the three sign-in windows.
+// S806 (REVIEW-S805 findings 6 and 7): the ONE sites page. The older
+// /dashboard/link-portals page now redirects here; its account name, last
+// check and "Forget this sign-in" sit under each row's Details, its sign-in
+// check runs here, and its renter-email card is step 2 below the rows.
 export default async function SitesSetupPage({
   searchParams,
 }: {
@@ -53,10 +61,25 @@ export default async function SitesSetupPage({
     }
   }
 
-  const [tiles, access] = await Promise.all([
+  const [tiles, access, locale] = await Promise.all([
     listChannelTileStatuses(org.id),
     readRobotPostingAccess(supabase, org.id),
+    getLocale(),
   ]);
+  // S806: per-site details and the sign-in check, from the older page's model.
+  const vm = await buildLinkPortalsViewModel(org.id, locale, propertyId);
+  const details: Record<string, SiteRowDetails> = {};
+  const due: Record<string, string | null> = {};
+  for (const row of vm.groups.flatMap((g) => g.rows)) {
+    details[row.channel] = {
+      accountLine: row.accountLine,
+      checkedLine: row.checkedLine,
+      capLine: null,
+      forget: row.forget,
+      kijijiTier: row.kijijiTier,
+    };
+    if (row.needsCheck || row.state === "checking") due[row.channel] = row.lastCheckedAt;
+  }
   const tileStateByChannel: Record<string, string> = {};
   for (const t of tiles) tileStateByChannel[t.channel] = t.state;
   // Hidden sites never reach the client; the pure builder gets a plain map.
@@ -152,11 +175,15 @@ export default async function SitesSetupPage({
                 facebookPageSkipped: Boolean(org.facebook_page_skipped_at),
               }}
               signinAllHref={access.setup ? signinChainHref(propertyId) : null}
+              details={details}
             />
           </div>
         </details>
       ) : (
         <div className="mt-5">
+          {access.setup ? (
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Step 1</p>
+          ) : null}
           <SitesRows
             input={{
               tileStateByChannel,
@@ -166,16 +193,19 @@ export default async function SitesSetupPage({
               facebookPageSkipped: Boolean(org.facebook_page_skipped_at),
             }}
             signinAllHref={access.setup ? signinChainHref(propertyId) : null}
+            details={details}
           />
         </div>
       )}
-      <p className="mt-6 text-xs text-gray-500">
-        Account details, checks and &quot;forget this sign-in&quot; are on{" "}
-        <Link href="/dashboard/link-portals" className="underline">
-          your sites page
-        </Link>
-        .
-      </p>
+      <SiteChecks due={due} probeEnabled={vm.probeEnabled} />
+      {access.setup ? (
+        // S806 (REVIEW-S805 finding 7): step 2. Renters who write on Kijiji,
+        // Rentals.ca or Zumper reach Vacantless only through this.
+        <section id={RENTER_EMAILS_ANCHOR} className="mt-8 scroll-mt-24">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Step 2</p>
+          <PortalInboxCard orgId={org.id} />
+        </section>
+      ) : null}
     </div>
   );
 }

@@ -105,7 +105,7 @@ export function buildSitesSetup(input: SitesSetupInput): SitesSetup {
         label: "Facebook Page",
         state: "needs_you",
         line: "Connected. Let us post to it.",
-        action: { label: "Allow posting", href: "/dashboard/link-portals" },
+        action: { label: "Allow posting", href: "/dashboard/settings?tab=distribution#channel-facebook_feed" },
         note: null,
       });
     } else if (page === "checking") {

@@ -3,6 +3,9 @@ import { HelperInstallTip } from "@/components/helper-install-tip";
 import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
 import { isHiddenForOrg } from "@/lib/posting-lanes";
 import { orgHasConnectedSite } from "@/lib/sites-setup";
+import { readRobotPostingAccess } from "@/lib/robot-posting-access";
+import { hasRenterEmails } from "@/lib/renter-emails";
+import { readRenterEmailEvents } from "@/lib/renter-emails-read";
 import { notFound } from "next/navigation";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import { createClient } from "@/lib/supabase/server";
@@ -117,8 +120,14 @@ export default async function GettingStartedPage({
   const siteTiles = await listChannelTileStatuses(org.id);
   const tileStateByChannel: Record<string, string> = {};
   for (const t of siteTiles) if (!isHiddenForOrg(t.channel, org.id)) tileStateByChannel[t.channel] = t.state;
+  // S806: "Get renter emails here" for accounts that post to Kijiji, Rentals.ca and Zumper.
+  const robotAccess = await readRobotPostingAccess(supabase, org.id);
+  const renterEmailsDone = robotAccess.setup
+    ? hasRenterEmails(await readRenterEmailEvents(supabase, org.id))
+    : undefined;
   const state = computeOnboardingState({
     hasConnectedSite: orgHasConnectedSite(tileStateByChannel),
+    hasRenterEmails: renterEmailsDone,
     hasProperty: (propertyCount ?? 0) > 0,
     hasLiveListing: (liveListingCount ?? 0) > 0,
     wizardEnabled: distributionWizardEnabled(),

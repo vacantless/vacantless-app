@@ -80,7 +80,7 @@ export default async function SiteSigninPage({
       propertyAddress = (owned.address as string | null) ?? null;
     }
   }
-  const backHref = propertyId ? `/dashboard/link-portals?property=${propertyId}` : "/dashboard/link-portals";
+  const backHref = propertyId ? `/dashboard/sites?property=${propertyId}` : "/dashboard/sites";
   // S735 (item 7): one sitting. When this window finishes, the panel opens the
   // next site still to sign in to. Read the tile states now so "next" is true
   // at render time; the panel re-checks nothing, it just moves on.
