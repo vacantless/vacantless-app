@@ -1,0 +1,35 @@
+import { unitJourney, type JourneyInput } from "../lib/unit-journey";
+let pass = 0, fail = 0;
+function ok(n: string, c: boolean) { if (c) pass++; else { fail++; console.log("FAIL", n); } }
+const base: JourneyInput = { status: "draft", crewStage: null, photoCount: 0, hasBasics: false, liveAdCount: 0, renters: 0, viewings: 0, tenancy: null };
+const states = (j: ReturnType<typeof unitJourney>) => j.steps.map((s) => s.state[0]).join("");
+
+const reno = unitJourney({ ...base, crewStage: "under_construction" });
+ok("reno: turnover current", reno.current === "turnover" && states(reno) === "ctttttt");
+const noPhotos = unitJourney({ ...base, crewStage: "photos_in" });
+ok("crew photos_in but none here: photos current", noPhotos.current === "photos");
+const draft = unitJourney({ ...base, photoCount: 8 });
+ok("draft w/o basics", draft.current === "ads" && draft.next === "Add the rent, beds and baths, then set it live.");
+const ready = unitJourney({ ...base, photoCount: 8, hasBasics: true });
+ok("draft ready", ready.next === "Set it live.");
+const pageOnly = unitJourney({ ...base, status: "available", photoCount: 8, hasBasics: true });
+ok("live, no site ads", pageOnly.current === "ads" && pageOnly.next!.startsWith("It is live"));
+const quiet = unitJourney({ ...base, status: "available", photoCount: 8, hasBasics: true, liveAdCount: 3 });
+ok("no renters", quiet.current === "renters");
+const noBook = unitJourney({ ...base, status: "available", photoCount: 8, hasBasics: true, liveAdCount: 3, renters: 5 });
+ok("renters, no viewings", noBook.current === "viewings");
+const booking = unitJourney({ ...base, status: "available", photoCount: 8, hasBasics: true, liveAdCount: 3, renters: 5, viewings: 2 });
+ok("viewings -> rented current", booking.current === "rented");
+const leased = unitJourney({ ...base, status: "leased" });
+ok("leased, no tenancy: moved_in current", leased.current === "moved_in" && leased.next === "Add the tenancy so rent and the move-in start.");
+const occupied = unitJourney({ ...base, status: "leased", tenancy: "active" });
+ok("occupied: all done", occupied.current === null && occupied.next === null && occupied.steps.every((s) => s.state === "done"));
+const notice = unitJourney({ ...base, status: "leased", tenancy: "active", crewStage: "notice_given" });
+ok("notice on occupied unit: turnover current", notice.current === "turnover");
+ok("gap: crew ads up, no link", unitJourney({ ...base, status: "available", crewStage: "live", photoCount: 3, hasBasics: true }).gap !== null);
+ok("gap: crew rented, no tenancy", unitJourney({ ...base, status: "available", crewStage: "rented" }).gap !== null);
+ok("no gap when facts agree", occupied.gap === null);
+ok("steps after current are todo", draft.steps.slice(3).every((s) => s.state === "todo"));
+ok("no em dash", !JSON.stringify([reno, draft, pageOnly, leased]).includes("—"));
+console.log(`test-unit-journey: ${pass} passed, ${fail} failed`);
+if (fail) process.exit(1);

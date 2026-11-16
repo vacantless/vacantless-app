@@ -129,6 +129,8 @@ import {
 } from "@/lib/vacancy-cost";
 import { demandCheck, daysSince, type DemandCheck } from "@/lib/demand-check";
 import { needsSisterFill, sameBuilding, type UnitFacts } from "@/lib/sister-unit-fill";
+import { unitJourney } from "@/lib/unit-journey";
+import { UnitJourneyLine } from "@/components/unit-journey-line";
 import {
   LAUNDRY_OPTIONS,
   laundryLabel,
@@ -175,7 +177,6 @@ import {
   LIFECYCLE_STEPS,
   type LifecycleStep,
 } from "@/lib/rental-lifecycle";
-import { LifecycleRail } from "./lifecycle-rail";
 import { deriveNextAction } from "@/lib/rental-next-action";
 import { NextActionCard } from "./next-action-card";
 import { AdsStillUpCard } from "./ads-still-up-card";
@@ -1049,9 +1050,9 @@ export default async function PropertyDetailPage({
   const p = property as Property;
   const nowMs = Date.now();
   // S790a: the unit's latest unit progress stage, shown as a chip in the header.
-  const unitStage = (property as { archived_at?: string | null }).archived_at
-    ? null
-    : stageChip((await latestStages(supabase, p.organization_id, [p.id])).get(p.id), new Date(nowMs));
+  const unitArchived = Boolean((property as { archived_at?: string | null }).archived_at);
+  const latestUnitStage = unitArchived ? undefined : (await latestStages(supabase, p.organization_id, [p.id])).get(p.id);
+  const unitStage = unitArchived ? null : stageChip(latestUnitStage, new Date(nowMs));
   // S789e: how many photos have a touched-up and an original copy, and which shows now.
   const { data: touchRows } = await supabase
     .from("property_photos")
@@ -2989,6 +2990,24 @@ export default async function PropertyDetailPage({
 
   // Lifecycle rail (IA Step 4 slice 1): derive where this unit sits, empty ->
   // leased, from data already fetched above. Pure — see lib/rental-lifecycle.
+  // S807: the one progress line (lib/unit-journey), top of the page. Renters
+  // and viewings count from when the rental last went live.
+  const liveSinceMs = p.available_since ? Date.parse(p.available_since) : NaN;
+  const sinceLive = leadRows.filter((l) => !Number.isFinite(liveSinceMs) || Date.parse(l.created_at) >= liveSinceMs);
+  const journey = unitArchived
+    ? null
+    : unitJourney({
+        status: p.status,
+        // Same 60-day window as the stage chip: an old tap is not today's state.
+        crewStage: unitStage ? latestUnitStage?.stage ?? null : null,
+        photoCount: photoRows.length,
+        hasBasics: (p.rent_cents ?? 0) > 0 && p.beds != null && p.baths != null,
+        liveAdCount: liveListingPostCount,
+        renters: sinceLive.length,
+        viewings: sinceLive.filter((l) => l.status === "booked" || l.status === "showed" || l.status === "applied" || l.status === "leased").length,
+        tenancy: tenancyStatus === "active" || tenancyStatus === "upcoming" ? tenancyStatus : null,
+      });
+
   const lifecycle = deriveRentalLifecycle(p.id, {
     propertyStatus: normalizedStatus,
     hasRent: (p.rent_cents ?? 0) > 0,
@@ -3504,6 +3523,8 @@ export default async function PropertyDetailPage({
           </div>
         }
       />
+
+      {journey && <UnitJourneyLine journey={journey} />}
 
       {searchParams.filled != null && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
@@ -5311,7 +5332,8 @@ export default async function PropertyDetailPage({
             </div>
           )}
 
-          <LifecycleRail lifecycle={lifecycle} />
+          {/* S807: the old "Where this rental is" rail is replaced by the
+              journey line at the top of the page (one line, never two). */}
 
           {nextAction && <NextActionCard action={nextAction} />}
         </div>

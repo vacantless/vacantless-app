@@ -332,10 +332,11 @@ ok("not resolved: in_progress", !isResolvedRunStatus("in_progress"));
       propertyDetailSource.includes("blockerSummary={syndicationBlockerSummary}"),
   );
   ok(
-    "lifecycle rail is demoted below the main tabs",
-    propertyDetailSource.includes("More rental context") &&
-      propertyDetailSource.indexOf("</TabbedSections>") <
-        propertyDetailSource.indexOf("<LifecycleRail lifecycle"),
+    "S807: one progress line, above the tabs; the old rail is gone",
+    propertyDetailSource.includes("<UnitJourneyLine journey={journey} />") &&
+      !propertyDetailSource.includes("<LifecycleRail lifecycle") &&
+      propertyDetailSource.indexOf("<UnitJourneyLine journey") <
+        propertyDetailSource.indexOf("</TabbedSections>"),
   );
 }
 {

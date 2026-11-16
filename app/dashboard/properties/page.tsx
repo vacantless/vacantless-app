@@ -41,6 +41,8 @@ import { coverageLabel, shortAddress } from "@/lib/posting-coverage";
 import { sortPhotos } from "@/lib/photos";
 import { latestStages } from "@/lib/unit-progress-latest";
 import { stageChip, STAGE_TONE_CLASS } from "@/lib/unit-progress";
+import { unitJourney } from "@/lib/unit-journey";
+import { UnitJourneyLine } from "@/components/unit-journey-line";
 import {
   siteLights,
   postMissingLabel,
@@ -63,6 +65,7 @@ type PropertyRow = {
   status: string;
   description: string | null;
   archived_at: string | null;
+  available_since?: string | null;
 };
 
 type ListingPostRef = {
@@ -284,7 +287,7 @@ export default async function PropertiesPage({
   ] = await Promise.all([
     supabase
       .from("properties")
-      .select("id, address, rent_cents, beds, baths, status, description, archived_at")
+      .select("id, address, rent_cents, beds, baths, status, description, archived_at, available_since")
       .eq("organization_id", org.id)
       .order("created_at", { ascending: false }),
     // S748d: counted in the database (property_rollups, migration 0271).
@@ -404,6 +407,24 @@ export default async function PropertiesPage({
   // S790a: each rental's latest unit progress stage, for the stage chip.
   const stageByProperty = archivedView ? new Map() : await latestStages(supabase, org.id, rowIds);
   const chipNow = new Date();
+  // S807: the compact progress line on each row (lib/unit-journey) needs each
+  // rental's renters and booked renters since it went live, and its tenancy.
+  const journeyLeads = new Map<string, { status: string; created_at: string }[]>();
+  const journeyTenancy = new Map<string, "active" | "upcoming">();
+  if (!archivedView && rowIds.length > 0) {
+    const [{ data: jl }, { data: jt }] = await Promise.all([
+      supabase.from("leads").select("property_id, status, created_at").in("property_id", rowIds).limit(5000),
+      supabase.from("tenancies").select("property_id, status").in("property_id", rowIds).in("status", ["active", "upcoming"]),
+    ]);
+    for (const r of (jl ?? []) as { property_id: string; status: string; created_at: string }[]) {
+      const list = journeyLeads.get(r.property_id) ?? [];
+      list.push(r);
+      journeyLeads.set(r.property_id, list);
+    }
+    for (const r of (jt ?? []) as { property_id: string; status: "active" | "upcoming" }[]) {
+      if (journeyTenancy.get(r.property_id) !== "active") journeyTenancy.set(r.property_id, r.status);
+    }
+  }
   if (rowIds.length > 0) {
     const { data: photoRows } = await supabase
       .from("property_photos")
@@ -483,6 +504,23 @@ export default async function PropertiesPage({
         statusTone,
         cover: coverByProperty.get(p.id) ?? null,
         stage: stageChip(stageByProperty.get(p.id), chipNow),
+        journey: archivedView
+          ? null
+          : (() => {
+              const since = p.available_since ? Date.parse(p.available_since) : NaN;
+              const ls = (journeyLeads.get(p.id) ?? []).filter((l) => !Number.isFinite(since) || Date.parse(l.created_at) >= since);
+              const chip = stageChip(stageByProperty.get(p.id), chipNow);
+              return unitJourney({
+                status: p.status,
+                crewStage: chip ? (stageByProperty.get(p.id)?.stage ?? null) : null,
+                photoCount,
+                hasBasics: (p.rent_cents ?? 0) > 0 && p.beds != null && p.baths != null,
+                liveAdCount: livePostCount,
+                renters: ls.length,
+                viewings: ls.filter((l) => ["booked", "showed", "applied", "leased"].includes(l.status)).length,
+                tenancy: journeyTenancy.get(p.id) ?? null,
+              });
+            })(),
         canHardDelete: hardDeletable(p.status, leadCount, tenancyCount, postCount),
         needsYou:
           (cov?.missing.length ?? 0) > 0 || renew.length > 0 || launch.tone === "warn",
@@ -814,6 +852,7 @@ export default async function PropertiesPage({
                           {v.stage.detail ? <span className="font-normal opacity-80">· {v.stage.detail}</span> : null}
                         </Link>
                       ) : null}
+                      {v.journey ? <UnitJourneyLine journey={v.journey} compact /> : null}
                       {(v.lights.length > 0 || !archivedView) && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                           {v.lights.map((l) =>
