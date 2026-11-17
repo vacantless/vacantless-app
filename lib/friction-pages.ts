@@ -105,7 +105,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Any paid plan, from CA$29 a month.",
     video: 10,
-    film: { seconds: 57, youtube: "jEIfxcyiOU4" },
+    film: { seconds: 57, youtube: "pLcpfH77yqQ" },
   },
   {
     slug: "showing-trips",
