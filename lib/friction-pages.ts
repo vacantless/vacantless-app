@@ -62,6 +62,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
       "Every message gets a reply with your booking link in seconds.",
       "Renters from every site land in one list.",
       "Quick replies on your phone for the chats you answer yourself.",
+      "One tap answers pets, parking and utilities questions.",
       "A free Chrome helper fills replies in Facebook Marketplace chats.",
     ],
     plan: "Free.",
