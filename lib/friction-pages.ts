@@ -66,7 +66,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Free.",
     video: 3,
-    film: { seconds: 38, youtube: "KLXuBpDyggw" },
+    film: { seconds: 38, youtube: "PJ3o8MvH6Os" },
   },
   {
     slug: "unqualified-renters",
