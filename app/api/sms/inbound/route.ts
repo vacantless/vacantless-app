@@ -1,6 +1,7 @@
+import { fileTextedRepair } from "@/lib/text-in-repairs-server";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyTwilioSignature } from "@/lib/sms";
+import { classifyInbound, verifyTwilioSignature } from "@/lib/sms";
 import { applyInboundSms } from "@/lib/sms-inbound";
 import { orgForTextingNumber } from "@/lib/org-sms-numbers";
 import { notifyOperatorsOfTextReply } from "@/lib/sms-reply-notify-server";
@@ -73,6 +74,20 @@ export async function POST(req: NextRequest) {
   // replies are logged to every matched lead timeline. No app-generated reply.
   // S717: a text to a landlord's own number is filed to that landlord only.
   const ownerOrgId = await orgForTextingNumber(admin, params.To ?? "");
+  // S808b: a plain text from a tenant on a paid plan is a repair request
+  // (lib/text-in-repairs-server). STOP, START and YES never are.
+  if (!classifyInbound(params.Body ?? "")) {
+    try {
+      const repair = await fileTextedRepair(admin, {
+        from: params.From ?? "",
+        body: params.Body ?? "",
+        ownerOrgId,
+      });
+      if (repair.handled) return twiml();
+    } catch (e) {
+      console.error("[sms/inbound] texted repair failed", e);
+    }
+  }
   const summary = await applyInboundSms(admin, {
     from: params.From ?? "",
     body: params.Body ?? "",

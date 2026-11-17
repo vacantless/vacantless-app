@@ -57,7 +57,8 @@ ok("0281 drops the 6-arg submit and grants the 7-arg one", mig.includes("drop fu
 ok("0281 approve makes emergencies urgent", mig.includes("when v_report.emergency_kind is not null then 'urgent'"));
 ok("0281 context returns info and call phone", mig.includes("'emergency_info',") && mig.includes("'emergency_call_phone'"));
 
-const action = readFileSync("app/report/[token]/actions.ts", "utf8");
+// S808b: the notify half moved to lib/incident-notify-server.ts.
+const action = readFileSync("app/report/[token]/actions.ts", "utf8") + readFileSync("lib/incident-notify-server.ts", "utf8");
 ok("action passes the kind and texts on emergency", action.includes("p_emergency_kind: emergencyKind") && action.includes("textEmergency(admin, org, emergencyKind, r)"));
 const form = readFileSync("app/report/[token]/report-form.tsx", "utf8");
 ok("form asks first and sends the kind", form.includes("Is this an emergency?") && form.includes("emergencyKind: emergency") && form.includes('href="tel:911"'));

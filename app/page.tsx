@@ -530,7 +530,7 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img?: stri
     kicker: "Repairs",
     title: "Repairs without the back and forth.",
     points: [
-      "Tenants report a problem from their own link, with photos. A unit that keeps reporting the same thing is flagged",
+      "Tenants report a problem from their own link, with photos, or by texting your number. A unit that keeps reporting the same thing is flagged",
       "An emergency alerts you at once, day or night. The tenant sees the shut-off and who to call",
       "They pick when they can be home. Your trade accepts, quotes and books from a link",
       "Vacantless finds the time that works for both, tells the tenant and reminds them the day before",

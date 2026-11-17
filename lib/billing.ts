@@ -615,10 +615,9 @@ export const TIERS: Record<TierKey, TierInfo> = {
     priceEnv: "STRIPE_PRICE_PREMIUM",
     maxActiveListings: null,
     blurb:
-      "Everything in Growth, plus text-in repair requests and help for bigger teams.",
+      "Everything in Growth, plus help for bigger teams.",
     features: [
       "Everything in Growth",
-      "Tenants can text in repair requests",
       "Larger photo capacity",
       "Shares new inquiries evenly across your team",
       "Priority support",
@@ -656,7 +655,7 @@ export const PAID_FEATURE_GROUPS: { head: string; items: string[] }[] = [
     head: "Run it",
     items: [
       "Rent by pre-authorized debit through your own Stripe or Rotessa account",
-      "Repairs: tenants report and pick times; emergencies alert you at once; find trades other landlords rated; your trade accepts, quotes and books from a link",
+      "Repairs: tenants report from a link or a text and pick times; emergencies alert you at once; find trades other landlords rated; your trade accepts, quotes and books from a link",
       "Ontario LTB notices filled for you: N4, N5, N8, N12, L1 and more",
       "Rent increase reminders with the N1 filled in",
       "Drop in a signed lease and the tenancy fills itself: rent, dates and tenants",
