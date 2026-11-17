@@ -4,7 +4,7 @@ export const HOW_TO_PATH = "/how-to";
 export const HOW_TO_VIDEOS: { n: number; title: string; line: string; seconds: number }[] = [
   { n: 1, title: "Add a rental", line: "Copy an old ad or start fresh. Rent, photos and an AI draft.", seconds: 60 },
   { n: 2, title: "Set viewing times", line: "Weekly windows for all your rentals, days per building, and what renters see.", seconds: 38 },
-  { n: 3, title: "Answer an inquiry", line: "Draft a reply with your booking link, answer Marketplace chats from Quick replies with your next open times, add the renter in one tap, and ask renters a few questions.", seconds: 70 },
+  { n: 3, title: "Answer an inquiry", line: "Draft a reply with your booking link, or answer Marketplace chats from Quick replies: tap what they asked, copy, and the renter is saved.", seconds: 72 },
   { n: 4, title: "Post to rental sites", line: "Connect your sites once, and get renter emails from them on the same page. Then every rental posts itself: your Facebook Page, Marketplace in one click, and Kijiji, Rentals.ca and Zumper. Change a rental and Marketplace updates in one click. Ads come down when it rents.", seconds: 93 },
   { n: 5, title: "Showing agents", line: "Add the people who run viewings and let new bookings go to them.", seconds: 25 },
   { n: 6, title: "After the viewing", line: "Reminders, the unconfirmed-viewings box, one-tap nudges, group viewings, new times, calendar links, follow-ups, feedback and the application link.", seconds: 86 },
