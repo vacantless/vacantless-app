@@ -19,6 +19,7 @@ import { isValidMailAlias } from "@/lib/email-ingest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { gateRenterEmail, kindFromTags } from "@/lib/renter-email-block";
 import { renterUnsubscribeUrl } from "@/lib/renter-unsubscribe-server";
+import { demoEmail, isDemoEmail } from "@/lib/demo-account";
 
 const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
@@ -46,6 +47,15 @@ async function brevoFetch(init: RequestInit): Promise<Response> {
       // why in the reason (brevo_422:...).
       const kind = kindFromTags(parsed.tags);
       const to = Array.isArray(parsed.to) ? (parsed.to[0] as { email?: string } | undefined) : undefined;
+      // S809: the demo login (demo@vacantless.com) is a member of Lakeview with
+      // no mailbox behind it; every alert to it bounced (550 5.1.1) and bounces
+      // hurt sending for everyone. Never send to it; report it as skipped.
+      if (isDemoEmail(to?.email ?? null, demoEmail(process.env))) {
+        return new Response(JSON.stringify({ message: "skipped: demo login has no mailbox" }), {
+          status: 202,
+          headers: { "content-type": "application/json" },
+        });
+      }
       const apiKey = (init.headers as Record<string, string> | undefined)?.["api-key"] ?? process.env.BREVO_API_KEY ?? "";
       const verdict = await gateRenterEmail(createAdminClient(), to?.email ?? null, kind, apiKey);
       if (!verdict.allow) {

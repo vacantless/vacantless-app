@@ -135,5 +135,12 @@ ok("a plain click is not a prefetch", !isPrefetch(h({})));
   ok("no Next Link or button points at /demo anywhere on the homepage", !/(SecondaryButton|PrimaryButton|<Link)[^>]*\/demo"/.test(home));
 }
 
+// S809: no email ever goes to the demo login (it has no mailbox; alerts bounced).
+{
+  const mail = (require("node:fs") as typeof import("node:fs")).readFileSync("lib/email.ts", "utf8");
+  const send = mail.slice(mail.indexOf("async function brevoFetch"), mail.indexOf("return fetch(BREVO_ENDPOINT"));
+  ok("every send skips the demo login before it reaches Brevo", send.includes("isDemoEmail(") && send.includes("demoEmail(process.env)"));
+}
+
 console.log(`\ntest-demo-account: ${passed} passed, ${failed} failed (${passed + failed} total)`);
 process.exit(failed ? 1 : 0);
