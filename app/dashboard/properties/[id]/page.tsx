@@ -3543,6 +3543,14 @@ export default async function PropertyDetailPage({
 
       {journey && <UnitJourneyLine journey={journey} />}
 
+      {/* S810: the demand check sits under the progress line, so how the ad
+          is doing is read next to where the rental is (was in the Details tab). */}
+      {demand && (
+        <div className="mb-4">
+          <DemandCheckPanel check={demand} />
+        </div>
+      )}
+
       {searchParams.filled != null && (
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-800">
           {searchParams.filled === "error"
@@ -3943,8 +3951,6 @@ export default async function PropertyDetailPage({
           </p>
         </div>
         </section>
-
-        {demand && <DemandCheckPanel check={demand} />}
 
         {/* S724 (V251-24): viewing rules for this rental (an occupied unit needs
             24 hours' notice to the tenant, and often a later first date). */}
