@@ -97,6 +97,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     how: [
       "The tenant's repair link asks first if it is an emergency.",
+      "Or the tenant texts your number, and it becomes a repair request.",
       "A real emergency reaches your phone at once, any hour.",
       "Your trade accepts, quotes and books from a link.",
       "See trades other landlords near you rated.",
@@ -104,7 +105,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
     ],
     plan: "Any paid plan, from CA$29 a month.",
     video: 10,
-    film: { seconds: 45, youtube: "jEIfxcyiOU4" },
+    film: { seconds: 57, youtube: "jEIfxcyiOU4" },
   },
   {
     slug: "showing-trips",
