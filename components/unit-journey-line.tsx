@@ -51,7 +51,9 @@ export function UnitJourneyLine({ journey, compact = false }: { journey: Journey
           <span className="font-semibold">Next:</span> {journey.next}
         </p>
       ) : (
-        <p className="mt-2 text-sm text-gray-600">Tenant in place. Nothing to do here.</p>
+        <p className="mt-2 text-sm text-gray-600">
+          {journey.steps.some((s) => s.key === "moved_in") ? "Tenant in place. Nothing to do here." : "Rented. Nothing to do here."}
+        </p>
       )}
       {journey.gap ? <p className="mt-1 text-xs text-amber-800">{journey.gap}</p> : null}
     </section>

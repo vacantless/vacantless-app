@@ -4,6 +4,15 @@
 // Drives both the operator edit form and the public /r listing page.
 // ============================================================================
 
+import {
+  appliancesLabel,
+  exposureLabel,
+  flooringLabel,
+  maxOccupantsLabel,
+  parkingFeeLabel,
+  renovatedLabel,
+} from "./listing-details";
+
 export const LAUNDRY_OPTIONS = [
   "in_suite",
   "in_building",
@@ -552,6 +561,16 @@ export type UnitFeatures = {
   smoking?: Smoking | string | null;
   lease_term?: LeaseTerm | string | null;
   on_site_management?: boolean | null;
+  // S808 (0303): the vacancy-schedule facts. parking_fee_cents and appliances
+  // can come from the account or building defaults (lib/policy-profile).
+  renovated_year?: number | null;
+  nearby?: string | null;
+  exposure?: ReadonlyArray<string> | null;
+  exposure_view?: string | null;
+  parking_fee_cents?: number | null;
+  appliances?: ReadonlyArray<string> | null;
+  flooring?: string | null;
+  max_occupants?: number | null;
 };
 
 // --- Availability -----------------------------------------------------------
@@ -708,6 +727,11 @@ export function buildAmenityChips(f: UnitFeatures): string[] {
   // as an amenity (absence is the norm, advertising it adds no value).
   if (f.smoking === "non_smoking") chips.push("Non-smoking");
   if (f.on_site_management) chips.push("On-site management");
+  // S808: flooring and exposure read as features too.
+  const flooring = flooringLabel(f.flooring);
+  if (flooring) chips.push(flooring);
+  const facing = exposureLabel(f.exposure, null);
+  if (facing) chips.push(facing);
   const seen = new Set(chips.map((chip) => chip.toLowerCase()));
   for (const amenity of normalizeAmenities(f.amenities)) {
     const label = AMENITY_LABELS[amenity];
@@ -815,6 +839,12 @@ export function buildGoodToKnow(f: {
   parking_type?: string | null;
   parking_count?: number | null;
   parking?: string | null;
+  parking_fee_cents?: number | null;
+  renovated_year?: number | null;
+  nearby?: string | null;
+  exposure_view?: string | null;
+  appliances?: ReadonlyArray<string> | null;
+  max_occupants?: number | null;
 }): GoodToKnowFact[] {
   const out: GoodToKnowFact[] = [];
   const heating = heatingTypeLabel(f.heating_type);
@@ -824,6 +854,18 @@ export function buildGoodToKnow(f: {
   const income = typeof f.income_requirement === "string" ? f.income_requirement.trim() : "";
   if (income) out.push({ label: "Income requirement", value: income });
   const parking = formatParking(f.parking_type, f.parking_count, f.parking);
-  if (parking) out.push({ label: "Parking", value: parking });
+  const fee = f.parking_type === "none" ? null : parkingFeeLabel(f.parking_fee_cents);
+  if (parking || fee) out.push({ label: "Parking", value: [parking, fee].filter(Boolean).join(", ") });
+  // S808: the vacancy-schedule facts.
+  const reno = renovatedLabel(f.renovated_year);
+  if (reno) out.push({ label: "Renovated", value: String(f.renovated_year) });
+  const appliances = appliancesLabel(f.appliances);
+  if (appliances) out.push({ label: "Appliances", value: appliances });
+  const nearby = typeof f.nearby === "string" ? f.nearby.trim() : "";
+  if (nearby) out.push({ label: "Nearby", value: nearby });
+  const view = typeof f.exposure_view === "string" ? f.exposure_view.trim() : "";
+  if (view) out.push({ label: "View", value: view });
+  const max = maxOccupantsLabel(f.max_occupants);
+  if (max) out.push({ label: "Occupancy", value: max });
   return out;
 }

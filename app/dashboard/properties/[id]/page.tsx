@@ -130,6 +130,18 @@ import {
 import { demandCheck, daysSince, type DemandCheck } from "@/lib/demand-check";
 import { needsSisterFill, sameBuilding, type UnitFacts } from "@/lib/sister-unit-fill";
 import { unitJourney } from "@/lib/unit-journey";
+import {
+  APPLIANCE_KEYS,
+  APPLIANCE_LABELS,
+  EXPOSURE_OPTIONS,
+  EXPOSURE_LABELS,
+  EXPOSURE_VIEW_MAX,
+  FLOORING_OPTIONS,
+  FLOORING_LABELS,
+  NEARBY_MAX,
+  appliancesLabel,
+  parkingFeeLabel,
+} from "@/lib/listing-details";
 import { UnitJourneyLine } from "@/components/unit-journey-line";
 import {
   LAUNDRY_OPTIONS,
@@ -160,6 +172,8 @@ import {
 import {
   resolveEffectiveFeatures,
   resolveBuildingProfile,
+  policyProfileFromRow,
+  POLICY_PROFILE_COLUMNS,
   type PolicyProfile,
 } from "@/lib/policy-profile";
 import {
@@ -399,6 +413,16 @@ type Property = {
   income_requirement: string | null;
   video_url: string | null;
   amenities: string[] | null;
+  // S808 (0303): vacancy-schedule facts.
+  internet_included: boolean | null;
+  renovated_year: number | null;
+  nearby: string | null;
+  exposure: string[] | null;
+  exposure_view: string | null;
+  parking_fee_cents: number | null;
+  appliances: string[] | null;
+  flooring: string | null;
+  max_occupants: number | null;
   // Standard-policy per-unit overrides (0048); null = inherit org profile.
   lease_term: string | null;
   smoking: string | null;
@@ -1041,7 +1065,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, emergency_info, emergency_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at, photo_source_url",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, emergency_info, emergency_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at, photo_source_url, internet_included, renovated_year, nearby, exposure, exposure_view, parking_fee_cents, appliances, flooring, max_occupants",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -1170,6 +1194,14 @@ export default async function PropertyDetailPage({
   const tenancyStatus =
     (chosenTenancy?.status as "upcoming" | "active" | "ended" | undefined) ??
     null;
+
+  // S808: an account with no tenancies anywhere in Vacantless ends the progress
+  // line at Rented (lib/unit-journey tracksTenancies).
+  const { count: orgTenancyCount } = await supabase
+    .from("tenancies")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", p.organization_id);
+  const tracksTenancies = tenancyList.length > 0 || (orgTenancyCount ?? 0) > 0;
 
   const eligibleCount = countEligible(leadRows, p.rent_cents);
   const showBlastCard = blastOfferable(
@@ -1595,44 +1627,17 @@ export default async function PropertyDetailPage({
   // apply the SAME merge server-side in get_public_listing / get_org_listing_feed.
   // `inheritedPolicy` records which fields came from the profile (vs the unit) so
   // the fill sheet labels them.
-  const orgProfile: PolicyProfile | null = org
-    ? {
-        lease_term: org.policy_lease_term,
-        smoking: org.policy_smoking,
-        ac_type: org.policy_ac_type,
-        on_site_management: org.policy_on_site_management,
-        heat_included: org.policy_heat_included,
-        hydro_included: org.policy_hydro_included,
-        water_included: org.policy_water_included,
-        pets_cats: org.policy_pets_cats,
-        pets_dogs: org.policy_pets_dogs,
-        pets_dog_size: org.policy_pets_dog_size,
-      }
-    : null;
+  // S808: one row mapper for every policy column (lib/policy-profile).
+  const orgProfile: PolicyProfile | null = org ? policyProfileFromRow(org as unknown as Record<string, unknown>) : null;
   let buildingProfile: PolicyProfile | null = null;
   if (org && p.building_key) {
     const { data: bp } = await supabase
       .from("org_building_policies")
-      .select(
-        "policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size",
-      )
+      .select(POLICY_PROFILE_COLUMNS)
       .eq("organization_id", org.id)
       .eq("building_key", p.building_key)
       .maybeSingle();
-    if (bp) {
-      buildingProfile = {
-        lease_term: bp.policy_lease_term,
-        smoking: bp.policy_smoking,
-        ac_type: bp.policy_ac_type,
-        on_site_management: bp.policy_on_site_management,
-        heat_included: bp.policy_heat_included,
-        hydro_included: bp.policy_hydro_included,
-        water_included: bp.policy_water_included,
-        pets_cats: bp.policy_pets_cats,
-        pets_dogs: bp.policy_pets_dogs,
-        pets_dog_size: bp.policy_pets_dog_size,
-      };
-    }
+    buildingProfile = policyProfileFromRow(bp as Record<string, unknown> | null);
   }
   // Building-over-org resolved into a single profile (forward-compat path).
   const policyProfile: PolicyProfile | null =
@@ -1667,6 +1672,17 @@ export default async function PropertyDetailPage({
         security_deposit_cents: p.security_deposit_cents,
         parking_type: p.parking_type,
         parking_count: p.parking_count,
+        // S808 (0303).
+        internet_included: p.internet_included,
+        amenities: p.amenities,
+        renovated_year: p.renovated_year,
+        nearby: p.nearby,
+        exposure: p.exposure,
+        exposure_view: p.exposure_view,
+        parking_fee_cents: p.parking_fee_cents,
+        appliances: p.appliances,
+        flooring: p.flooring,
+        max_occupants: p.max_occupants,
       },
       policyProfile,
     );
@@ -3006,6 +3022,7 @@ export default async function PropertyDetailPage({
         renters: sinceLive.length,
         viewings: sinceLive.filter((l) => l.status === "booked" || l.status === "showed" || l.status === "applied" || l.status === "leased").length,
         tenancy: tenancyStatus === "active" || tenancyStatus === "upcoming" ? tenancyStatus : null,
+        tracksTenancies,
       });
 
   const lifecycle = deriveRentalLifecycle(p.id, {
@@ -4356,6 +4373,131 @@ export default async function PropertyDetailPage({
                   defaultChecked={normalizeAmenities(p.amenities).includes(key)}
                 />
                 {AMENITY_LABELS[key]}
+              </label>
+            ))}
+          </div>
+          {/* S808 (0303): the vacancy-schedule facts. Blank parking fee, nearby and
+              appliances use the account or building's usual (Building standard policy). */}
+          <input type="hidden" name="listing_details_on_form" value="1" />
+          <p className="mb-2 mt-5 text-xs font-medium text-gray-600">For your ad</p>
+          <div className="flex flex-wrap gap-4">
+            <div className="w-32">
+              <label htmlFor="property-renovated-year" className="mb-1 block text-xs font-medium text-gray-600">
+                Year renovated
+              </label>
+              <input
+                id="property-renovated-year"
+                name="renovated_year"
+                type="number"
+                min="1900"
+                max={new Date().getFullYear()}
+                step="1"
+                defaultValue={p.renovated_year ?? ""}
+                placeholder="2024"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="w-44">
+              <label htmlFor="property-flooring" className="mb-1 block text-xs font-medium text-gray-600">
+                Flooring
+              </label>
+              <select
+                id="property-flooring"
+                name="flooring"
+                defaultValue={p.flooring ?? ""}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="">Not specified</option>
+                {FLOORING_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {FLOORING_LABELS[opt]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="w-32">
+              <label htmlFor="property-max-occupants" className="mb-1 block text-xs font-medium text-gray-600">
+                Most people
+              </label>
+              <input
+                id="property-max-occupants"
+                name="max_occupants"
+                type="number"
+                min="1"
+                max="20"
+                step="1"
+                defaultValue={p.max_occupants ?? ""}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="w-40">
+              <label htmlFor="property-parking-fee" className="mb-1 block text-xs font-medium text-gray-600">
+                Parking fee a month
+              </label>
+              <input
+                id="property-parking-fee"
+                name="parking_fee"
+                inputMode="decimal"
+                defaultValue={p.parking_fee_cents != null ? String(p.parking_fee_cents / 100) : ""}
+                placeholder={
+                  p.parking_fee_cents == null && effectiveFeatures.parking_fee_cents != null
+                    ? `Your usual: ${parkingFeeLabel(effectiveFeatures.parking_fee_cents)}`
+                    : "0 if included"
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-4">
+            <div className="w-full sm:w-80">
+              <label htmlFor="property-nearby" className="mb-1 block text-xs font-medium text-gray-600">
+                Nearby
+              </label>
+              <input
+                id="property-nearby"
+                name="nearby"
+                maxLength={NEARBY_MAX}
+                defaultValue={p.nearby ?? ""}
+                placeholder={
+                  !p.nearby && effectiveFeatures.nearby ? `Your usual: ${effectiveFeatures.nearby}` : "Close to Walkerville, bus on Ottawa St"
+                }
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="w-full sm:w-64">
+              <label htmlFor="property-exposure-view" className="mb-1 block text-xs font-medium text-gray-600">
+                View
+              </label>
+              <input
+                id="property-exposure-view"
+                name="exposure_view"
+                maxLength={EXPOSURE_VIEW_MAX}
+                defaultValue={p.exposure_view ?? ""}
+                placeholder="Park view"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <p className="mb-2 mt-4 text-xs font-medium text-gray-600">Windows face</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {EXPOSURE_OPTIONS.map((key) => (
+              <label key={key} className="flex items-center gap-1.5 text-sm text-gray-700">
+                <input type="checkbox" name="exposure" value={key} defaultChecked={(p.exposure ?? []).includes(key)} />
+                {EXPOSURE_LABELS[key]}
+              </label>
+            ))}
+          </div>
+          <p className="mb-2 mt-4 text-xs font-medium text-gray-600">
+            Appliances
+            {!(p.appliances && p.appliances.length) && effectiveFeatures.appliances && effectiveFeatures.appliances.length ? (
+              <span className="ml-2 font-normal text-gray-400">Your usual: {appliancesLabel(effectiveFeatures.appliances)}</span>
+            ) : null}
+          </p>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {APPLIANCE_KEYS.map((key) => (
+              <label key={key} className="flex items-center gap-1.5 text-sm text-gray-700">
+                <input type="checkbox" name="appliances" value={key} defaultChecked={(p.appliances ?? []).includes(key)} />
+                {APPLIANCE_LABELS[key]}
               </label>
             ))}
           </div>

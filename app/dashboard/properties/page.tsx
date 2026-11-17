@@ -411,11 +411,15 @@ export default async function PropertiesPage({
   // rental's renters and booked renters since it went live, and its tenancy.
   const journeyLeads = new Map<string, { status: string; created_at: string }[]>();
   const journeyTenancy = new Map<string, "active" | "upcoming">();
+  // S808: an account with no tenancies at all ends each line at Rented.
+  let tracksTenancies = true;
   if (!archivedView && rowIds.length > 0) {
-    const [{ data: jl }, { data: jt }] = await Promise.all([
+    const [{ data: jl }, { data: jt }, { count: orgTenancyCount }] = await Promise.all([
       supabase.from("leads").select("property_id, status, created_at").in("property_id", rowIds).limit(5000),
       supabase.from("tenancies").select("property_id, status").in("property_id", rowIds).in("status", ["active", "upcoming"]),
+      supabase.from("tenancies").select("id", { count: "exact", head: true }).eq("organization_id", org.id),
     ]);
+    tracksTenancies = (orgTenancyCount ?? 0) > 0;
     for (const r of (jl ?? []) as { property_id: string; status: string; created_at: string }[]) {
       const list = journeyLeads.get(r.property_id) ?? [];
       list.push(r);
@@ -519,6 +523,7 @@ export default async function PropertiesPage({
                 renters: ls.length,
                 viewings: ls.filter((l) => ["booked", "showed", "applied", "leased"].includes(l.status)).length,
                 tenancy: journeyTenancy.get(p.id) ?? null,
+                tracksTenancies,
               });
             })(),
         canHardDelete: hardDeletable(p.status, leadCount, tenancyCount, postCount),

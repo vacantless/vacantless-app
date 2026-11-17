@@ -28,7 +28,7 @@ ok("empty falls back", displayTimeZone(null) === DEFAULT_TIME_ZONE && displayTim
 // S748d added four lines to the reconcile page).
 const PLAIN_PARTS = /new Date\((?:[^()]*,[^()]*|`\$\{[^`]*\}T00:00:00`)\)\s*$/;
 const ALLOWED = new Set([
-  "app/r/[propertyId]/page.tsx:404", // S775: +1 line (group-viewing import); S799c: +1 (sqft_estimated)
+  "app/r/[propertyId]/page.tsx:462", // S775: +1 line (group-viewing import); S799c: +1 (sqft_estimated); S808: +58 (listing defaults merge)
   "app/dashboard/automations/page.tsx:121",
 ]);
 

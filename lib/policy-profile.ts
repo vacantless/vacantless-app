@@ -35,7 +35,12 @@ import {
   normalizeAcType,
   normalizeDogSize,
   derivePetFriendly,
+  normalizeLaundry,
+  normalizeAmenities,
+  isParkingType,
+  isHeatingType,
 } from "./property-features";
+import { normalizeAppliances, parseDollarsToCents, cleanText, NEARBY_MAX } from "./listing-details";
 
 /**
  * The org/building standard-policy defaults (organizations.policy_* /
@@ -58,7 +63,49 @@ export type PolicyProfile = {
   pets_cats?: boolean | null;
   pets_dogs?: boolean | null;
   pets_dog_size?: DogSize | string | null;
+  // Listing defaults (0303, S808). null = no default at this level.
+  parking_type?: string | null;
+  parking_count?: number | null;
+  parking_fee_cents?: number | null;
+  laundry?: string | null;
+  heating_type?: string | null;
+  internet_included?: boolean | null;
+  /** Added to every unit's own amenities (union), never replacing them. */
+  building_amenities?: ReadonlyArray<string> | null;
+  nearby?: string | null;
+  appliances?: ReadonlyArray<string> | null;
 };
+
+/** Every policy column on organizations / org_building_policies, for selects. */
+export const POLICY_PROFILE_COLUMNS =
+  "policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size, policy_parking_type, policy_parking_count, policy_parking_fee_cents, policy_laundry, policy_heating_type, policy_internet_included, policy_building_amenities, policy_nearby, policy_appliances";
+
+/** A policy_* row (org or building) as a PolicyProfile. Missing columns read as null. */
+export function policyProfileFromRow(row: Record<string, unknown> | null | undefined): PolicyProfile | null {
+  if (!row) return null;
+  const g = <T,>(k: string) => ((row[k] ?? null) as T | null);
+  return {
+    lease_term: g<string>("policy_lease_term"),
+    smoking: g<string>("policy_smoking"),
+    ac_type: g<string>("policy_ac_type"),
+    on_site_management: g<boolean>("policy_on_site_management"),
+    heat_included: g<boolean>("policy_heat_included"),
+    hydro_included: g<boolean>("policy_hydro_included"),
+    water_included: g<boolean>("policy_water_included"),
+    pets_cats: g<boolean>("policy_pets_cats"),
+    pets_dogs: g<boolean>("policy_pets_dogs"),
+    pets_dog_size: g<string>("policy_pets_dog_size"),
+    parking_type: g<string>("policy_parking_type"),
+    parking_count: g<number>("policy_parking_count"),
+    parking_fee_cents: g<number>("policy_parking_fee_cents"),
+    laundry: g<string>("policy_laundry"),
+    heating_type: g<string>("policy_heating_type"),
+    internet_included: g<boolean>("policy_internet_included"),
+    building_amenities: g<string[]>("policy_building_amenities"),
+    nearby: g<string>("policy_nearby"),
+    appliances: g<string[]>("policy_appliances"),
+  };
+}
 
 // The four ORIGINAL policy fields the profile owns (0048/0049). Used for the
 // provenance set (fill-sheet "from building profile" labels) + tests. The 0050
@@ -185,9 +232,36 @@ export function resolveEffectiveFeatures(
     ? base.pets_dog_size
     : (p.pets_dog_size ?? null);
 
+  // Listing defaults (0303, S808). Parking type and count come as a pair, only
+  // when the unit says nothing about parking. The fee follows when the unit's
+  // parking is the default's kind (or unset) and is not "none". Laundry,
+  // heating, internet, nearby and appliances fill an empty unit value. Building
+  // amenities are added to the unit's own.
+  const unitSaysParking =
+    isSet(base.parking_type) || isSet(base.parking_count) || (typeof base.parking === "string" && base.parking.trim() !== "");
+  const parkingType = unitSaysParking ? base.parking_type ?? null : p.parking_type ?? null;
+  const parkingCount = unitSaysParking ? base.parking_count ?? null : p.parking_count ?? null;
+  const feeFits = parkingType !== "none" && (!isSet(base.parking_type) || base.parking_type === p.parking_type);
+  const parkingFee = isSet(base.parking_fee_cents) ? base.parking_fee_cents : feeFits ? p.parking_fee_cents ?? null : null;
+  const nearbyOwn = typeof base.nearby === "string" && base.nearby.trim() !== "";
+  const appliancesOwn = Array.isArray(base.appliances) && base.appliances.length > 0;
+  const amenities =
+    (base.amenities && base.amenities.length) || (p.building_amenities && p.building_amenities.length)
+      ? normalizeAmenities([...(base.amenities ?? []), ...(p.building_amenities ?? [])])
+      : base.amenities ?? null;
+
   return {
     features: {
       ...base,
+      parking_type: parkingType,
+      parking_count: parkingCount,
+      parking_fee_cents: parkingFee,
+      laundry: isSet(base.laundry) ? base.laundry : p.laundry ?? null,
+      heating_type: isSet(base.heating_type) ? base.heating_type : p.heating_type ?? null,
+      internet_included: isSet(base.internet_included) ? base.internet_included : p.internet_included ?? null,
+      nearby: nearbyOwn ? base.nearby : p.nearby ?? null,
+      appliances: appliancesOwn ? base.appliances : p.appliances ?? null,
+      amenities,
       lease_term: policy.lease_term,
       smoking: policy.smoking,
       ac_type: policy.ac_type,
@@ -239,7 +313,83 @@ export function resolveBuildingProfile(
     pets_cats: pick("pets_cats"),
     pets_dogs: pick("pets_dogs"),
     pets_dog_size: pick("pets_dog_size"),
+    // Listing defaults (0303). A building's list wins over the org's when set.
+    parking_type: pick("parking_type"),
+    parking_count: pick("parking_count"),
+    parking_fee_cents: pick("parking_fee_cents"),
+    laundry: pick("laundry"),
+    heating_type: pick("heating_type"),
+    internet_included: pick("internet_included"),
+    building_amenities: b.building_amenities && b.building_amenities.length ? b.building_amenities : o.building_amenities ?? null,
+    nearby: pick("nearby"),
+    appliances: b.appliances && b.appliances.length ? b.appliances : o.appliances ?? null,
   };
+}
+
+// --- Listing defaults on the settings forms (0303) ---------------------------
+
+export type ListingDefaultsInput = {
+  parking_type?: string;
+  parking_count?: string;
+  parking_fee?: string;
+  laundry?: string;
+  heating_type?: string;
+  internet_included?: string;
+  building_amenities?: string[];
+  nearby?: string;
+  appliances?: string[];
+};
+
+export type ListingDefaultsValues = {
+  policy_parking_type: string | null;
+  policy_parking_count: number | null;
+  policy_parking_fee_cents: number | null;
+  policy_laundry: string | null;
+  policy_heating_type: string | null;
+  policy_internet_included: boolean | null;
+  policy_building_amenities: string[] | null;
+  policy_nearby: string | null;
+  policy_appliances: string[] | null;
+};
+
+/** Read the listing-default fields off a standard-policy form. */
+export function readListingDefaultsForm(fd: { get(k: string): unknown; getAll(k: string): unknown[] }): ListingDefaultsInput {
+  const str = (k: string) => String(fd.get(k) ?? "");
+  return {
+    parking_type: str("policy_parking_type"),
+    parking_count: str("policy_parking_count"),
+    parking_fee: str("policy_parking_fee"),
+    laundry: str("policy_laundry"),
+    heating_type: str("policy_heating_type"),
+    internet_included: str("policy_internet_included"),
+    building_amenities: fd.getAll("policy_building_amenities").map(String),
+    nearby: str("policy_nearby"),
+    appliances: fd.getAll("policy_appliances").map(String),
+  };
+}
+
+/** Parse the listing defaults; blank means no default (org) or "your usual" (building). */
+export function parseListingDefaults(input: ListingDefaultsInput): ListingDefaultsValues {
+  const pt = (input.parking_type ?? "").trim();
+  const ht = (input.heating_type ?? "").trim();
+  const count = Number((input.parking_count ?? "").trim());
+  const amen = normalizeAmenities(input.building_amenities ?? []);
+  const appl = normalizeAppliances(input.appliances ?? []);
+  return {
+    policy_parking_type: isParkingType(pt) ? pt : null,
+    policy_parking_count: (input.parking_count ?? "").trim() !== "" && Number.isInteger(count) && count >= 0 && count <= 20 ? count : null,
+    policy_parking_fee_cents: parseDollarsToCents(input.parking_fee),
+    policy_laundry: normalizeLaundry(input.laundry ?? ""),
+    policy_heating_type: isHeatingType(ht) ? ht : null,
+    policy_internet_included: triStateBool(input.internet_included ?? ""),
+    policy_building_amenities: amen.length ? amen : null,
+    policy_nearby: cleanText(input.nearby, NEARBY_MAX),
+    policy_appliances: appl.length ? appl : null,
+  };
+}
+
+export function listingDefaultsAllInherit(v: ListingDefaultsValues): boolean {
+  return Object.values(v).every((x) => x === null);
 }
 
 // --- Settings save validation ----------------------------------------------
@@ -300,7 +450,7 @@ export type PolicyProfileValues = {
   policy_smoking: Smoking | null;
   policy_ac_type: AcType | null;
   policy_on_site_management: boolean | null;
-} & FeaturePolicyValues;
+} & FeaturePolicyValues & ListingDefaultsValues;
 
 /**
  * Validate + normalize the Building-standard-policy settings form. lease_term is
@@ -315,12 +465,13 @@ export function validatePolicyProfileSettings(
     smoking: string;
     ac_type: string;
     on_site_management: string;
-  } & FeaturePolicyInput,
+  } & FeaturePolicyInput & ListingDefaultsInput,
 ): { ok: true; values: PolicyProfileValues } {
   const osm = input.on_site_management.trim();
   return {
     ok: true,
     values: {
+      ...parseListingDefaults(input),
       policy_lease_term: normalizeLeaseTerm(input.lease_term) ?? "1_year",
       policy_smoking: normalizeSmoking(input.smoking),
       policy_ac_type: normalizeAcType(input.ac_type),
@@ -342,7 +493,7 @@ export type BuildingPolicyValues = {
   policy_smoking: Smoking | null;
   policy_ac_type: AcType | null;
   policy_on_site_management: boolean | null;
-} & FeaturePolicyValues;
+} & FeaturePolicyValues & ListingDefaultsValues;
 
 /**
  * Validate + normalize a per-building override form (0049, slice 2). Every field
@@ -357,11 +508,13 @@ export function validateBuildingPolicySettings(
     smoking: string;
     ac_type: string;
     on_site_management: string;
-  } & FeaturePolicyInput,
+  } & FeaturePolicyInput & ListingDefaultsInput,
 ): { ok: true; values: BuildingPolicyValues; allInherit: boolean } {
   const osm = input.on_site_management.trim();
   const features = parseFeaturePolicy(input);
+  const listing = parseListingDefaults(input);
   const values: BuildingPolicyValues = {
+    ...listing,
     policy_lease_term: normalizeLeaseTerm(input.lease_term),
     policy_smoking: normalizeSmoking(input.smoking),
     policy_ac_type: normalizeAcType(input.ac_type),
@@ -374,7 +527,8 @@ export function validateBuildingPolicySettings(
     values.policy_smoking === null &&
     values.policy_ac_type === null &&
     values.policy_on_site_management === null &&
-    featurePolicyAllInherit(features);
+    featurePolicyAllInherit(features) &&
+    listingDefaultsAllInherit(listing);
   return { ok: true, values, allInherit };
 }
 

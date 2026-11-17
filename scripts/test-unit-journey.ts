@@ -1,7 +1,7 @@
 import { unitJourney, type JourneyInput } from "../lib/unit-journey";
 let pass = 0, fail = 0;
 function ok(n: string, c: boolean) { if (c) pass++; else { fail++; console.log("FAIL", n); } }
-const base: JourneyInput = { status: "draft", crewStage: null, photoCount: 0, hasBasics: false, liveAdCount: 0, renters: 0, viewings: 0, tenancy: null };
+const base: JourneyInput = { status: "draft", crewStage: null, photoCount: 0, hasBasics: false, liveAdCount: 0, renters: 0, viewings: 0, tenancy: null, tracksTenancies: true };
 const states = (j: ReturnType<typeof unitJourney>) => j.steps.map((s) => s.state[0]).join("");
 
 const reno = unitJourney({ ...base, crewStage: "under_construction" });
@@ -31,5 +31,16 @@ ok("gap: crew rented, no tenancy", unitJourney({ ...base, status: "available", c
 ok("no gap when facts agree", occupied.gap === null);
 ok("steps after current are todo", draft.steps.slice(3).every((s) => s.state === "todo"));
 ok("no em dash", !JSON.stringify([reno, draft, pageOnly, leased]).includes("—"));
+// S808: accounts with no tenancies in Vacantless end the line at Rented.
+const noTrack = { ...base, tracksTenancies: false };
+const nLeased = unitJourney({ ...noTrack, status: "leased" });
+ok("no tenancies: leased is all done", nLeased.current === null && nLeased.next === null && nLeased.steps.length === 6 && nLeased.steps.every((s) => s.state === "done"));
+ok("no tenancies: no Moved in step", !nLeased.steps.some((s) => s.key === "moved_in"));
+ok("no tenancies: never says add the tenancy", !JSON.stringify(nLeased).includes("tenancy"));
+const nBooking = unitJourney({ ...noTrack, status: "available", photoCount: 8, hasBasics: true, liveAdCount: 3, renters: 5, viewings: 2 });
+ok("no tenancies: viewings -> rented current", nBooking.current === "rented");
+const nCrew = unitJourney({ ...noTrack, status: "available", crewStage: "rented" });
+ok("no tenancies: crew rented gap does not ask for a tenancy", nCrew.gap !== null && !nCrew.gap.includes("tenancy"));
+ok("no tenancies: crew moved_in on leased unit is no gap", unitJourney({ ...noTrack, status: "leased", crewStage: "moved_in" }).gap === null);
 console.log(`test-unit-journey: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

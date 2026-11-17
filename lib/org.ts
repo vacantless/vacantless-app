@@ -78,13 +78,23 @@ export type Org = {
   policy_pets_cats: boolean | null;
   policy_pets_dogs: boolean | null;
   policy_pets_dog_size: string | null;
+  // Listing defaults (0303, S808).
+  policy_parking_type: string | null;
+  policy_parking_count: number | null;
+  policy_parking_fee_cents: number | null;
+  policy_laundry: string | null;
+  policy_heating_type: string | null;
+  policy_internet_included: boolean | null;
+  policy_building_amenities: string[] | null;
+  policy_nearby: string | null;
+  policy_appliances: string[] | null;
   // Slice 0 Block C: one-time per-org acknowledgment that gates in-app trade
   // dispatch go-live. Null until an operator accepts on /dashboard/maintenance.
   dispatch_terms_accepted_at: string | null;
 };
 
 export const ORG_COLUMNS =
-  "id, name, slug, brand_color, brand_color_secondary, logo_url, mail_alias, reply_to_email, facebook_page_skipped_at, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, subscription_cancel_at, pilot_started_at, pilot_deposit_status, pilot_deposit_payment_intent_id, pilot_deposit_amount_cents, pilot_deposit_paid_at, booking_timezone, booking_requires_confirmation, feedback_enabled, feedback_delay_hours, nurture_enabled, sms_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, auto_assign_agents, showing_confirm_mode, auto_release_unconfirmed_enabled, auto_release_unconfirmed_hours, showing_autoclose_enabled, showing_autoclose_after_hours, outcome_nudge_max, screening_enabled, screening_income_multiple, screening_max_movein_days, screening_flag_pets, screening_gate_booking, screening_reason_income, screening_reason_movein, screening_reason_pets, screening_ask_income, screening_ask_movein, screening_ask_pets, screening_ask_occupants, inquiry_require_phone, public_contact_phone, public_contact_email, landlord_campaign_email, browse_listed, compliance_calendar_enabled, showing_arrival_phone, policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size, dispatch_terms_accepted_at";
+  "id, name, slug, brand_color, brand_color_secondary, logo_url, mail_alias, reply_to_email, facebook_page_skipped_at, plan, stripe_customer_id, stripe_subscription_id, subscription_status, current_period_end, subscription_cancel_at, pilot_started_at, pilot_deposit_status, pilot_deposit_payment_intent_id, pilot_deposit_amount_cents, pilot_deposit_paid_at, booking_timezone, booking_requires_confirmation, feedback_enabled, feedback_delay_hours, nurture_enabled, sms_enabled, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, auto_assign_agents, showing_confirm_mode, auto_release_unconfirmed_enabled, auto_release_unconfirmed_hours, showing_autoclose_enabled, showing_autoclose_after_hours, outcome_nudge_max, screening_enabled, screening_income_multiple, screening_max_movein_days, screening_flag_pets, screening_gate_booking, screening_reason_income, screening_reason_movein, screening_reason_pets, screening_ask_income, screening_ask_movein, screening_ask_pets, screening_ask_occupants, inquiry_require_phone, public_contact_phone, public_contact_email, landlord_campaign_email, browse_listed, compliance_calendar_enabled, showing_arrival_phone, policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size, policy_parking_type, policy_parking_count, policy_parking_fee_cents, policy_laundry, policy_heating_type, policy_internet_included, policy_building_amenities, policy_nearby, policy_appliances, dispatch_terms_accepted_at";
 
 // The active org for the signed-in user. A user can belong to several orgs
 // (multi-org agents); the ACTIVE one is resolved from the `selected_org` cookie,

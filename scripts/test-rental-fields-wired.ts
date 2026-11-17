@@ -119,7 +119,7 @@ ok("5 notify: selects move_in_by", /max_rent_cents, move_in_by,/.test(wl));
 ok("5 notify: vacancy has available_date", wl.includes("rent_cents, address, available_date") && wl.includes("available_date: (prop.available_date"));
 
 const pub = read("app/r/[propertyId]/page.tsx");
-ok("2 public: narrow column list", pub.includes('"heating_type, security_deposit_cents, income_requirement, parking_type, parking_count, amenities, video_url"'));
+ok("2 public: narrow column list", pub.includes('"heating_type, security_deposit_cents, income_requirement, parking_type, parking_count, amenities, video_url, internet_included, renovated_year, nearby, exposure, exposure_view, parking_fee_cents, appliances, flooring, max_occupants, building_key"'));
 ok("2 public: extras only when available", /if \(isAvailable\) \{\s*const admin = createAdminClient\(\);/.test(pub));
 ok("2 public: good to know block", pub.includes("Good to know") && pub.includes("buildGoodToKnow("));
 ok("2 public: amenities merged", pub.includes("amenities: extras?.amenities"));

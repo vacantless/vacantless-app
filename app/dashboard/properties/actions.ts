@@ -17,6 +17,17 @@ import { setLiveSiteNote, type SetLiveSiteNote } from "@/lib/set-live-cost-line"
 import { EMPTY_COST_CAP } from "@/lib/distribution-channels";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { revalidatePath } from "next/cache";
+import {
+  normalizeExposure,
+  normalizeAppliances,
+  normalizeFlooring,
+  parseRenovatedYear,
+  parseMaxOccupants,
+  parseDollarsToCents,
+  cleanText,
+  NEARBY_MAX,
+  EXPOSURE_VIEW_MAX,
+} from "@/lib/listing-details";
 import { SISTER_FILL_FIELDS, sameBuilding, sisterFillPatch, type UnitFacts } from "@/lib/sister-unit-fill";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -1231,6 +1242,23 @@ export async function updateProperty(formData: FormData) {
         ? (() => {
             const a = normalizeAmenities(formData.getAll("amenities"));
             return { amenities: a.length > 0 ? a : null };
+          })()
+        : {}),
+      // S808 (0303): the vacancy-schedule facts, only when the form carried them.
+      ...(formData.get("listing_details_on_form") === "1"
+        ? (() => {
+            const exposure = normalizeExposure(formData.getAll("exposure"));
+            const appliances = normalizeAppliances(formData.getAll("appliances"));
+            return {
+              renovated_year: parseRenovatedYear(formData.get("renovated_year")),
+              flooring: normalizeFlooring(formData.get("flooring")),
+              max_occupants: parseMaxOccupants(formData.get("max_occupants")),
+              parking_fee_cents: parseDollarsToCents(formData.get("parking_fee")),
+              nearby: cleanText(formData.get("nearby"), NEARBY_MAX),
+              exposure_view: cleanText(formData.get("exposure_view"), EXPOSURE_VIEW_MAX),
+              exposure: exposure.length > 0 ? exposure : null,
+              appliances: appliances.length > 0 ? appliances : null,
+            };
           })()
         : {}),
       // Standard-policy per-unit overrides (0048); null = inherit org profile.

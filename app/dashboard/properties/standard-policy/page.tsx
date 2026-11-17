@@ -14,7 +14,18 @@ import {
   acTypeLabel,
   DOG_SIZE_OPTIONS,
   dogSizeLabel,
+  LAUNDRY_OPTIONS,
+  laundryLabel,
+  HEATING_TYPE_OPTIONS,
+  HEATING_TYPE_LABELS,
+  heatingTypeLabel,
+  PARKING_TYPE_OPTIONS,
+  PARKING_TYPE_LABELS,
+  AMENITY_KEYS,
+  AMENITY_LABELS,
 } from "@/lib/property-features";
+import { APPLIANCE_KEYS, APPLIANCE_LABELS, NEARBY_MAX, appliancesLabel, parkingFeeLabel } from "@/lib/listing-details";
+import { POLICY_PROFILE_COLUMNS } from "@/lib/policy-profile";
 import { splitAddressUnit } from "@/lib/address-unit";
 import { BrandBanner, IconTile } from "@/components/ui";
 import { Icons } from "@/components/icons";
@@ -194,12 +205,172 @@ function FeaturePolicyFields({
   );
 }
 
+// S808 (0303): listing defaults. Parking, laundry, heating, internet, nearby,
+// appliances and building amenities, set once and used by every unit that
+// leaves them blank (building amenities are added to the unit's own).
+type ListingDefaults = {
+  policy_parking_type: string | null;
+  policy_parking_count: number | null;
+  policy_parking_fee_cents: number | null;
+  policy_laundry: string | null;
+  policy_heating_type: string | null;
+  policy_internet_included: boolean | null;
+  policy_building_amenities: string[] | null;
+  policy_nearby: string | null;
+  policy_appliances: string[] | null;
+};
+
+const EMPTY_LISTING_DEFAULTS: ListingDefaults = {
+  policy_parking_type: null,
+  policy_parking_count: null,
+  policy_parking_fee_cents: null,
+  policy_laundry: null,
+  policy_heating_type: null,
+  policy_internet_included: null,
+  policy_building_amenities: null,
+  policy_nearby: null,
+  policy_appliances: null,
+};
+
+function ListingDefaultsFields({ values, base }: { values: ListingDefaults; base: ListingDefaults | null }) {
+  const isBuilding = base !== null;
+  const usual = (word: string | null | undefined) => (isBuilding ? `Your usual: ${word ?? "not set"}` : "Not set");
+  const fee = values.policy_parking_fee_cents;
+  return (
+    <div className="mt-5 border-t border-gray-100 pt-5">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">For your ad</p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-gray-700">Parking</span>
+          <select name="policy_parking_type" defaultValue={values.policy_parking_type ?? ""} className={SELECT_CLASS}>
+            <option value="">
+              {usual(base?.policy_parking_type ? PARKING_TYPE_LABELS[base.policy_parking_type as keyof typeof PARKING_TYPE_LABELS] : null)}
+            </option>
+            {PARKING_TYPE_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {PARKING_TYPE_LABELS[opt]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-gray-700">Spaces per unit</span>
+          <input
+            name="policy_parking_count"
+            type="number"
+            min="0"
+            max="20"
+            defaultValue={values.policy_parking_count ?? ""}
+            placeholder={isBuilding && base?.policy_parking_count != null ? `Your usual: ${base.policy_parking_count}` : ""}
+            className={SELECT_CLASS}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-gray-700">Parking fee a month</span>
+          <input
+            name="policy_parking_fee"
+            inputMode="decimal"
+            defaultValue={fee != null ? String(fee / 100) : ""}
+            placeholder={
+              isBuilding && base?.policy_parking_fee_cents != null
+                ? `Your usual: ${parkingFeeLabel(base.policy_parking_fee_cents)}`
+                : "0 if included"
+            }
+            className={SELECT_CLASS}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-gray-700">Laundry</span>
+          <select name="policy_laundry" defaultValue={values.policy_laundry ?? ""} className={SELECT_CLASS}>
+            <option value="">{usual(laundryLabel(base?.policy_laundry))}</option>
+            {LAUNDRY_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {laundryLabel(opt)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-gray-700">Heating</span>
+          <select name="policy_heating_type" defaultValue={values.policy_heating_type ?? ""} className={SELECT_CLASS}>
+            <option value="">{usual(heatingTypeLabel(base?.policy_heating_type))}</option>
+            {HEATING_TYPE_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {HEATING_TYPE_LABELS[opt]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-gray-700">Internet</span>
+          <FeatureTriSelect
+            name="policy_internet_included"
+            value={values.policy_internet_included}
+            base={isBuilding ? base!.policy_internet_included : undefined}
+            trueLabel="Included"
+            falseLabel="Tenant pays"
+            emptyWord={utilInheritWord}
+          />
+        </label>
+      </div>
+      <label className="mt-4 block">
+        <span className="mb-1 block text-sm font-medium text-gray-700">Nearby</span>
+        <input
+          name="policy_nearby"
+          maxLength={NEARBY_MAX}
+          defaultValue={values.policy_nearby ?? ""}
+          placeholder={isBuilding && base?.policy_nearby ? `Your usual: ${base.policy_nearby}` : "Close to Walkerville, bus on Ottawa St"}
+          className={SELECT_CLASS}
+        />
+      </label>
+      <p className="mb-2 mt-4 text-sm font-medium text-gray-700">
+        Appliances in every unit
+        {isBuilding && base?.policy_appliances?.length ? (
+          <span className="ml-2 font-normal text-gray-400">Your usual: {appliancesLabel(base.policy_appliances)}</span>
+        ) : null}
+      </p>
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
+        {APPLIANCE_KEYS.map((key) => (
+          <label key={key} className="flex items-center gap-1.5 text-sm text-gray-700">
+            <input type="checkbox" name="policy_appliances" value={key} defaultChecked={(values.policy_appliances ?? []).includes(key)} />
+            {APPLIANCE_LABELS[key]}
+          </label>
+        ))}
+      </div>
+      <p className="mb-2 mt-4 text-sm font-medium text-gray-700">
+        Building amenities
+        {isBuilding && base?.policy_building_amenities?.length ? (
+          <span className="ml-1 font-normal text-gray-400">
+            Your usual: {base.policy_building_amenities.map((k) => AMENITY_LABELS[k as keyof typeof AMENITY_LABELS] ?? k).join(", ")}
+          </span>
+        ) : null}
+      </p>
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
+        {AMENITY_KEYS.map((key) => (
+          <label key={key} className="flex items-center gap-1.5 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              name="policy_building_amenities"
+              value={key}
+              defaultChecked={(values.policy_building_amenities ?? []).includes(key)}
+            />
+            {AMENITY_LABELS[key]}
+          </label>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-gray-400">
+        A unit that has its own value keeps it. Building amenities are added to each unit&apos;s own.
+      </p>
+    </div>
+  );
+}
+
 type BuildingOverride = {
   policy_lease_term: string | null;
   policy_smoking: string | null;
   policy_ac_type: string | null;
   policy_on_site_management: boolean | null;
-} & FeaturePolicy;
+} & FeaturePolicy & ListingDefaults;
 
 type BuildingRow = {
   key: string;
@@ -232,7 +403,7 @@ export default async function StandardPolicyPage({
     supabase
       .from("org_building_policies")
       .select(
-        "building_key, policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size",
+        `building_key, ${POLICY_PROFILE_COLUMNS}`,
       )
       .eq("organization_id", org.id),
   ]);
@@ -250,6 +421,15 @@ export default async function StandardPolicyPage({
       policy_pets_cats: r.policy_pets_cats,
       policy_pets_dogs: r.policy_pets_dogs,
       policy_pets_dog_size: r.policy_pets_dog_size,
+      policy_parking_type: r.policy_parking_type,
+      policy_parking_count: r.policy_parking_count,
+      policy_parking_fee_cents: r.policy_parking_fee_cents,
+      policy_laundry: r.policy_laundry,
+      policy_heating_type: r.policy_heating_type,
+      policy_internet_included: r.policy_internet_included,
+      policy_building_amenities: r.policy_building_amenities,
+      policy_nearby: r.policy_nearby,
+      policy_appliances: r.policy_appliances,
     });
   }
 
@@ -263,6 +443,17 @@ export default async function StandardPolicyPage({
     policy_pets_cats: org.policy_pets_cats,
     policy_pets_dogs: org.policy_pets_dogs,
     policy_pets_dog_size: org.policy_pets_dog_size,
+  };
+  const orgListingDefaults: ListingDefaults = {
+    policy_parking_type: org.policy_parking_type,
+    policy_parking_count: org.policy_parking_count,
+    policy_parking_fee_cents: org.policy_parking_fee_cents,
+    policy_laundry: org.policy_laundry,
+    policy_heating_type: org.policy_heating_type,
+    policy_internet_included: org.policy_internet_included,
+    policy_building_amenities: org.policy_building_amenities,
+    policy_nearby: org.policy_nearby,
+    policy_appliances: org.policy_appliances,
   };
 
   // Group units into buildings; keep the first address seen as the display
@@ -405,6 +596,7 @@ export default async function StandardPolicyPage({
           </div>
 
           <FeaturePolicyFields values={orgFeatureDefaults} base={null} />
+          <ListingDefaultsFields values={orgListingDefaults} base={null} />
 
           <button className="mt-5 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
             Save organization defaults
@@ -559,6 +751,7 @@ export default async function StandardPolicyPage({
                         }
                         base={orgFeatureDefaults}
                       />
+                      <ListingDefaultsFields values={ov ?? EMPTY_LISTING_DEFAULTS} base={orgListingDefaults} />
                       <button className="mt-4 rounded-lg bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm">
                         Save this building
                       </button>

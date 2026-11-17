@@ -22,6 +22,12 @@ import {
   safeHttpUrl,
   utilitiesSummary,
 } from "@/lib/property-features";
+import {
+  POLICY_PROFILE_COLUMNS,
+  policyProfileFromRow,
+  resolveBuildingProfile,
+  resolveEffectiveFeatures,
+} from "@/lib/policy-profile";
 import { virtualTourFor } from "@/lib/virtual-tour";
 import {
   buildListingJsonLd,
@@ -108,7 +114,7 @@ type Listing = {
 
 // S712: renter-facing columns get_public_listing does not return.
 const LISTING_EXTRAS_COLUMNS =
-  "heating_type, security_deposit_cents, income_requirement, parking_type, parking_count, amenities, video_url";
+  "heating_type, security_deposit_cents, income_requirement, parking_type, parking_count, amenities, video_url, internet_included, renovated_year, nearby, exposure, exposure_view, parking_fee_cents, appliances, flooring, max_occupants, building_key";
 type ListingExtras = {
   heating_type: string | null;
   security_deposit_cents: number | null;
@@ -117,6 +123,17 @@ type ListingExtras = {
   parking_count: number | null;
   amenities: string[] | null;
   video_url: string | null;
+  // S808 (0303).
+  internet_included: boolean | null;
+  renovated_year: number | null;
+  nearby: string | null;
+  exposure: string[] | null;
+  exposure_view: string | null;
+  parking_fee_cents: number | null;
+  appliances: string[] | null;
+  flooring: string | null;
+  max_occupants: number | null;
+  building_key: string | null;
 };
 
 type OpenSibling = {
@@ -330,6 +347,7 @@ export default async function PublicListingPage({
   // structured parking, amenities, video). Read only for a live listing, by id,
   // selecting just these renter-facing columns. Service role, so keep it narrow.
   let extras: ListingExtras | null = null;
+  let mergedLaundry: string | null = null;
   // S728: the form says "We'll text you" only when this account's renters
   // really get texts (texting live, turned on, in the plan, a number to send
   // from). Free accounts and accounts still waiting for a number say nothing.
@@ -346,18 +364,58 @@ export default async function PublicListingPage({
       extras = (extraRow as ListingExtras | null) ?? null;
       const orgId = (extraRow as { organization_id?: string | null } | null)?.organization_id ?? null;
       textsRenters = await orgTextsRenters(orgId);
+      // S808 (0303): the account and building listing defaults fill what this
+      // unit leaves blank, the same merge as the dashboard (lib/policy-profile).
+      if (extras && orgId) {
+        const [{ data: orgRow }, { data: bRow }] = await Promise.all([
+          admin.from("organizations").select(POLICY_PROFILE_COLUMNS).eq("id", orgId).maybeSingle(),
+          extras.building_key
+            ? admin
+                .from("org_building_policies")
+                .select(POLICY_PROFILE_COLUMNS)
+                .eq("organization_id", orgId)
+                .eq("building_key", extras.building_key)
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+        const merged = resolveEffectiveFeatures(
+          { ...extras, parking: l.parking, laundry: l.laundry },
+          resolveBuildingProfile(
+            policyProfileFromRow(bRow as Record<string, unknown> | null),
+            policyProfileFromRow(orgRow as Record<string, unknown> | null),
+          ),
+        ).features;
+        extras = {
+          ...extras,
+          parking_type: (merged.parking_type as string | null) ?? null,
+          parking_count: merged.parking_count ?? null,
+          parking_fee_cents: merged.parking_fee_cents ?? null,
+          heating_type: (merged.heating_type as string | null) ?? null,
+          internet_included: merged.internet_included ?? null,
+          amenities: merged.amenities ? [...merged.amenities] : null,
+          nearby: merged.nearby ?? null,
+          appliances: merged.appliances ? [...merged.appliances] : null,
+        };
+        mergedLaundry = (merged.laundry as string | null) ?? null;
+      }
     }
   }
+  const lx = { ...l, laundry: mergedLaundry ?? l.laundry, internet_included: extras?.internet_included ?? null };
   const goodToKnow = buildGoodToKnow({ ...(extras ?? {}), parking: l.parking });
   // Parking moves to "Good to know" when we have it, so it is not said twice.
   const hasParkingFact = goodToKnow.some((fact) => fact.label === "Parking");
   const specs = buildSpecLine(
-    hasParkingFact ? { ...l, parking: null, parking_type: null, parking_count: null } : l,
+    hasParkingFact ? { ...lx, parking: null, parking_type: null, parking_count: null } : lx,
   );
-  const amenities = buildAmenityChips({ ...l, amenities: extras?.amenities ?? null });
+  const amenities = buildAmenityChips({
+    ...lx,
+    amenities: extras?.amenities ?? null,
+    flooring: extras?.flooring ?? null,
+    exposure: extras?.exposure ?? null,
+  });
   const videoHref = safeHttpUrl(extras?.video_url);
   const showVideoLink = !!videoHref && videoHref !== safeHttpUrl(l.virtual_tour_url);
-  const utilities = utilitiesSummary(l);
+  const utilities = utilitiesSummary(lx);
   const availability = formatAvailability(l.available_date);
   // Photos come pre-ordered from the RPC (cover first, then sort order).
   const photos = Array.isArray(l.photos) ? l.photos : [];

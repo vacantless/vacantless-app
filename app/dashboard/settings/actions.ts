@@ -22,6 +22,7 @@ import {
 import {
   validatePolicyProfileSettings,
   validateBuildingPolicySettings,
+  readListingDefaultsForm,
 } from "@/lib/policy-profile";
 import { sendTestEmail, sendNotificationEmail } from "@/lib/email";
 import {
@@ -536,6 +537,8 @@ export async function updatePolicyProfile(formData: FormData) {
     pets_cats: String(formData.get("policy_pets_cats") ?? ""),
     pets_dogs: String(formData.get("policy_pets_dogs") ?? ""),
     pets_dog_size: String(formData.get("policy_pets_dog_size") ?? ""),
+    // Listing defaults (0303, S808).
+    ...readListingDefaultsForm(formData),
   });
 
   const supabase = createClient();
@@ -577,6 +580,8 @@ export async function updateBuildingPolicy(formData: FormData) {
     pets_cats: String(formData.get("policy_pets_cats") ?? ""),
     pets_dogs: String(formData.get("policy_pets_dogs") ?? ""),
     pets_dog_size: String(formData.get("policy_pets_dog_size") ?? ""),
+    // Listing defaults (0303, S808).
+    ...readListingDefaultsForm(formData),
   });
 
   const supabase = createClient();

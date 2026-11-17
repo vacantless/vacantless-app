@@ -11,6 +11,9 @@
 // - When a crew tap and the app's facts disagree, the fact wins and `gap` says
 //   what is missing (crew "Ads are up" with no ad link saved, crew "Rented" with
 //   no tenancy).
+// - S808: an account with no tenancies in Vacantless at all (Agile keeps them in
+//   Buildium) ends the line at Rented: no "Moved in" step, no "Add the tenancy"
+//   nudge. Any tenancy on the account turns the full line back on.
 // PURE. Tests: scripts/test-unit-journey.ts.
 // ============================================================================
 
@@ -44,6 +47,8 @@ export type JourneyInput = {
   viewings: number;
   /** Latest tenancy on the unit, if any. */
   tenancy: "upcoming" | "active" | null;
+  /** The account keeps tenancies in Vacantless (it has at least one). */
+  tracksTenancies: boolean;
 };
 
 export type Journey = {
@@ -74,17 +79,18 @@ export function unitJourney(i: JourneyInput): Journey {
     moved_in: movedIn,
   };
 
+  const order: readonly JourneyStep[] = i.tracksTenancies ? JOURNEY_STEPS : JOURNEY_STEPS.filter((k) => k !== "moved_in");
   let current: JourneyStep | null = null;
-  for (const k of JOURNEY_STEPS) {
+  for (const k of order) {
     if (!done[k]) {
       current = k;
       break;
     }
   }
-  const steps = JOURNEY_STEPS.map((key) => ({
+  const steps = order.map((key) => ({
     key,
     label: JOURNEY_LABEL[key],
-    state: (done[key] && (current == null || JOURNEY_STEPS.indexOf(key) < JOURNEY_STEPS.indexOf(current))
+    state: (done[key] && (current == null || order.indexOf(key) < order.indexOf(current))
       ? "done"
       : key === current
         ? "current"
@@ -93,8 +99,9 @@ export function unitJourney(i: JourneyInput): Journey {
 
   let gap: string | null = null;
   if (i.crewStage === "live" && i.liveAdCount === 0) gap = "Your crew marked ads as up, but no ad link is saved here yet.";
-  else if (i.crewStage != null && CREW_RENTED.has(i.crewStage) && !rented) gap = "Your crew marked it rented, but there is no tenancy yet.";
-  else if (i.crewStage === "moved_in" && i.tenancy !== "active") gap = "Your crew marked it moved in, but there is no active tenancy yet.";
+  else if (i.crewStage != null && CREW_RENTED.has(i.crewStage) && !rented)
+    gap = i.tracksTenancies ? "Your crew marked it rented, but there is no tenancy yet." : "Your crew marked it rented, but it is not marked rented here yet.";
+  else if (i.tracksTenancies && i.crewStage === "moved_in" && i.tenancy !== "active") gap = "Your crew marked it moved in, but there is no active tenancy yet.";
 
   return { steps, current, next: nextLine(current, i), gap };
 }

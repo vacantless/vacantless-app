@@ -8,6 +8,7 @@
 // the "build copy" and "track where posted" flows speak the same vocabulary.
 // ============================================================================
 
+import { appliancesLabel, maxOccupantsLabel, parkingFeeLabel, renovatedLabel } from "./listing-details";
 import {
   type UnitFeatures,
   buildSpecLine,
@@ -432,6 +433,17 @@ export function listingFactsLine(features: UnitFeatures): string | null {
   if (heating) parts.push(`Heating: ${heating}.`);
   const deposit = formatDollarsFromCents(features.security_deposit_cents);
   if (deposit) parts.push(`Deposit: ${deposit}.`);
+  // S808: the vacancy-schedule facts, each only when set.
+  const reno = renovatedLabel(features.renovated_year);
+  if (reno) parts.push(`${reno}.`);
+  const appliances = appliancesLabel(features.appliances);
+  if (appliances) parts.push(`Appliances: ${appliances}.`);
+  const fee = features.parking_type === "none" ? null : parkingFeeLabel(features.parking_fee_cents);
+  if (fee) parts.push(fee === "Included" ? "Parking included." : `Parking: ${fee}.`);
+  const nearby = typeof features.nearby === "string" ? features.nearby.trim() : "";
+  if (nearby) parts.push(`Nearby: ${nearby.replace(/[.\s]+$/, "")}.`);
+  const max = maxOccupantsLabel(features.max_occupants);
+  if (max) parts.push(`${max}.`);
   return parts.length ? parts.join(" ") : null;
 }
 

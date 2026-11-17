@@ -25,6 +25,8 @@ import {
 import {
   resolveBuildingProfile,
   resolveEffectiveFeatures,
+  policyProfileFromRow,
+  POLICY_PROFILE_COLUMNS,
   type PolicyProfile,
 } from "./policy-profile";
 import { publishChannelChoices } from "./distribution-publish";
@@ -177,42 +179,16 @@ export async function loadQuestionSheet(
     .eq("property_id", propertyId);
 
   // Policy inheritance, the same merge the property page does (unit > building > org).
-  const orgProfile: PolicyProfile = {
-    lease_term: org.policy_lease_term ?? null,
-    smoking: org.policy_smoking ?? null,
-    ac_type: org.policy_ac_type ?? null,
-    on_site_management: org.policy_on_site_management ?? null,
-    heat_included: org.policy_heat_included ?? null,
-    hydro_included: org.policy_hydro_included ?? null,
-    water_included: org.policy_water_included ?? null,
-    pets_cats: org.policy_pets_cats ?? null,
-    pets_dogs: org.policy_pets_dogs ?? null,
-    pets_dog_size: org.policy_pets_dog_size ?? null,
-  };
+  const orgProfile: PolicyProfile | null = policyProfileFromRow(org as unknown as Record<string, unknown>);
   let buildingProfile: PolicyProfile | null = null;
   if (p.building_key) {
     const { data: bp } = await supabase
       .from("org_building_policies")
-      .select(
-        "policy_lease_term, policy_smoking, policy_ac_type, policy_on_site_management, policy_heat_included, policy_hydro_included, policy_water_included, policy_pets_cats, policy_pets_dogs, policy_pets_dog_size",
-      )
+      .select(POLICY_PROFILE_COLUMNS)
       .eq("organization_id", org.id)
       .eq("building_key", p.building_key)
       .maybeSingle();
-    if (bp) {
-      buildingProfile = {
-        lease_term: bp.policy_lease_term,
-        smoking: bp.policy_smoking,
-        ac_type: bp.policy_ac_type,
-        on_site_management: bp.policy_on_site_management,
-        heat_included: bp.policy_heat_included,
-        hydro_included: bp.policy_hydro_included,
-        water_included: bp.policy_water_included,
-        pets_cats: bp.policy_pets_cats,
-        pets_dogs: bp.policy_pets_dogs,
-        pets_dog_size: bp.policy_pets_dog_size,
-      };
-    }
+    buildingProfile = policyProfileFromRow(bp as Record<string, unknown> | null);
   }
   const { features: effectiveFeatures } = resolveEffectiveFeatures(
     {

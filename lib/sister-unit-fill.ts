@@ -46,6 +46,13 @@ export const SISTER_FILL_FIELDS = [
   "showing_arrival_phone",
   "emergency_info",
   "emergency_phone",
+  // S808 (0303): building facts. Exposure, view and renovation year are this
+  // unit's own, never copied.
+  "nearby",
+  "parking_fee_cents",
+  "appliances",
+  "flooring",
+  "max_occupants",
 ] as const;
 
 export type SisterFillField = (typeof SISTER_FILL_FIELDS)[number];
