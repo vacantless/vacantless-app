@@ -24,7 +24,7 @@ export type AskPage = {
 };
 
 export const ASK_PATH = "/ask";
-export const ASK_CHECKED = "2026-11-12";
+export const ASK_CHECKED = "2026-11-17";
 
 const LTB_SERVE: AskSource = {
   label: "Landlord and Tenant Board: How to serve documents",
@@ -225,6 +225,59 @@ export const ASK_PAGES: AskPage[] = [
       { label: "Canada Revenue Agency: Guide T4036, Rental Income", url: "https://www.canada.ca/en/revenue-agency/services/forms-publications/publications/t4036/rental-income.html" },
     ],
     related: { href: "/fix/tax-time", label: "Tax time, fixed" },
+  },
+  {
+    slug: "l10-former-tenant-address-unknown",
+    question: "I don't know my former tenant's new address. Can I still file an L10?",
+    answer:
+      "Yes. You can leave the address blank on the L10 if you don't know it. You still have to serve the application and Notice of Hearing yourself. If no method works, ask the Board to approve another way.",
+    details: [
+      "File within one year of the day the tenant moved out.",
+      "Serve each former tenant at least 30 days before the hearing.",
+      "Don't give the rental unit's address as their current address.",
+      "At the hearing, you may be asked how you found their address.",
+      "Can't reach them? File a Request to Use Alternative Service, like email.",
+      "File that request at least 40 days before the hearing.",
+      "Then file a Certificate of Service at least 20 days before the hearing.",
+    ],
+    sources: [
+      {
+        label: "Landlord and Tenant Board: L10 instructions",
+        url: "https://tribunalsontario.ca/documents/ltb/Landlord%20Applications%20&%20Instructions/L10_Instructions.html",
+      },
+      {
+        label: "Landlord and Tenant Board: Rules of Procedure, rules 3.4 and 5.8",
+        url: "https://tribunalsontario.ca/documents/ltb/Rules/LTB%20Rules%20of%20Procedure.html",
+      },
+    ],
+    related: { href: "/fix/ltb-forms", label: "Board forms without the mistakes" },
+  },
+  {
+    slug: "n12-declaration-when-my-child-moves-in",
+    question: "What declaration do I file with an L2 when my child is moving in?",
+    answer:
+      "Your child signs it, not you. They declare they need it for their own use, for at least one year. The Board won't accept the L2 without it.",
+    details: [
+      "The person named on the N12 as moving in must sign it.",
+      "Use the Board's words: in good faith, for their own personal use.",
+      "Add that they will live there for at least one year.",
+      "The Board has a blank Declaration form you can use.",
+      "A sworn affidavit works instead of a declaration.",
+      "File the L2 within 30 days after the N12 end date.",
+      "A false declaration is an offence under the Act.",
+    ],
+    sources: [
+      {
+        label: "Landlord and Tenant Board: L2 instructions, Schedule B",
+        url: "https://tribunalsontario.ca/documents/ltb/Landlord%20Applications%20&%20Instructions/L2_Instructions.html",
+      },
+      { label: "Landlord and Tenant Board: Declaration form", url: "https://tribunalsontario.ca/documents/ltb/Other%20Forms/Declaration.pdf" },
+      {
+        label: "Landlord and Tenant Board: N12 instructions",
+        url: "https://tribunalsontario.ca/documents/ltb/Notices%20of%20Termination%20&%20Instructions/N12_Instructions.html",
+      },
+    ],
+    related: { href: "/tools/n12", label: "Fill in an N12 for free, dates checked" },
   },
 ];
 
