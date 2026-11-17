@@ -460,3 +460,59 @@ export function renewedPostedOn(current: string | null | undefined, renewedDay: 
   if (current && /^\d{4}-\d{2}-\d{2}$/.test(current) && current >= renewedDay) return null;
   return renewedDay;
 }
+
+// ---- S809: Facebook's own Renew clock (helper 1.2.6) -------------------------
+// Facebook greys out Renew with a count ("Renew (7 days)"). The helper reads
+// that count off the ad's "..." menu and hands it to the next Vacantless page.
+// Before this, the reminder guessed from the posted date: on 2026-11-17 it
+// asked Noam to renew Pillette Unit 3 while Facebook showed "Renew (7 days)"
+// on all four Agile ads (Unit 3's renewal the day before never reached us).
+
+/** Helper 1.2.6 and up reports how long until Facebook opens Renew. */
+export const MARKETPLACE_HELPER_RENEW_WAIT_MIN_VERSION = "1.2.6";
+
+export type HelperRenewWait = { itemId: string; days: number; at: number };
+
+/** Waits as the helper sent them, checked: a real ad id, 1 to 60 days, seen in the last 7 days. Latest per ad. */
+export function cleanRenewWaits(raw: unknown, now: number = Date.now()): HelperRenewWait[] {
+  if (!Array.isArray(raw)) return [];
+  const byId = new Map<string, HelperRenewWait>();
+  for (const r of raw.slice(0, 50)) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    const itemId = String(o.itemId ?? "");
+    const days = Number(o.days);
+    const at = Number(o.at);
+    if (!/^\d{6,20}$/.test(itemId)) continue;
+    if (!Number.isInteger(days) || days < 1 || days > 60) continue;
+    if (!Number.isFinite(at) || at > now + 5 * 60_000 || now - at > 7 * 24 * 60 * 60_000) continue;
+    const prev = byId.get(itemId);
+    if (!prev || prev.at < at) byId.set(itemId, { itemId, days, at });
+  }
+  return Array.from(byId.values());
+}
+
+function addDaysIso(day: string, n: number): string {
+  const t = Date.parse(`${day}T00:00:00Z`) + n * 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+/**
+ * The posted date that makes the app's refresh rule agree with Facebook:
+ * Renew opens `days` after `seenDay`, and the app calls a Facebook ad due
+ * `refreshDays` after its posted date, so posted = seenDay + days - refreshDays.
+ * Never later than the day it was seen, never backwards (renewedPostedOn).
+ * Null when nothing should change. Pure.
+ */
+export function renewWaitPostedOn(
+  current: string | null | undefined,
+  seenDay: string,
+  days: number,
+  refreshDays: number | null,
+): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(seenDay) || refreshDays == null) return null;
+  if (!Number.isInteger(days) || days < 1) return null;
+  let implied = addDaysIso(seenDay, days - refreshDays);
+  if (implied > seenDay) implied = seenDay;
+  return renewedPostedOn(current, implied);
+}

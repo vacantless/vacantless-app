@@ -19,6 +19,7 @@ import {
   helperSaveCapturedAds,
   helperSaveRejectedAds,
   helperSaveRenewedAds,
+  helperSaveRenewWaits,
   helperSaveRepliedChats,
 } from "./marketplace-helper-actions";
 
@@ -171,6 +172,7 @@ export default async function DashboardLayout({
         loadAds={helperAdList}
         saveCaptured={helperSaveCapturedAds}
         saveRenewed={helperSaveRenewedAds}
+        saveRenewWaits={helperSaveRenewWaits}
         saveRejected={helperSaveRejectedAds}
         saveReplied={helperSaveRepliedChats}
       />

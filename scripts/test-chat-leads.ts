@@ -17,6 +17,7 @@ import {
   type ChatLeadCandidate,
   MARKETPLACE_HELPER_REPLIED_MIN_VERSION,
 } from "../lib/chat-leads";
+import { versionAtLeast } from "../lib/marketplace-helper";
 
 const now = Date.parse("2026-11-09T15:00:00Z");
 const day = 24 * 60 * 60_000;
@@ -125,7 +126,8 @@ if (existsSync("../vacantless-extension/app-bridge.js")) {
   const bridge = readFileSync("../vacantless-extension/app-bridge.js", "utf8");
   const watch = readFileSync("../vacantless-extension/facebook-watch.js", "utf8");
   const manifest = JSON.parse(readFileSync("../vacantless-extension/manifest.json", "utf8"));
-  assert.equal(manifest.version, MARKETPLACE_HELPER_REPLIED_MIN_VERSION);
+  // S809: 1.2.6 and later still report replied chats (at least the 1.2.5 that added it).
+  assert.ok(versionAtLeast(manifest.version, MARKETPLACE_HELPER_REPLIED_MIN_VERSION));
   assert.match(bridge, /data\.type === "get_replied"/);
   assert.match(bridge, /type: "replied_chats"/);
   // The page forgets by itemId|renterName, the same key the server returns.

@@ -2,13 +2,14 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { cleanCapturedAds, cleanRejectedAds, cleanRenewedAds, type HelperAdEntry } from "@/lib/marketplace-helper";
+import { cleanCapturedAds, cleanRejectedAds, cleanRenewedAds, cleanRenewWaits, type HelperAdEntry } from "@/lib/marketplace-helper";
 import {
   helperOrgIds,
   loadHelperAdList,
   saveHelperCapturedAds,
   saveHelperRejectedAds,
   saveHelperRenewedAds,
+  saveHelperRenewWaits,
 } from "@/lib/marketplace-helper-server";
 import { cleanRepliedChats } from "@/lib/chat-leads";
 import { saveHelperRepliedChats } from "@/lib/chat-leads-server";
@@ -51,6 +52,16 @@ export async function helperSaveRenewedAds(raw: unknown): Promise<{ done: string
   const admin = createAdminClient();
   if (!orgIds || !admin) return { done: [] };
   return { done: await saveHelperRenewedAds(admin, orgIds, items) };
+}
+
+// S809: Facebook's own "Renew (N days)" the helper (1.2.6) read off an ad's menu.
+export async function helperSaveRenewWaits(raw: unknown): Promise<{ done: string[] }> {
+  const items = cleanRenewWaits(raw);
+  if (items.length === 0) return { done: [] };
+  const orgIds = await signedInOrgIds();
+  const admin = createAdminClient();
+  if (!orgIds || !admin) return { done: [] };
+  return { done: await saveHelperRenewWaits(admin, orgIds, items) };
 }
 
 // S764: Marketplace ads the helper saw Facebook remove.

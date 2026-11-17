@@ -7,6 +7,7 @@ import {
   MARKETPLACE_HELPER_APP_SOURCE,
   MARKETPLACE_HELPER_REJECT_MIN_VERSION,
   MARKETPLACE_HELPER_RENEW_MIN_VERSION,
+  MARKETPLACE_HELPER_RENEW_WAIT_MIN_VERSION,
   rejectedAdsBanner,
   isHelperMessage,
   isHelperPong,
@@ -24,16 +25,20 @@ import { MARKETPLACE_HELPER_REPLIED_MIN_VERSION } from "@/lib/chat-leads";
 // remove, with a banner that says which rental to post again.
 // S767: and saves the renters the helper (1.2.5+) filled a chat reply for, as
 // Replied renters with no email or phone yet (lib/chat-leads).
+// S809: and Facebook's own "Renew (N days)" the helper (1.2.6+) read, so the
+// renew reminder waits for the day Facebook really opens Renew.
 export function MarketplaceHelperSync({
   loadAds,
   saveCaptured,
   saveRenewed,
+  saveRenewWaits,
   saveRejected,
   saveReplied,
 }: {
   loadAds: () => Promise<HelperAdEntry[]>;
   saveCaptured: (items: unknown) => Promise<{ done: string[] }>;
   saveRenewed: (items: unknown) => Promise<{ done: string[] }>;
+  saveRenewWaits: (items: unknown) => Promise<{ done: string[] }>;
   saveRejected: (items: unknown) => Promise<{ done: string[]; rentals: { propertyId: string; rental: string }[] }>;
   saveReplied: (items: unknown) => Promise<{ done: string[] }>;
 }) {
@@ -56,6 +61,7 @@ export function MarketplaceHelperSync({
         }
         post({ type: "get_captured" });
         if (versionAtLeast(data.version, MARKETPLACE_HELPER_RENEW_MIN_VERSION)) post({ type: "get_renewed" });
+        if (versionAtLeast(data.version, MARKETPLACE_HELPER_RENEW_WAIT_MIN_VERSION)) post({ type: "get_renew_waits" });
         if (versionAtLeast(data.version, MARKETPLACE_HELPER_REJECT_MIN_VERSION)) post({ type: "get_rejected" });
         if (versionAtLeast(data.version, MARKETPLACE_HELPER_REPLIED_MIN_VERSION)) post({ type: "get_replied" });
         return;
@@ -79,6 +85,18 @@ export function MarketplaceHelperSync({
           if (rentals.length > 0) {
             setRemoved(rentals);
             post({ type: "ad_list", ads: await loadAds(), at: Date.now() });
+            router.refresh();
+          }
+        } catch {
+          /* kept by the helper; tried again on the next page */
+        }
+        return;
+      }
+      if (isHelperMessage(data, "renew_waits")) {
+        try {
+          const { done } = await saveRenewWaits(data.items);
+          if (done.length > 0) {
+            post({ type: "renew_waits_saved", itemIds: done });
             router.refresh();
           }
         } catch {
@@ -118,7 +136,7 @@ export function MarketplaceHelperSync({
       window.removeEventListener("message", onMessage);
       timers.forEach((t) => window.clearTimeout(t));
     };
-  }, [loadAds, saveCaptured, saveRenewed, saveRejected, saveReplied, router]);
+  }, [loadAds, saveCaptured, saveRenewed, saveRenewWaits, saveRejected, saveReplied, router]);
   const banner = rejectedAdsBanner(removed.map((r) => r.rental));
   if (!banner) return null;
   return (
