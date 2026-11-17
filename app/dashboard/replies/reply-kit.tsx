@@ -8,6 +8,9 @@ import { addChatRenter } from "./actions";
 // live ad, then Copy (clipboard) or Share (the phone's share sheet, which
 // lists Messenger, Messages and WhatsApp). Nothing is sent from here.
 // S767: "Add this renter" saves the chat renter in Renters (name only).
+// S812: "They asked about" swaps the reply for an answer from the rental's own
+// details (only the ones on file). With a name typed, Copy or Share also saves
+// the renter, so no second tap is needed.
 
 export function ReplyKit({ cards, phone }: { cards: ReplyKitCard[]; phone: string | null }) {
   const [name, setName] = useState("");
@@ -49,6 +52,13 @@ export function ReplyKit({ cards, phone }: { cards: ReplyKitCard[]; phone: strin
           placeholder="e.g. Khushpreet"
           className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-3 text-base focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
         />
+        {name.trim() ? (
+          <button type="button" onClick={() => setName("")} className="mt-1 text-xs font-medium text-gray-600 underline">
+            Clear the name for the next renter
+          </button>
+        ) : (
+          <span className="mt-1 block text-xs text-gray-500">With a name here, Copy also saves the renter in Renters.</span>
+        )}
       </label>
       {cards.map((card) => (
         <ReplyCard key={card.propertyId} card={card} phone={phone} name={name} />
@@ -62,7 +72,29 @@ function ReplyCard({ card, phone, name }: { card: ReplyKitCard; phone: string | 
   const [done, setDone] = useState<string | null>(null);
   const [added, setAdded] = useState<{ ok: boolean; message: string } | null>(null);
   const [adding, setAdding] = useState(false);
+  // S812: null is the "still available" reply; otherwise one of card.answers.
+  const [answerKey, setAnswerKey] = useState<string | null>(null);
+  // Names already saved from this card, so a second Copy does not save twice.
+  const [savedNames, setSavedNames] = useState<string[]>([]);
   const site = card.sites.find((s) => s.key === siteKey) ?? card.sites[0];
+
+  /** Copy or Share with a name typed: save the renter once, quietly. */
+  async function saveOnCopy(): Promise<string | null> {
+    const typed = name.trim();
+    if (!card.available || !typed) return null;
+    if (savedNames.includes(typed.toLowerCase())) return null;
+    try {
+      const r = await addChatRenter({ propertyId: card.propertyId, siteKey: site.key, name: typed });
+      if (r.ok) {
+        setSavedNames((list) => [...list, typed.toLowerCase()]);
+        setAdded(null);
+        return r.message;
+      }
+      return r.message;
+    } catch {
+      return "The renter was not saved. Tap Add below to try again.";
+    }
+  }
 
   async function addRenter() {
     if (!name.trim()) {
@@ -78,16 +110,19 @@ function ReplyCard({ card, phone, name }: { card: ReplyKitCard; phone: string | 
       setAdding(false);
     }
   }
-  const text = replyKitText({ card, site, phone, renterName: name });
+  const text = replyKitText({ card, site, phone, renterName: name, answerKey });
 
   async function copy() {
+    let copied = true;
     try {
       await navigator.clipboard.writeText(text);
-      setDone("Copied. Paste it in the chat.");
     } catch {
-      setDone("Press and hold the reply below to copy it.");
+      copied = false;
     }
-    setTimeout(() => setDone(null), 2500);
+    setDone(copied ? "Copied. Paste it in the chat." : "Press and hold the reply below to copy it.");
+    const saved = copied ? await saveOnCopy() : null;
+    if (saved) setDone(`Copied. Paste it in the chat. ${saved}`);
+    setTimeout(() => setDone(null), saved ? 5000 : 2500);
   }
   async function share() {
     const nav = navigator as Navigator & { share?: (d: { text: string }) => Promise<void> };
@@ -95,7 +130,13 @@ function ReplyCard({ card, phone, name }: { card: ReplyKitCard; phone: string | 
       try {
         await nav.share({ text });
       } catch {
-        // The renter closed the share sheet; nothing to do.
+        // The landlord closed the share sheet; nothing to do.
+        return;
+      }
+      const saved = await saveOnCopy();
+      if (saved) {
+        setDone(saved);
+        setTimeout(() => setDone(null), 5000);
       }
     } else {
       await copy();
@@ -156,6 +197,26 @@ function ReplyCard({ card, phone, name }: { card: ReplyKitCard; phone: string | 
           </button>
         ))}
       </div>
+      {card.answers.length > 0 && (
+        <div className="mt-3">
+          <div className="text-xs font-medium text-gray-600">They asked about</div>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {[{ key: null as string | null, label: "Is it available?" }, ...card.answers.map((a) => ({ key: a.key as string | null, label: a.label }))].map((a) => (
+              <button
+                key={a.key ?? "available"}
+                type="button"
+                onClick={() => setAnswerKey(a.key)}
+                aria-pressed={a.key === answerKey}
+                className={`rounded-full border px-3 py-1.5 text-sm ${
+                  a.key === answerKey ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-700"
+                }`}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <p className="mt-3 select-all whitespace-pre-wrap rounded-lg bg-gray-50 p-3 text-sm text-gray-800">{text}</p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button type="button" onClick={copy} className="rounded-xl bg-brand px-4 py-3 text-base font-semibold text-white">
@@ -166,7 +227,7 @@ function ReplyCard({ card, phone, name }: { card: ReplyKitCard; phone: string | 
         </button>
       </div>
       {done && <p className="mt-2 text-sm text-green-700">{done}</p>}
-      {card.available && (
+      {card.available && !savedNames.includes(name.trim().toLowerCase()) && (
         <div className="mt-3 border-t border-gray-100 pt-3">
           <button
             type="button"

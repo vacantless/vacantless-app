@@ -12,6 +12,8 @@ import { helperReplyTemplate, fillHelperReply, marketplacePropertyType, shortRen
 import { buildTrackedLink, portalLabel } from "./listing-distribution";
 import { formatRent } from "./listing-copy";
 import type { DaySlots } from "./booking";
+import type { UnitFeatures } from "./property-features";
+import { answerReplyText, buildReplyAnswers, type ReplyAnswer } from "./reply-answers";
 
 export type ReplyKitProperty = {
   id: string;
@@ -43,6 +45,8 @@ export type ReplyKitCard = {
   photos: string[];
   /** S750: another available rental has the same rent, so the price alone can't tell them apart. */
   priceShared: boolean;
+  /** S812: answers to common questions this rental's record can give (lib/reply-answers). Empty when rented. */
+  answers: ReplyAnswer[];
 };
 
 /** Facebook's own rental title as the chat shows it: "CA$1,250 · 1 Bed 1 Bath Apartment". */
@@ -102,6 +106,9 @@ export function buildReplyKitCards(input: {
   timesByProperty: Map<string, { hasViewingTimes: boolean; nextTimes: string | null }>;
   /** Photo URLs per rental, already in the rental's order (cover first). */
   photosByProperty?: Map<string, string[]>;
+  /** S812: each rental's details with the account and building defaults already merged in. */
+  featuresByProperty?: Map<string, UnitFeatures>;
+  now?: Date;
 }): ReplyKitCard[] {
   const liveByProp = new Map<string, ReplyKitPost[]>();
   for (const p of input.posts) {
@@ -145,6 +152,7 @@ export function buildReplyKitCards(input: {
       facebookTitle: facebookChatTitle(prop),
       photos: (input.photosByProperty?.get(prop.id) ?? []).slice(0, 3),
       priceShared: false,
+      answers: available ? buildReplyAnswers(input.featuresByProperty?.get(prop.id) ?? null, input.now) : [],
     });
   }
   // S750: the chat header shows the price, so it is the fastest way to find the
@@ -168,7 +176,18 @@ export function replyKitText(input: {
   site: ReplyKitSite;
   phone: string | null;
   renterName?: string | null;
+  /** S812: answer a question instead of the "still available" reply. Unknown keys fall back to it. */
+  answerKey?: string | null;
 }): string {
+  const answer = input.card.available && input.answerKey ? input.card.answers.find((a) => a.key === input.answerKey) : null;
+  if (answer) {
+    return answerReplyText({
+      answer,
+      bookingUrl: input.site.bookingUrl,
+      hasViewingTimes: input.card.hasViewingTimes,
+      renterName: input.renterName,
+    });
+  }
   const base = helperReplyTemplate({
     available: input.card.available,
     bookingUrl: input.site.bookingUrl,

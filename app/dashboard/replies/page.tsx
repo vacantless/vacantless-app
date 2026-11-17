@@ -8,6 +8,14 @@ import { sortPhotos } from "@/lib/photos";
 import { PageHeader } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { buildReplyKitCards, longDayLabel, nextTimesLabel, type ReplyKitPost, type ReplyKitProperty } from "@/lib/reply-kit";
+import type { UnitFeatures } from "@/lib/property-features";
+import {
+  POLICY_PROFILE_COLUMNS,
+  policyProfileFromRow,
+  resolveBuildingProfile,
+  resolveEffectiveFeatures,
+  type PolicyProfile,
+} from "@/lib/policy-profile";
 import { ReplyKit } from "./reply-kit";
 
 export const dynamic = "force-dynamic";
@@ -84,14 +92,47 @@ export default async function QuickRepliesPage() {
     photosByProperty.set(id, sortPhotos(list).map((ph) => ph.url).filter(Boolean).slice(0, 3));
   }
 
-  const cards = buildReplyKitCards({ appUrl: APP_URL, properties, posts, timesByProperty, photosByProperty });
+  // S812: the facts behind "Answer a question". Each rental's own details with
+  // the account and building defaults filled in (the same merge as the rental
+  // page). Read on its own so a failed read only hides the answers.
+  const featuresByProperty = new Map<string, UnitFeatures>();
+  const availableIds = properties.filter((p) => p.status === "available").map((p) => p.id);
+  if (availableIds.length) {
+    try {
+      const [{ data: factRows, error: factErr }, { data: orgRow }, { data: buildingRows }] = await Promise.all([
+        supabase
+          .from("properties")
+          .select(
+            "id, building_key, available_date, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, internet_included, cable_included, laundry, parking, parking_type, parking_count, parking_fee_cents, appliances, ac_type, lease_term, smoking, on_site_management",
+          )
+          .eq("organization_id", org.id)
+          .in("id", availableIds),
+        supabase.from("organizations").select(POLICY_PROFILE_COLUMNS).eq("id", org.id).maybeSingle(),
+        supabase.from("org_building_policies").select(`building_key, ${POLICY_PROFILE_COLUMNS}`).eq("organization_id", org.id),
+      ]);
+      if (factErr) console.warn(`[replies] rental details read failed: ${factErr.message}`);
+      const orgProfile = policyProfileFromRow(orgRow as Record<string, unknown> | null);
+      const buildingByKey = new Map<string, PolicyProfile | null>();
+      for (const b of (buildingRows ?? []) as unknown as ({ building_key: string | null } & Record<string, unknown>)[]) {
+        if (b.building_key) buildingByKey.set(b.building_key, policyProfileFromRow(b));
+      }
+      for (const row of (factRows ?? []) as unknown as ({ id: string; building_key: string | null } & UnitFeatures)[]) {
+        const building = row.building_key ? buildingByKey.get(row.building_key) ?? null : null;
+        featuresByProperty.set(row.id, resolveEffectiveFeatures(row, resolveBuildingProfile(building, orgProfile)).features);
+      }
+    } catch (e) {
+      console.warn(`[replies] answers skipped: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  const cards = buildReplyKitCards({ appUrl: APP_URL, properties, posts, timesByProperty, photosByProperty, featuresByProperty });
 
   return (
     <div className="mx-auto max-w-xl px-1 py-4">
       <PageHeader
         icon={<Icons.chat />}
         title="Quick replies"
-        subtitle="Match the photo and price from the chat. Pick the site, copy, and paste it in the chat. Each site has its own link, so you see where bookings come from."
+        subtitle="Match the photo and price from the chat. Pick the site and what they asked. Copy it and paste it in the chat. Type the name first and Copy also saves the renter."
       />
       <ReplyKit cards={cards} phone={org.public_contact_phone ?? null} />
       <details className="mt-6 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700">
