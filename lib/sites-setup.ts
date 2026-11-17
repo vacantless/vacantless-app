@@ -196,17 +196,31 @@ export function buildSitesSetup(input: SitesSetupInput): SitesSetup {
       continue;
     }
     if (!nextSignin) nextSignin = key;
-    rows.push({
+    // S811 (REVIEW-S805 finding 11): Zumper's ID check can take a day and
+    // blocks posting, so a Zumper that was never signed in says so first and
+    // moves to the top of the robot sites. A Zumper sign-in that ended does
+    // not move: its ID check is already done.
+    const zumperFirst = key === "zumper" && state !== "dead_session";
+    const row: SiteSetupRow = {
       key,
       label: ROBOT_LABEL[key],
       state: "needs_you",
       line:
         state === "dead_session"
           ? "Your sign-in ended. Sign in again, about 2 minutes."
-          : `Sign in once, about 2 minutes. ${ROBOT_FREE_LINE[key]}`,
+          : zumperFirst
+            ? `Do this one today: Zumper checks your ID, which can take a day. ${ROBOT_FREE_LINE[key]}`
+            : `Sign in once, about 2 minutes. ${ROBOT_FREE_LINE[key]}`,
       action: { label: state === "dead_session" ? "Sign in again" : "Sign in once", href: signinChainHref(input.propertyId) },
-      note: key === "zumper" ? "Zumper checks your ID before it lets you post. Do that on Zumper today; it can take a day." : null,
-    });
+      note: zumperFirst ? "Make your Zumper landlord account and send your ID on Zumper today. Sign in here once Zumper approves you." : null,
+    };
+    if (zumperFirst) {
+      const firstRobot = rows.findIndex((r) => (SITE_SIGNIN_ORDER as readonly string[]).includes(r.key));
+      if (firstRobot === -1) rows.push(row);
+      else rows.splice(firstRobot, 0, row);
+    } else {
+      rows.push(row);
+    }
   }
 
   const connectedCount = rows.filter((r) => r.state === "on").length;

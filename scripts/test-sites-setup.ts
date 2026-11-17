@@ -21,7 +21,7 @@ const base = { postingAllowed: true, helperInstalled: null as boolean | null, po
 // --- 1. A stranger: nothing connected -----------------------------------------
 const fresh = buildSitesSetup({ ...base, tileStateByChannel: {} });
 ok("five rows", fresh.rows.length === 5);
-ok("order: Page, Marketplace, Kijiji, Rentals.ca, Zumper", fresh.rows.map((r) => r.key).join(",") === "facebook_feed,facebook_marketplace,kijiji,rentals_ca,zumper");
+ok("order: Page, Marketplace, Zumper (ID check first, S811), Kijiji, Rentals.ca", fresh.rows.map((r) => r.key).join(",") === "facebook_feed,facebook_marketplace,zumper,kijiji,rentals_ca");
 ok("nothing on", fresh.connectedCount === 0 && fresh.progress === "0 of 5 connected");
 ok("not done", !fresh.done);
 ok("every row needs you", fresh.rows.every((r) => r.state === "needs_you"));
@@ -31,7 +31,11 @@ ok("Marketplace installs the helper", /chromewebstore/.test(fresh.rows[1].action
 ok("Marketplace says the one rule", /only lets a person press Post|On your phone/.test(fresh.rows[1].note ?? ""));
 ok("robot rows open the chained sign-in", fresh.rows.slice(2).every((r) => r.action?.href === "/dashboard/site-signin"));
 ok("next sign-in is Kijiji", fresh.nextSignin === "kijiji");
-ok("Zumper warns about the ID check", /ID/.test(fresh.rows[4].note ?? ""));
+ok("Zumper warns about the ID check", /ID/.test(fresh.rows[2].note ?? "") && /^Do this one today/.test(fresh.rows[2].line));
+const zDead = buildSitesSetup({ ...base, tileStateByChannel: { zumper: "dead_session" } });
+ok("S811: an ended Zumper sign-in stays last", zDead.rows.at(-1)?.key === "zumper" && zDead.rows.at(-1)?.action?.label === "Sign in again");
+const zOnly = buildSitesSetup({ ...base, tileStateByChannel: { kijiji: "linked", rentals_ca: "linked" } });
+ok("S811: a never-signed-in Zumper leads the robot sites", zOnly.rows.map((r) => r.key).join(",") === "facebook_feed,facebook_marketplace,zumper,kijiji,rentals_ca");
 ok("summary says do it once", /once/i.test(fresh.summary));
 
 // --- 2. Helper detected in this browser ---------------------------------------

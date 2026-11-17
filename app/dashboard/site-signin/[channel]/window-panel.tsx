@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   siteSigninIsOpen,
-  siteSigninPassword,
   siteSigninSafeViewUrl,
   siteSigninView,
   SITE_SIGNIN_LABEL,
@@ -103,7 +102,6 @@ export function WindowPanel({
 
   const view = siteSigninView(channel, win.status, win.detail);
   const link = siteSigninSafeViewUrl(win.viewUrl);
-  const password = siteSigninPassword(win.viewUrl);
 
   return (
     <div className={`rounded-2xl border p-5 shadow-sm ${TONE[view.tone]}`}>
@@ -154,14 +152,12 @@ export function WindowPanel({
               {minutesLeft != null ? ` ${minutesLeft === 1 ? "1 minute" : `${minutesLeft} minutes`} left.` : ""}
             </p>
           )}
+          {/* S811 (REVIEW-S805 finding 10): the window's one-time password rides
+              in the link, so the window never asks for it (watched live on
+              Zumper, 2026-11-17). No password line, no web-address warning. */}
           <p className="text-xs text-gray-500">
-            We run this window for you. Its web address looks unusual because it is made just for this sign-in. That is expected.
+            This opens {SITE_SIGNIN_LABEL[channel]} inside a Vacantless window.
           </p>
-          {password && (
-            <p className="text-xs text-gray-500">
-              If the window asks for a password, it is <span className="font-mono font-semibold text-gray-800">{password}</span>. It works only for this window.
-            </p>
-          )}
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
               type="button"
