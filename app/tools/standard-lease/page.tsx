@@ -258,7 +258,7 @@ export default function StandardLeaseToolPage() {
 
         <MarketingCta
           title="Fill the next vacancy the same easy way."
-          body="Vacantless is the leasing tool built by working landlords. Renters book their own viewings, every inquiry lands in one list, and the lease and rent-increase forms fill themselves."
+          body="Vacantless is the leasing tool built by working landlords. Renters book their own viewings, every renter lands in one list, and the lease and rent-increase forms fill themselves."
         />
       </main>
       <MarketingFooter />

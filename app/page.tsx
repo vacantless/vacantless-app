@@ -758,6 +758,8 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
     head: "Your ads",
     items: [
       { text: "Have an old ad or a realtor's data sheet? Paste it or drop the PDF. The form fills itself." },
+      // S809: listing defaults (S808a) and the robot fills that use them (S809w).
+      { text: "Set your building's parking and its fee, laundry, appliances and what's nearby once. Every ad uses them, on Kijiji, Rentals.ca and Zumper too." },
       { text: "A 15-second video ad made from your photos, ready for Facebook or Instagram." },
       { text: "Each rental shows which site brings renters who actually book." },
       { text: "Worried someone copied your ad to scam renters? One click opens a search of your cover photo, Kijiji and Marketplace near your price." },

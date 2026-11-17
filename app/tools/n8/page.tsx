@@ -137,7 +137,7 @@ export default function N8ToolPage() {
 
         <MarketingCta
           title="Keep the rent record and the paperwork in one place."
-          body="Vacantless is the leasing tool built by working landlords. Renters book their own viewings, every inquiry lands in one list, and the Board forms are filled from the tenancy."
+          body="Vacantless is the leasing tool built by working landlords. Renters book their own viewings, every renter lands in one list, and the Board forms are filled from the tenancy."
         />
       </main>
       <MarketingFooter />

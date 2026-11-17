@@ -182,7 +182,7 @@ export default async function RentIncreaseToolPage() {
 
         <MarketingCta
           title="Fill your next vacancy the same easy way."
-          body="Vacantless is the leasing tool built by working landlords. Renters book their own viewings, every inquiry lands in one list, and the rent-increase reminder is free for one rental."
+          body="Vacantless is the leasing tool built by working landlords. Renters book their own viewings, every renter lands in one list, and the rent-increase reminder is free for one rental."
         />
       </main>
       <MarketingFooter />

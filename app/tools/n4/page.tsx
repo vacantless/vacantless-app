@@ -144,7 +144,7 @@ export default function N4ToolPage() {
 
         <MarketingCta
           title="Fill your next vacancy the same easy way."
-          body="Vacantless is the leasing tool built by working landlords. Renters book their own viewings, every inquiry lands in one list, and the Board forms are filled from the tenancy."
+          body="Vacantless is the leasing tool built by working landlords. Renters book their own viewings, every renter lands in one list, and the Board forms are filled from the tenancy."
         />
       </main>
       <MarketingFooter />
