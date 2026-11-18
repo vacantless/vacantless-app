@@ -52,9 +52,13 @@ async function brevoProblems(): Promise<HealthInput["emails"]> {
         });
         if (!res.ok) throw new Error(`brevo ${event} ${res.status}`);
         const json = (await res.json()) as {
-          events?: { email?: string; subject?: string; reason?: string; event?: string }[];
+          events?: { email?: string; subject?: string; reason?: string; event?: string; date?: string }[];
         };
-        return (json.events ?? []).map((e) => ({
+        // S816f: Brevo's days=1 spans about two calendar days, so one bounce
+        // showed in two mornings' emails (demo@ on Nov 17 and 18). Keep only
+        // events from the last 24 hours; an event with no date is kept.
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        return (json.events ?? []).filter((e) => !e.date || !(Date.parse(e.date) < cutoff)).map((e) => ({
           event: event as string,
           email: e.email ?? "(unknown)",
           subject: e.subject ?? null,

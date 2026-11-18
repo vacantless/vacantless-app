@@ -182,3 +182,13 @@ ok("toronto: 03:00Z is the previous local day", torontoDateHour(new Date("2026-1
 console.log(`\nhealth-digest: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
 
+
+// S816f: Brevo events older than 24 hours are dropped (one bounce showed two mornings).
+{
+  const route = readFileSync("app/api/cron/health-digest/route.ts", "utf8");
+  if (!route.includes("Date.now() - 24 * 60 * 60 * 1000") || !route.includes("Date.parse(e.date) < cutoff")) {
+    console.error("FAIL: health digest keeps Brevo events older than 24 hours");
+    process.exit(1);
+  }
+  console.log("ok   Brevo events limited to the last 24 hours");
+}
