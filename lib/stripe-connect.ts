@@ -291,6 +291,12 @@ export function buildSetupSessionParams(args: {
           payment_schedule: "interval",
           interval_description: "Monthly rent",
           transaction_type: "personal",
+          // S816h: without this the mandate is not used for the subscription's
+          // invoices: the $5 test's first debit (2026-11-18) stayed incomplete
+          // with no mandate and Stripe ended the subscription. Stripe's guide
+          // (billing/subscriptions/acss-debit, "saving payment method details
+          // for future use") asks for default_for invoice + subscription.
+          default_for: ["invoice", "subscription"],
         },
       },
     };
@@ -963,4 +969,20 @@ export function selectActiveSchedulePhase(sched: ScheduleLike): ActiveSchedulePh
   const price = active.items?.[0]?.price;
   const priceId = typeof price === "string" ? price : (price?.id ?? null);
   return { ok: true, startDate: active.start_date, priceId };
+}
+
+
+/**
+ * S816h: a Canadian bank (ACSS) mandate can pay a rent subscription only when
+ * it was authorized "for" subscriptions (default_for). US bank debit and any
+ * non-ACSS mandate pass. No mandate object: true (nothing to check). Pure.
+ */
+export function mandateCoversSubscriptions(
+  mandate: { payment_method_details?: { type?: string; acss_debit?: { default_for?: string[] } } } | null | undefined,
+): boolean {
+  const d = mandate?.payment_method_details;
+  if (!d) return true;
+  if (d.type && d.type !== "acss_debit") return true;
+  const list = d.acss_debit?.default_for ?? [];
+  return list.includes("subscription");
 }

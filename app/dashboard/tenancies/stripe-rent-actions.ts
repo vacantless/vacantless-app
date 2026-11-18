@@ -1,6 +1,7 @@
 "use server";
 
 import type Stripe from "stripe";
+import { mandateCoversSubscriptions } from "@/lib/stripe-connect";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -213,6 +214,7 @@ type SubTenancyRow = {
   stripe_mandate_status: string | null;
   stripe_subscription_id: string | null;
   stripe_subscription_status: string | null;
+  stripe_setup_session_id: string | null;
 };
 
 export async function createStripeRentSubscription(formData: FormData) {
@@ -242,7 +244,7 @@ export async function createStripeRentSubscription(formData: FormData) {
 
   const { data: tData } = await supabase
     .from("tenancies")
-    .select("id, rent_cents, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_subscription_id, stripe_subscription_status")
+    .select("id, rent_cents, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_subscription_id, stripe_subscription_status, stripe_setup_session_id")
     .eq("id", tenancyId)
     .maybeSingle();
   const tenancy = tData as SubTenancyRow | null;
@@ -269,6 +271,29 @@ export async function createStripeRentSubscription(formData: FormData) {
   }
   // past this point prereq is the ok branch
   const ok = prereq.ok ? prereq : null!;
+
+  // S816h: the bank authorization must cover subscriptions, or the first debit
+  // stays incomplete and Stripe ends the subscription (the $5 test, 2026-11-18).
+  // Authorizations made before S816h don't; the tenant authorizes again.
+  if (tenancy.stripe_setup_session_id) {
+    try {
+      const session = await stripe!.checkout.sessions.retrieve(
+        tenancy.stripe_setup_session_id,
+        { expand: ["setup_intent.mandate"] },
+        { stripeAccount: connect.connected_account_id },
+      );
+      const mandate = (session.setup_intent as { mandate?: unknown } | null)?.mandate as
+        | { payment_method_details?: { acss_debit?: { default_for?: string[] } ; type?: string } }
+        | null
+        | undefined;
+      if (!mandateCoversSubscriptions(mandate)) {
+        redirect(`${tenancyPath(tenancyId)}?striperent=reauthorize`);
+      }
+    } catch (err) {
+      if (err && typeof err === "object" && "digest" in err) throw err;
+      console.error("[stripe-rent] mandate check failed:", err instanceof Error ? err.message : String(err));
+    }
+  }
 
   // First-charge date: must be at least 2 business days out (same rule as the
   // Rotessa rail). Convert to a future billing_cycle_anchor.

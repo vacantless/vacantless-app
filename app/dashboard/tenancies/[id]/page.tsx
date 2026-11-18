@@ -427,6 +427,7 @@ const STRIPE_RENT_ERROR: Record<string, string> = {
   subalready: "This tenancy already has a rent subscription.",
   nocustomer: "Authorize the tenant's bank account before scheduling rent.",
   nomandate: "The tenant needs to authorize their bank (mandate) before scheduling rent.",
+  reauthorize: "This bank authorization was made before monthly rent could use it. Send the tenant the bank link again, then schedule rent.",
   nopm: "No saved payment method yet. Finish the bank authorization first.",
   norent: "Set a monthly rent amount on this tenancy before scheduling rent.",
   baddate: "Pick a first charge date at least 2 business days from today.",
