@@ -23,6 +23,8 @@ import {
 } from "@/lib/reports";
 import { buildPostingAdvice } from "@/lib/posting-advice";
 import { buildRentalAdvice, type RentalLite } from "@/lib/rental-advice";
+import { buildSiteCosts, buildCostAdvice, costSite, dollars, COST_SITE_OPTIONS, type CostLite } from "@/lib/channel-costs";
+import { addMarketingCost, removeMarketingCost } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +36,7 @@ function rent(cents: number | null): string {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: { days?: string };
+  searchParams: { days?: string; cost?: string };
 }) {
   const supabase = createClient();
   const org = await getCurrentOrg();
@@ -50,6 +52,7 @@ export default async function ReportsPage({
     { data: showingsData },
     { data: propsData },
     { data: feedbackData },
+    { data: costsData },
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -67,6 +70,12 @@ export default async function ReportsPage({
       .from("feedback")
       .select("rating, created_at")
       .eq("organization_id", org.id),
+    // S818c: what the landlord paid each site.
+    supabase
+      .from("marketing_costs")
+      .select("id, portal, label, amount_cents, spent_on, note")
+      .eq("organization_id", org.id)
+      .order("spent_on", { ascending: false }),
   ]);
 
   const allLeads = (leadsData ?? []) as LeadLite[];
@@ -93,6 +102,21 @@ export default async function ReportsPage({
   const showRep = buildShowingReport(showings, nowMs);
   const timing = buildLeaseTiming(leads);
   const feedbackRep = buildFeedbackReport(feedback);
+  // S818c: costs in the same window as the renters they are compared with.
+  type CostRow = CostLite & { id: string; note: string | null };
+  const allCosts = (costsData ?? []) as CostRow[];
+  const costs = startMs == null ? allCosts : allCosts.filter((c) => Date.parse(`${c.spent_on}T12:00:00Z`) >= startMs);
+  const siteCosts = buildSiteCosts(channels, costs);
+  const costAdvice = buildCostAdvice(siteCosts);
+  const spentTotal = costs.reduce((n, c) => n + c.amount_cents, 0);
+  const COST_FLASH: Record<string, string> = {
+    saved: "Saved.",
+    removed: "Removed.",
+    amount: "Type the amount in dollars, for example 33.84.",
+    site: "Pick the site you paid.",
+    error: "Something went wrong. Please try again.",
+  };
+  const costFlash = searchParams.cost ? COST_FLASH[searchParams.cost] ?? null : null;
 
   const leasedStep = funnel[funnel.length - 1];
 
@@ -288,6 +312,102 @@ export default async function ReportsPage({
           </Table>
         )}
       </Section>
+
+      {/* S818c: what each site costs you */}
+      <div id="site-costs" className="scroll-mt-6">
+        <Section
+          title="What each site costs you"
+          subtitle="Add what you paid each site, for ads or boosts, and see what each renter and booked viewing cost. Renters who opened your Vacantless page link are not counted here, because they could have come from any site."
+        >
+          {costFlash ? (
+            <p className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">{costFlash}</p>
+          ) : null}
+          {costAdvice.length > 0 ? (
+            <ul className="mb-3 space-y-1.5">
+              {costAdvice.map((a) => (
+                <li
+                  key={a.text}
+                  className={`rounded-lg border px-3 py-2 text-sm ${
+                    a.tone === "fix" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-green-200 bg-green-50 text-green-900"
+                  }`}
+                >
+                  {a.text}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {siteCosts.length === 0 ? (
+            <Empty>No renters from a named site in this window yet.</Empty>
+          ) : (
+            <Table head={["Site", "Renters", "Booked", "Showed", "Leased", "You paid", "Per renter", "Per booked viewing"]}>
+              {siteCosts.map((r) => (
+                <tr key={r.site} className="border-t border-gray-100">
+                  <Td>{r.site}</Td>
+                  <Td num>{r.renters}</Td>
+                  <Td num>{r.booked}</Td>
+                  <Td num>{r.showed}</Td>
+                  <Td num>{r.leased}</Td>
+                  <Td num>{r.spentCents > 0 ? dollars(r.spentCents) : "Free"}</Td>
+                  <Td num>{r.perRenterCents != null ? dollars(r.perRenterCents) : "-"}</Td>
+                  <Td num>{r.perBookedCents != null ? dollars(r.perBookedCents) : r.spentCents > 0 ? "No viewings" : "-"}</Td>
+                </tr>
+              ))}
+            </Table>
+          )}
+          <form action={addMarketingCost} className="mt-4 grid grid-cols-1 gap-2 rounded-2xl border border-gray-200 bg-white p-4 sm:grid-cols-6">
+            <input type="hidden" name="days" value={String(window)} />
+            <label className="block sm:col-span-2">
+              <span className="mb-1 block text-xs font-medium text-gray-600">Site</span>
+              <select name="portal" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" defaultValue="kijiji">
+                {COST_SITE_OPTIONS.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">You paid</span>
+              <input name="amount" inputMode="decimal" placeholder="33.84" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" required />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">On</span>
+              <input name="spent_on" type="date" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="mb-1 block text-xs font-medium text-gray-600">Note, or the site name for Other</span>
+              <input name="label" placeholder="Pillette Unit 3 ad" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+            </label>
+            <div className="sm:col-span-6">
+              <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white">
+                Add what you paid
+              </button>
+              {spentTotal > 0 ? (
+                <span className="ml-2 text-xs text-gray-500">{dollars(spentTotal)} paid in this window.</span>
+              ) : null}
+            </div>
+          </form>
+          {costs.length > 0 ? (
+            <ul className="mt-3 divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white text-sm">
+              {costs.slice(0, 20).map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-2">
+                  <span className="text-gray-700">
+                    {c.spent_on} · {costSite(c)} · {dollars(c.amount_cents)}
+                    {c.note ? <span className="text-gray-400"> · {c.note}</span> : null}
+                  </span>
+                  <form action={removeMarketingCost}>
+                    <input type="hidden" name="cost_id" value={c.id} />
+                    <input type="hidden" name="days" value={String(window)} />
+                    <button type="submit" className="text-xs text-gray-400 hover:text-red-600">
+                      Remove
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </Section>
+      </div>
 
       {/* By rental */}
       <Section

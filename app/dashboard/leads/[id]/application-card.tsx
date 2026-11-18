@@ -288,6 +288,8 @@ export function ApplicationCard(p: {
         </details>
       ) : null}
 
+      {/* S818c: an account on its own application form runs checks there too. */}
+      {p.ownForm && open.length === 0 ? null : (
       <p className="mt-3 text-xs text-gray-500">
         {CREDIT_CHECK_ONE_LINE}{" "}
         {p.ontario ? `${CREDIT_CHECK_ONTARIO_LINE} ` : ""}
@@ -296,6 +298,7 @@ export function ApplicationCard(p: {
           {p.hasScreeningLink ? "Change it" : "Add it in Settings"}
         </Link>
       </p>
+      )}
       {p.ontario && signed.length > 0 ? <p className="mt-1 text-xs text-gray-500">{LTB_CHECK_LINE}</p> : null}
 
       {/* 2. Offer */}

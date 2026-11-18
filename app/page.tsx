@@ -760,6 +760,8 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
       { text: "On Ontario rentals, search an applicant's Landlord and Tenant Board orders free, in one tap." },
       // S818b: an account's own application form (Buildium and the like).
       { text: "Already take applications in Buildium? Send your own form from each renter, with the rental's address." },
+      // S818c: what each site costs you (Reports).
+      { text: "Add what you paid each site and see what each renter and booked viewing cost you, before you boost again." },
     ],
   },
   {
