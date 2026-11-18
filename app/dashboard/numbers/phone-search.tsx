@@ -8,7 +8,7 @@ import { dialTarget, matchesBook, prettyPhone, type BookEntry } from "@/lib/phon
 export function PhoneSearch({ entries }: { entries: BookEntry[] }) {
   const [q, setQ] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
-  const shown = useMemo(() => entries.filter((e) => matchesBook(e, q)).slice(0, 200), [entries, q]);
+  const shown = useMemo(() => entries.filter((e) => matchesBook(e, q)).slice(0, q.trim() ? 300 : 2000), [entries, q]);
   return (
     <div>
       <input

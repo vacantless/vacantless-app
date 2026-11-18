@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg } from "@/lib/org";
 import { loadTeam } from "@/lib/team-server";
+import { orgOwnSmsNumber } from "@/lib/org-sms-numbers";
 import { PageHeader } from "@/components/ui";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { dedupeBook, dialTarget, prettyPhone, BOOK_LEAD_COLS, BOOK_TENANT_COLS, BOOK_APP_COLS, type BookEntry } from "@/lib/phone-book";
@@ -46,13 +47,16 @@ export default async function PhoneBookPage({ searchParams }: { searchParams: { 
   if (!org) return null;
   const supabase = createClient();
 
-  const [{ data: orgRow }, { data: smsRows }, { data: propRows }] = await Promise.all([
+  // org_sms_numbers is service-role only (no signed-in read), so the texting
+  // number comes through the same helper the texting code uses.
+  const admin = createAdminClient();
+  const [{ data: orgRow }, texting, { data: propRows }] = await Promise.all([
     supabase
       .from("organizations")
       .select("public_contact_phone, showing_arrival_phone, emergency_phone, alert_mobile_e164")
       .eq("id", org.id)
       .maybeSingle(),
-    supabase.from("org_sms_numbers").select("phone_e164, enabled").eq("organization_id", org.id),
+    orgOwnSmsNumber(admin, org.id),
     supabase
       .from("properties")
       .select("id, address, showing_arrival_phone, emergency_phone")
@@ -66,7 +70,6 @@ export default async function PhoneBookPage({ searchParams }: { searchParams: { 
     emergency_phone?: string | null;
     alert_mobile_e164?: string | null;
   };
-  const texting = ((smsRows ?? []) as { phone_e164: string; enabled: boolean }[]).find((r) => r.enabled)?.phone_e164 ?? null;
 
   const own: OwnNumber[] = [
     {
@@ -114,7 +117,6 @@ export default async function PhoneBookPage({ searchParams }: { searchParams: { 
 
   // Team: teammates (with the mobile saved here), showing agents, trades.
   const team = await loadTeam(org.id);
-  const admin = createAdminClient();
   const mobileByMembership = new Map<string, string | null>();
   if (admin && team && team.members.length > 0) {
     const { data } = await admin

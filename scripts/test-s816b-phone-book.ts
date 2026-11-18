@@ -30,6 +30,8 @@ const page = readFileSync("app/dashboard/numbers/page.tsx", "utf8");
 for (const label of ["Your texting number", "Rental questions", "Arrival number", "Emergency repairs", "Your alert mobile", "Showing agent", "Teammate"]) {
   ok(`page shows ${label}`, page.includes(label));
 }
+ok("texting number read through the service helper", page.includes("orgOwnSmsNumber(admin, org.id)") && !page.includes('from("org_sms_numbers")'));
+ok("whole list shows before a search", readFileSync("app/dashboard/numbers/phone-search.tsx", "utf8").includes("q.trim() ? 300 : 2000"));
 ok("nav links phone book", readFileSync("app/dashboard/dashboard-nav.tsx", "utf8").includes('href: "/dashboard/numbers"'));
 ok("no em dash", !page.includes("—") && !readFileSync("lib/phone-book.ts", "utf8").includes("—"));
 
