@@ -33,6 +33,7 @@ import {
   removeOrgLogo,
   closeAccount,
   requestTexting,
+  updateScreeningLink,
 } from "./actions";
 import { ACCOUNT_CLOSURE_MESSAGES } from "@/lib/account-closure";
 import { CopyLinkButton } from "@/components/copy-link-button";
@@ -332,6 +333,7 @@ export default async function SettingsPage({
 }: {
   searchParams: {
     tab?: string;
+    credit?: string;
     saved?: string;
     error?: string;
     test?: string;
@@ -1141,6 +1143,58 @@ export default async function SettingsPage({
       )}
 
       {/* ================= Tab - Distribution ================= */}
+      {tab === "brand" && (
+        <div id="credit-check" className="mt-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+          <h2 className="text-base font-semibold text-gray-900">Credit checks</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Paste the link from your credit check company, such as FrontLobby or SingleKey. After a renter signs
+            their application, they go straight to it. Their social insurance number and banking details go only to
+            that company.
+          </p>
+          {searchParams.credit === "saved" && (
+            <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">Saved.</p>
+          )}
+          {searchParams.credit === "bad" && (
+            <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              That doesn&apos;t look like a web link. Copy it from your credit check company&apos;s site.
+            </p>
+          )}
+          {searchParams.credit === "error" && (
+            <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              Something went wrong. Please try again.
+            </p>
+          )}
+          <form action={updateScreeningLink} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <label className="block sm:col-span-2">
+              <span className="mb-1 block text-sm font-medium text-gray-700">Credit check link</span>
+              <input
+                name="screening_link_url"
+                type="url"
+                inputMode="url"
+                placeholder="https://"
+                defaultValue={org.screening_link_url ?? ""}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">Company name</span>
+              <input
+                name="screening_link_name"
+                placeholder="FrontLobby"
+                defaultValue={org.screening_link_name ?? ""}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <div className="sm:col-span-3">
+              <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white">
+                Save
+              </button>
+              <span className="ml-2 text-xs text-gray-500">Leave the link blank to turn this off.</span>
+            </div>
+          </form>
+        </div>
+      )}
+
       {tab === "distribution" && (
         <div className="mt-6 space-y-6">
           {searchParams.distribution === "saved" && (

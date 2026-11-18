@@ -1,4 +1,5 @@
 import { longDate } from "@/lib/keep-fresh";
+import { SignedPapers } from "@/components/signed-papers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -1837,6 +1838,9 @@ export default async function TenancyDetailPage({
           {errMsg}
         </p>
       )}
+
+      {/* S816: the signed application and offer this tenancy came from. */}
+      {t.lead_id ? <SignedPapers supabase={supabase} leadIds={[t.lead_id]} /> : null}
 
       {/* Tenants roster --------------------------------------------------- */}
       <CollapsibleSection

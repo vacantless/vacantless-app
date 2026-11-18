@@ -8,11 +8,12 @@ import { isLeadStatus } from "@/lib/pipeline";
 import { normalizeDate, normalizeText } from "@/lib/lead-detail";
 import { redirect } from "next/navigation";
 import { canUseRentalApplications } from "@/lib/billing";
-import { normalizePayMode } from "@/lib/rental-application";
 import { normalizeEmail } from "@/lib/persons";
 import { resolvePersonId } from "@/lib/persons-server";
 import { normalizePhoneE164 } from "@/lib/sms";
-import { sendRentalApplicationInvite } from "@/lib/email";
+import { sendApplicationOfferInvite } from "@/lib/email";
+import { startRentalApplication } from "@/lib/rental-application-server";
+import { parseOfferInput, offerTermLines, canSendNewOffer, type OfferParsed } from "@/lib/application-offer";
 import { createHash } from "crypto";
 import { DOCUMENTS_BUCKET } from "@/lib/documents-server";
 import { documentStoragePath, validateDocumentUpload } from "@/lib/documents";
@@ -359,7 +360,6 @@ export async function clearNextAction(formData: FormData) {
 export async function requestRentalApplication(formData: FormData) {
   await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
   const id = String(formData.get("id") ?? "");
-  const payMode = normalizePayMode(String(formData.get("pay_mode") ?? ""));
   if (!id) return;
 
   const org = await getCurrentOrg();
@@ -370,8 +370,7 @@ export async function requestRentalApplication(formData: FormData) {
   }
 
   const supabase = createClient();
-  // RLS-scoped read — a foreign/forged lead id yields null and the action no-ops
-  // (mirrors leadInOrg). Pull the basics we denormalize onto the application.
+  // RLS-scoped read — a foreign/forged lead id yields null and the action no-ops.
   const { data: leadRow } = await supabase
     .from("leads")
     .select("id, name, email, phone, property_id, property:properties(address)")
@@ -387,90 +386,251 @@ export async function requestRentalApplication(formData: FormData) {
     property: { address: string | null } | null;
   };
 
-  // Idempotency: don't mint a duplicate while an application is already open for
-  // this lead (any non-declined status). A declined one may be re-requested.
-  const { data: existing } = await supabase
-    .from("rental_applications")
-    .select("id")
-    .eq("lead_id", id)
-    .neq("status", "declined")
-    .limit(1);
-  if ((existing?.length ?? 0) > 0) {
-    redirect(`/dashboard/leads/${id}?apply=exists`);
-  }
+  // S816: the same button adds a co-applicant when a name/email/phone is typed
+  // in "Add another applicant"; otherwise it goes to the renter on file.
+  const coName = String(formData.get("co_name") ?? "").trim();
+  const coEmail = String(formData.get("co_email") ?? "").trim();
+  const coPhone = String(formData.get("co_phone") ?? "").trim();
+  const isCo = !!(coName || coEmail || coPhone);
+  const applicant = isCo
+    ? { name: coName || null, email: coEmail || null, phone: coPhone || null }
+    : { name: lead.name, email: lead.email, phone: lead.phone };
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Resolve (or create) the durable per-org person for this applicant NOW, from
-  // the lead identity, so the whole application lifecycle shares one identity:
-  // Slice 2 screening (buildInviteRequest needs a personId), file-to-vault (the
-  // filed summary lands on the person's vault page), and the eventual tenancy
-  // (createTenancy resolves the same contact key -> the SAME person). A missing
-  // contact key just yields a fresh person; a null result is harmless.
-  const applicantPhoneE164 = normalizePhoneE164(lead.phone);
-  const personId = await resolvePersonId(supabase, org.id, {
-    name: lead.name,
-    email: lead.email,
-    phone: lead.phone,
-    phone_e164: applicantPhoneE164,
-  });
-
-  const { data: inserted, error } = await supabase
-    .from("rental_applications")
-    .insert({
-      organization_id: org.id,
-      lead_id: id,
-      property_id: lead.property_id,
-      person_id: personId,
-      applicant_name: lead.name,
-      applicant_email: lead.email,
-      applicant_phone: lead.phone,
-      applicant_email_norm: normalizeEmail(lead.email),
-      applicant_phone_e164: applicantPhoneE164,
-      pay_mode: payMode,
-      requested_by: user?.id ?? null,
-    })
-    .select("public_token")
-    .single();
-  if (error || !inserted) {
-    redirect(`/dashboard/leads/${id}?apply=error`);
-  }
-  const token = (inserted as { public_token: string }).public_token;
-  const applyUrl = `${APP_URL}/apply/${token}`;
-
-  // Best-effort branded invite to the applicant (never blocks the operator).
-  if (lead.email) {
-    try {
-      await sendRentalApplicationInvite({
-        applicant_name: lead.name,
-        applicant_email: lead.email,
-        org_name: org.name,
-        brand_color: org.brand_color,
-        logo_url: org.logo_url,
-        mail_alias: org.mail_alias,
-        reply_to_email: org.reply_to_email,
-        property_address: lead.property?.address ?? null,
-        apply_url: applyUrl,
-      });
-    } catch {
-      // swallow — the application row is saved; the invite is best-effort and the
-      // operator can always copy the link from the lead detail card.
-    }
-  }
-
-  // Timeline note for oversight.
-  await supabase.from("messages").insert({
-    organization_id: org.id,
-    lead_id: id,
-    channel: "note",
-    direction: "outbound",
-    body: `Rental application requested (${payMode === "landlord" ? "landlord-paid" : "applicant-paid"}).`,
+  const res = await startRentalApplication(supabase, {
+    org: {
+      id: org.id,
+      name: org.name,
+      brand_color: org.brand_color ?? null,
+      logo_url: org.logo_url ?? null,
+      mail_alias: org.mail_alias ?? null,
+      reply_to_email: org.reply_to_email ?? null,
+    },
+    leadId: id,
+    propertyId: lead.property_id,
+    propertyAddress: lead.property?.address ?? null,
+    applicant,
+    requestedBy: user?.id ?? null,
+    sentByLabel: "your team",
   });
 
   revalidatePath(`/dashboard/leads/${id}`);
-  redirect(`/dashboard/leads/${id}?apply=sent`);
+  if (!res.ok) redirect(`/dashboard/leads/${id}?apply=${res.reason === "exists" ? "exists" : res.reason === "contact_required" ? "contact" : "error"}#application`);
+  redirect(`/dashboard/leads/${id}?apply=${res.emailed ? "sent" : "made"}#application`);
+}
+
+// S816: mark the credit check as asked for or received (the landlord runs it
+// with their own screening company; Vacantless never holds the report).
+export async function setCreditCheck(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
+  const leadId = String(formData.get("id") ?? "");
+  const appId = String(formData.get("application_id") ?? "");
+  const state = String(formData.get("state") ?? "");
+  if (!leadId || !appId) return;
+  const next = state === "asked" || state === "received" ? state : null;
+  const supabase = createClient();
+  const { data: app } = await supabase
+    .from("rental_applications")
+    .select("id, applicant_name")
+    .eq("id", appId)
+    .eq("lead_id", leadId)
+    .maybeSingle();
+  if (!app) return;
+  const org = await getCurrentOrg();
+  if (!org) return;
+  await supabase
+    .from("rental_applications")
+    .update({ credit_check_status: next, credit_check_at: next ? new Date().toISOString() : null })
+    .eq("id", appId);
+  if (next) {
+    await supabase.from("messages").insert({
+      organization_id: org.id,
+      lead_id: leadId,
+      channel: "note",
+      direction: "outbound",
+      body: `Credit check ${next === "asked" ? "asked for" : "received"}: ${(app as { applicant_name: string | null }).applicant_name ?? "applicant"}.`,
+    });
+  }
+  revalidatePath(`/dashboard/leads/${leadId}`);
+  redirect(`/dashboard/leads/${leadId}#application`);
+}
+
+// S816: withdraw one application (wrong person, or they backed out).
+export async function withdrawRentalApplication(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
+  const leadId = String(formData.get("id") ?? "");
+  const appId = String(formData.get("application_id") ?? "");
+  if (!leadId || !appId) return;
+  const org = await getCurrentOrg();
+  if (!org) return;
+  const supabase = createClient();
+  const { data: app } = await supabase
+    .from("rental_applications")
+    .update({ status: "declined", updated_at: new Date().toISOString() })
+    .eq("id", appId)
+    .eq("lead_id", leadId)
+    .select("applicant_name")
+    .maybeSingle();
+  if (app) {
+    await supabase.from("messages").insert({
+      organization_id: org.id,
+      lead_id: leadId,
+      channel: "note",
+      direction: "outbound",
+      body: `Rental application withdrawn: ${(app as { applicant_name: string | null }).applicant_name ?? "applicant"}.`,
+    });
+  }
+  revalidatePath(`/dashboard/leads/${leadId}`);
+  redirect(`/dashboard/leads/${leadId}#application`);
+}
+
+// S816: send an offer to everyone who signed an application on this renter.
+// The landlord signs by typing their name; each applicant gets their own link.
+export async function sendApplicationOffer(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
+  const leadId = String(formData.get("id") ?? "");
+  if (!leadId) return;
+  const org = await getCurrentOrg();
+  if (!org) return;
+  if (!canUseRentalApplications(org.plan)) redirect(`/dashboard/leads/${leadId}?apply=upgrade`);
+  const back = (e: string) => redirect(`/dashboard/leads/${leadId}?offer_err=${e}#offer`);
+
+  const parsed = parseOfferInput({
+    rent: String(formData.get("rent") ?? ""),
+    deposit: String(formData.get("deposit") ?? ""),
+    startDate: String(formData.get("start_date") ?? ""),
+    termMonths: String(formData.get("term_months") ?? ""),
+    conditions: String(formData.get("conditions") ?? ""),
+    landlordName: String(formData.get("landlord_name") ?? ""),
+  });
+  if (!parsed.ok) back(parsed.reason);
+  const offer = (parsed as { ok: true; value: OfferParsed }).value;
+
+  const supabase = createClient();
+  const { data: leadRow } = await supabase
+    .from("leads")
+    .select("id, property_id, property:properties(address)")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (!leadRow) return;
+  const lead = leadRow as unknown as { property_id: string | null; property: { address: string | null } | null };
+
+  const { data: latest } = await supabase
+    .from("application_offers")
+    .select("status")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!canSendNewOffer((latest as { status: string } | null)?.status)) back("open_offer");
+
+  const { data: apps } = await supabase
+    .from("rental_applications")
+    .select("id, person_id, applicant_name, applicant_email")
+    .eq("lead_id", leadId)
+    .in("status", ["submitted", "screening", "complete"]);
+  const applicants = (apps ?? []) as {
+    id: string;
+    person_id: string | null;
+    applicant_name: string | null;
+    applicant_email: string | null;
+  }[];
+  if (applicants.length === 0) back("no_applicants");
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: ins, error } = await supabase
+    .from("application_offers")
+    .insert({
+      organization_id: org.id,
+      lead_id: leadId,
+      property_id: lead.property_id,
+      ...offer,
+      created_by: user?.id ?? null,
+    })
+    .select("id")
+    .single();
+  if (error || !ins) back("error");
+  const offerId = (ins as { id: string }).id;
+
+  const { data: signers } = await supabase
+    .from("application_offer_signers")
+    .insert(
+      applicants.map((a) => ({
+        organization_id: org.id,
+        offer_id: offerId,
+        application_id: a.id,
+        person_id: a.person_id,
+        name: a.applicant_name,
+        email: a.applicant_email,
+      })),
+    )
+    .select("name, email, token");
+
+  let emailed = 0;
+  for (const s of (signers ?? []) as { name: string | null; email: string | null; token: string }[]) {
+    if (!s.email) continue;
+    try {
+      const r = await sendApplicationOfferInvite({
+        applicant_name: s.name,
+        applicant_email: s.email,
+        org_name: org.name,
+        brand_color: org.brand_color ?? null,
+        logo_url: org.logo_url ?? null,
+        mail_alias: org.mail_alias ?? null,
+        reply_to_email: org.reply_to_email ?? null,
+        property_address: lead.property?.address ?? null,
+        term_lines: offerTermLines(offer),
+        offer_url: `${APP_URL}/offer/${s.token}`,
+      });
+      if (r.sent) emailed++;
+    } catch {
+      // best effort; the link is on the renter page to copy
+    }
+  }
+
+  await supabase.from("messages").insert({
+    organization_id: org.id,
+    lead_id: leadId,
+    channel: "note",
+    direction: "outbound",
+    body: `Offer sent, signed by ${offer.landlord_signed_name}: ${offerTermLines(offer).join(", ")}. Emailed ${emailed} of ${applicants.length}.`,
+  });
+  revalidatePath(`/dashboard/leads/${leadId}`);
+  redirect(`/dashboard/leads/${leadId}?offer=sent#offer`);
+}
+
+export async function withdrawApplicationOffer(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
+  const leadId = String(formData.get("id") ?? "");
+  const offerId = String(formData.get("offer_id") ?? "");
+  if (!leadId || !offerId) return;
+  const org = await getCurrentOrg();
+  if (!org) return;
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("application_offers")
+    .update({ status: "withdrawn", updated_at: new Date().toISOString() })
+    .eq("id", offerId)
+    .eq("lead_id", leadId)
+    .eq("status", "sent")
+    .select("id")
+    .maybeSingle();
+  if (data) {
+    await supabase.from("messages").insert({
+      organization_id: org.id,
+      lead_id: leadId,
+      channel: "note",
+      direction: "outbound",
+      body: "Offer withdrawn.",
+    });
+  }
+  revalidatePath(`/dashboard/leads/${leadId}`);
+  redirect(`/dashboard/leads/${leadId}#offer`);
 }
 
 // File a SUBMITTED application's NON-SENSITIVE summary PDF into the document

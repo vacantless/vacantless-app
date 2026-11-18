@@ -568,6 +568,83 @@ export async function sendRentalApplicationInvite(
 }
 
 // ---------------------------------------------------------------------------
+// S816: offer to rent. Each applicant gets their own link to read and sign.
+// ---------------------------------------------------------------------------
+
+export type ApplicationOfferInvitePayload = {
+  applicant_name: string | null;
+  applicant_email: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  mail_alias?: string | null;
+  reply_to_email: string | null;
+  property_address: string | null;
+  term_lines: string[];
+  offer_url: string; // absolute /offer/<token> link
+};
+
+function applicationOfferInviteHtml(p: ApplicationOfferInvitePayload): string {
+  const brand = escapeHtml(p.brand_color || DEFAULT_BRAND_COLOR);
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.applicant_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : null;
+  const url = escapeHtml(p.offer_url);
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+  const terms = p.term_lines.map((l) => `<li style="margin:0 0 4px;">${escapeHtml(l)}</li>`).join("");
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${brand};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 12px;">Good news: ${org} is offering you ${addr ? `<strong>${addr}</strong>` : "the rental"}.</p>
+      <ul style="margin:0 0 20px;padding-left:18px;">${terms}</ul>
+      <p style="margin:0 0 24px;">
+        <a href="${url}" style="display:inline-block;background:${brand};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px;">Read and sign the offer</a>
+      </p>
+      <p style="margin:0 0 8px;color:#52525b;font-size:13px;">Or paste this link into your browser:</p>
+      <p style="margin:0 0 16px;word-break:break-all;font-size:13px;"><a href="${url}" style="color:${brand};">${url}</a></p>
+      <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
+    </div>
+  </div>
+</body></html>`;
+}
+
+/** Best-effort branded offer email. Never throws. */
+export async function sendApplicationOfferInvite(p: ApplicationOfferInvitePayload): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.applicant_email) return { sent: false, reason: "no_applicant_email" };
+  const subject = p.property_address ? `Your offer for ${p.property_address}` : "Your rental offer";
+  const body = {
+    sender: senderOf(p.mail_alias, p.org_name),
+    to: [{ email: p.applicant_email, ...(p.applicant_name ? { name: p.applicant_name } : {}) }],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: applicationOfferInviteHtml(p),
+    tags: ["kind:application_offer"],
+  };
+  try {
+    const res = await brevoFetch({
+      method: "POST",
+      headers: { "api-key": apiKey, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Showing reschedule proposal (S497). Renter-facing: operator suggests 1-3
 // currently open slots, but the viewing is not moved until the renter accepts
 // through the POST-only magic link.

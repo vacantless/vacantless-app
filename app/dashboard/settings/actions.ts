@@ -1,5 +1,6 @@
 "use server";
 
+import { normalizeScreeningLink } from "@/lib/rental-application";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
@@ -1330,4 +1331,23 @@ export async function requestTexting() {
   }
 
   redirect("/dashboard/settings?tab=comms&sms=requested");
+}
+
+
+// S816: the account's own credit check company link. Applicants go straight to
+// it after they sign their application. Any provider works; Vacantless never
+// holds the report.
+export async function updateScreeningLink(formData: FormData) {
+  const org = await requireSettingsOrg();
+  const rawUrl = String(formData.get("screening_link_url") ?? "");
+  const url = normalizeScreeningLink(rawUrl);
+  if (rawUrl.trim() && !url) redirect("/dashboard/settings?tab=brand&credit=bad#credit-check");
+  const name = String(formData.get("screening_link_name") ?? "").trim().slice(0, 60) || null;
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ screening_link_url: url, screening_link_name: url ? name : null })
+    .eq("id", org.id);
+  if (error) redirect("/dashboard/settings?tab=brand&credit=error#credit-check");
+  redirect("/dashboard/settings?tab=brand&credit=saved#credit-check");
 }

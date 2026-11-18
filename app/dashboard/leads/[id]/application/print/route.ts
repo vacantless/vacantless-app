@@ -37,18 +37,17 @@ export async function GET(
 
   const supabase = createClient();
 
-  // The latest non-declined application for this lead (RLS scopes to org). One is
-  // open at a time (requestRentalApplication guards duplicates).
-  const { data: appRow } = await supabase
+  // S816: a renter can have several applicants; ?app= picks one. Without it,
+  // the latest non-declined one (older links keep working).
+  const appId = req.nextUrl.searchParams.get("app");
+  let q = supabase
     .from("rental_applications")
     .select(
-      "id, status, pay_mode, applicant_name, applicant_email, applicant_phone, submitted_at, form_data, property:properties(address)",
+      "id, status, pay_mode, applicant_name, applicant_email, applicant_phone, submitted_at, form_data, signed_name, signed_at, signer_ip, signer_user_agent, consent_text, credit_check_status, property:properties(address)",
     )
-    .eq("lead_id", params.id)
-    .neq("status", "declined")
-    .order("requested_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq("lead_id", params.id);
+  q = appId ? q.eq("id", appId) : q.neq("status", "declined");
+  const { data: appRow } = await q.order("requested_at", { ascending: false }).limit(1).maybeSingle();
   if (!appRow) return new NextResponse("Application not found", { status: 404 });
 
   const app = appRow as unknown as {
@@ -59,6 +58,12 @@ export async function GET(
     applicant_phone: string | null;
     submitted_at: string | null;
     form_data: Record<string, unknown> | null;
+    signed_name: string | null;
+    signed_at: string | null;
+    signer_ip: string | null;
+    signer_user_agent: string | null;
+    consent_text: string | null;
+    credit_check_status: string | null;
     property: { address: string | null } | null;
   };
 
@@ -87,6 +92,21 @@ export async function GET(
     submittedAtIso: app.submitted_at,
     formData: app.form_data,
     generatedAtIso: new Date().toISOString(),
+    signature: app.signed_name
+      ? {
+          signedName: app.signed_name,
+          signedAtIso: app.signed_at,
+          ip: app.signer_ip,
+          device: app.signer_user_agent,
+          consentText: app.consent_text,
+        }
+      : null,
+    creditCheck:
+      app.credit_check_status === "received"
+        ? "Received"
+        : app.credit_check_status === "asked"
+          ? "Asked for"
+          : null,
   });
 
   return new NextResponse(renderApplicationSummaryHtml(model), {

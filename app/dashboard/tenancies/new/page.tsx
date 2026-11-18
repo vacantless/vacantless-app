@@ -41,7 +41,7 @@ const inputCls = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm";
 export default async function NewTenancyPage({
   searchParams,
 }: {
-  searchParams: { from?: string; err?: string; property?: string };
+  searchParams: { from?: string; err?: string; property?: string; offer?: string };
 }) {
   const supabase = createClient();
   const org = await getCurrentOrg();
@@ -67,6 +67,40 @@ export default async function NewTenancyPage({
   }
 
   const isConvert = lead != null;
+
+  // S816: an accepted offer fills in the terms and every applicant who signed.
+  type OfferPrefill = {
+    id: string;
+    rent_cents: number;
+    deposit_cents: number | null;
+    start_date: string;
+    term_months: number | null;
+    signers: { name: string | null; status: string; created_at: string; app: { applicant_email: string | null; applicant_phone: string | null } | null }[];
+  };
+  let offer: OfferPrefill | null = null;
+  if (lead && searchParams.offer) {
+    const { data } = await supabase
+      .from("application_offers")
+      .select(
+        "id, rent_cents, deposit_cents, start_date, term_months, signers:application_offer_signers(name, status, created_at, app:rental_applications(applicant_email, applicant_phone))",
+      )
+      .eq("id", searchParams.offer)
+      .eq("lead_id", lead.id)
+      .eq("status", "accepted")
+      .maybeSingle();
+    offer = (data as unknown as OfferPrefill | null) ?? null;
+  }
+  const offerTenants = (offer?.signers ?? [])
+    .filter((x) => x.status === "signed")
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .slice(0, 3)
+    .map((x) => ({ name: x.name ?? "", email: x.app?.applicant_email ?? "", phone: x.app?.applicant_phone ?? "" }));
+  const tenantDefault = (i: number, k: "name" | "email" | "phone"): string =>
+    offerTenants.length > 0
+      ? offerTenants[i]?.[k] ?? ""
+      : i === 0
+        ? (k === "name" ? lead?.name : k === "email" ? lead?.email : lead?.phone) ?? ""
+        : "";
   // Preselect the unit: a converted lead's property wins; otherwise honor
   // ?property= from the rental lifecycle rail's Lease step (S282, IA G8 fix),
   // so "create the lease for this unit" lands with the unit already chosen.
@@ -112,12 +146,13 @@ export default async function NewTenancyPage({
   const emptyState = newTenancyEmptyState(allProperties.length, properties.length);
 
   const leadProperty = properties.find((p) => p.id === defaultPropertyId);
-  const defaultRent =
-    leadProperty?.rent_cents != null
+  const defaultRent = offer
+    ? (offer.rent_cents / 100).toString()
+    : leadProperty?.rent_cents != null
       ? (leadProperty.rent_cents / 100).toString()
       : "";
   const defaultStart =
-    (lead?.move_in && parseDateOrNull(lead.move_in)) || "";
+    offer?.start_date || (lead?.move_in && parseDateOrNull(lead.move_in)) || "";
 
   const errMsg = tenancyErrorMessage(searchParams.err);
   const leaseTermShiftOn = leaseTermShiftEnabled();
@@ -198,6 +233,12 @@ export default async function NewTenancyPage({
           className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
         >
           {isConvert && <input type="hidden" name="lead_id" value={lead!.id} />}
+          {offer && <input type="hidden" name="offer_id" value={offer.id} />}
+          {offer && (
+            <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+              Filled in from the signed offer. Check it and save.
+            </p>
+          )}
 
           {/* Unit + dates ------------------------------------------------- */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -255,6 +296,7 @@ export default async function NewTenancyPage({
                 step="1"
                 min="1"
                 placeholder="12"
+                defaultValue={offer?.term_months ?? undefined}
                 className={inputCls}
               />
             </div>
@@ -315,6 +357,7 @@ export default async function NewTenancyPage({
                 step="0.01"
                 min="0"
                 placeholder="1250"
+                defaultValue={offer?.deposit_cents != null ? offer.deposit_cents / 100 : undefined}
                 className={inputCls}
               />
             </div>
@@ -358,7 +401,7 @@ export default async function NewTenancyPage({
                     id={`tenant-name-${i}`}
                     name="tenant_name"
                     placeholder={i === 0 ? "Full name" : "Co-tenant name (optional)"}
-                    defaultValue={i === 0 ? lead?.name ?? "" : ""}
+                    defaultValue={tenantDefault(i, "name")}
                     className={inputCls}
                   />
                   <label htmlFor={`tenant-email-${i}`} className="sr-only">
@@ -369,7 +412,7 @@ export default async function NewTenancyPage({
                     name="tenant_email"
                     type="email"
                     placeholder="Email"
-                    defaultValue={i === 0 ? lead?.email ?? "" : ""}
+                    defaultValue={tenantDefault(i, "email")}
                     className={inputCls}
                   />
                   <label htmlFor={`tenant-phone-${i}`} className="sr-only">
@@ -379,7 +422,7 @@ export default async function NewTenancyPage({
                     id={`tenant-phone-${i}`}
                     name="tenant_phone"
                     placeholder="Phone"
-                    defaultValue={i === 0 ? lead?.phone ?? "" : ""}
+                    defaultValue={tenantDefault(i, "phone")}
                     className={inputCls}
                   />
                 </div>

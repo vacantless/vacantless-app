@@ -1,0 +1,32 @@
+S816a: signed applications, co-applicants, agent send, offers, credit check link
+
+Noam 2026-11-17: "is it easy for an agent or manager to send a renter a
+rental application? how about an offer? should this be improved up for
+pulling credit and signing for authorization." "Proceed with 1 to 4."
+"it has to be easy to use and be easily accessible and integrated".
+SingleKey dropped (cost); any credit check company works by link.
+
+- Migration 0304 (applied to prod by Noam via COPY-SQL-0304, checked by
+  SQL and a rolled-back sign test): signature columns on
+  rental_applications, screening_link_url/name on organizations,
+  submit_rental_application_signed (old submit kept), application_offers
+  and application_offer_signers with RLS, get_application_offer_by_token,
+  sign_application_offer (last signer makes it accepted).
+- Apply page: the authorization words (lib applicationConsentText) and a
+  typed signature that must match the legal name; time, IP and device kept.
+  After signing, the account's own credit check link shows if saved.
+- Renter page: one "Application and offer" card. Every applicant with tap
+  to call/email, status, copy link, open the signed application, credit
+  check Asked for / Received, withdraw; add another applicant; send an
+  offer (landlord signs by typing a name); each applicant signs their own
+  /offer link; accepted offer opens the tenancy filled in.
+- Showing agent page: after "Renter showed", one button sends the
+  application (shared starter lib/rental-application-server).
+- Tenancy: started from an offer is linked to it. People page and tenancy
+  page list the signed application and offer (components/signed-papers).
+- Settings, Brand tab: Credit checks link and company name.
+- Signed application record shows the signature block and exact words.
+- Homepage: three lines in Renters and viewings.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrMz8oSgzAZqtkqGS3

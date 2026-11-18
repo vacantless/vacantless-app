@@ -752,6 +752,10 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
       { text: "Make a phone number required on your renter form, so you can always call back." },
       { text: "Missed a call from a renter? It shows on their record with a reminder to call back.", plan: "paid plans, with texting on" },
       { text: "Messages that look like scams are held, not filed as renters." },
+      // S816: signed applications, co-applicants, agent send, offers, credit check link.
+      { text: "Renters apply and sign online, each roommate on their own link. Your showing agent can send it from the doorstep.", plan: "Starter and up" },
+      { text: "Send an offer they sign too. When everyone signs, their tenant record fills itself in.", plan: "Starter and up" },
+      { text: "Use any credit check company. After signing, renters go straight to your link." },
     ],
   },
   {

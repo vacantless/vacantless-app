@@ -6,6 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendOrgNotification } from "@/lib/notifications-server";
 import { resolveLeadNotifyEmailsPreferMemberFallback } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
+import { canUseRentalApplications } from "@/lib/billing";
+import { startRentalApplication } from "@/lib/rental-application-server";
 
 // Public, UNAUTHENTICATED agent self-confirm (showing routing Slice 3). The
 // covering agent opens their /agent/[token] shared calendar from the hand-off /
@@ -63,7 +65,11 @@ export async function recordOutcomeFromToken(formData: FormData) {
   if (error || !result?.ok) {
     redirect(path(token, result?.reason === "not_found" ? "invalid" : "error"));
   }
-  redirect(path(token, outcome === "attended" ? "recorded_attended" : "recorded_no_show"));
+  // S816: after "Renter showed", the agent can send the application right there.
+  if (outcome === "attended") {
+    redirect(`${path(token, "recorded_attended")}&showing=${encodeURIComponent(showingId)}`);
+  }
+  redirect(path(token, "recorded_no_show"));
 }
 
 // S729: "Can't make it". The agent hands an upcoming viewing back. The
@@ -176,4 +182,74 @@ export async function releaseShowingFromToken(formData: FormData) {
   }
   await notifyCantMakeIt(result);
   redirect(path(token, "released"));
+}
+
+
+// S816: the covering agent sends the rental application from the doorstep.
+// Re-derives the agent and org from the token, and only for a viewing assigned
+// to this agent that they marked as attended. Uses the shared starter, so the
+// renter gets the same email and the renter page shows who sent it.
+export async function sendApplicationFromToken(formData: FormData) {
+  const token = String(formData.get("token") ?? "").trim();
+  const showingId = String(formData.get("showing_id") ?? "").trim();
+  if (!token || !showingId) redirect("/agent/invalid?status=invalid");
+  const admin = createAdminClient();
+  if (!admin) redirect(path(token, "error"));
+
+  const { data: agentRow } = await admin!
+    .from("showing_agents")
+    .select("id, name, archived, organization_id")
+    .eq("agent_token", token)
+    .maybeSingle();
+  const agent = agentRow as { id: string; name: string; archived: boolean; organization_id: string } | null;
+  if (!agent || agent.archived) redirect(path(token, "invalid"));
+
+  const { data: showingRow } = await admin!
+    .from("showings")
+    .select("id, outcome, lead:leads(id, name, email, phone, property_id, property:properties(address))")
+    .eq("id", showingId)
+    .eq("assigned_agent_id", agent!.id)
+    .eq("organization_id", agent!.organization_id)
+    .maybeSingle();
+  const showing = showingRow as unknown as {
+    outcome: string | null;
+    lead: {
+      id: string;
+      name: string | null;
+      email: string | null;
+      phone: string | null;
+      property_id: string | null;
+      property: { address: string | null } | null;
+    } | null;
+  } | null;
+  if (!showing?.lead || showing.outcome !== "attended") redirect(path(token, "error"));
+
+  const { data: orgRow } = await admin!
+    .from("organizations")
+    .select("id, name, plan, brand_color, logo_url, mail_alias, reply_to_email")
+    .eq("id", agent!.organization_id)
+    .maybeSingle();
+  const org = orgRow as {
+    id: string;
+    name: string | null;
+    plan: string | null;
+    brand_color: string | null;
+    logo_url: string | null;
+    mail_alias: string | null;
+    reply_to_email: string | null;
+  } | null;
+  if (!org || !canUseRentalApplications(org.plan)) redirect(path(token, "app_unavailable"));
+
+  const lead = showing!.lead!;
+  const res = await startRentalApplication(admin!, {
+    org: org!,
+    leadId: lead.id,
+    propertyId: lead.property_id,
+    propertyAddress: lead.property?.address ?? null,
+    applicant: { name: lead.name, email: lead.email, phone: lead.phone },
+    sentByAgentId: agent!.id,
+    sentByLabel: `${agent!.name} (showing agent)`,
+  });
+  if (!res.ok) redirect(path(token, res.reason === "exists" ? "app_exists" : "app_failed"));
+  redirect(path(token, res.emailed ? "app_sent" : "app_made"));
 }

@@ -33,12 +33,9 @@ import {
   setNextAction,
   clearNextAction,
   updateLeadStatus,
-  requestRentalApplication,
-  fileApplicationPdf,
 } from "../actions";
 import { canUseRentalApplications } from "@/lib/billing";
-import { ALLOWED_FORM_FIELDS } from "@/lib/rental-application";
-import { createDocumentDownloadUrl } from "@/lib/documents-server";
+import { ApplicationCard, type CardApplication, type CardOffer } from "./application-card";
 import { OutcomeSelect } from "../../showings/outcome-select";
 import { InquiryReplyPanel } from "../inquiry-reply-panel";
 import { TextBackPanel } from "../text-back-panel";
@@ -48,7 +45,6 @@ import { displayCanadianNumber } from "@/lib/texting-setup-emails";
 import { buildAiReplyDraft } from "@/lib/ai-reply";
 import { loadPropertyKnowledge } from "@/lib/property-qa";
 import { PropertyQaPanel } from "../property-qa-panel";
-import { SCREENING_LIVE } from "@/lib/screening-live";
 import {
   isFeatureEnabledForOrg,
   loadOrganizationFeatureFlags,
@@ -140,7 +136,7 @@ export default async function LeadDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { apply?: string; qa?: string; text?: string; book?: string };
+  searchParams: { apply?: string; qa?: string; text?: string; book?: string; offer?: string; offer_err?: string };
 }) {
   const supabase = createClient();
   const { data: lead } = await supabase
@@ -192,35 +188,26 @@ export default async function LeadDetailPage({
     .order("scheduled_at", { ascending: false });
   const showings = (showingData ?? []) as Showing[];
 
-  // Rental application on this lead (S454, Slice 1). Latest by request time; there
-  // is at most one OPEN application (requestRentalApplication guards duplicates).
-  const { data: appRow } = await supabase
+  // S816: every application on this renter (co-applicants too) and the latest
+  // offer with its signatures, for the Application and offer card.
+  const { data: appRows } = await supabase
     .from("rental_applications")
     .select(
-      "id, status, public_token, pay_mode, applicant_name, submitted_at, requested_at, form_data, filed_to_vault_at, filed_document_id",
+      "id, status, public_token, applicant_name, applicant_email, applicant_phone, requested_at, submitted_at, signed_at, signed_name, credit_check_status, person_id",
     )
     .eq("lead_id", l.id)
-    .order("requested_at", { ascending: false })
+    .order("requested_at", { ascending: true });
+  const applications = (appRows ?? []) as CardApplication[];
+  const { data: offerRow } = await supabase
+    .from("application_offers")
+    .select(
+      "id, status, rent_cents, deposit_cents, start_date, term_months, conditions, landlord_signed_name, landlord_signed_at, tenancy_id, signers:application_offer_signers(id, name, status, signed_at, token, created_at)",
+    )
+    .eq("lead_id", l.id)
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const application = appRow as RentalApp | null;
-
-  // Signed download for the filed application-summary PDF (S456, Slice 1b), if
-  // one exists. Minted per page load (short-lived) like the vault list view.
-  let applicationFiledDownloadUrl: string | null = null;
-  if (application?.filed_document_id) {
-    const { data: docRow } = await supabase
-      .from("documents")
-      .select("storage_path")
-      .eq("id", application.filed_document_id)
-      .is("deleted_at", null)
-      .maybeSingle();
-    const storagePath = (docRow as { storage_path: string } | null)?.storage_path ?? null;
-    if (storagePath) {
-      const signed = await createDocumentDownloadUrl(supabase, storagePath);
-      if (signed.ok) applicationFiledDownloadUrl = signed.signedUrl;
-    }
-  }
+  const offer = (offerRow as CardOffer | null) ?? null;
 
   // Cancelled-booking cue (S447 Codex P3): a lead can sit at "Booked" after its
   // only viewing was cancelled. Since 0228 a trigger moves such leads back to
@@ -757,13 +744,19 @@ export default async function LeadDetailPage({
 
       <ApplicationCard
         leadId={l.id}
-        application={application}
+        lead={{ name: l.name, email: l.email, phone: l.phone, move_in: l.move_in ?? null }}
+        rentCents={l.property?.rent_cents ?? null}
+        applications={applications}
+        offer={offer}
         canApplications={canApplications}
-        applyBaseUrl={APP_URL}
+        appUrl={APP_URL}
         timeZone={timeZone}
-        bannerKey={applyBannerKey}
-        printUrl={`/dashboard/leads/${l.id}/application/print`}
-        filedDownloadUrl={applicationFiledDownloadUrl}
+        applyBanner={applyBannerKey}
+        offerBanner={searchParams.offer ?? null}
+        offerError={searchParams.offer_err ?? null}
+        screeningName={org?.screening_link_name ?? null}
+        hasScreeningLink={!!org?.screening_link_url}
+        tenancyId={existingTenancyId}
       />
 
       <div className="mt-8">
@@ -985,283 +978,6 @@ function Field({
           <span className="text-gray-400">-</span>
         )}
       </div>
-    </div>
-  );
-}
-
-// --- Rental application (S454, Slice 1) ------------------------------------
-
-type RentalApp = {
-  id: string;
-  status: string;
-  public_token: string;
-  pay_mode: string;
-  applicant_name: string | null;
-  submitted_at: string | null;
-  requested_at: string | null;
-  form_data: Record<string, unknown> | null;
-  filed_to_vault_at: string | null;
-  filed_document_id: string | null;
-};
-
-// Human labels for the non-sensitive Form-410-equivalent keys (mirror
-// lib/rental-application ALLOWED_FORM_FIELDS). Used to render the submission.
-const FORM_LABELS: Record<string, string> = {
-  current_address: "Current address",
-  current_duration: "Time at current address",
-  current_rent: "Current monthly rent",
-  current_landlord_name: "Current landlord",
-  current_landlord_contact: "Current landlord contact",
-  current_reason_leaving: "Reason for leaving",
-  previous_address: "Previous address",
-  previous_duration: "Time at previous address",
-  previous_landlord_name: "Previous landlord",
-  previous_landlord_contact: "Previous landlord contact",
-  employer: "Employer",
-  position: "Position",
-  employment_length: "Length of employment",
-  supervisor_contact: "Supervisor / HR contact",
-  gross_income: "Gross monthly income",
-  second_employer: "Second employer",
-  second_income: "Second income",
-  other_income: "Other income",
-  bank_reference_institution: "Bank / institution",
-  reference_1_name: "Reference 1",
-  reference_1_contact: "Reference 1 contact",
-  reference_2_name: "Reference 2",
-  reference_2_contact: "Reference 2 contact",
-  vehicles: "Vehicle(s)",
-  occupants: "Other occupants",
-  smoking: "Smoking",
-  pets: "Pets",
-  emergency_contact_name: "Emergency contact",
-  emergency_contact_phone: "Emergency contact phone",
-};
-
-const APPLICATION_ALLOWED = new Set<string>(ALLOWED_FORM_FIELDS as readonly string[]);
-
-const APPLY_BANNERS: Record<string, { tone: "ok" | "warn" | "err"; text: string }> = {
-  sent: { tone: "ok", text: "Application link sent to the applicant." },
-  exists: { tone: "warn", text: "An application is already open for this lead." },
-  error: { tone: "err", text: "Couldn't create the application. Please try again." },
-  upgrade: { tone: "warn", text: "Rental applications come with Starter and up. Upgrade to request one." },
-  filed: { tone: "ok", text: "Application summary filed to the document vault." },
-  filenone: { tone: "err", text: "No PDF was selected. Print the summary, save it as a PDF, then choose that file." },
-  filetype: { tone: "err", text: "That file wasn't a PDF. Use Print → Save as PDF, then upload the PDF." },
-  filenotready: { tone: "warn", text: "The applicant hasn't submitted this application yet." },
-  filefail: { tone: "err", text: "Couldn't file the summary. Please try again." },
-};
-
-function ApplicationCard({
-  leadId,
-  application,
-  canApplications,
-  applyBaseUrl,
-  timeZone,
-  bannerKey,
-  printUrl,
-  filedDownloadUrl,
-}: {
-  leadId: string;
-  application: RentalApp | null;
-  canApplications: boolean;
-  applyBaseUrl: string;
-  timeZone: string;
-  bannerKey: string | null;
-  printUrl: string;
-  filedDownloadUrl: string | null;
-}) {
-  const banner = bannerKey ? APPLY_BANNERS[bannerKey] ?? null : null;
-  const bannerClass =
-    banner?.tone === "ok"
-      ? "border-green-200 bg-green-50 text-green-800"
-      : banner?.tone === "err"
-        ? "border-red-200 bg-red-50 text-red-700"
-        : "border-amber-200 bg-amber-50 text-amber-800";
-
-  const submitted = application != null && application.status !== "requested";
-  const entries = submitted
-    ? Object.entries(application?.form_data ?? {}).filter(
-        ([k, v]) =>
-          APPLICATION_ALLOWED.has(k.trim().toLowerCase()) &&
-          (typeof v === "string" || typeof v === "number" || typeof v === "boolean") &&
-          String(v).trim().length > 0,
-      )
-    : [];
-
-  return (
-    <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      {banner && (
-        <p className={`mb-3 rounded-lg border px-3 py-2 text-sm ${bannerClass}`}>
-          {banner.text}
-        </p>
-      )}
-
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-xs font-medium uppercase tracking-wider text-gray-500">
-          Rental application
-        </h3>
-        {application && (
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-              submitted ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
-            }`}
-          >
-            {submitted ? "Submitted" : "Awaiting applicant"}
-          </span>
-        )}
-      </div>
-
-      {application ? (
-        submitted ? (
-          <div className="mt-3">
-            <p className="text-sm text-gray-600">
-              Submitted
-              {application.submitted_at
-                ? ` ${new Date(application.submitted_at).toLocaleString("en-US", { timeZone })}`
-                : ""}
-              {" · "}
-              {application.pay_mode === "landlord" ? "landlord-paid" : "applicant-paid"}.
-            </p>
-            <details className="mt-2 text-sm">
-              <summary className="cursor-pointer font-medium text-brand">
-                View submission
-              </summary>
-              {entries.length > 0 ? (
-                <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-                  {entries.map(([k, v]) => (
-                    <div key={k}>
-                      <dt className="text-xs font-medium uppercase tracking-wider text-gray-400">
-                        {FORM_LABELS[k.toLowerCase()] ?? k}
-                      </dt>
-                      <dd className="whitespace-pre-wrap text-sm text-gray-800">{String(v)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : (
-                <p className="mt-2 text-sm text-gray-500">
-                  The applicant submitted the consent without filling optional fields.
-                </p>
-              )}
-            </details>
-            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
-              <a
-                href={printUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-medium text-brand hover:underline"
-              >
-                Print summary (save as PDF)
-              </a>
-              {filedDownloadUrl ? (
-                <span className="inline-flex items-center gap-2 text-sm text-gray-600">
-                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
-                    Filed to vault
-                  </span>
-                  <a
-                    href={filedDownloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-brand hover:underline"
-                  >
-                    Download
-                  </a>
-                </span>
-              ) : (
-                <form action={fileApplicationPdf} className="flex flex-wrap items-center gap-2">
-                  <input type="hidden" name="id" value={leadId} />
-                  <input type="hidden" name="application_id" value={application.id} />
-                  <input
-                    type="file"
-                    name="document"
-                    accept="application/pdf"
-                    required
-                    className="text-xs text-gray-600 file:mr-2 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200"
-                  />
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    File to vault
-                  </button>
-                </form>
-              )}
-            </div>
-            {SCREENING_LIVE ? (
-              <p className="mt-3 text-xs text-gray-400">
-                Credit &amp; background screening runs on the applicant&apos;s secure link.
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <div className="mt-3 space-y-2">
-            <p className="text-sm text-gray-600">
-              Requested
-              {application.requested_at
-                ? ` ${new Date(application.requested_at).toLocaleString("en-US", { timeZone })}`
-                : ""}
-              {SCREENING_LIVE
-                ? ` · ${application.pay_mode === "landlord" ? "landlord-paid" : "applicant-paid"}`
-                : ""}
-              . Waiting for the applicant to complete it.
-            </p>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-400">
-                Applicant link
-              </span>
-              <input
-                type="text"
-                readOnly
-                value={`${applyBaseUrl}/apply/${application.public_token}`}
-                className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700"
-              />
-            </label>
-          </div>
-        )
-      ) : canApplications ? (
-        <form action={requestRentalApplication} className="mt-3 space-y-3">
-          <input type="hidden" name="id" value={leadId} />
-          <p className="text-sm text-gray-600">
-            Send this renter a secure link to complete a rental application. No SIN, birthdate, or banking
-            details are collected on this step.
-          </p>
-          <div className="flex flex-wrap items-end gap-3">
-            {SCREENING_LIVE ? (
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-gray-400">
-                  Who pays for screening
-                </span>
-                <select
-                  name="pay_mode"
-                  defaultValue="applicant"
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                >
-                  <option value="applicant">Applicant pays</option>
-                  <option value="landlord">I&apos;ll pay</option>
-                </select>
-              </label>
-            ) : null}
-            <button
-              type="submit"
-              className="rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
-              style={{ background: "var(--brand-gradient, var(--brand-color))" }}
-            >
-              Request application
-            </button>
-          </div>
-        </form>
-      ) : (
-        <p className="mt-3 text-sm text-gray-500">
-          {SCREENING_LIVE
-            ? "Rental applications with built-in credit & background screening are part of "
-            : "Rental applications are part of "}
-          <span className="font-medium text-gray-700">Starter and up</span>.{" "}
-          <Link href="/dashboard/billing" className="font-medium text-brand hover:underline">
-            Upgrade to request one
-          </Link>
-          .
-        </p>
-      )}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { createDocumentDownloadUrls } from "@/lib/documents-server";
 import { tenancyStatusLabel } from "@/lib/tenancy";
 import { StatusChip, tenancyStatusTone, SectionHeading, type ChipTone } from "@/components/ui";
 import { Icons } from "@/components/icons";
+import { SignedPapers } from "@/components/signed-papers";
 
 export const dynamic = "force-dynamic";
 
@@ -213,6 +214,9 @@ export default async function PersonVaultPage({ params }: { params: { id: string
         </div>
         {person.notes && <p className="mt-3 text-sm text-gray-600">{person.notes}</p>}
       </div>
+
+      {/* S816: signed rental applications and offers follow the person. */}
+      <SignedPapers supabase={supabase} personId={person.id} />
 
       {/* Tenancies across units --------------------------------------------- */}
       <SectionHeading>Tenancies</SectionHeading>

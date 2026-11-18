@@ -7,7 +7,7 @@ import {
   coordinationStatusLabel,
 } from "@/lib/showing-agents";
 import { OUTCOME_NUDGE_MAX_AGE_MS } from "@/lib/reminders";
-import { confirmShowingFromToken, recordOutcomeFromToken, releaseShowingFromToken } from "./actions";
+import { confirmShowingFromToken, recordOutcomeFromToken, releaseShowingFromToken, sendApplicationFromToken } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +76,7 @@ export default async function AgentCalendarPage({
   searchParams,
 }: {
   params: { token: string };
-  searchParams: { status?: string };
+  searchParams: { status?: string; showing?: string };
 }) {
   const admin = createAdminClient();
   if (!admin) notFound();
@@ -332,9 +332,44 @@ export default async function AgentCalendarPage({
           </p>
         )}
         {recordedAttended && (
+          <div className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+            <p>Thanks, marked as attended. That updates the renter&apos;s status automatically.</p>
+            {searchParams.showing ? (
+              <form action={sendApplicationFromToken} className="mt-3">
+                <input type="hidden" name="token" value={params.token} />
+                <input type="hidden" name="showing_id" value={searchParams.showing} />
+                <button
+                  type="submit"
+                  className="w-full rounded-xl px-4 py-3 text-center text-base font-semibold text-white shadow-sm hover:opacity-95"
+                  style={{ background: brandBg }}
+                >
+                  Interested? Send them the rental application
+                </button>
+                <p className="mt-1 text-xs text-emerald-700">
+                  They get an email with a link to apply and sign. {orgName} sees it right away.
+                </p>
+              </form>
+            ) : null}
+          </div>
+        )}
+        {searchParams.status === "app_sent" && (
           <p className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
-            Thanks, marked as attended. That updates the renter&apos;s status
-            automatically.
+            Application sent. The renter has an email with their link.
+          </p>
+        )}
+        {searchParams.status === "app_made" && (
+          <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            Application made, but the renter has no email on file. {orgName} can text them the link.
+          </p>
+        )}
+        {searchParams.status === "app_exists" && (
+          <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            This renter already has an application open. Nothing more to do.
+          </p>
+        )}
+        {(searchParams.status === "app_failed" || searchParams.status === "app_unavailable") && (
+          <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            Couldn&apos;t send the application from here. {orgName} can send it from the renter&apos;s page.
           </p>
         )}
         {recordedNoShow && (

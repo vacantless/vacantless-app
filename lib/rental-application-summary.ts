@@ -111,6 +111,15 @@ export type ApplicationSummaryModel = {
   submittedAtIso: string | null;
   generatedAtIso: string;
   sections: ApplicationSummarySection[];
+  // S816: the signature, kept with the exact words agreed to.
+  signature?: {
+    signedName: string;
+    signedAtIso: string | null;
+    ip: string | null;
+    device: string | null;
+    consentText: string | null;
+  } | null;
+  creditCheck?: string | null;
 };
 
 /** Flatten a stored form value to a printable string; drops nested objects to a
@@ -201,6 +210,8 @@ export function buildApplicationSummaryModel(input: {
   submittedAtIso?: string | null;
   formData?: Record<string, unknown> | null;
   generatedAtIso: string;
+  signature?: ApplicationSummaryModel["signature"];
+  creditCheck?: string | null;
 }): ApplicationSummaryModel {
   return {
     orgName: input.orgName,
@@ -215,6 +226,8 @@ export function buildApplicationSummaryModel(input: {
     submittedAtIso: input.submittedAtIso ?? null,
     generatedAtIso: input.generatedAtIso,
     sections: buildSummarySections(input.formData),
+    signature: input.signature ?? null,
+    creditCheck: input.creditCheck ?? null,
   };
 }
 
@@ -275,8 +288,8 @@ export function renderApplicationSummaryHtml(model: ApplicationSummaryModel): st
   addRow("Email", model.applicantEmail);
   addRow("Phone", model.applicantPhone);
   addRow("Rental unit", model.propertyAddress);
-  addRow("Screening paid by", model.payMode === "landlord" ? "Landlord" : "Applicant");
   addRow("Submitted", submitted);
+  addRow("Credit check", model.creditCheck ?? null);
 
   const sectionsHtml =
     model.sections.length > 0
@@ -296,6 +309,23 @@ export function renderApplicationSummaryHtml(model: ApplicationSummaryModel): st
           )
           .join("\n  ")
       : `<div class="banner">The applicant acknowledged consent without completing the optional fields.</div>`;
+
+  const sig = model.signature;
+  const sigTime = sig?.signedAtIso
+    ? new Date(sig.signedAtIso).toLocaleString("en-CA", { timeZone: "America/Toronto", dateStyle: "long", timeStyle: "short" })
+    : null;
+  const signatureHtml = sig
+    ? `<section class="sig">
+    <h2>Authorization and signature</h2>
+    ${sig.consentText ? `<p class="consent">${escapeHtml(sig.consentText)}</p>` : ""}
+    <p class="signed-name">${escapeHtml(sig.signedName)}</p>
+    <table class="terms">
+      <tr><th>Signed electronically</th><td class="val">${escapeHtml(sigTime ?? "-")} (Toronto time)</td></tr>
+      ${sig.ip ? `<tr><th>From internet address</th><td>${escapeHtml(sig.ip)}</td></tr>` : ""}
+      ${sig.device ? `<tr><th>Device</th><td class="device">${escapeHtml(sig.device)}</td></tr>` : ""}
+    </table>
+  </section>`
+    : `<div class="banner">This application was submitted before signatures were added, so it has no typed signature.</div>`;
 
   const titleAddr = model.propertyAddress ? ", " + escapeHtml(model.propertyAddress) : "";
 
@@ -331,6 +361,10 @@ export function renderApplicationSummaryHtml(model: ApplicationSummaryModel): st
   section { break-inside: avoid; }
   .banner { border-radius: 6px; padding: 8px 12px; font-family: Arial, sans-serif;
     font-size: 12px; margin: 14px 0; background: #f3f4f6; border: 1px solid var(--line); color: var(--muted); }
+  .sig .consent { font-size: 13px; color: var(--ink); margin: 0 0 10px; }
+  .sig .signed-name { font-size: 24px; font-style: italic; border-bottom: 1px solid var(--ink);
+    display: inline-block; min-width: 60%; padding: 0 4px 2px; margin: 4px 0 10px; }
+  .sig .device { font-family: Arial, sans-serif; font-size: 11px; color: var(--muted); }
   .foot { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 10px;
     font-family: Arial, sans-serif; font-size: 11px; color: var(--muted); }
   .print-btn { position: fixed; top: 14px; right: 14px; font-family: Arial, sans-serif;
@@ -350,16 +384,17 @@ export function renderApplicationSummaryHtml(model: ApplicationSummaryModel): st
   ${masthead}
   <p class="eyebrow">Rental application</p>
   <h1>Application summary</h1>
-  <p class="sub">Form 410-equivalent record — non-sensitive fields only</p>
+  <p class="sub">Signed rental application</p>
   <table class="terms">
     ${applicantRows.join("\n    ")}
   </table>
   ${sectionsHtml}
+  ${signatureHtml}
   <div class="foot">
     Generated ${generated}. This summary intentionally contains no Social Insurance Number,
     date of birth, driver&rsquo;s licence, or banking details &mdash; those are never collected or
-    stored by Vacantless. Credit &amp; background screening is completed by the applicant on the
-    provider&rsquo;s secure hosted form.
+    stored by Vacantless. A credit check, if asked for, is done by the landlord&rsquo;s own screening
+    company on its secure site.
   </div>
 </div>
 </body>

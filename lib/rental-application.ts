@@ -197,3 +197,66 @@ export function applicationPersonCandidate(input: {
     phone_e164: (input.applicant_phone_e164 ?? "").trim() || null,
   };
 }
+
+// --- Signed authorization (S816) -------------------------------------------
+// Noam 2026-11-17: the application should be signed, with authorization for a
+// credit check. The typed full legal name is the signature; the exact words
+// agreed to are stored with it (consent_text) along with time, IP and device.
+
+/** The words the applicant signs. One function so the form and the stored copy
+ * can never drift apart. */
+export function applicationConsentText(orgName: string | null | undefined): string {
+  const org = (orgName ?? "").trim() || "the landlord";
+  return (
+    `I confirm the information in this application is true and complete. ` +
+    `I authorize ${org}, and any screening company it uses, to check it, to contact my ` +
+    `references, employers and current and past landlords, and to obtain a consumer credit ` +
+    `report and tenancy history about me to decide on this application. ` +
+    `Typing my name below is my electronic signature.`
+  );
+}
+
+/** A typed signature: at least two letters, and it must match the full legal
+ * name given on the form (case, spacing and accents ignored). */
+export function validateTypedSignature(
+  signedName: string | null | undefined,
+  legalName: string | null | undefined,
+): { ok: true } | { ok: false; reason: "signature_required" | "signature_mismatch" } {
+  const fold = (s: string | null | undefined) =>
+    (s ?? "")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z]+/g, " ")
+      .trim();
+  const sig = fold(signedName);
+  if (sig.replace(/ /g, "").length < 2) return { ok: false, reason: "signature_required" };
+  const legal = fold(legalName);
+  if (legal && sig !== legal) return { ok: false, reason: "signature_mismatch" };
+  return { ok: true };
+}
+
+/** Plain status words for one applicant, shown on the renter page. */
+export function applicantStatusLabel(row: {
+  status: string;
+  signed_at?: string | null;
+}): "Waiting to apply" | "Signed" | "Submitted" | "Withdrawn" {
+  if (row.status === "declined") return "Withdrawn";
+  if (row.status === "requested") return "Waiting to apply";
+  return row.signed_at ? "Signed" : "Submitted";
+}
+
+/** Accept only an http(s) link for the account's screening company. */
+export function normalizeScreeningLink(raw: string | null | undefined): string | null {
+  const s = (raw ?? "").trim();
+  if (!s) return null;
+  const withScheme = /^https?:\/\//i.test(s) ? s : `https://${s}`;
+  try {
+    const u = new URL(withScheme);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    if (!u.hostname.includes(".")) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}

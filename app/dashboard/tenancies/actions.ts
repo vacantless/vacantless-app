@@ -393,6 +393,18 @@ export async function createTenancy(formData: FormData) {
     await supabase.from("tenants").insert(tenantRows);
   }
 
+  // S816: a tenancy started from a signed offer is linked back to it, so the
+  // tenancy page shows the signed application and offer it came from.
+  const fromOffer = s(formData, "offer_id") || null;
+  if (fromOffer && fromLead) {
+    await supabase
+      .from("application_offers")
+      .update({ tenancy_id: tenancyId, updated_at: new Date().toISOString() })
+      .eq("id", fromOffer)
+      .eq("lead_id", fromLead)
+      .eq("organization_id", org.id);
+  }
+
   revalidatePath("/dashboard/tenancies");
   revalidatePath("/dashboard");
   redirect(

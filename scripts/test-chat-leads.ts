@@ -143,9 +143,12 @@ if (existsSync("../vacantless-extension/app-bridge.js")) {
   const server = readFileSync("lib/chat-leads-server.ts", "utf8");
   assert.ok(server.includes('for (const table of ["showings", "messages"])'));
   assert.ok(!/from\("rental_applications"\)|"rental_applications"\]/.test(server));
+  // S816: every send goes through the shared starter, which writes the row.
   const actions = readFileSync("app/dashboard/leads/actions.ts", "utf8");
   const req = actions.slice(actions.indexOf("export async function requestRentalApplication"));
-  assert.ok(req.slice(0, 6000).includes('from("messages").insert'), "an application request writes an activity row");
+  assert.ok(req.slice(0, 3000).includes("startRentalApplication("), "the request uses the shared starter");
+  const starter = readFileSync("lib/rental-application-server.ts", "utf8");
+  assert.ok(starter.includes('from("messages").insert'), "an application request writes an activity row");
 }
 
 console.log("PASS test-chat-leads");

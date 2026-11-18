@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { submitRentalApplication } from "./actions";
-import { SCREENING_LIVE } from "@/lib/screening-live";
+import { applicationConsentText } from "@/lib/rental-application";
 
 export const dynamic = "force-dynamic";
 
@@ -18,12 +18,15 @@ type AppShell = {
   brand_color_secondary?: string | null;
   logo_url?: string | null;
   submitted?: boolean;
+  screening_link_url?: string | null;
+  screening_link_name?: string | null;
+  signed_name?: string | null;
 };
 
 const ERROR_COPY: Record<string, string> = {
-  consent_required: SCREENING_LIVE
-    ? "Please tick the authorization box so we can process your application."
-    : "Please tick the box to confirm your answers are true.",
+  consent_required: "Please tick the box to agree before you sign.",
+  signature_required: "Please type your full legal name to sign.",
+  signature_mismatch: "Your signature should match the full legal name at the top of the form.",
   name_required: "Please enter your full legal name.",
   contact_required: "Please give an email or phone number so we can reach you.",
   already_submitted: "This application has already been submitted. Thank you!",
@@ -79,8 +82,28 @@ export default async function ApplyPage({
             <h2 className="text-lg font-semibold text-gray-900">Application received</h2>
             <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">
               Thanks{app.applicant_name ? `, ${app.applicant_name.split(" ")[0]}` : ""}. {orgName} has your
-              application and will be in touch about next steps. You can close this page.
+              application and will be in touch about next steps.
             </p>
+            {app.screening_link_url ? (
+              <div className="mx-auto mt-6 max-w-md rounded-xl border border-gray-200 bg-gray-50 p-4 text-left">
+                <p className="text-sm font-semibold text-gray-900">Next step: your credit check</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  {orgName} uses {app.screening_link_name || "a screening company"} for credit checks. It takes a few
+                  minutes on their secure site. Your SIN and banking details go only to them, never to us.
+                </p>
+                <a
+                  href={app.screening_link_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-block rounded-lg px-4 py-2 text-sm font-semibold text-white"
+                  style={{ background: brandBg }}
+                >
+                  Start my credit check
+                </a>
+              </div>
+            ) : (
+              <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">You can close this page.</p>
+            )}
           </div>
         ) : (
           <form action={submitRentalApplication} className="space-y-8 px-6 py-6">
@@ -93,11 +116,8 @@ export default async function ApplyPage({
             ) : null}
 
             <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-              This is the first step of your application. We will <strong>never</strong> ask for your SIN,
-              date of birth, or banking details here.
-              {SCREENING_LIVE
-                ? " If a credit or background check is needed, you will receive a separate secure link from our screening partner."
-                : null}
+              This takes about five minutes. We will <strong>never</strong> ask for your SIN, date of birth or
+              banking details here. If there are two or more of you, each adult gets their own application.
             </p>
 
             <Section title="Your details">
@@ -172,25 +192,28 @@ export default async function ApplyPage({
               </div>
             </Section>
 
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-              {SCREENING_LIVE ? (
-                <label className="flex items-start gap-3 text-sm text-gray-700">
-                  <input type="checkbox" name="consent" value="1" required className="mt-1 h-4 w-4" />
-                  <span>
-                    I certify the information above is true and complete, and I authorize {orgName} and its
-                    screening partner to verify it and to obtain a consumer credit report and background/tenancy
-                    history as part of processing this application (PIPEDA consent).
-                  </span>
-                </label>
-              ) : (
-                <label className="flex items-start gap-3 text-sm text-gray-700">
-                  <input type="checkbox" name="certify" value="1" required className="mt-1 h-4 w-4" />
-                  <span>
-                    I confirm my answers are true and complete. {orgName} may contact my references and
-                    landlords to check them. My details are used only for this application.
-                  </span>
-                </label>
-              )}
+            <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm font-semibold text-gray-900">Sign your application</p>
+              <p className="text-sm text-gray-700">{applicationConsentText(orgName)}</p>
+              <label className="flex items-start gap-3 text-sm text-gray-700">
+                <input type="checkbox" name="agree" value="1" required className="mt-1 h-4 w-4" />
+                <span>I agree.</span>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">
+                  Type your full legal name to sign<span className="text-red-500"> *</span>
+                </span>
+                <input
+                  type="text"
+                  name="signed_name"
+                  required
+                  autoComplete="name"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 font-serif text-lg italic focus:border-gray-400 focus:outline-none"
+                />
+              </label>
+              <p className="text-xs text-gray-500">
+                We keep the date, time and device you sign from with your signature.
+              </p>
             </div>
 
             <button
@@ -198,7 +221,7 @@ export default async function ApplyPage({
               className="w-full rounded-lg px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
               style={{ background: brandBg }}
             >
-              Submit application
+              Sign and submit
             </button>
           </form>
         )}
