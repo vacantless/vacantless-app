@@ -1,0 +1,11 @@
+S815a: a rental site's email with a quoted sender check is passed on
+
+Found live 2026-11-17: Rentals.ca's sign-up email reached a landlord's
+Vacantless address and was not passed on to the owner (S806 pass-on). The
+mail server wrote smtp.mailfrom in quotes; the closing quote stayed on the
+domain ("em3909.rentals.ca\""), so the email read as unaligned and was
+dropped as "not parsed".
+
+- lib/portal-senders.ts: domainOf strips quotes and angle brackets before
+  reading the domain. A look-alike domain is still refused.
+- scripts/test-site-mail-pass.ts: the real header shape, and a look-alike.

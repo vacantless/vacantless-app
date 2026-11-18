@@ -33,6 +33,19 @@ const DKIM = (d: string) => ({ "Authentication-Results": `mx.postmarkapp.com; dk
 ok("aligned dkim trusted", isTrustedSiteMail("noreply@mail.kijiji.ca", DKIM("kijiji.ca")).ok);
 ok("dkim for another domain refused", !isTrustedSiteMail("noreply@kijiji.ca", DKIM("evil.com")).ok);
 ok("no auth refused", !isTrustedSiteMail("noreply@kijiji.ca", {}).ok);
+// S815: the header Rentals.ca's sign-up email really carried (2026-11-17): a quoted mailfrom.
+ok(
+  "quoted spf mailfrom on a rentals.ca subdomain trusted",
+  isTrustedSiteMail("no-reply@rentals.ca", {
+    "Authentication-Results": 'mx; dkim=none; spf=pass smtp.mailfrom="bounces+123@em3909.rentals.ca"; dmarc=none',
+  }).ok,
+);
+ok(
+  "quoted spf mailfrom for another domain still refused",
+  !isTrustedSiteMail("no-reply@rentals.ca", {
+    "Authentication-Results": 'mx; spf=pass smtp.mailfrom="bounce@rentals.ca.evil.com"',
+  }).ok,
+);
 ok(
   "aligned spf trusted",
   isTrustedSiteMail("no-reply@rentals.ca", { "Authentication-Results": "mx; dkim=none; spf=pass smtp.mailfrom=bounce.rentals.ca" }).ok,

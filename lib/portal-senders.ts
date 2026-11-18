@@ -172,7 +172,10 @@ function verdictIn(segment: string, method: string): AuthVerdict {
 
 function domainOf(value: string | null | undefined): string | null {
   if (!value) return null;
-  let v = value.trim().toLowerCase().replace(/^@/, "");
+  // S815: some mail servers quote the value (smtp.mailfrom="bounce@em3909.rentals.ca").
+  // The closing quote stayed on the domain, so a real Rentals.ca email read as
+  // unaligned and its sign-up email was never passed on to the landlord.
+  let v = value.trim().toLowerCase().replace(/["'<>]/g, "").replace(/^@/, "");
   const at = v.lastIndexOf("@");
   if (at >= 0) v = v.slice(at + 1);
   v = v.replace(/[>;,)\s].*$/, ""); // trim trailing junk
