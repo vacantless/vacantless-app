@@ -17,3 +17,27 @@ export const HOW_TO_VIDEOS: { n: number; title: string; line: string; seconds: n
 // S729: the count in words, so headings never go stale when a video is added.
 const COUNT_WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
 export const HOW_TO_COUNT_WORD = COUNT_WORDS[HOW_TO_VIDEOS.length] ?? String(HOW_TO_VIDEOS.length);
+
+// S816: a version stamp per video (first 8 of the md5 of the mp4 then the jpg),
+// so a re-shot video or poster can never come from a browser's old copy, and the
+// help window can't show one video's poster over another. scripts/test-page-help
+// fails if a file changes without its stamp: re-shoot, then update the stamp.
+export const HOW_TO_FILE_VERSION: Record<number, string> = {
+  1: "72bfee5d",
+  2: "c75f7f46",
+  3: "d1473f77",
+  4: "74744e70",
+  5: "5e766fae",
+  6: "27db4a2d",
+  7: "585f4ef1",
+  8: "46b772aa",
+  9: "15ce89cf",
+  10: "345f174c",
+};
+
+export function howToVideoSrc(n: number): string {
+  return `/videos/howto-${n}.mp4?v=${HOW_TO_FILE_VERSION[n] ?? "0"}`;
+}
+export function howToPosterSrc(n: number): string {
+  return `/videos/howto-${n}.jpg?v=${HOW_TO_FILE_VERSION[n] ?? "0"}`;
+}

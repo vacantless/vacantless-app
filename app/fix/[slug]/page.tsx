@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MarketingCta, MarketingFooter, MarketingHeader } from "@/components/marketing-chrome";
 import { FRICTION_PAGES, FIX_PATH, frictionPage } from "@/lib/friction-pages";
-import { HOW_TO_PATH, HOW_TO_VIDEOS } from "@/lib/how-to-videos";
+import { HOW_TO_PATH, HOW_TO_VIDEOS, howToVideoSrc, howToPosterSrc } from "@/lib/how-to-videos";
 
 // S777: one page per landlord friction (lib/friction-pages.ts). The fix works
 // with any tool; Vacantless comes second. Forum replies and YouTube link here.
@@ -102,8 +102,8 @@ export default function FrictionPageView({ params }: { params: { slug: string } 
                 <h2 className="text-[1.35rem] font-extrabold tracking-tight">See it</h2>
                 <video
                   className="mt-4 aspect-video w-full rounded-lg border border-[#d9e1dc] bg-[#edf5f0]"
-                  src={`/videos/howto-${video.n}.mp4`}
-                  poster={`/videos/howto-${video.n}.jpg`}
+                  src={howToVideoSrc(video.n)}
+                  poster={howToPosterSrc(video.n)}
                   controls
                   preload="none"
                   playsInline

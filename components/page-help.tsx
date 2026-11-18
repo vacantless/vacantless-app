@@ -5,7 +5,7 @@
 // videos, and an email link.
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { HOW_TO_PATH, HOW_TO_VIDEOS } from "@/lib/how-to-videos";
+import { HOW_TO_PATH, HOW_TO_VIDEOS, howToVideoSrc, howToPosterSrc } from "@/lib/how-to-videos";
 import { HELP_EMAIL, helpVideosFor } from "@/lib/page-help";
 
 export function PageHelp() {
@@ -74,8 +74,8 @@ export function PageHelp() {
                 <video
                   key={current.n}
                   className="aspect-video w-full rounded-lg border border-slate-200 bg-slate-100"
-                  src={`/videos/howto-${current.n}.mp4`}
-                  poster={`/videos/howto-${current.n}.jpg`}
+                  src={howToVideoSrc(current.n)}
+                  poster={howToPosterSrc(current.n)}
                   controls
                   preload="none"
                   playsInline

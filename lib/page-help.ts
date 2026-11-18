@@ -15,6 +15,7 @@ export const PAGE_HELP_ROUTES: [string, number[]][] = [
   ["/dashboard/properties", [1]],
   ["/dashboard/add-details", [1]],
   ["/dashboard/availability", [2]],
+  ["/dashboard/leads/", [3, 6]],
   ["/dashboard/leads", [3]],
   ["/dashboard/replies", [3]],
   ["/dashboard/messages", [3]],
@@ -32,19 +33,25 @@ export const PAGE_HELP_ROUTES: [string, number[]][] = [
   ["/dashboard/tenancies/", [10, 9]],
   ["/dashboard/tenancies", [10]],
   ["/dashboard/tenants", [10, 9]],
-  ["/dashboard/leasing", [10]],
+  // S816: Leasing overview and Reports are about renters and viewings, not
+  // after the lease (Noam: the "?" sometimes opened the wrong video).
+  ["/dashboard/leasing", [3, 6]],
   ["/dashboard/rent", [10]],
   ["/dashboard/money", [10]],
   ["/dashboard/maintenance", [10]],
   ["/dashboard/expenses", [10]],
-  ["/dashboard/reports", [10]],
+  ["/dashboard/reports", [6, 3]],
 ];
+
+// The Today page itself (exact /dashboard only): replies and follow-ups.
+const HOME_VIDEOS = [3, 6];
 
 export type HelpVideo = (typeof HOW_TO_VIDEOS)[number];
 
 /** The videos for a page, most useful first; [] means show the full list. */
 export function helpVideosFor(pathname: string | null | undefined): HelpVideo[] {
-  const p = (pathname ?? "").split(/[?#]/)[0];
+  const p = (pathname ?? "").split(/[?#]/)[0].replace(/\/+$/, "") || "/";
+  if (p === "/dashboard") return HOME_VIDEOS.map((n) => HOW_TO_VIDEOS.find((v) => v.n === n)!).filter(Boolean);
   for (const [prefix, nums] of PAGE_HELP_ROUTES) {
     const hit = prefix.endsWith("/") ? p.startsWith(prefix) && p.length > prefix.length : p === prefix || p.startsWith(prefix + "/");
     if (hit) return nums.map((n) => HOW_TO_VIDEOS.find((v) => v.n === n)!).filter(Boolean);

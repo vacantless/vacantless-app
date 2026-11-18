@@ -1,0 +1,22 @@
+S816c: help videos always match the page and the picture
+
+Noam 2026-11-17: '"help for this page" brings up sometimes correct and
+sometimes incorrect videos please ensure they are correctly correlated.'
+
+Cause: the poster image shown before a video plays was never redone when
+videos were re-shot. Five still said "of 7", one "of 9", and posters 3, 8
+and 10 showed frames from old cuts (10 showed the Owner statement). The
+mp4 files also kept the same name across re-shoots, so a browser could
+play an old copy.
+
+- All ten posters regenerated from each current video's title card (read
+  side by side before and after).
+- lib/how-to-videos: HOW_TO_FILE_VERSION per video (md5 of mp4 + jpg) and
+  howToVideoSrc / howToPosterSrc; the help window, /how-to and /fix pages
+  use them. test-page-help fails if a file changes without its stamp.
+- lib/page-help: Today opens Answer an inquiry, then After the viewing;
+  Leasing overview and Reports no longer open "After you lease"; a
+  renter's page adds After the viewing (it has the application now).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrMz8oSgzAZqtkqGS3

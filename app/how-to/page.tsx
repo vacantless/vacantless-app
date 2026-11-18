@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { MarketingHeader } from "@/components/marketing-chrome";
 import { VacantlessMark } from "../../components/vacantless-mark";
-import { HOW_TO_COUNT_WORD, HOW_TO_VIDEOS } from "@/lib/how-to-videos";
+import { HOW_TO_COUNT_WORD, HOW_TO_VIDEOS, howToVideoSrc, howToPosterSrc } from "@/lib/how-to-videos";
 
 // S726: the how-to videos (recorded on the S712 test account, captions
 // only). Public, so the welcome email and the getting-started page can link
@@ -31,8 +31,8 @@ export default function HowToPage() {
             <li key={v.n} id={`video-${v.n}`} className="scroll-mt-6">
               <video
                 className="aspect-video w-full rounded-lg border border-[#d9e1dc] bg-[#edf5f0]"
-                src={`/videos/howto-${v.n}.mp4`}
-                poster={`/videos/howto-${v.n}.jpg`}
+                src={howToVideoSrc(v.n)}
+                poster={howToPosterSrc(v.n)}
                 controls
                 preload="none"
                 playsInline
