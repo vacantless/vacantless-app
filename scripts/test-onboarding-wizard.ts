@@ -176,5 +176,16 @@ ok("S770: it opens the live rental's public page", seeIt.steps.find((s) => s.key
 ok("S770: the first renter completes it", computeOnboardingState({ ...freshInput, hasLiveListing: true, hasProperty: true, hasLead: true }).steps.find((s) => s.key === "see_it_work")?.status === "complete");
 ok("S770: hasLead omitted -> no step (back-compat)", fresh.steps.every((s) => s.key !== "see_it_work"));
 
+// S817d: "Answer renters from your phone".
+{
+  const withPhone = computeOnboardingState({ ...freshInput, hasLead: false, hasPhoneReplies: false });
+  const keys = withPhone.steps.map((x) => x.key);
+  ok("S817d: phone step follows See it work", keys.indexOf("phone_replies") === keys.indexOf("see_it_work") + 1);
+  const step = withPhone.steps.find((x) => x.key === "phone_replies");
+  ok("S817d: it opens the Shortcut card on Quick replies", step?.href === "/dashboard/replies?from=getting-started#send-shortcut");
+  ok("S817d: a renter saved from the phone completes it", computeOnboardingState({ ...freshInput, hasPhoneReplies: true }).steps.find((x) => x.key === "phone_replies")?.status === "complete");
+  ok("S817d: a tenancy completes it", computeOnboardingState({ ...freshInput, hasTenancy: true, hasPhoneReplies: false }).steps.find((x) => x.key === "phone_replies")?.status === "complete");
+  ok("S817d: hasPhoneReplies omitted -> no step (back-compat)", fresh.steps.every((x) => x.key !== "phone_replies"));
+}
 console.log(`\nonboarding-wizard: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

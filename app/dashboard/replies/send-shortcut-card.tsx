@@ -45,7 +45,7 @@ export function SendShortcutCard({
   }
 
   return (
-    <details className="mt-6 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700" open={Boolean(key)}>
+    <details id="send-shortcut" className="mt-6 scroll-mt-4 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700" open={Boolean(key) || !hasKey}>
       <summary className="cursor-pointer font-medium text-gray-900">Save the renter and copy your reply from a chat screenshot</summary>
       <p className="mt-2">
         Take a screenshot of the chat, tap Share, then &quot;Send to Vacantless&quot;. We read the renter&apos;s name and the rental. Then we

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HelperInstallTip } from "@/components/helper-install-tip";
+import { hasPhoneReplyRenter } from "@/lib/reply-kit-server";
 import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
 import { isHiddenForOrg } from "@/lib/posting-lanes";
 import { orgHasConnectedSite } from "@/lib/sites-setup";
@@ -125,7 +126,10 @@ export default async function GettingStartedPage({
   const renterEmailsDone = robotAccess.setup
     ? hasRenterEmails(await readRenterEmailEvents(supabase, org.id))
     : undefined;
+  // S817d: "Answer renters from your phone" is done on the first renter saved from the phone.
+  const phoneReplies = await hasPhoneReplyRenter(supabase, org.id);
   const state = computeOnboardingState({
+    hasPhoneReplies: phoneReplies,
     hasConnectedSite: orgHasConnectedSite(tileStateByChannel),
     hasRenterEmails: renterEmailsDone,
     hasProperty: (propertyCount ?? 0) > 0,

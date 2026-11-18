@@ -5,6 +5,7 @@ export type OnboardingWizardStepKey =
   | "renter_emails"
   | "get_online"
   | "see_it_work"
+  | "phone_replies"
   | "tenancy"
   | "rent_rail";
 
@@ -86,6 +87,13 @@ export type OnboardingWizardInput = {
   hasLead?: boolean;
   /** The live rental's public page for that step (/r/<id>); null before Set Live. */
   liveRentalId?: string | null;
+  /**
+   * S817d: a renter was saved from the phone, by the Send to Vacantless
+   * Shortcut or by Quick replies' Copy (lib/reply-kit-server
+   * hasPhoneReplyRenter). When the caller passes it, an "Answer renters from
+   * your phone" step follows "See it work". Omitted = not shown.
+   */
+  hasPhoneReplies?: boolean;
 };
 
 type StepDef = Omit<OnboardingWizardStep, "status">;
@@ -140,6 +148,14 @@ const STEP_DEFS: StepDef[] = [
     cta: "Open my rental page",
   },
   {
+    key: "phone_replies",
+    label: "Answer renters from your phone",
+    description:
+      "Renters on Facebook write in Messenger, mostly on your phone. Open Quick replies on your phone and add it to your home screen. On iPhone, also add the Send to Vacantless Shortcut. Share a chat screenshot, and it saves the renter and copies your reply. Done when your first renter is saved this way.",
+    href: "/dashboard/replies?from=getting-started#send-shortcut",
+    cta: "Set up my phone",
+  },
+  {
     key: "tenancy",
     label: "Add a tenancy and tenant",
     description:
@@ -172,6 +188,7 @@ export function computeOnboardingState(
     // for every org that finished the old three steps (reviewer S691 #3).
     get_online: input.hasLiveListing || input.hasTenancy,
     see_it_work: input.hasLead === true || input.hasTenancy,
+    phone_replies: input.hasPhoneReplies === true || input.hasTenancy,
     tenancy: input.hasTenancy,
     rent_rail: Boolean(input.railStepDoneAt),
   };
@@ -182,6 +199,7 @@ export function computeOnboardingState(
     if (def.key === "connect_sites" && input.hasConnectedSite === undefined) return false;
     if (def.key === "renter_emails" && input.hasRenterEmails === undefined) return false;
     if (def.key === "see_it_work" && input.hasLead === undefined) return false;
+    if (def.key === "phone_replies" && input.hasPhoneReplies === undefined) return false;
     if (input.postLeaseEnabled === false && (def.key === "tenancy" || def.key === "rent_rail")) {
       return false;
     }

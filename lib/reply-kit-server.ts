@@ -113,3 +113,22 @@ export async function loadReplyKitCards(
 
   return buildReplyKitCards({ appUrl, properties, posts, timesByProperty, photosByProperty, featuresByProperty });
 }
+
+/**
+ * S817d: the "Answer renters from your phone" step is done once a renter was
+ * saved from the phone: the Shortcut's note or Quick replies' Copy note
+ * (lib/send-shortcut-server, lib/chat-leads chatLeadNoteManual).
+ */
+export const PHONE_REPLY_NOTE_MARKS = ["Added from Quick replies", "Sent from the iPhone share menu"] as const;
+export async function hasPhoneReplyRenter(supabase: SupabaseClient, orgId: string): Promise<boolean> {
+  try {
+    const { count } = await supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", orgId)
+      .or(PHONE_REPLY_NOTE_MARKS.map((m) => `notes.ilike."*${m}*"`).join(","));
+    return (count ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}

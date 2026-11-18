@@ -140,7 +140,8 @@ export function buildSitesSetup(input: SitesSetupInput): SitesSetup {
         state: "on",
         line: "The helper is in your Chrome. One click fills the ad and photos; you press Facebook's Post button.",
         action: null,
-        note: null,
+        // S817d: posting is on the computer; replies are on the phone.
+        note: "Renters write back in Messenger. Answer them from Quick replies on your phone.",
       });
     } else if (input.helperInstalled === false) {
       rows.push({

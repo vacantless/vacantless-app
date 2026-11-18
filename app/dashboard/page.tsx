@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { hasPhoneReplyRenter } from "@/lib/reply-kit-server";
 import { answeredLeadIds } from "@/lib/lead-answered";
 import { countViewingTimes } from "@/lib/viewing-times-count";
 import { createClient } from "@/lib/supabase/server";
@@ -637,8 +638,11 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       events: emailEvents,
     });
   }
+  // S817d: "Answer renters from your phone" is done on the first renter saved from the phone.
+  const onboardingPhoneReplies = onboardingWizardEnabled ? await hasPhoneReplyRenter(supabase, org.id) : undefined;
   const onboardingWizardState = onboardingWizardEnabled
     ? computeOnboardingState({
+        hasPhoneReplies: onboardingPhoneReplies,
         hasConnectedSite: onboardingHasConnectedSite,
         hasRenterEmails: onboardingRenterEmails,
         postLeaseEnabled: onboardingPostLease,

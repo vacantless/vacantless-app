@@ -90,6 +90,8 @@ export function decideOnboardingEmail(args: {
         `Prefer to watch? ${HOW_TO_COUNT_WORD} short videos, about a minute each: https://www.vacantless.com/how-to`,
         // S751: the Chrome helper was only findable on a rental's Marketplace row.
         `Facebook Marketplace is where most renters look. Facebook only lets a person press Post there. On a computer, add the free Vacantless helper to Chrome once. It fills in the ad and photos, and you press Post: ${MARKETPLACE_HELPER_INSTALL_URL}`,
+        // S817d: Marketplace renters write in Messenger; answer them from the phone.
+        "Marketplace renters write back in Messenger. On your phone, open Quick replies in Vacantless. On iPhone, add the Send to Vacantless Shortcut there. Share a chat screenshot, and it saves the renter and copies your reply.",
         nextLine,
         "Reply to this email if you get stuck. I read every one.",
         "Noam, founder of Vacantless",
