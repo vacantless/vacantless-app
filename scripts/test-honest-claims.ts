@@ -33,8 +33,8 @@ const applyPage = read("app/apply/[token]/page.tsx");
 ok("apply page has no screening-partner promise", !applyPage.includes("from our screening partner"));
 const step = applyPage.indexOf("Start my credit check");
 ok(
-  "credit step only renders with the account's own link",
-  step > 0 && applyPage.lastIndexOf("app.screening_link_url ?", step) > step - 1200,
+  "credit step only renders with the account's own link, once asked (S818)",
+  step > 0 && applyPage.lastIndexOf('app.screening_link_url && app.credit_check_status === "asked" ?', step) > step - 1200,
 );
 ok("apply page signs with a typed name", /name="signed_name"/.test(applyPage) && /name="agree"/.test(applyPage));
 const words = read("lib/rental-application.ts");

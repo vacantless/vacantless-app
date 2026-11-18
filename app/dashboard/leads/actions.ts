@@ -11,7 +11,7 @@ import { canUseRentalApplications } from "@/lib/billing";
 import { normalizeEmail } from "@/lib/persons";
 import { resolvePersonId } from "@/lib/persons-server";
 import { normalizePhoneE164 } from "@/lib/sms";
-import { sendApplicationOfferInvite } from "@/lib/email";
+import { sendApplicationOfferInvite, sendCreditCheckInvite } from "@/lib/email";
 import { startRentalApplication } from "@/lib/rental-application-server";
 import { parseOfferInput, offerTermLines, canSendNewOffer, type OfferParsed } from "@/lib/application-offer";
 import { createHash } from "crypto";
@@ -424,6 +424,10 @@ export async function requestRentalApplication(formData: FormData) {
 
 // S816: mark the credit check as asked for or received (the landlord runs it
 // with their own screening company; Vacantless never holds the report).
+// S818: "Ask for credit check" is the moment the applicant gets the link: one
+// check per vacancy, on the applicant the landlord picked (in Ontario the
+// landlord pays and cannot charge the applicant). Emails the link when the
+// account has one and the applicant left an email.
 export async function setCreditCheck(formData: FormData) {
   await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
   const leadId = String(formData.get("id") ?? "");
@@ -434,28 +438,66 @@ export async function setCreditCheck(formData: FormData) {
   const supabase = createClient();
   const { data: app } = await supabase
     .from("rental_applications")
-    .select("id, applicant_name")
+    .select("id, applicant_name, applicant_email, public_token, status, credit_check_status, property:properties(address)")
     .eq("id", appId)
     .eq("lead_id", leadId)
     .maybeSingle();
   if (!app) return;
+  const row = app as unknown as {
+    applicant_name: string | null;
+    applicant_email: string | null;
+    public_token: string;
+    status: string;
+    credit_check_status: string | null;
+    property: { address: string | null } | null;
+  };
   const org = await getCurrentOrg();
   if (!org) return;
   await supabase
     .from("rental_applications")
     .update({ credit_check_status: next, credit_check_at: next ? new Date().toISOString() : null })
     .eq("id", appId);
+
+  let banner: string | null = null;
+  let emailed = false;
+  const firstAsk = next === "asked" && row.credit_check_status !== "asked" && row.status !== "requested";
+  if (firstAsk) {
+    if (!org.screening_link_url) {
+      banner = "credit_nolink";
+    } else if (row.applicant_email) {
+      try {
+        const r = await sendCreditCheckInvite({
+          applicant_name: row.applicant_name,
+          applicant_email: row.applicant_email,
+          org_name: org.name,
+          brand_color: org.brand_color ?? null,
+          logo_url: org.logo_url ?? null,
+          mail_alias: org.mail_alias ?? null,
+          reply_to_email: org.reply_to_email ?? null,
+          property_address: row.property?.address ?? null,
+          screening_name: org.screening_link_name ?? null,
+          apply_url: `${APP_URL}/apply/${row.public_token}`,
+        });
+        emailed = r.sent === true;
+      } catch {
+        emailed = false;
+      }
+      banner = emailed ? "credit_emailed" : "credit_copy";
+    } else {
+      banner = "credit_copy";
+    }
+  }
   if (next) {
     await supabase.from("messages").insert({
       organization_id: org.id,
       lead_id: leadId,
       channel: "note",
       direction: "outbound",
-      body: `Credit check ${next === "asked" ? "asked for" : "received"}: ${(app as { applicant_name: string | null }).applicant_name ?? "applicant"}.`,
+      body: `Credit check ${next === "asked" ? "asked for" : "received"}: ${row.applicant_name ?? "applicant"}${emailed ? " (link emailed)" : ""}.`,
     });
   }
   revalidatePath(`/dashboard/leads/${leadId}`);
-  redirect(`/dashboard/leads/${leadId}#application`);
+  redirect(`/dashboard/leads/${leadId}${banner ? `?apply=${banner}` : ""}#application`);
 }
 
 // S816: withdraw one application (wrong person, or they backed out).

@@ -9,6 +9,7 @@ import { maskEmail, maskPhone, scrubContactText } from "@/lib/demo-account";
 import { getCurrentOrg } from "@/lib/org";
 import { statusLabel, type LeadStatus } from "@/lib/pipeline";
 import { incomeRequirementMagnitude } from "@/lib/screening";
+import { isOntarioRental } from "@/lib/credit-check";
 import {
   collectPreferenceMismatches,
   preferredAnswerLabel,
@@ -92,6 +93,7 @@ type Lead = {
   property: {
     id: string;
     address: string;
+    postal_code?: string | null;
     status?: string | null;
     rent_cents: number | null;
     beds: number | null;
@@ -142,7 +144,7 @@ export default async function LeadDetailPage({
   const { data: lead } = await supabase
     .from("leads")
     .select(
-      "id, name, email, phone, source, source_detail, no_suitable_time, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, email_opt_out_at, sms_opt_out, property:properties(id, address, status, rent_cents, beds, baths, parking, available_date, laundry, pet_friendly, pets_cats, pets_dogs), listing_post:listing_posts(portal, label, url)",
+      "id, name, email, phone, source, source_detail, no_suitable_time, status, notes, move_in, next_action_at, next_action_note, created_at, screen_income_cents, screen_occupants, screen_has_pets, screen_pets_detail, qualified_out, qualify_out_reasons, screen_custom_answers, email_opt_out_at, sms_opt_out, property:properties(id, address, postal_code, status, rent_cents, beds, baths, parking, available_date, laundry, pet_friendly, pets_cats, pets_dogs), listing_post:listing_posts(portal, label, url)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -756,6 +758,7 @@ export default async function LeadDetailPage({
         offerError={searchParams.offer_err ?? null}
         screeningName={org?.screening_link_name ?? null}
         hasScreeningLink={!!org?.screening_link_url}
+        ontario={isOntarioRental(l.property)}
         tenancyId={existingTenancyId}
       />
 

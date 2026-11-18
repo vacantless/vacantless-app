@@ -20,6 +20,7 @@ type AppShell = {
   submitted?: boolean;
   screening_link_url?: string | null;
   screening_link_name?: string | null;
+  credit_check_status?: string | null;
   signed_name?: string | null;
 };
 
@@ -84,7 +85,9 @@ export default async function ApplyPage({
               Thanks{app.applicant_name ? `, ${app.applicant_name.split(" ")[0]}` : ""}. {orgName} has your
               application and will be in touch about next steps.
             </p>
-            {app.screening_link_url ? (
+            {/* S818: the credit step shows only after the landlord asks this
+                applicant (0308 also withholds the link until then). */}
+            {app.screening_link_url && app.credit_check_status === "asked" ? (
               <div className="mx-auto mt-6 max-w-md rounded-xl border border-gray-200 bg-gray-50 p-4 text-left">
                 <p className="text-sm font-semibold text-gray-900">Next step: your credit check</p>
                 <p className="mt-1 text-sm text-gray-600">

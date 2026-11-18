@@ -568,6 +568,93 @@ export async function sendRentalApplicationInvite(
 }
 
 // ---------------------------------------------------------------------------
+// S818: credit check ask. Sent when the landlord presses "Ask for credit check"
+// on the applicant they picked. The link opens the applicant's own /apply page,
+// which now shows the account's credit check step. Best-effort, never throws.
+// ---------------------------------------------------------------------------
+
+export type CreditCheckInvitePayload = {
+  applicant_name: string | null;
+  applicant_email: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  mail_alias?: string | null;
+  reply_to_email: string | null;
+  property_address: string | null;
+  screening_name: string | null;
+  apply_url: string; // absolute /apply/<token> link
+};
+
+export function creditCheckInviteHtml(p: CreditCheckInvitePayload): string {
+  const brand = escapeHtml(p.brand_color || DEFAULT_BRAND_COLOR);
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.applicant_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : null;
+  const company = escapeHtml(p.screening_name || "their screening company");
+  const url = escapeHtml(p.apply_url);
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+  const lead = addr
+    ? `<p style="margin:0 0 16px;">Thanks for your application for <strong>${addr}</strong>. The next step is a credit check.</p>`
+    : `<p style="margin:0 0 16px;">Thanks for your application. The next step is a credit check.</p>`;
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${brand};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      ${lead}
+      <p style="margin:0 0 20px;">${org} uses ${company}. It takes a few minutes on their secure site. Your SIN and banking details go only to them.</p>
+      <p style="margin:0 0 24px;">
+        <a href="${url}" style="display:inline-block;background:${brand};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px;">Start my credit check</a>
+      </p>
+      <p style="margin:0 0 8px;color:#52525b;font-size:13px;">Or paste this link into your browser:</p>
+      <p style="margin:0 0 16px;word-break:break-all;font-size:13px;"><a href="${url}" style="color:${brand};">${url}</a></p>
+      <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you applied for a rental with ${org}. We will never ask for your SIN or banking details by email.
+    </div>
+  </div>
+</body></html>`;
+}
+
+/** Best-effort credit check ask. Never throws. */
+export async function sendCreditCheckInvite(p: CreditCheckInvitePayload): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.applicant_email) return { sent: false, reason: "no_applicant_email" };
+  const subject = p.property_address
+    ? `Next step for ${p.property_address}: your credit check`
+    : "Next step: your credit check";
+  const body = {
+    sender: senderOf(p.mail_alias, p.org_name),
+    to: [{ email: p.applicant_email, ...(p.applicant_name ? { name: p.applicant_name } : {}) }],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: creditCheckInviteHtml(p),
+    tags: ["kind:credit_check_invite"],
+  };
+  try {
+    const res = await brevoFetch({
+      method: "POST",
+      headers: { "api-key": apiKey, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // S816: offer to rent. Each applicant gets their own link to read and sign.
 // ---------------------------------------------------------------------------
 

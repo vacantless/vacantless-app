@@ -1,3 +1,4 @@
+import { CREDIT_CHECK_ONE_LINE, CREDIT_CHECK_ONTARIO_LINE, LTB_CHECK_LINE } from "@/lib/credit-check";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { adminEmails } from "@/lib/provisioning-server";
 import { channelShownFor } from "@/lib/posting-lanes";
@@ -1147,10 +1148,15 @@ export default async function SettingsPage({
         <div id="credit-check" className="mt-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5">
           <h2 className="text-base font-semibold text-gray-900">Credit checks</h2>
           <p className="mt-1 text-sm text-gray-600">
-            Paste the link from your credit check company, such as FrontLobby or SingleKey. After a renter signs
-            their application, they go straight to it. Their social insurance number and banking details go only to
-            that company.
+            Paste the link from your credit check company, such as FrontLobby or SingleKey. Pick one applicant and
+            press Ask for credit check. They get the link. Their social insurance number and
+            banking details go only to that company.
           </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-600">
+            <li>{CREDIT_CHECK_ONE_LINE}</li>
+            <li>{CREDIT_CHECK_ONTARIO_LINE} If your company offers &quot;tenant pays&quot;, use its landlord-pays option for Ontario rentals.</li>
+            <li>{LTB_CHECK_LINE} Each signed applicant on an Ontario rental has a button for it.</li>
+          </ul>
           {searchParams.credit === "saved" && (
             <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">Saved.</p>
           )}

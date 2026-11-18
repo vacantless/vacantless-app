@@ -755,7 +755,9 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
       // S816: signed applications, co-applicants, agent send, offers, credit check link.
       { text: "Renters apply and sign online, each roommate on their own link. Your showing agent can send it from the doorstep.", plan: "Starter and up" },
       { text: "Send an offer they sign too. When everyone signs, their tenant record fills itself in.", plan: "Starter and up" },
-      { text: "Use any credit check company. After signing, renters go straight to your link." },
+      // S818: one credit check per vacancy; free LTB order search first (Ontario).
+      { text: "Use any credit check company. Only the applicant you pick gets your link, so you pay for one check, not ten." },
+      { text: "On Ontario rentals, search an applicant's Landlord and Tenant Board orders free, in one tap." },
     ],
   },
   {

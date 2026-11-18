@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { applicantStatusLabel } from "@/lib/rental-application";
+import { ltbSearchUrl, CREDIT_CHECK_ONE_LINE, CREDIT_CHECK_ONTARIO_LINE, LTB_CHECK_LINE } from "@/lib/credit-check";
 import { offerTermLines, offerStatusLabel, OFFER_ERRORS, fmtDollars } from "@/lib/application-offer";
 import {
   requestRentalApplication,
@@ -49,6 +50,12 @@ const BANNERS: Record<string, { tone: "ok" | "warn" | "err"; text: string }> = {
   contact: { tone: "err", text: "Add an email or phone number for that person first." },
   error: { tone: "err", text: "Couldn't create the application. Please try again." },
   upgrade: { tone: "warn", text: "Rental applications come with Starter and up." },
+  credit_emailed: { tone: "ok", text: "Credit check asked for. They got an email with your credit check link." },
+  credit_copy: { tone: "warn", text: "Credit check asked for. They have no email on file, so copy their link below and text it." },
+  credit_nolink: {
+    tone: "warn",
+    text: "Marked as asked for. Add your credit check company's link in Settings and they will see it on their application page.",
+  },
 };
 
 const btn =
@@ -91,6 +98,7 @@ export function ApplicationCard(p: {
   offerError: string | null;
   screeningName: string | null;
   hasScreeningLink: boolean;
+  ontario: boolean;
   tenancyId: string | null;
 }) {
   const banner = p.applyBanner ? BANNERS[p.applyBanner] ?? null : null;
@@ -201,6 +209,17 @@ export function ApplicationCard(p: {
                 </div>
                 {a.status !== "requested" ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                    {p.ontario && ltbSearchUrl(a.applicant_name) ? (
+                      <a
+                        href={ltbSearchUrl(a.applicant_name) ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={small}
+                        title={LTB_CHECK_LINE}
+                      >
+                        Check LTB orders (free)
+                      </a>
+                    ) : null}
                     <span>Credit check:</span>
                     {(["asked", "received"] as const).map((st) => (
                       <form key={st} action={setCreditCheck}>
@@ -215,10 +234,13 @@ export function ApplicationCard(p: {
                               : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
                           }`}
                         >
-                          {st === "asked" ? "Asked for" : "Received"}
+                          {st === "asked" ? (a.credit_check_status === "asked" ? "Asked for" : "Ask for credit check") : "Received"}
                         </button>
                       </form>
                     ))}
+                    {a.credit_check_status === "asked" && p.hasScreeningLink ? (
+                      <CopyTextButton value={link} label="Copy their link" />
+                    ) : null}
                   </div>
                 ) : null}
               </li>
@@ -246,13 +268,14 @@ export function ApplicationCard(p: {
       ) : null}
 
       <p className="mt-3 text-xs text-gray-500">
-        {p.hasScreeningLink
-          ? `After signing, applicants go straight to your ${p.screeningName || "credit check"} link. `
-          : "Add your credit check company's link and applicants go straight to it after signing. "}
+        {CREDIT_CHECK_ONE_LINE}{" "}
+        {p.ontario ? `${CREDIT_CHECK_ONTARIO_LINE} ` : ""}
+        {p.hasScreeningLink ? `Your link: ${p.screeningName || "credit check company"}. ` : "Add your credit check company's link first. "}
         <Link href="/dashboard/settings?tab=brand#credit-check" className="text-brand hover:underline">
           {p.hasScreeningLink ? "Change it" : "Add it in Settings"}
         </Link>
       </p>
+      {p.ontario && signed.length > 0 ? <p className="mt-1 text-xs text-gray-500">{LTB_CHECK_LINE}</p> : null}
 
       {/* 2. Offer */}
       <div id="offer" className="mt-5 border-t border-gray-100 pt-4">
