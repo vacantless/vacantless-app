@@ -140,6 +140,22 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
                 </SubmitButton>
               </form>
             )}
+            {/* S816h: an authorization made before S816h can't pay monthly rent;
+                a fresh one can. Offered whenever no rent is running. */}
+            {!(view.subscriptionId && subscriptionIsLive(view.subscriptionStatus)) && (
+              <form action={startStripeRentMandate} className="mt-2">
+                <input type="hidden" name="tenancy_id" value={view.tenancyId} />
+                <SubmitButton
+                  pendingLabel="Opening…"
+                  className="text-sm font-medium text-brand hover:underline disabled:opacity-60"
+                >
+                  Authorize the bank again
+                </SubmitButton>
+                <span className="ml-2 text-xs text-gray-500">
+                  Needed if rent was set up before Nov 18, 2026, or the tenant changed banks.
+                </span>
+              </form>
+            )}
           </div>
 
           {/* Monthly rent subscription (increment 3) */}

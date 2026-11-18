@@ -561,7 +561,14 @@ export function summarizeRentPayments(
       out.lastPaymentIso = unixToIsoDate(last.status_transitions?.paid_at ?? last.created);
       out.lastPaymentCents = typeof last.amount_paid === "number" && last.amount_paid > 0 ? last.amount_paid : last.amount_due ?? null;
     } else {
-      const bounced = last.status === "uncollectible" || status === "past_due" || status === "unpaid";
+      // S816h: an unpaid invoice on an ended subscription was never collected
+      // (the $5 test read "processing at the bank" after Stripe ended it).
+      const bounced =
+        last.status === "uncollectible" ||
+        status === "past_due" ||
+        status === "unpaid" ||
+        status === "canceled" ||
+        status === "incomplete_expired";
       out.lastPaymentState = bounced ? "failed" : "processing";
       out.lastPaymentIso = unixToIsoDate(last.created);
       out.lastPaymentCents = last.amount_due ?? null;
