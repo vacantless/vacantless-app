@@ -14,7 +14,7 @@ import {
   SEND_ERRORS,
   sniffImageType,
 } from "../lib/send-shortcut";
-import { SEND_SHORTCUT_STEPS } from "../lib/send-shortcut-copy";
+import { SEND_SHORTCUT_FILE, SEND_SHORTCUT_STEPS } from "../lib/send-shortcut-copy";
 
 let n = 0;
 const ok = (c: unknown, m: string) => {
@@ -88,4 +88,6 @@ ok(page.includes("<SendShortcutCard"), "card on Quick replies");
 const server = readFileSync("lib/send-shortcut-server.ts", "utf8");
 ok(server.includes('roleCan(role, "manage_leads")'), "role checked on every send");
 
+// S817: the shared file is named with spaces so iPhone shows "Send to Vacantless".
+ok(decodeURIComponent(SEND_SHORTCUT_FILE) === "/shortcut/Send to Vacantless.shortcut", "shortcut file named with spaces");
 console.log(`s816l send shortcut: ${n} passed, 0 failed`);
