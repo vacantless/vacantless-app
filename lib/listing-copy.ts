@@ -474,7 +474,7 @@ export function buildRenterMessageReply({
   const lines = [
     hasViewingTimes
       ? `Hi, yes it is still available. You can pick a viewing time here: ${publicUrl}`
-      : `Hi, yes it is still available. Open the link and tap "Request a viewing". Leave your name, email and phone. We will contact you to set a time. Link: ${publicUrl}`,
+      : `Hi, yes it is still available. Open the link and tap "Request a viewing". Leave your name, email and phone. The showing agent will get back to you to set a time. Link: ${publicUrl}`,
   ];
   const p = phone?.trim();
   if (p) lines.push(`If you would rather not fill out the form, you can also call ${p}.`);

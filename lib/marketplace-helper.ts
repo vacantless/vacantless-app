@@ -323,7 +323,7 @@ export function helperReplyTemplate(input: {
   const yes = unit ? `yes, ${unit} is still available.` : "yes it is still available.";
   const lines = [
     input.hasViewingTimes === false
-      ? `Hi ${HELPER_REPLY_NAME}, ${yes} Open the link and tap "Request a viewing". Leave your name, email and phone. We will contact you to set a time. Link: ${input.bookingUrl}`
+      ? `Hi ${HELPER_REPLY_NAME}, ${yes} Open the link and tap "Request a viewing". Leave your name, email and phone. The showing agent will get back to you to set a time. Link: ${input.bookingUrl}`
       : `Hi ${HELPER_REPLY_NAME}, ${yes} You can pick a viewing time here: ${input.bookingUrl}`,
   ];
   const p = input.phone?.trim();
