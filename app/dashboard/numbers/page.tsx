@@ -95,14 +95,15 @@ export default async function PhoneBookPage({ searchParams }: { searchParams: { 
     },
     {
       label: "Emergency repairs",
-      use: "Tenants call this for an emergency.",
+      use: "Tenants call this for an emergency. Only needed if tenants report repairs in Vacantless.",
       phone: o.emergency_phone ?? null,
       change: "/dashboard/maintenance",
       canText: true,
     },
     {
-      label: "Your alert mobile",
-      use: "Where Vacantless texts you about new renters and urgent repairs.",
+      // S816e: this column is the sign-out text (Settings, S762), not new renters.
+      label: "Sign-out alert mobile",
+      use: "We text this number if Kijiji, Rentals.ca or Zumper signs you out.",
       phone: o.alert_mobile_e164 ?? null,
       change: "/dashboard/settings?tab=comms",
       canText: true,
