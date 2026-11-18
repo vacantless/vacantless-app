@@ -546,6 +546,7 @@ export async function handleInboundLeadPost(
     const res = await passSiteMail(admin, {
       orgId: rotatedOrgId,
       siteName: siteMailName(trust.domain),
+      domain: trust.domain,
       from,
       subject: str(payload.Subject),
       html: str(payload.HtmlBody) || null,
@@ -603,12 +604,13 @@ export async function handleInboundLeadPost(
     const res = await passSiteMail(admin, {
       orgId: orgId as string,
       siteName: siteMailName(trust.domain),
+      domain: trust.domain,
       from,
       subject: str(payload.Subject),
       html: str(payload.HtmlBody) || null,
       text: str(payload.TextBody) || null,
     });
-    return NextResponse.json({ ok: true, handled: "site_mail_passed", sent: res.sent });
+    return NextResponse.json({ ok: true, handled: "site_mail_passed", sent: res.sent, confirmed: res.confirmed === true });
   };
   if (!isKnownPortalSender(from)) {
     const passed = await passOn();

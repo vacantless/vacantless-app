@@ -4,9 +4,13 @@
 import { readFileSync } from "node:fs";
 import {
   isTrustedSiteMail,
+  linkOnSite,
+  siteConfirmLink,
+  siteMailCopyLead,
   siteMailCopySubject,
   siteMailDomain,
 } from "../lib/site-mail-pass";
+import { openSiteConfirmLink } from "../lib/site-mail-pass-server";
 import { siteMailCopyHtml } from "../lib/email";
 import { handleInboundLeadPost } from "../lib/portal-lead-ingest-server";
 import { DEFAULT_INGEST_DOMAIN, ingestAddressFromToken } from "../lib/email-ingest";
@@ -179,7 +183,49 @@ ok("a closed account's closer still gets them", server.includes("closed_by") && 
 ok("closed page says to change the site email", read("app/account-closed/page.tsx").includes("change it on that site to your own email"));
 ok("rotate says to change site accounts", read("app/dashboard/captures/page.tsx").includes("change that account to the new one"));
 
-main().then(() => {
+// --- S817c: the site's confirm link is opened for the landlord ----------------------
+// Shaped like the real Rentals.ca "Email Validation" email of 2026-11-17 (Postmark
+// 79bcb03b): tracked links everywhere, the button's words "Validate".
+const rcHtml = `<a href="https://url6872.rentals.ca/ls/click?upn=u001.logo">
+  <img src="https://rentals.ca/static/fe/img/emails/rentals-email-logo-white.png"></a>
+  <h1>Email validation</h1><p>Click the confirmation button below to validate your Rentals.ca account email</p>
+  <a href="https://url6872.rentals.ca/ls/click?upn=u001.TOKEN&amp;x=1" style="background:#000"><span>Validate</span></a>
+  <a href="https://url6872.rentals.ca/ls/click?upn=u001.tiktok">TikTok</a>`;
+const rcLink = siteConfirmLink({ domain: "rentals.ca", subject: "Rentals.ca Email Validation", html: rcHtml, text: null });
+ok("finds the Validate button, not the logo", rcLink === "https://url6872.rentals.ca/ls/click?upn=u001.TOKEN&x=1", rcLink);
+ok("a password reset is never opened", siteConfirmLink({ domain: "rentals.ca", subject: "Password recovery request for Rentals.ca", html: rcHtml.replace("Validate", "Reset password"), text: null }) === null);
+ok("a reset with a verify word is still never opened", siteConfirmLink({ domain: "rentals.ca", subject: "Verify your email to reset your password", html: rcHtml, text: null }) === null);
+ok("a log-in code email is not a confirmation", siteConfirmLink({ domain: "rentals.ca", subject: "Your Rentals.ca Listing - Verification Required", html: rcHtml, text: null }) === null);
+ok("a button off the site's domain is refused", siteConfirmLink({ domain: "rentals.ca", subject: "Verify your email", html: '<a href="https://rentals.ca.evil.com/v?t=1">Verify email</a>', text: null }) === null);
+ok("plain http is refused", !linkOnSite("http://rentals.ca/validate?t=1", "rentals.ca"));
+ok("subdomain on https is fine", linkOnSite("https://url6872.rentals.ca/ls/click?x=1", "rentals.ca"));
+ok("Kijiji style button", siteConfirmLink({ domain: "kijiji.ca", subject: "Please verify your email address", html: '<a href="https://www.kijiji.ca/t-activate.html?token=abc">Verify email address</a>', text: null }) === "https://www.kijiji.ca/t-activate.html?token=abc");
+ok("plain-text confirm link", siteConfirmLink({ domain: "zumper.com", subject: "Confirm your email", html: null, text: "Confirm your email here:\nhttps://www.zumper.com/confirm?t=9\n" }) === "https://www.zumper.com/confirm?t=9");
+ok("copy line says it was confirmed", siteMailCopyLead("Rentals.ca", true).includes("We already opened its confirm link for you"));
+ok("copy line unchanged when not", siteMailCopyLead("Rentals.ca") === "Rentals.ca sent this to your Vacantless address. It is not from a renter, so we passed it on to you.");
+const serverSrc = read("lib/site-mail-pass-server.ts");
+ok("confirm only runs on the trusted path (domain from isTrustedSiteMail)", read("lib/portal-lead-ingest-server.ts").split("domain: trust.domain,").length === 3);
+ok("the confirm happens before the copy is sent", serverSrc.indexOf("siteConfirmLink(") < serverSrc.indexOf("sendSiteMailCopy({"));
+
+async function confirmFetchTests() {
+  const seen: string[] = [];
+  const fake = (async (url: string) => {
+    seen.push(String(url));
+    if (String(url).includes("ls/click")) return new Response(null, { status: 302, headers: { location: "https://rentals.ca/?validated" } });
+    return new Response("ok", { status: 200 });
+  }) as unknown as typeof fetch;
+  const r = await openSiteConfirmLink("https://url6872.rentals.ca/ls/click?upn=u001.T", "rentals.ca", fake);
+  ok("follows the site's own redirect and reports opened", r.opened && r.status === 200 && r.host === "rentals.ca" && seen.length === 2, { r, seen });
+  const off = (async () => new Response(null, { status: 302, headers: { location: "https://evil.example/steal" } })) as unknown as typeof fetch;
+  const r2 = await openSiteConfirmLink("https://url6872.rentals.ca/ls/click?upn=u001.T", "rentals.ca", off);
+  ok("stops at a redirect off the site", !r2.opened, r2);
+  const boom = (async () => {
+    throw new Error("network");
+  }) as unknown as typeof fetch;
+  ok("never throws", !(await openSiteConfirmLink("https://rentals.ca/v", "rentals.ca", boom)).opened);
+}
+
+confirmFetchTests().then(() => main()).then(() => {
   console.log(`\nsite-mail-pass: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 });
