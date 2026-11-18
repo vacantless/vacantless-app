@@ -88,15 +88,15 @@ export function SendShortcutCard({
         <div className="mt-4">
           <p className="font-medium text-gray-900">Add the Shortcut</p>
           <ol className="mt-1 list-decimal space-y-1 pl-5">
-            <li>Make your key above and copy it.</li>
+            <li>Open this page on your iPhone. Make your key above and copy it.</li>
             <li>
-              On your iPhone, open{" "}
+              Tap{" "}
               <a href={shortcutUrl} className="text-brand underline">
-                the Send to Vacantless Shortcut
-              </a>{" "}
-              and tap &quot;Add Shortcut&quot;.
+                Get the Shortcut
+              </a>
+              . If Safari asks, tap Download, then open it from Downloads.
             </li>
-            <li>When it asks for your key, paste it.</li>
+            <li>Tap &quot;Add Shortcut&quot;. When it asks for your key, paste it.</li>
           </ol>
         </div>
       ) : (

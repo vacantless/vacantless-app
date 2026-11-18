@@ -18,6 +18,7 @@ import {
 } from "@/lib/policy-profile";
 import { ReplyKit } from "./reply-kit";
 import { SendShortcutCard } from "./send-shortcut-card";
+import { SEND_SHORTCUT_FILE } from "@/lib/send-shortcut-copy";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -148,7 +149,7 @@ export default async function QuickRepliesPage() {
       ? new Date(k.last_used_at).toLocaleString("en-CA", { timeZone: org.booking_timezone || "America/Toronto", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
       : null;
   }
-  const shortcutUrl = process.env.NEXT_PUBLIC_SEND_SHORTCUT_URL?.trim() || null;
+  const shortcutUrl = process.env.NEXT_PUBLIC_SEND_SHORTCUT_URL?.trim() || `${APP_URL}${SEND_SHORTCUT_FILE}`;
 
   const cards = buildReplyKitCards({ appUrl: APP_URL, properties, posts, timesByProperty, photosByProperty, featuresByProperty });
 

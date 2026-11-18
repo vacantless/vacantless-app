@@ -1,6 +1,8 @@
 // S816l: the words for building the "Send to Vacantless" Apple Shortcut by
 // hand, used until we have a shared Shortcut link (NEXT_PUBLIC_SEND_SHORTCUT_URL).
 export const SEND_URL_PATH = "/api/shortcut/renter";
+/** The signed Shortcut, served from public/. Signed on a Mac by SIGN-SEND-SHORTCUT.sh. */
+export const SEND_SHORTCUT_FILE = "/shortcut/Send-to-Vacantless.shortcut";
 
 export const SEND_SHORTCUT_STEPS: string[] = [
   'Open the Shortcuts app on your iPhone. Tap + and name it "Send to Vacantless".',
