@@ -58,6 +58,10 @@ export async function saveRenterFromShortcut(
   const rentals = await openRentalsForOrg(admin, owner.orgId);
   const read = await readScreenshotWithAi(image, rentals);
   if (!read) return { line: sendResultLine({ outcome: "unreadable" }), leadId: null };
+  // Which fields came back (never the values), so a miss can be traced.
+  console.log(
+    `[shortcut/renter] read org=${owner.orgId} name=${Boolean(read.name)} email=${Boolean(read.email)} phone=${Boolean(read.phone)} rental=${Boolean(read.rentalId)} site=${read.site ?? "none"}`,
+  );
 
   const name = cleanRenterName(read.name);
   const email = normalizeEmail(read.email ?? "") || null;

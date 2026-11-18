@@ -40,8 +40,10 @@ export function buildScreenshotPrompt(rentals: EnquiryRental[]): string {
     '{"is_enquiry": true|false, "confidence": 0 to 1, "name": string|null, "email": string|null,',
     ' "phone": string|null, "question": string|null, "rental_id": one id from the list or null,',
     ' "site": the app or website the chat is on (for example Facebook Marketplace, Kijiji, WhatsApp, Text message), or null}',
-    "name is the renter's name as shown in the chat. question is what the renter asked, in one short sentence.",
-    "Pick rental_id only when the chat clearly points to that rental by address, price, beds or ad title.",
+    "name is the renter's name as shown in the chat, copied exactly in whatever script it is written (Punjabi, Arabic, Chinese and so on are fine).",
+    "On Facebook Marketplace and Messenger the chat title reads \"Name · ad title\" and a line says \"Name started this chat\": that Name is the renter.",
+    "question is what the renter asked, in one short sentence.",
+    "Pick rental_id when the chat points to one rental by address, unit, price, beds or ad title. A Marketplace listing line such as \"CA$1,250 · 1 Bed 1 Bath\" matches the rental with that monthly price.",
   ].join("\n");
 }
 
