@@ -143,6 +143,8 @@ const SURFACES: Surface[] = [
   // The dashboard home, where a first-timer starts.
   { file: "app/dashboard/today-lane.tsx", mode: "ui" },
   { file: "app/dashboard/dashboard-nav.tsx", mode: "ui" },
+  // S816b: the phone book.
+  { file: "app/dashboard/numbers/page.tsx", mode: "ui" },
   // The lib modules that BUILD the landlord sentences the pages render. The
   // discovery sweep below found these; without them WP1 could rewrite a page and
   // reintroduce every banned word one layer down.

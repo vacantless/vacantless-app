@@ -1,0 +1,21 @@
+S816b: Phone book, every number in the account at your fingertips
+
+Noam 2026-11-17: "phone numbers, text messages numbers, showing numbers,
+rental questions numbers, team mate text numbers, emergency numbers.... its
+a lot to find and it needs to be all easy at fingertips."
+
+- /dashboard/numbers ("Phone book" in the account menu, under Quick
+  replies): your texting number, rental questions, arrival, emergency
+  repairs and your alert mobile, each with Call, Text, Copy and Change;
+  buildings or units with their own arrival or emergency number; your team
+  (teammates with a mobile saved here, showing agents, trades); one search
+  over every renter, applicant and tenant (name, address or part of the
+  number), one row per number with the most current role.
+- Migration 0305 (pasted by Noam): memberships.mobile. Anyone sets their
+  own; the owner can set anyone's.
+- Plain-language gate now covers the page; baseline re-recorded (602,
+  unchanged). Application card says "Add them as tenants" and "Open their
+  tenant record" (no "tenancy" in landlord copy).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MTgxGrMz8oSgzAZqtkqGS3

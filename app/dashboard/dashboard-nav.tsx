@@ -78,6 +78,8 @@ const PRIMARY: NavItem[] = [
 const ACCOUNT: NavItem[] = [
   // S750: the phone reply kit, first so it is one tap from the menu on a phone.
   { href: "/dashboard/replies", label: "Quick replies" },
+  // S816b: every number in the account, one tap to call, text or copy.
+  { href: "/dashboard/numbers", label: "Phone book" },
   // S788b: crew links and where each unit is at.
   { href: "/dashboard/crew", label: "Unit progress" },
   { href: "/dashboard/settings", label: "Company settings" },
