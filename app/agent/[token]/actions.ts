@@ -226,7 +226,7 @@ export async function sendApplicationFromToken(formData: FormData) {
 
   const { data: orgRow } = await admin!
     .from("organizations")
-    .select("id, name, plan, brand_color, logo_url, mail_alias, reply_to_email")
+    .select("id, name, plan, brand_color, logo_url, mail_alias, reply_to_email, application_link_url, application_link_name")
     .eq("id", agent!.organization_id)
     .maybeSingle();
   const org = orgRow as {
@@ -237,6 +237,8 @@ export async function sendApplicationFromToken(formData: FormData) {
     logo_url: string | null;
     mail_alias: string | null;
     reply_to_email: string | null;
+    application_link_url: string | null;
+    application_link_name: string | null;
   } | null;
   if (!org || !canUseRentalApplications(org.plan)) redirect(path(token, "app_unavailable"));
 

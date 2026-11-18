@@ -758,6 +758,8 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
       // S818: one credit check per vacancy; free LTB order search first (Ontario).
       { text: "Use any credit check company. Only the applicant you pick gets your link, so you pay for one check, not ten." },
       { text: "On Ontario rentals, search an applicant's Landlord and Tenant Board orders free, in one tap." },
+      // S818b: an account's own application form (Buildium and the like).
+      { text: "Already take applications in Buildium? Send your own form from each renter, with the rental's address." },
     ],
   },
   {

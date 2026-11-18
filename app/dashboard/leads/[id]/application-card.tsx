@@ -50,6 +50,8 @@ const BANNERS: Record<string, { tone: "ok" | "warn" | "err"; text: string }> = {
   contact: { tone: "err", text: "Add an email or phone number for that person first." },
   error: { tone: "err", text: "Couldn't create the application. Please try again." },
   upgrade: { tone: "warn", text: "Rental applications come with Starter and up." },
+  ext_sent: { tone: "ok", text: "Application link sent. They got an email with your own application form." },
+  ext_copy: { tone: "warn", text: "They have no email on file, so copy your application link below and text it." },
   credit_emailed: { tone: "ok", text: "Credit check asked for. They got an email with your credit check link." },
   credit_copy: { tone: "warn", text: "Credit check asked for. They have no email on file, so copy their link below and text it." },
   credit_nolink: {
@@ -99,6 +101,8 @@ export function ApplicationCard(p: {
   screeningName: string | null;
   hasScreeningLink: boolean;
   ontario: boolean;
+  /** S818b: the account's own application form (Buildium and the like). */
+  ownForm: { url: string; name: string | null } | null;
   tenancyId: string | null;
 }) {
   const banner = p.applyBanner ? BANNERS[p.applyBanner] ?? null : null;
@@ -131,7 +135,24 @@ export function ApplicationCard(p: {
       <h3 className="text-xs font-medium uppercase tracking-wider text-gray-500">Application and offer</h3>
 
       {/* 1. Applicants */}
-      {open.length === 0 ? (
+      {open.length === 0 && p.ownForm ? (
+        <div className="mt-3 space-y-2">
+          <form action={requestRentalApplication} className="flex flex-wrap items-center gap-3">
+            <input type="hidden" name="id" value={p.leadId} />
+            <button type="submit" className={btn} style={btnStyle} disabled={!p.lead.email && !p.lead.phone}>
+              Send your {p.ownForm.name || "own"} application{p.lead.name ? ` to ${p.lead.name.split(" ")[0]}` : ""}
+            </button>
+            <CopyTextButton value={p.ownForm.url} label="Copy the link" />
+          </form>
+          <p className="text-xs text-gray-500">
+            {p.lead.email ? `Emails your application form to ${p.lead.email}, with this rental's address. ` : ""}
+            Applications come back in {p.ownForm.name || "your own system"}, not here.{" "}
+            <Link href="/dashboard/settings?tab=brand#application-form" className="text-brand hover:underline">
+              Change it
+            </Link>
+          </p>
+        </div>
+      ) : open.length === 0 ? (
         <form action={requestRentalApplication} className="mt-3 flex flex-wrap items-center gap-3">
           <input type="hidden" name="id" value={p.leadId} />
           <button type="submit" className={btn} style={btnStyle} disabled={!p.lead.email && !p.lead.phone}>

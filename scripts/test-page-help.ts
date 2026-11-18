@@ -45,13 +45,18 @@ ok("pages get the right video first", () => {
   assert.deepEqual(nums("/dashboard/tenancies"), [10]);
   assert.deepEqual(nums("/dashboard/tenancies/t1/lease/l1/standard"), [10, 9]);
   assert.deepEqual(nums("/dashboard/money/tax-package"), [10]);
+  assert.deepEqual(nums("/dashboard/settings"), [7]);
+  assert.deepEqual(nums("/dashboard/crew"), [10]);
+  assert.deepEqual(nums("/dashboard/people/p1"), [6, 10]);
+  assert.deepEqual(nums("/dashboard/numbers"), [7, 3]);
 });
 ok("no prefix swallows a neighbour (showings vs showing-agents, rent vs rental)", () => {
   assert.deepEqual(nums("/dashboard/showings-x"), []);
   assert.deepEqual(nums("/dashboard/rental"), []);
 });
 ok("pages with no video get the full list", () => {
-  for (const p of ["/dashboard/settings", "/dashboard/billing", "/dashboard/crew", "", null]) {
+  // S818: Settings, Crew, People, Phone book and Me now open a matching video.
+  for (const p of ["/dashboard/billing", "", null]) {
     assert.deepEqual(nums(p as string), [], String(p));
   }
 });

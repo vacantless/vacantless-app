@@ -41,6 +41,13 @@ export const PAGE_HELP_ROUTES: [string, number[]][] = [
   ["/dashboard/maintenance", [10]],
   ["/dashboard/expenses", [10]],
   ["/dashboard/reports", [6, 3]],
+  // S818: pages that fell back to the full list (Noam: the "?" should match).
+  ["/dashboard/people/", [6, 10]],
+  ["/dashboard/people", [10, 6]],
+  ["/dashboard/numbers", [7, 3]],
+  ["/dashboard/crew", [10]],
+  ["/dashboard/settings", [7]],
+  ["/dashboard/me", [7]],
 ];
 
 // The Today page itself (exact /dashboard only): replies and follow-ups.

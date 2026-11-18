@@ -18,10 +18,14 @@ export type StartApplicationOrg = {
   logo_url: string | null;
   mail_alias?: string | null;
   reply_to_email: string | null;
+  // S818b: the account's own application form (Buildium and the like).
+  application_link_url?: string | null;
+  application_link_name?: string | null;
 };
 
 export type StartApplicationResult =
-  | { ok: true; applicationId: string; applyUrl: string; emailed: boolean }
+  | { ok: true; applicationId: string; applyUrl: string; emailed: boolean; external?: false }
+  | { ok: true; external: true; applyUrl: string; emailed: boolean; formName: string | null }
   | { ok: false; reason: "exists" | "contact_required" | "error" };
 
 export async function startRentalApplication(
@@ -41,6 +45,40 @@ export async function startRentalApplication(
   const email = (args.applicant.email ?? "").trim() || null;
   const phone = (args.applicant.phone ?? "").trim() || null;
   if (!email && !phone) return { ok: false, reason: "contact_required" };
+
+  // S818b: an account with its own application form sends that link instead.
+  // No Vacantless application row: the paperwork lives in their own system.
+  if (args.org.application_link_url) {
+    const link = args.org.application_link_url;
+    const formName = args.org.application_link_name ?? null;
+    let sent = false;
+    if (email) {
+      try {
+        const r = await sendRentalApplicationInvite({
+          applicant_name: name,
+          applicant_email: email,
+          org_name: args.org.name,
+          brand_color: args.org.brand_color,
+          logo_url: args.org.logo_url,
+          mail_alias: args.org.mail_alias ?? null,
+          reply_to_email: args.org.reply_to_email,
+          property_address: args.propertyAddress,
+          apply_url: link,
+        });
+        sent = r.sent === true;
+      } catch {
+        sent = false;
+      }
+    }
+    await client.from("messages").insert({
+      organization_id: args.org.id,
+      lead_id: args.leadId,
+      channel: "note",
+      direction: "outbound",
+      body: `${formName ?? "Your own"} application link sent to ${name ?? email ?? phone} by ${args.sentByLabel}${sent ? " (emailed)" : ""}.`,
+    });
+    return { ok: true, external: true, applyUrl: link, emailed: sent, formName };
+  }
 
   const emailNorm = normalizeEmail(email);
   const phoneE164 = normalizePhoneE164(phone);

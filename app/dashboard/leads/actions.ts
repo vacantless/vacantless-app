@@ -408,6 +408,8 @@ export async function requestRentalApplication(formData: FormData) {
       logo_url: org.logo_url ?? null,
       mail_alias: org.mail_alias ?? null,
       reply_to_email: org.reply_to_email ?? null,
+      application_link_url: org.application_link_url ?? null,
+      application_link_name: org.application_link_name ?? null,
     },
     leadId: id,
     propertyId: lead.property_id,
@@ -419,6 +421,7 @@ export async function requestRentalApplication(formData: FormData) {
 
   revalidatePath(`/dashboard/leads/${id}`);
   if (!res.ok) redirect(`/dashboard/leads/${id}?apply=${res.reason === "exists" ? "exists" : res.reason === "contact_required" ? "contact" : "error"}#application`);
+  if (res.external) redirect(`/dashboard/leads/${id}?apply=${res.emailed ? "ext_sent" : "ext_copy"}#application`);
   redirect(`/dashboard/leads/${id}?apply=${res.emailed ? "sent" : "made"}#application`);
 }
 

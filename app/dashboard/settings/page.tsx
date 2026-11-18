@@ -35,6 +35,7 @@ import {
   closeAccount,
   requestTexting,
   updateScreeningLink,
+  updateApplicationLink,
 } from "./actions";
 import { ACCOUNT_CLOSURE_MESSAGES } from "@/lib/account-closure";
 import { CopyLinkButton } from "@/components/copy-link-button";
@@ -335,6 +336,7 @@ export default async function SettingsPage({
   searchParams: {
     tab?: string;
     credit?: string;
+    appform?: string;
     saved?: string;
     error?: string;
     test?: string;
@@ -1145,6 +1147,56 @@ export default async function SettingsPage({
 
       {/* ================= Tab - Distribution ================= */}
       {tab === "brand" && (
+        <>
+        <div id="application-form" className="mt-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+          <h2 className="text-base font-semibold text-gray-900">Rental application</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Already take applications in Buildium or another system? Paste its application link. Send application then
+            emails your form with the rental&apos;s address. Applications come back there. Leave it
+            blank to use the Vacantless application.
+          </p>
+          {searchParams.appform === "saved" && (
+            <p className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">Saved.</p>
+          )}
+          {searchParams.appform === "bad" && (
+            <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              That doesn&apos;t look like a web link. Copy it from your application settings.
+            </p>
+          )}
+          {searchParams.appform === "error" && (
+            <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              Something went wrong. Please try again.
+            </p>
+          )}
+          <form action={updateApplicationLink} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <label className="block sm:col-span-2">
+              <span className="mb-1 block text-sm font-medium text-gray-700">Application link</span>
+              <input
+                name="application_link_url"
+                type="url"
+                inputMode="url"
+                placeholder="https://"
+                defaultValue={org.application_link_url ?? ""}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">System name</span>
+              <input
+                name="application_link_name"
+                placeholder="Buildium"
+                defaultValue={org.application_link_name ?? ""}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <div className="sm:col-span-3">
+              <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white">
+                Save
+              </button>
+              <span className="ml-2 text-xs text-gray-500">In Buildium: Leasing, Applicants, the three dots, Customize rental application, Copy permanent link.</span>
+            </div>
+          </form>
+        </div>
         <div id="credit-check" className="mt-6 scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5">
           <h2 className="text-base font-semibold text-gray-900">Credit checks</h2>
           <p className="mt-1 text-sm text-gray-600">
@@ -1199,6 +1251,7 @@ export default async function SettingsPage({
             </div>
           </form>
         </div>
+        </>
       )}
 
       {tab === "distribution" && (

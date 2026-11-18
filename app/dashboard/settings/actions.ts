@@ -1337,6 +1337,23 @@ export async function requestTexting() {
 // S816: the account's own credit check company link. Applicants go straight to
 // it after they sign their application. Any provider works; Vacantless never
 // holds the report.
+// S818b: the account's own rental application form (Buildium, Rentec, Yardi).
+// When set, "Send application" emails this link instead of the Vacantless form.
+export async function updateApplicationLink(formData: FormData) {
+  const org = await requireSettingsOrg();
+  const rawUrl = String(formData.get("application_link_url") ?? "");
+  const url = normalizeScreeningLink(rawUrl);
+  if (rawUrl.trim() && !url) redirect("/dashboard/settings?tab=brand&appform=bad#application-form");
+  const name = String(formData.get("application_link_name") ?? "").trim().slice(0, 60) || null;
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ application_link_url: url, application_link_name: url ? name : null })
+    .eq("id", org.id);
+  if (error) redirect("/dashboard/settings?tab=brand&appform=error#application-form");
+  redirect("/dashboard/settings?tab=brand&appform=saved#application-form");
+}
+
 export async function updateScreeningLink(formData: FormData) {
   const org = await requireSettingsOrg();
   const rawUrl = String(formData.get("screening_link_url") ?? "");

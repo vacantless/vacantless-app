@@ -759,6 +759,7 @@ export default async function LeadDetailPage({
         screeningName={org?.screening_link_name ?? null}
         hasScreeningLink={!!org?.screening_link_url}
         ontario={isOntarioRental(l.property)}
+        ownForm={org?.application_link_url ? { url: org.application_link_url, name: org.application_link_name ?? null } : null}
         tenancyId={existingTenancyId}
       />
 
