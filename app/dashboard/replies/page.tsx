@@ -17,6 +17,7 @@ import {
   type PolicyProfile,
 } from "@/lib/policy-profile";
 import { ReplyKit } from "./reply-kit";
+import { SendShortcutCard } from "./send-shortcut-card";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -125,6 +126,30 @@ export default async function QuickRepliesPage() {
     }
   }
 
+  // S816l: this person's "Send to Vacantless" key, if any (only its last 4).
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let keyHint: string | null = null;
+  let keyLastUsed: string | null = null;
+  if (user) {
+    const { data: keyRow } = await supabase
+      .from("capture_keys")
+      .select("key_hint, last_used_at")
+      .eq("user_id", user.id)
+      .eq("organization_id", org.id)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const k = keyRow as { key_hint: string; last_used_at: string | null } | null;
+    keyHint = k?.key_hint ?? null;
+    keyLastUsed = k?.last_used_at
+      ? new Date(k.last_used_at).toLocaleString("en-CA", { timeZone: org.booking_timezone || "America/Toronto", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+      : null;
+  }
+  const shortcutUrl = process.env.NEXT_PUBLIC_SEND_SHORTCUT_URL?.trim() || null;
+
   const cards = buildReplyKitCards({ appUrl: APP_URL, properties, posts, timesByProperty, photosByProperty, featuresByProperty });
 
   return (
@@ -135,6 +160,7 @@ export default async function QuickRepliesPage() {
         subtitle="Match the photo and price from the chat. Pick the site and what they asked. Copy it and paste it in the chat. Type the name first and Copy also saves the renter."
       />
       <ReplyKit cards={cards} phone={org.public_contact_phone ?? null} />
+      <SendShortcutCard appUrl={APP_URL} hint={keyHint} lastUsed={keyLastUsed} shortcutUrl={shortcutUrl} />
       <details className="mt-6 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700">
         <summary className="cursor-pointer font-medium text-gray-900">Put this on your phone&apos;s home screen</summary>
         <ol className="mt-2 list-decimal space-y-1 pl-5">

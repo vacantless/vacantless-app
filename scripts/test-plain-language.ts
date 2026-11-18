@@ -71,6 +71,9 @@ const SURFACES: Surface[] = [
   // S750: Quick replies, the phone reply kit.
   { file: "app/dashboard/replies/page.tsx", mode: "ui" },
   { file: "app/dashboard/replies/reply-kit.tsx", mode: "ui" },
+  { file: "app/dashboard/replies/send-shortcut-card.tsx", mode: "ui" },
+  { file: "lib/send-shortcut.ts", mode: "ui" },
+  { file: "lib/send-shortcut-copy.ts", mode: "ui" },
   // S760: the one-time "Connect your rental sites" step.
   { file: "app/dashboard/sites/page.tsx", mode: "ui" },
   { file: "app/dashboard/sites/sites-rows.tsx", mode: "ui" },

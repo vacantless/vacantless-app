@@ -1,0 +1,123 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizePhoneE164 } from "@/lib/sms";
+import { normalizeEmail } from "@/lib/persons";
+import { roleCan } from "@/lib/roles";
+import { saveChatRenter } from "@/lib/chat-leads-server";
+import { cleanRenterName, CHAT_LEAD_MATCH_DAYS } from "@/lib/chat-leads";
+import { openRentalsForOrg, readScreenshotWithAi } from "@/lib/ai-enquiry-server";
+import { hashSendKey, nextWindow, planSend, sendResultLine, sendSource } from "@/lib/send-shortcut";
+
+// S816l: the server half of "Send to Vacantless". Everything here runs with
+// the service-role client, scoped to the key's own account.
+
+export type SendKeyOwner = { keyId: string; orgId: string; userId: string };
+
+/** The key's account, if the key is live and its person may still add renters. */
+export async function checkSendKey(
+  admin: SupabaseClient,
+  rawKey: string,
+  now: Date = new Date(),
+): Promise<{ ok: true; owner: SendKeyOwner } | { ok: false; reason: "key" | "role" | "limit" }> {
+  const { data } = await admin
+    .from("capture_keys")
+    .select("id, organization_id, user_id, revoked_at, window_start, uses_in_window")
+    .eq("key_hash", hashSendKey(rawKey))
+    .maybeSingle();
+  const row = data as {
+    id: string;
+    organization_id: string;
+    user_id: string;
+    revoked_at: string | null;
+    window_start: string | null;
+    uses_in_window: number | null;
+  } | null;
+  if (!row || row.revoked_at) return { ok: false, reason: "key" };
+  const { data: m } = await admin
+    .from("memberships")
+    .select("role")
+    .eq("user_id", row.user_id)
+    .eq("organization_id", row.organization_id)
+    .limit(1);
+  const role = (m as { role: string | null }[] | null)?.[0]?.role ?? null;
+  if (!role || !roleCan(role, "manage_leads")) return { ok: false, reason: "role" };
+  const w = nextWindow(row.window_start, row.uses_in_window ?? 0, now);
+  if (!w.allowed) return { ok: false, reason: "limit" };
+  await admin
+    .from("capture_keys")
+    .update({ last_used_at: now.toISOString(), window_start: w.windowStart, uses_in_window: w.uses })
+    .eq("id", row.id);
+  return { ok: true, owner: { keyId: row.id, orgId: row.organization_id, userId: row.user_id } };
+}
+
+/** Read the screenshot and save the renter. Returns the line the Shortcut shows. */
+export async function saveRenterFromShortcut(
+  admin: SupabaseClient,
+  owner: SendKeyOwner,
+  image: { mediaType: string; base64: string },
+): Promise<{ line: string; leadId: string | null }> {
+  const rentals = await openRentalsForOrg(admin, owner.orgId);
+  const read = await readScreenshotWithAi(image, rentals);
+  if (!read) return { line: sendResultLine({ outcome: "unreadable" }), leadId: null };
+
+  const name = cleanRenterName(read.name);
+  const email = normalizeEmail(read.email ?? "") || null;
+  const phone = (read.phone ?? "").trim().slice(0, 40) || null;
+  const rental = read.rentalId ? rentals.find((r) => r.id === read.rentalId) ?? null : null;
+  const rentalLabel = rental?.address ?? null;
+  const question = (read.question ?? "").trim().slice(0, 400);
+  const source = sendSource(read.site);
+  const note = [question ? `Asked: ${question}` : null, "Sent from the iPhone share menu (chat screenshot)."]
+    .filter(Boolean)
+    .join("\n");
+
+  const plan = planSend({ name, email, phone, rentalId: rental?.id ?? null });
+  if (plan.kind === "no_renter") return { line: sendResultLine({ outcome: "no_renter" }), leadId: null };
+
+  if (plan.kind === "chat_name") {
+    const r = await saveChatRenter(admin, {
+      orgId: owner.orgId,
+      propertyId: plan.propertyId,
+      name: name!,
+      source,
+      sourceDetail: null,
+      listingPostId: null,
+      note,
+    });
+    return { line: sendResultLine({ outcome: r, name, rental: rentalLabel }), leadId: null };
+  }
+
+  if (plan.kind === "contact") {
+    const since = new Date(Date.now() - CHAT_LEAD_MATCH_DAYS * 24 * 60 * 60_000).toISOString();
+    const e164 = normalizePhoneE164(phone);
+    const ors = [email ? `email.eq."${email}"` : null, e164 ? `phone_e164.eq."${e164}"` : null].filter(Boolean).join(",");
+    if (ors) {
+      const { data: dupes } = await admin
+        .from("leads")
+        .select("id")
+        .eq("organization_id", owner.orgId)
+        .gte("created_at", since)
+        .or(ors)
+        .limit(1);
+      const hit = (dupes as { id: string }[] | null)?.[0];
+      if (hit) return { line: sendResultLine({ outcome: "exists", name, rental: rentalLabel }), leadId: hit.id };
+    }
+  }
+
+  const { data, error } = await admin
+    .from("leads")
+    .insert({
+      organization_id: owner.orgId,
+      property_id: rental?.id ?? null,
+      name,
+      email,
+      phone,
+      phone_e164: normalizePhoneE164(phone),
+      source,
+      status: email || phone ? "new" : "replied",
+      notes: note,
+    })
+    .select("id")
+    .maybeSingle();
+  if (error || !data?.id) return { line: sendResultLine({ outcome: "failed" }), leadId: null };
+  return { line: sendResultLine({ outcome: "saved", name, rental: rentalLabel }), leadId: (data as { id: string }).id };
+}
