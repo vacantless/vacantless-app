@@ -13,7 +13,7 @@ import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
 import { drivePullLine, type DrivePullResult } from "@/lib/drive-import";
-import { STAGE_LABEL, isCrewRole, stageDateLine, tenancyEffectAction, type Stage, type TenancyEffect } from "@/lib/unit-progress";
+import { STAGE_LABEL, isCrewRole, stageDateLine, tenancyEffectAction, rentedLine, type Stage, type TenancyEffect } from "@/lib/unit-progress";
 import { unitCardsForOrg } from "@/lib/unit-progress-server";
 import { digestCountLabel, photosAlreadyLine, readyDigests, tapLine, type PendingTap } from "@/lib/unit-progress-digest";
 import {
@@ -71,6 +71,8 @@ export async function notifyLandlordOfTap(args: {
   deliveryUrl?: string | null;
   /** S803: the tap's event row. With it, the email waits for the sweep's batch (not for Rented). */
   eventId?: string | null;
+  /** S816g: live ads on the unit when Rented was tapped (undefined: not counted). */
+  liveAds?: number;
 }): Promise<void> {
   if (!TAP_NOTIFY_STAGES.includes(args.stage)) return;
   try {
@@ -80,7 +82,7 @@ export async function notifyLandlordOfTap(args: {
     const address = (prop as { address: string | null } | null)?.address ?? "A unit";
     const tenancyAction = args.effect ? tenancyEffectAction(args.effect, args.propertyId, APP_URL) : null;
     const base =
-      args.stage === "rented" ? "Its ads are coming down. If that was a mistake, relist it from the rental page." : stageDateLine(args.stage, args.dueDate);
+      args.stage === "rented" ? rentedLine(args.liveAds) : stageDateLine(args.stage, args.dueDate);
     // S803: a unit that already has photos and no folder says so, not "add a folder".
     const havePhotos =
       args.stage === "photos_in" && !args.photos && !args.hasPhotoFolder ? await photoCount(args.admin, args.propertyId) : 0;
@@ -313,3 +315,4 @@ export async function runUnitProgressSweep(args: { admin: SupabaseClient; now?: 
   }
   return summary;
 }
+

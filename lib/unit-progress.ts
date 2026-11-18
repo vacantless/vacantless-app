@@ -343,3 +343,12 @@ export function photographerLabel(name: string | null | undefined): string {
   const n = (name ?? "").trim();
   return n ? `Photographer ${n}` : "The photographer";
 }
+
+/** S816g: the Rented line names what really happens to the ads. Pure. */
+export function rentedLine(liveAds: number | undefined): string {
+  const undo = "If that was a mistake, relist it from the rental page.";
+  if (liveAds === 0) return `It had no ads up, so there was nothing to take down. Renters can no longer book it. ${undo}`;
+  if (liveAds === 1) return `Its ad is coming down. ${undo}`;
+  if (typeof liveAds === "number") return `Its ${liveAds} ads are coming down. ${undo}`;
+  return `Its ads are coming down. ${undo}`;
+}

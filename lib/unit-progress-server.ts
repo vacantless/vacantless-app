@@ -143,6 +143,18 @@ export async function recordCrewTap(args: {
     }
   }
 
+  // S816g: count the live ads before they come down, so the email says what
+  // really happened (Unit 32, the first live Rented tap, had none).
+  let liveAds: number | undefined;
+  if (takesAdsDown(stage)) {
+    const { count } = await admin
+      .from("listing_posts")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", crew.organization_id)
+      .eq("property_id", args.propertyId)
+      .eq("status", "live");
+    liveAds = count ?? 0;
+  }
   if (takesAdsDown(stage) && (prop as { status: string | null }).status !== "leased") {
     await markRentedAndTakeDown({ admin, organizationId: crew.organization_id, propertyId: args.propertyId });
   }
@@ -159,6 +171,7 @@ export async function recordCrewTap(args: {
     photos,
     hasPhotoFolder: !!photoFolder,
     eventId,
+    liveAds,
   });
   return { ok: true, stage, photos, shootToken };
 }
