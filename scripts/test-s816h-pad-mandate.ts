@@ -9,7 +9,7 @@ const ca = buildSetupSessionParams({ country: "CA", customerId: "cus_1", success
 };
 const mo = ca.payment_method_options?.acss_debit?.mandate_options;
 ok("default_for invoice + subscription", !!mo?.default_for?.includes("invoice") && !!mo?.default_for?.includes("subscription"));
-ok("schedule kept", mo?.payment_schedule === "interval");
+ok("no schedule with default_for (Stripe 400)", mo?.payment_schedule === undefined && (mo as { interval_description?: string } | undefined)?.interval_description === undefined);
 ok("old mandate refused", !mandateCoversSubscriptions({ payment_method_details: { type: "acss_debit", acss_debit: { default_for: [] } } }));
 ok("old mandate no field refused", !mandateCoversSubscriptions({ payment_method_details: { type: "acss_debit", acss_debit: {} } }));
 ok("new mandate ok", mandateCoversSubscriptions({ payment_method_details: { type: "acss_debit", acss_debit: { default_for: ["invoice", "subscription"] } } }));

@@ -137,6 +137,8 @@ export async function startStripeRentMandate(formData: FormData) {
   } catch (err) {
     // redirect() throws a special digest error — re-throw so Next navigates.
     if (err && typeof err === "object" && "digest" in err) throw err;
+    // S816h: say why (the default_for 400 was swallowed here).
+    console.error("[stripe-rent] setup session failed:", err instanceof Error ? err.message : String(err));
     redirect(`${tenancyPath(tenancyId)}?striperent=createfail`);
   }
 }

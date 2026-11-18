@@ -287,9 +287,10 @@ export function buildSetupSessionParams(args: {
     base.payment_method_options = {
       acss_debit: {
         currency: "cad",
+        // S816h: Stripe refuses payment_schedule and interval_description
+        // alongside default_for (400 on checkout/sessions, 2026-11-18); the
+        // subscription itself sets the monthly schedule.
         mandate_options: {
-          payment_schedule: "interval",
-          interval_description: "Monthly rent",
           transaction_type: "personal",
           // S816h: without this the mandate is not used for the subscription's
           // invoices: the $5 test's first debit (2026-11-18) stayed incomplete

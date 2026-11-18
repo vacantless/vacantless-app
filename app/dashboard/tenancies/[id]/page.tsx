@@ -1782,7 +1782,14 @@ export default async function TenancyDetailPage({
 
   // Smart default-open (S286): open the one section that needs attention now,
   // instead of always-Tenants. Falls back to Tenants when nothing's pending.
-  const openSection = rentIncreasePendingConfirm
+  // S816: "Confirm rent" only opens itself when an increase could be due soon
+  // (lease over ten months old). A new lease keeps it closed with its chip;
+  // Noam 2026-11-18: "why is rent increase always expanded?"
+  const confirmRentSoon =
+    rentIncreasePendingConfirm &&
+    !!t.start_date &&
+    Date.now() - new Date(`${t.start_date}T12:00:00Z`).getTime() > 300 * 24 * 3600 * 1000;
+  const openSection = confirmRentSoon
     ? "rent-increase"
     : pickDefaultOpenSection({
         tenantCount: tenants.length,

@@ -232,7 +232,8 @@ ok("CA setup session = acss_debit + cad + mandate_options", (() => {
     p.customer === "cus_1" &&
     p.currency === "cad" &&
     pmt[0] === "acss_debit" &&
-    pmo.acss_debit?.mandate_options?.payment_schedule === "interval" &&
+    // S816h: no payment_schedule with default_for (Stripe 400).
+    pmo.acss_debit?.mandate_options?.payment_schedule === undefined &&
     pmo.acss_debit?.mandate_options?.transaction_type === "personal"
   );
 })());
