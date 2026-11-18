@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiConfigured } from "@/lib/ai-call";
 import { checkScreenshot } from "@/lib/ai-screenshot-lead";
-import { readSendKey, SEND_ERRORS } from "@/lib/send-shortcut";
+import { readSendKey, sniffImageType, SEND_ERRORS } from "@/lib/send-shortcut";
 import { checkSendKey, saveRenterFromShortcut } from "@/lib/send-shortcut-server";
 
 // S816l: "Send to Vacantless" from the iPhone share menu. The Apple Shortcut
-// posts a form with "screenshot" (the picture) and "key" (the landlord's
-// key, or an Authorization: Bearer header). The answer is one plain line the
+// posts the picture as the body with "Authorization: Bearer <key>" (or a
+// form with "screenshot" and "key"). The answer is one plain line the
 // Shortcut shows, plus the renter's page when one was saved.
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -21,19 +21,31 @@ function say(line: string, status = 200): NextResponse {
 export async function POST(request: Request) {
   const admin = createAdminClient();
   if (!admin) return say(SEND_ERRORS.off, 503);
-  let form: FormData;
-  try {
-    form = await request.formData();
-  } catch {
-    return say(SEND_ERRORS.missing, 400);
+  // Two shapes: the Shortcut sends the picture as the whole body with the key
+  // in an Authorization header, or a form with "screenshot" and "key".
+  const type = (request.headers.get("content-type") ?? "").toLowerCase();
+  let formKey: unknown = null;
+  let file: { type: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> } | null = null;
+  if (type.startsWith("multipart/form-data") || type.startsWith("application/x-www-form-urlencoded")) {
+    let form: FormData;
+    try {
+      form = await request.formData();
+    } catch {
+      return say(SEND_ERRORS.missing, 400);
+    }
+    formKey = form.get("key");
+    const raw = form.get("screenshot") ?? form.get("file");
+    file = raw instanceof File ? raw : null;
+  } else {
+    const buf = await request.arrayBuffer().catch(() => new ArrayBuffer(0));
+    const mediaType = sniffImageType(new Uint8Array(buf.slice(0, 8))) ?? type.split(";")[0].trim();
+    file = buf.byteLength > 0 ? { type: mediaType, size: buf.byteLength, arrayBuffer: async () => buf } : null;
   }
-  const key = readSendKey(request.headers.get("authorization"), form.get("key"));
+  const key = readSendKey(request.headers.get("authorization"), formKey);
   if (!key) return say(SEND_ERRORS.key, 401);
   const owner = await checkSendKey(admin, key);
   if (!owner.ok) return say(SEND_ERRORS[owner.reason], owner.reason === "limit" ? 429 : owner.reason === "role" ? 403 : 401);
 
-  const raw = form.get("screenshot") ?? form.get("file");
-  const file = raw instanceof File ? raw : null;
   const check = checkScreenshot(file);
   if (!check.ok) return say(SEND_ERRORS[check.reason], 400);
   if (!aiConfigured()) return say(SEND_ERRORS.off, 503);

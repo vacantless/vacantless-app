@@ -12,6 +12,7 @@ import {
   sendSource,
   SEND_HOURLY_LIMIT,
   SEND_ERRORS,
+  sniffImageType,
 } from "../lib/send-shortcut";
 import { SEND_SHORTCUT_STEPS } from "../lib/send-shortcut-copy";
 
@@ -71,6 +72,10 @@ ok(lines[0] === "Saved Maria for 833 Pillette Rd, Unit 3 in Renters.", "saved li
 ok(lines[1].includes("pick it on their page"), "no rental line");
 for (const l of lines) ok(!/[—–]/.test(l), `no dashes: ${l}`);
 ok(SEND_SHORTCUT_STEPS.some((s) => s.includes("{URL}")), "steps carry the address");
+
+ok(sniffImageType(new Uint8Array([0xff, 0xd8, 0xff])) === "image/jpeg", "sniff jpeg");
+ok(sniffImageType(new Uint8Array([0x89, 0x50, 0x4e, 0x47])) === "image/png", "sniff png");
+ok(sniffImageType(new Uint8Array([1, 2, 3])) === null, "sniff other");
 
 // Wiring: route, migration, card.
 const route = readFileSync("app/api/shortcut/renter/route.ts", "utf8");

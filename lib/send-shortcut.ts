@@ -31,6 +31,14 @@ export function readSendKey(authHeader: string | null | undefined, formKey: unkn
   return raw.startsWith(SEND_KEY_PREFIX) && raw.length >= 20 && raw.length <= 80 ? raw : null;
 }
 
+/** The picture type from its first bytes; Shortcuts may send no type. */
+export function sniffImageType(head: Uint8Array): string | null {
+  if (head[0] === 0xff && head[1] === 0xd8) return "image/jpeg";
+  if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) return "image/png";
+  if (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46) return "image/gif";
+  return null;
+}
+
 /** Start a new hour when the last one is over; otherwise count this use. */
 export function nextWindow(
   windowStart: string | null,
