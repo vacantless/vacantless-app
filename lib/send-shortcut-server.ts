@@ -49,12 +49,22 @@ export async function checkSendKey(
   return { ok: true, owner: { keyId: row.id, orgId: row.organization_id, userId: row.user_id } };
 }
 
+/** S817b: what was saved, plus what the reply needs (rental, question, site, name). */
+export type SendSaved = {
+  line: string;
+  leadId: string | null;
+  rentalId?: string | null;
+  question?: string | null;
+  site?: string | null;
+  name?: string | null;
+};
+
 /** Read the screenshot and save the renter. Returns the line the Shortcut shows. */
 export async function saveRenterFromShortcut(
   admin: SupabaseClient,
   owner: SendKeyOwner,
   image: { mediaType: string; base64: string },
-): Promise<{ line: string; leadId: string | null }> {
+): Promise<SendSaved> {
   const rentals = await openRentalsForOrg(admin, owner.orgId);
   const read = await readScreenshotWithAi(image, rentals);
   if (!read) return { line: sendResultLine({ outcome: "unreadable" }), leadId: null };
@@ -74,8 +84,9 @@ export async function saveRenterFromShortcut(
     .filter(Boolean)
     .join("\n");
 
+  const ctx = { rentalId: rental?.id ?? null, question: question || null, site: read.site ?? null, name };
   const plan = planSend({ name, email, phone, rentalId: rental?.id ?? null });
-  if (plan.kind === "no_renter") return { line: sendResultLine({ outcome: "no_renter" }), leadId: null };
+  if (plan.kind === "no_renter") return { line: sendResultLine({ outcome: "no_renter" }), leadId: null, ...ctx };
 
   if (plan.kind === "chat_name") {
     const r = await saveChatRenter(admin, {
@@ -87,7 +98,7 @@ export async function saveRenterFromShortcut(
       listingPostId: null,
       note,
     });
-    return { line: sendResultLine({ outcome: r, name, rental: rentalLabel }), leadId: null };
+    return { line: sendResultLine({ outcome: r, name, rental: rentalLabel }), leadId: null, ...ctx };
   }
 
   if (plan.kind === "contact") {
@@ -103,7 +114,7 @@ export async function saveRenterFromShortcut(
         .or(ors)
         .limit(1);
       const hit = (dupes as { id: string }[] | null)?.[0];
-      if (hit) return { line: sendResultLine({ outcome: "exists", name, rental: rentalLabel }), leadId: hit.id };
+      if (hit) return { line: sendResultLine({ outcome: "exists", name, rental: rentalLabel }), leadId: hit.id, ...ctx };
     }
   }
 
@@ -123,5 +134,5 @@ export async function saveRenterFromShortcut(
     .select("id")
     .maybeSingle();
   if (error || !data?.id) return { line: sendResultLine({ outcome: "failed" }), leadId: null };
-  return { line: sendResultLine({ outcome: "saved", name, rental: rentalLabel }), leadId: (data as { id: string }).id };
+  return { line: sendResultLine({ outcome: "saved", name, rental: rentalLabel }), leadId: (data as { id: string }).id, ...ctx };
 }

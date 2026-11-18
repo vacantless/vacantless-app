@@ -46,10 +46,11 @@ export function SendShortcutCard({
 
   return (
     <details className="mt-6 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700" open={Boolean(key)}>
-      <summary className="cursor-pointer font-medium text-gray-900">Save renters from a chat screenshot on your iPhone</summary>
+      <summary className="cursor-pointer font-medium text-gray-900">Save the renter and copy your reply from a chat screenshot</summary>
       <p className="mt-2">
         Take a screenshot of the chat, tap Share, then &quot;Send to Vacantless&quot;. We read the renter&apos;s name and the rental. Then we
-        save them in Renters. Works for Messenger, Kijiji, texts and email.
+        save them in Renters. We also copy your Quick replies answer, so paste it in the chat. Works for Messenger, Kijiji, texts and
+        email.
       </p>
 
       {key ? (

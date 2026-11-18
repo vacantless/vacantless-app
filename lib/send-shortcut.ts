@@ -5,6 +5,8 @@
 // app/api/shortcut/renter and the saving is lib/send-shortcut-server.ts.
 import { createHash, randomBytes } from "crypto";
 import { screenshotSource } from "./ai-screenshot-lead";
+import { replyKitText, type ReplyKitCard } from "./reply-kit";
+import type { ReplyAnswerKey } from "./reply-answers";
 
 export const SEND_KEY_PREFIX = "vl_";
 /** Screenshots read per key per hour. Each one is an AI read. */
@@ -117,3 +119,64 @@ export const SEND_ERRORS = {
   size: "That picture is too big. Use one under 5 MB.",
   off: "Screenshot reading is not available right now.",
 } as const;
+
+// S817b: the Shortcut also copies the reply, the same words Quick replies would
+// give for this rental, site and question. Pure.
+
+/** Which Quick replies answer the renter's question asks for. Null = the first "still available" reply. */
+export function answerKeyForQuestion(question: string | null | undefined): ReplyAnswerKey | null {
+  const q = String(question ?? "").toLowerCase();
+  if (!q.trim()) return null;
+  const rules: [ReplyAnswerKey, RegExp][] = [
+    ["pets", /\b(pets?|cats?|dogs?|kitten|puppy|animals?)\b/],
+    ["utilities", /\b(utilit(y|ies)|hydro|heat|heating|water|electric(ity)?|internet|wifi|bills?|inclusive|included)\b/],
+    ["parking", /\b(park(ing)?|garage|driveway|car)\b/],
+    ["laundry", /\b(laundry|washer|dryer|washing)\b/],
+    ["ac", /\b(a\/?c|air ?condition(ing|er)?|cooling)\b/],
+    ["appliances", /\b(appliances?|fridge|stove|dishwasher|microwave)\b/],
+    ["move_in", /\b(move[- ]?in|when.*(available|move)|available (from|on|starting)|start date|december|january|february|march|april|june|july|august|september|october|november)\b/],
+  ];
+  for (const [key, re] of rules) if (re.test(q)) return key;
+  return null;
+}
+
+/** The card's site button for the chat's site; "direct" when that ad is not tracked. */
+export function replySiteKey(site: string | null | undefined): string {
+  const s = String(site ?? "").toLowerCase();
+  if (/marketplace|facebook|messenger/.test(s)) return "facebook";
+  if (/kijiji/.test(s)) return "kijiji";
+  if (/zumper/.test(s)) return "zumper";
+  if (/rentals\.?ca/.test(s)) return "rentals_ca";
+  return "direct";
+}
+
+/**
+ * The reply to copy, or null with why. A question with no answer on file gets
+ * no reply (never a guess, the S812 rule); Quick replies says the same.
+ */
+export function shortcutReply(input: {
+  card: ReplyKitCard | null;
+  site: string | null | undefined;
+  question: string | null | undefined;
+  phone: string | null;
+  renterName: string | null;
+}): { text: string | null; why: "ok" | "no_rental" | "no_answer" } {
+  const card = input.card;
+  if (!card) return { text: null, why: "no_rental" };
+  const want = replySiteKey(input.site);
+  const site = card.sites.find((x) => x.key === want) ?? card.sites.find((x) => x.key === "direct") ?? card.sites[0];
+  if (!site) return { text: null, why: "no_rental" };
+  const key = card.available ? answerKeyForQuestion(input.question) : null;
+  if (key && !card.answers.some((a) => a.key === key)) return { text: null, why: "no_answer" };
+  return {
+    text: replyKitText({ card, site, phone: input.phone, renterName: input.renterName, answerKey: key }),
+    why: "ok",
+  };
+}
+
+/** The second line the Shortcut shows under the saved line. */
+export function shortcutReplyLine(why: "ok" | "no_rental" | "no_answer"): string {
+  if (why === "ok") return "Your reply is copied. Paste it in the chat.";
+  if (why === "no_answer") return "There is no answer on file for that question, so nothing was copied. Answer it on Quick replies.";
+  return "Pick the rental on Quick replies to copy a reply. We could not tell which one it was.";
+}

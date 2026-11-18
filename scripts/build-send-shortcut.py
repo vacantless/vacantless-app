@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 # S816l: builds the unsigned "Send to Vacantless" Apple Shortcut. Sign it on a
 # Mac with: shortcuts sign --mode anyone --input <in> --output <out>
-import plistlib, sys, uuid
+# S817b: v=2 answers in JSON; the Shortcut copies "reply" (the Quick replies
+# text) and shows "line". SEND_KEY_FILE=<file> builds your own copy with your
+# key inside (no question when it is added); the file is never committed.
+import os, plistlib, sys, uuid
 
-URL = "https://app.vacantless.com/api/shortcut/renter"
+URL = "https://app.vacantless.com/api/shortcut/renter?v=2"
+KEY = open(os.environ["SEND_KEY_FILE"]).read().strip() if os.environ.get("SEND_KEY_FILE") else None
 OBJ = "￼"
-u_key, u_img, u_post = (str(uuid.uuid4()).upper() for _ in range(3))
+u_key, u_img, u_post, u_reply, u_line, u_if = (str(uuid.uuid4()).upper() for _ in range(6))
 
 def out(uid, name):
     return {"Type": "ActionOutput", "OutputUUID": uid, "OutputName": name}
@@ -21,7 +25,7 @@ def txt(s, attach=None):
 
 actions = [
     {"WFWorkflowActionIdentifier": "is.workflow.actions.gettext",
-     "WFWorkflowActionParameters": {"UUID": u_key, "WFTextActionText": "Paste your Vacantless key here"}},
+     "WFWorkflowActionParameters": {"UUID": u_key, "WFTextActionText": KEY or "Paste your Vacantless key here"}},
     {"WFWorkflowActionIdentifier": "is.workflow.actions.image.convert",
      "WFWorkflowActionParameters": {"UUID": u_img, "WFImageFormat": "JPEG", "WFImagePreserveMetadata": False,
                                     "WFInput": att({"Type": "ExtensionInput"})}},
@@ -34,8 +38,21 @@ actions = [
               "WFValue": {"Value": {"string": "Bearer " + OBJ, "attachmentsByRange": {"{7, 1}": out(u_key, "Text")}},
                           "WFSerializationType": "WFTextTokenString"}},
          ]}, "WFSerializationType": "WFDictionaryFieldValue"}}},
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.getvalueforkey",
+     "WFWorkflowActionParameters": {"UUID": u_reply, "WFDictionaryKey": "reply",
+                                    "WFInput": att(out(u_post, "Contents of URL"))}},
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.conditional",
+     "WFWorkflowActionParameters": {"GroupingIdentifier": u_if, "WFControlFlowMode": 0, "WFCondition": 100,
+                                    "WFInput": {"Type": "Variable", "Variable": att(out(u_reply, "Dictionary Value"))}}},
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.setclipboard",
+     "WFWorkflowActionParameters": {"WFInput": att(out(u_reply, "Dictionary Value"))}},
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.conditional",
+     "WFWorkflowActionParameters": {"GroupingIdentifier": u_if, "WFControlFlowMode": 2}},
+    {"WFWorkflowActionIdentifier": "is.workflow.actions.getvalueforkey",
+     "WFWorkflowActionParameters": {"UUID": u_line, "WFDictionaryKey": "line",
+                                    "WFInput": att(out(u_post, "Contents of URL"))}},
     {"WFWorkflowActionIdentifier": "is.workflow.actions.showresult",
-     "WFWorkflowActionParameters": {"Text": txt(OBJ, out(u_post, "Contents of URL"))}},
+     "WFWorkflowActionParameters": {"Text": txt(OBJ, out(u_line, "Dictionary Value"))}},
 ]
 
 wf = {
@@ -46,7 +63,7 @@ wf = {
     "WFWorkflowTypes": ["ActionExtension"],
     "WFWorkflowInputContentItemClasses": ["WFImageContentItem"],
     "WFWorkflowHasShortcutInputVariables": True,
-    "WFWorkflowImportQuestions": [{
+    "WFWorkflowImportQuestions": [] if KEY else [{
         "ActionIndex": 0, "Category": "Parameter", "ParameterKey": "WFTextActionText",
         "Text": "Paste your Vacantless key. Make it on Quick replies in Vacantless.", "DefaultValue": "",
     }],

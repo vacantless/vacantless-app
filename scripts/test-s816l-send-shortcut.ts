@@ -15,6 +15,8 @@ import {
   sniffImageType,
 } from "../lib/send-shortcut";
 import { SEND_SHORTCUT_FILE, SEND_SHORTCUT_STEPS } from "../lib/send-shortcut-copy";
+import { answerKeyForQuestion, replySiteKey, shortcutReply, shortcutReplyLine } from "../lib/send-shortcut";
+import { buildReplyKitCards } from "../lib/reply-kit";
 
 let n = 0;
 const ok = (c: unknown, m: string) => {
@@ -90,4 +92,48 @@ ok(server.includes('roleCan(role, "manage_leads")'), "role checked on every send
 
 // S817: the shared file is named with spaces so iPhone shows "Send to Vacantless".
 ok(decodeURIComponent(SEND_SHORTCUT_FILE) === "/shortcut/Send to Vacantless.shortcut", "shortcut file named with spaces");
+// S817b: the Shortcut copies the Quick replies text.
+ok(answerKeyForQuestion("Is this still available?") === null, "still available = first reply");
+ok(answerKeyForQuestion("Is this 1 bed 1 bath apartment still available?") === null, "Victor's question = first reply");
+ok(answerKeyForQuestion("") === null, "no question = first reply");
+ok(answerKeyForQuestion("Are pets allowed? I have a cat") === "pets", "pets");
+ok(answerKeyForQuestion("Is hydro included?") === "utilities", "utilities");
+ok(answerKeyForQuestion("is there parking") === "parking", "parking");
+ok(answerKeyForQuestion("Laundry in building?") === "laundry", "laundry");
+ok(answerKeyForQuestion("does it have A/C") === "ac", "ac");
+ok(answerKeyForQuestion("When can I move in?") === "move_in", "move in");
+ok(answerKeyForQuestion("May I see it this week?") === null, "May the word is not a month");
+ok(replySiteKey("Facebook Marketplace") === "facebook" && replySiteKey("Messenger") === "facebook", "facebook site");
+ok(replySiteKey("Kijiji") === "kijiji" && replySiteKey("texts") === "direct", "other sites");
+{
+  const cards = buildReplyKitCards({
+    appUrl: "https://app.vacantless.com",
+    properties: [{ id: "p1", address: "1551 Assumption St, Unit 9, Windsor, ON", rent_cents: 109500, beds: 1, baths: 1, status: "available", archived_at: null }],
+    posts: [{ id: "post1", property_id: "p1", portal: "facebook", status: "live" }],
+    timesByProperty: new Map([["p1", { hasViewingTimes: true, nextTimes: null }]]),
+    featuresByProperty: new Map([["p1", { pets_cats: false, pets_dogs: false, heat_included: true, hydro_included: false }]]),
+  });
+  const card = cards[0];
+  const first = shortcutReply({ card, site: "Facebook Marketplace", question: "Is this still available?", phone: null, renterName: "Victor" });
+  ok(first.why === "ok" && !!first.text && first.text.includes("Victor") && first.text.includes("post1"), "first reply uses the Marketplace link and the name");
+  const pets = shortcutReply({ card, site: "Facebook Marketplace", question: "Do you allow dogs?", phone: null, renterName: "Victor" });
+  ok(pets.why === "ok" && !!pets.text && /pets are not allowed/.test(pets.text), "pets answer from the record");
+  const park = shortcutReply({ card, site: "Facebook Marketplace", question: "Is there parking?", phone: null, renterName: "Victor" });
+  ok(park.text === null && park.why === "no_answer", "no parking on file = nothing copied, never a guess");
+  const none = shortcutReply({ card: null, site: "Facebook Marketplace", question: "", phone: null, renterName: "Victor" });
+  ok(none.text === null && none.why === "no_rental", "no rental = nothing copied");
+  const text = shortcutReply({ card, site: "texts", question: "", phone: null, renterName: null });
+  ok(!!text.text && !text.text.includes("post1"), "a text chat gets the plain link");
+  ok(shortcutReplyLine("ok").includes("copied"), "copied line");
+}
+{
+  const routeSrc = readFileSync("app/api/shortcut/renter/route.ts", "utf8");
+  ok(routeSrc.includes('get("v") === "2"') && routeSrc.includes("sayJson"), "v=2 answers in JSON");
+  ok(routeSrc.includes("if (!v2) return say("), "older Shortcuts keep the plain line");
+  const builder = readFileSync("scripts/build-send-shortcut.py", "utf8");
+  ok(builder.includes("renter?v=2") && builder.includes("setclipboard") && builder.includes('"reply"'), "Shortcut copies reply");
+  ok(!/vl_[A-Za-z0-9_-]{20,}/.test(builder), "no key in the shared builder");
+  const pageSrc = readFileSync("app/dashboard/replies/page.tsx", "utf8");
+  ok(pageSrc.includes("loadReplyKitCards("), "Quick replies and the Shortcut share one loader");
+}
 console.log(`s816l send shortcut: ${n} passed, 0 failed`);
