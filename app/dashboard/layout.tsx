@@ -117,9 +117,10 @@ export default async function DashboardLayout({
             />
             <div>
               <p className="text-xs uppercase tracking-wider opacity-80">
-                Vacantless · {planLabelOf(org.plan as PlanKey)}
+                {/* S821d: a browser translator turned the brand into the word for empty. */}
+                <span translate="no" className="notranslate">Vacantless</span> · {planLabelOf(org.plan as PlanKey)}
               </p>
-              <h1 className="text-lg font-bold">{org.name}</h1>
+              <h1 translate="no" className="notranslate text-lg font-bold">{org.name}</h1>
             </div>
           </div>
           <div className="flex items-center gap-2">

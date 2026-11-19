@@ -7,6 +7,7 @@ import { ANDROID_SHARE_NOTE, ANDROID_SHARE_STEPS, SHARE_TARGET_FIELD, SHARE_TARG
 import { PHONE_REPLY_NOTE_MARKS } from "../lib/reply-kit-server";
 import { sendResultLine } from "../lib/send-shortcut";
 import manifest from "../app/manifest";
+import { buildSitesSetup } from "../lib/sites-setup";
 
 let pass = 0;
 let fail = 0;
@@ -82,6 +83,34 @@ ok("the page has Copy reply and the renter link", html.includes('id="copy"') && 
 const miss = renderSharePage({ line: "We could not read that picture.", reply: null, link: null, ok: false });
 ok("a miss has no reply box and no script", miss.includes("<h1>Not saved</h1>") && !miss.includes('id="copy"') && !miss.includes("<script>"));
 ok("no em dash in the new copy", ![html, miss, ...ANDROID_SHARE_STEPS, connect.description, phone.description].some((t) => t.includes("—")));
+
+// --- S821d: first visits are one question -------------------------------------
+{
+  const base = { tileStateByChannel: {}, postingAllowed: true, helperInstalled: false, postingHref: "/dashboard/billing#posting" };
+  const first = buildSitesSetup({ ...base, firstTime: true });
+  const kijiji = first.rows.find((r) => r.key === "kijiji");
+  ok("first time: a site row opens its own page", kijiji?.action?.href === "/dashboard/site-signin/kijiji" && kijiji.action.label === "Sign in or make my account", kijiji?.action);
+  const later = buildSitesSetup(base);
+  ok("later: the row keeps the walk through all three", later.rows.find((r) => r.key === "kijiji")?.action?.href === "/dashboard/site-signin");
+  const ended = buildSitesSetup({ ...base, firstTime: true, tileStateByChannel: { kijiji: "dead_session" } });
+  ok("an ended sign-in still says Sign in again", ended.rows.find((r) => r.key === "kijiji")?.action?.label === "Sign in again");
+  const sites = read("app/dashboard/sites/page.tsx");
+  ok("sites page leads with one choice when nothing is connected", sites.includes("Pick one site to begin.") && sites.includes("const firstTime = !orgHasConnectedSite(tileStateByChannel)"));
+  ok("the price line comes after the rows on a first visit", sites.indexOf("Pick one site to begin.") < sites.indexOf("<SitesRows") && sites.lastIndexOf("See Posting") > sites.lastIndexOf("<SitesRows"));
+  ok("the all-three button waits", read("app/dashboard/sites/sites-rows.tsx").includes("setup.nextSignin && !input.firstTime"));
+  const av = read("app/dashboard/availability/page.tsx");
+  ok("viewing times: a first visit shows one-tap choices", av.includes("When can you show the rental?") && av.includes("VIEWING_PRESETS.map") && av.includes('name="from" value="availability"'));
+  ok("viewing times: the rest waits under More settings", av.includes('<details id="more-settings"') && av.includes("open={!firstVisit}") && av.includes("</details>"));
+  ok("viewing times: first visit means nothing set at all", av.includes("const firstVisit = rules.length === 0 && overrides.length === 0;"));
+  ok("the preset stays on the page when started there", read("app/dashboard/availability/actions.ts").includes('redirect("/dashboard/availability?saved=preset")'));
+}
+
+// S821d: the Punjabi walk. Chrome's translator renamed the brand and the account.
+{
+  const layout = read("app/dashboard/layout.tsx");
+  ok("the brand is not translated", layout.includes('<span translate="no" className="notranslate">Vacantless</span>'));
+  ok("the account name is not translated", layout.includes('<h1 translate="no" className="notranslate text-lg font-bold">{org.name}</h1>'));
+}
 
 console.log(`\ns821b: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

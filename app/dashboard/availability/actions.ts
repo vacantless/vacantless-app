@@ -205,6 +205,8 @@ export async function openViewingPreset(formData: FormData) {
   }
   revalidatePath("/dashboard/availability");
   revalidatePath("/dashboard");
+  // S821d: from the Set viewing times page, stay there and show the result.
+  if (String(formData.get("from") ?? "") === "availability") redirect("/dashboard/availability?saved=preset");
   redirect(`/dashboard?opened=${key}&added=${added}`);
 }
 

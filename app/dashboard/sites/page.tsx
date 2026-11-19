@@ -10,7 +10,7 @@ import { isHiddenForOrg } from "@/lib/posting-lanes";
 import { POSTING_ADDON_HREF, FREE_RENTAL_POSTING_LINE } from "@/lib/billing";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { cleanPropertyId } from "@/lib/site-signin";
-import { signinChainHref } from "@/lib/sites-setup";
+import { orgHasConnectedSite, signinChainHref } from "@/lib/sites-setup";
 import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
 import { SitesRows, type SiteRowDetails } from "./sites-rows";
 import { SiteChecks } from "./site-checks";
@@ -98,6 +98,8 @@ export default async function SitesSetupPage({
     mailedLine = sitesPhoneMailedLine(searchParams.mailed, user?.email ?? null);
   }
 
+  // S821d: nothing connected yet. Lead with one choice, not five.
+  const firstTime = !orgHasConnectedSite(tileStateByChannel);
   const backHref = propertyId
     ? `/dashboard/properties/${propertyId}?tab=distribute#distribute-header`
     : searchParams.from === "getting-started"
@@ -113,8 +115,20 @@ export default async function SitesSetupPage({
         icon={<Icons.check />}
         eyebrow="Set up once"
         title="Connect your rental sites"
-        subtitle="Sign in to each site. After that, post a rental and it goes up on every connected site. We keep the ads up and take them down when it rents. If a site signs you out, we tell you."
+        subtitle={
+          firstTime
+            ? "Connect a site once. After that, we post your rental there and keep the ad up."
+            : "Sign in to each site. After that, post a rental and it goes up on every connected site. We keep the ads up and take them down when it rents. If a site signs you out, we tell you."
+        }
       />
+      {firstTime ? (
+        <div id="first-site" className="mt-4 rounded-xl border border-brand/30 bg-white px-4 py-3 text-sm text-gray-800">
+          <p className="text-base font-semibold text-gray-900">Pick one site to begin.</p>
+          <p className="mt-1">One is enough. You can add the others later.</p>
+          <p className="mt-1">No account on a site yet? Open it and we make the account with you.</p>
+        </div>
+      ) : (
+        <>
       {!access.allowed ? (
         <p className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
           {access.setup
@@ -125,6 +139,8 @@ export default async function SitesSetupPage({
           </Link>
         </p>
       ) : null}
+        </>
+      )}
       {onPhone ? (
         <div className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
           <p className="text-base text-gray-900">{SITES_PHONE_LINE}</p>
@@ -173,6 +189,7 @@ export default async function SitesSetupPage({
                 propertyId,
                 postingHref: POSTING_ADDON_HREF,
                 facebookPageSkipped: Boolean(org.facebook_page_skipped_at),
+                firstTime,
               }}
               signinAllHref={access.setup ? signinChainHref(propertyId) : null}
               details={details}
@@ -191,12 +208,27 @@ export default async function SitesSetupPage({
               propertyId,
               postingHref: POSTING_ADDON_HREF,
               facebookPageSkipped: Boolean(org.facebook_page_skipped_at),
+                firstTime,
             }}
             signinAllHref={access.setup ? signinChainHref(propertyId) : null}
             details={details}
           />
         </div>
       )}
+      {firstTime ? (
+        <>
+      {!access.allowed ? (
+        <p className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          {access.setup
+            ? `Your Facebook Page and Marketplace are free for every account. ${FREE_RENTAL_POSTING_LINE}`
+            : "Your Facebook Page and Marketplace are free for every account. Kijiji, Rentals.ca and Zumper are posted for you with Posting, $49 a month."}{" "}
+          <Link href={POSTING_ADDON_HREF} className="font-semibold text-brand">
+            See Posting
+          </Link>
+        </p>
+      ) : null}
+        </>
+      ) : null}
       <SiteChecks due={due} probeEnabled={vm.probeEnabled} />
       {access.setup ? (
         // S806 (REVIEW-S805 finding 7): step 2. Renters who write on Kijiji,

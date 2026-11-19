@@ -10,7 +10,7 @@
 // ============================================================================
 
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
-import { SITE_SIGNIN_ORDER, signinNeeded, type SiteSigninChannel } from "@/lib/site-signin";
+import { SITE_SIGNIN_ORDER, signinNeeded, siteSigninHref, type SiteSigninChannel } from "@/lib/site-signin";
 import { MARKETPLACE_HELPER_INSTALL_URL } from "@/lib/marketplace-helper";
 
 export const SITES_SETUP_HREF = "/dashboard/sites";
@@ -47,6 +47,12 @@ export type SitesSetupInput = {
   postingHref: string;
   /** S770: the landlord said they have no Facebook Page (organizations.facebook_page_skipped_at). */
   facebookPageSkipped?: boolean;
+  /**
+   * S821d: nothing is connected yet. Each site row then opens its own page,
+   * where "Make my account" sits beside sign-in, and the page hides the
+   * button that walks all three sites in a row. One site is enough to begin.
+   */
+  firstTime?: boolean;
 };
 
 export type SitesSetup = {
@@ -212,7 +218,10 @@ export function buildSitesSetup(input: SitesSetupInput): SitesSetup {
           : zumperFirst
             ? `Do this one today: Zumper checks your ID, which can take a day. ${ROBOT_FREE_LINE[key]}`
             : `Sign in once, about 2 minutes. ${ROBOT_FREE_LINE[key]}`,
-      action: { label: state === "dead_session" ? "Sign in again" : "Sign in once", href: signinChainHref(input.propertyId) },
+      action:
+        input.firstTime && state !== "dead_session"
+          ? { label: "Sign in or make my account", href: siteSigninHref(key, input.propertyId) }
+          : { label: state === "dead_session" ? "Sign in again" : "Sign in once", href: signinChainHref(input.propertyId) },
       note: zumperFirst ? "Make your Zumper landlord account and send your ID on Zumper today. Sign in here once Zumper approves you." : null,
     };
     if (zumperFirst) {

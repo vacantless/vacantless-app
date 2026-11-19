@@ -12,7 +12,9 @@ import {
   addAvailabilityOverride,
   removeAvailabilityOverride,
   saveBuildingViewingDays,
+  openViewingPreset,
 } from "./actions";
+import { VIEWING_PRESETS } from "@/lib/viewing-presets";
 import { PageHeader } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { BOOKING_TIMEZONES, timezoneLabel } from "@/lib/timezone-label";
@@ -55,6 +57,7 @@ const SAVED_MESSAGES: Record<string, string> = {
   cluster: "Grouping settings saved.",
   double_booking: "Open-house booking setting saved.",
   window: "Viewing window added.",
+  preset: "Your viewing times are set. Renters can book now. Change them below any time.",
   dayoff: "Day off added.",
   override: "Specific-date hours added.",
   building_days: "Viewing days for the building saved.",
@@ -212,6 +215,8 @@ export default async function AvailabilityPage({
   // the operator sees exactly what a renter chooses from. Already-booked times
   // are hidden live; this static preview shows the full set from the window.
   const previewRule = rules.length > 0 ? rules[0] : null;
+  // S821d: nothing set yet, weekly or by date.
+  const firstVisit = rules.length === 0 && overrides.length === 0;
   const previewStarts = previewRule
     ? previewSlotStarts(
         previewRule.start_minute,
@@ -235,7 +240,7 @@ export default async function AvailabilityPage({
         icon={<Icons.clock />}
         eyebrow="Viewings"
         title="Set viewing times"
-        subtitle="Set the weekly windows when renters can book their own viewings. Open slots are generated from these times minus anything already booked."
+        subtitle="Pick the hours when renters can book a viewing. Times that are booked come off by themselves."
       />
 
       {savedMessage && (
@@ -255,7 +260,32 @@ export default async function AvailabilityPage({
         </p>
       )}
 
-      <p className="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+      {/* S821d: a first visit is one question with one-tap answers. The full
+          page read as about 500 words before the first button. */}
+      {firstVisit && (
+        <div id="quick-times" className="mb-6 rounded-2xl border border-brand/30 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-gray-900">When can you show the rental?</h2>
+          <p className="mt-1 text-sm text-gray-600">Tap one. You can change it any time.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {VIEWING_PRESETS.map((p) => (
+              <form key={p.key} action={openViewingPreset}>
+                <input type="hidden" name="preset" value={p.key} />
+                <input type="hidden" name="from" value="availability" />
+                <button
+                  type="submit"
+                  className="w-full rounded-xl bg-brand px-4 py-4 text-left text-white shadow-sm transition hover:opacity-90"
+                >
+                  <span className="block text-base font-semibold">{p.label}</span>
+                  <span className="mt-1 block text-sm text-white/85">{p.detail}</span>
+                </button>
+              </form>
+            ))}
+          </div>
+          <p className="mt-3 text-sm text-gray-600">Want other hours? Add them in the box below.</p>
+        </div>
+      )}
+
+      <p className={`mb-6 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 ${firstVisit ? "hidden" : ""}`}>
         These windows apply to <strong>all of your rentals</strong>, so you keep
         one viewing schedule instead of setting times per unit. To keep visits to
         the same building together on a given day, turn on &ldquo;Group viewings
@@ -389,6 +419,9 @@ export default async function AvailabilityPage({
         </form>
       </div>
 
+      {/* S821d: everything past the weekly times waits under More settings on a first visit. */}
+      <details id="more-settings" className="mt-6" open={!firstVisit}>
+      <summary className={`cursor-pointer text-sm font-semibold text-gray-700 ${firstVisit ? "" : "sr-only"}`}>More settings</summary>
       {/* Specific dates: day-off blackouts + custom hours */}
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
@@ -893,6 +926,7 @@ export default async function AvailabilityPage({
         </form>
       </div>
 
+      </details>
     </div>
   );
 }
