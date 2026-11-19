@@ -130,11 +130,12 @@ export default async function TenanciesPage({
                   className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 hover:bg-gray-50"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-gray-900">
+                    {/* S822: names and addresses are left out of Chrome's translator. */}
+                    <span translate="no" className="notranslate block truncate text-gray-900">
                       {tenantSummary(t.tenants)}
                     </span>
                     <span className="block truncate text-xs text-gray-500">
-                      {t.property?.address ?? "Unit removed"} · from{" "}
+                      <span translate="no" className="notranslate">{t.property?.address ?? "Unit removed"}</span> · from{" "}
                       {longDate(t.start_date)}
                       {t.end_date ? ` to ${longDate(t.end_date)}` : ""}
                     </span>

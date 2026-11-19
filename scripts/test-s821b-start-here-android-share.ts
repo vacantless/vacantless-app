@@ -133,5 +133,16 @@ ok("no em dash in the new copy", ![html, miss, ...ANDROID_SHARE_STEPS, connect.d
   ok("welcome email says one site is enough", read("lib/onboarding-emails.ts").includes("One site is enough to begin"));
 }
 
+// S822: names and addresses stay out of Chrome's translator on the remaining screens.
+{
+  const showings = read("app/dashboard/showings/page.tsx");
+  ok("viewings: renter name not translated", showings.includes('<span translate="no" className="notranslate">{s.lead.name || s.lead.email || "Renter"}</span>'));
+  ok("viewings: address not translated", showings.includes('<span translate="no" className="notranslate">{s.property.address}</span>'));
+  const tenancies = read("app/dashboard/tenancies/page.tsx");
+  ok("tenancies: names and address not translated", tenancies.includes('translate="no" className="notranslate block truncate') && tenancies.includes('{t.property?.address ?? "Unit removed"}</span>'));
+  ok("tenancy page: name not translated", read("app/dashboard/tenancies/[id]/page.tsx").includes("titleNoTranslate={Boolean(primary?.name || primary?.email)}"));
+  ok("quick replies: rental not translated", read("app/dashboard/replies/reply-kit.tsx").includes('<div translate="no" className="notranslate text-sm font-medium text-gray-800">{card.rental}</div>'));
+}
+
 console.log(`\ns821b: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

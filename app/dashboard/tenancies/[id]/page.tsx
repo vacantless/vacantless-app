@@ -1811,6 +1811,7 @@ export default async function TenancyDetailPage({
         icon={<Icons.key />}
         eyebrow="Tenancy"
         title={primary?.name || primary?.email || "Tenancy"}
+        titleNoTranslate={Boolean(primary?.name || primary?.email)}
         subtitle={
           <>
             {t.property ? (

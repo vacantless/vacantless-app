@@ -159,7 +159,7 @@ function ReplyCard({ card, phone, name }: { card: ReplyKitCard; phone: string | 
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Rented</span>
             )}
           </div>
-          <div className="text-sm font-medium text-gray-800">{card.rental}</div>
+          <div translate="no" className="notranslate text-sm font-medium text-gray-800">{card.rental}</div>
           {card.facebookTitle && <div className="text-xs text-gray-500">On Facebook: {card.facebookTitle}</div>}
           {card.priceShared && (
             <div className="mt-1 text-xs font-medium text-amber-700">Another rental has this price. Match the photo.</div>

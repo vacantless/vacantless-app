@@ -603,12 +603,12 @@ function AtRiskBoard({
                       href={`/dashboard/leads/${s.lead.id}`}
                       className="font-medium text-amber-900 hover:underline"
                     >
-                      {s.lead.name || s.lead.email || "Renter"}
+                      <span translate="no" className="notranslate">{s.lead.name || s.lead.email || "Renter"}</span>
                     </Link>
                   ) : (
                     "Renter"
                   )}
-                  {s.property ? ` · ${s.property.address}` : ""}
+                  {s.property ? <> · <span translate="no" className="notranslate">{s.property.address}</span></> : null}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -774,12 +774,12 @@ function Section({
                         href={`/dashboard/leads/${s.lead.id}`}
                         className="text-brand hover:underline"
                       >
-                        {s.lead.name || s.lead.email || "Renter"}
+                        <span translate="no" className="notranslate">{s.lead.name || s.lead.email || "Renter"}</span>
                       </Link>
                     ) : (
                       "Renter"
                     )}
-                    {s.property ? ` · ${s.property.address}` : ""}
+                    {s.property ? <> · <span translate="no" className="notranslate">{s.property.address}</span></> : null}
                   </p>
                   {fb && fb.rating != null && (
                     <p className="mt-1 text-xs">
@@ -836,7 +836,7 @@ function Section({
                     )}
                     {contact && contactDigits !== "" && (
                       <p className="text-xs text-gray-500">
-                        {contact.name}:{" "}
+                        <span translate="no" className="notranslate">{contact.name}</span>:{" "}
                         <a
                           href={`sms:${contactDigits}`}
                           className="font-medium text-brand hover:underline"
@@ -901,7 +901,7 @@ function Section({
                         )}
                         {contact && contactDigits !== "" && (
                           <p className="text-xs text-gray-500">
-                            {contact.name}:{" "}
+                            <span translate="no" className="notranslate">{contact.name}</span>:{" "}
                             <a
                               href={`sms:${contactDigits}`}
                               className="font-medium text-brand hover:underline"
