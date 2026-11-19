@@ -132,11 +132,18 @@ function appliancesAnswer(f: UnitFeatures): string | null {
 function acAnswer(f: UnitFeatures): string | null {
   // Only the answered kind counts. The old yes/no box defaults to "no", so a
   // "no" there may mean nobody answered.
+  // S822: the landlord's own note (e.g. a wall sleeve size) follows the answer.
   if (!isAcType(f.ac_type)) return null;
-  if (f.ac_type === "none") return "It does not come with air conditioning.";
-  if (f.ac_type === "central") return "Yes, it has central air.";
-  if (f.ac_type === "sleeve") return "Yes, it has a wall air conditioner.";
-  return `Yes, it has a ${f.ac_type} air conditioner.`;
+  const note = noteSentence(f.ac_notes);
+  const base =
+    f.ac_type === "none"
+      ? "It does not come with air conditioning."
+      : f.ac_type === "central"
+        ? "Yes, it has central air."
+        : f.ac_type === "sleeve"
+          ? "Yes, it has a wall air conditioner."
+          : `Yes, it has a ${f.ac_type} air conditioner.`;
+  return note ? `${base} ${note}` : base;
 }
 
 /** The answers this rental's record can give, in the order renters ask. */

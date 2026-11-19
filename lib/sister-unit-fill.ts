@@ -21,6 +21,7 @@ export const SISTER_FILL_FIELDS = [
   "laundry",
   "air_conditioning",
   "ac_type",
+  "ac_notes",
   "heating_type",
   "heat_included",
   "hydro_included",

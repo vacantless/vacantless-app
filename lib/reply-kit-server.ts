@@ -89,7 +89,7 @@ export async function loadReplyKitCards(
         supabase
           .from("properties")
           .select(
-            "id, building_key, available_date, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, internet_included, cable_included, laundry, parking, parking_type, parking_count, parking_fee_cents, appliances, ac_type, lease_term, smoking, on_site_management",
+            "id, building_key, available_date, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, internet_included, cable_included, laundry, parking, parking_type, parking_count, parking_fee_cents, appliances, ac_type, ac_notes, lease_term, smoking, on_site_management",
           )
           .eq("organization_id", orgId)
           .in("id", availableIds),

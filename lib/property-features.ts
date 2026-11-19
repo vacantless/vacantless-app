@@ -537,6 +537,8 @@ export type UnitFeatures = {
   pets_dogs?: boolean | null;
   pets_dog_size?: DogSize | string | null;
   pets_notes?: string | null;
+  /** S822: the landlord's own A/C note, e.g. a wall sleeve size. */
+  ac_notes?: string | null;
   heat_included?: boolean | null;
   hydro_included?: boolean | null;
   water_included?: boolean | null;

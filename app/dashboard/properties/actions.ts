@@ -1266,6 +1266,8 @@ export async function updateProperty(formData: FormData) {
       lease_term: normalizeLeaseTerm(formData.get("lease_term")),
       smoking: normalizeSmoking(formData.get("smoking")),
       ac_type: normalizeAcType(formData.get("ac_type")),
+      // S822: only a form that carries the A/C note field can change it.
+      ...(formData.has("ac_notes") ? { ac_notes: textOrNull(formData.get("ac_notes")) } : {}),
       on_site_management: parseTriStateBool(formData, "on_site_management"),
     })
     .eq("id", id);

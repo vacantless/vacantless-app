@@ -52,6 +52,14 @@ eq(text({ appliances: ["fridge", "stove"] }, "appliances"), "It comes with these
 eq(text({ ac_type: "none" }, "ac"), "It does not come with air conditioning.", "no air conditioning, answered");
 eq(text({ ac_type: "central" }, "ac"), "Yes, it has central air.", "central air");
 eq(text({ ac_type: "window" }, "ac"), "Yes, it has a window air conditioner.", "window unit");
+// S822: the landlord's own A/C note follows the answer; a note alone is not an answer.
+eq(
+  text({ ac_type: "none", ac_notes: "Bring a portable unit sized for the wall sleeve" }, "ac"),
+  "It does not come with air conditioning. Bring a portable unit sized for the wall sleeve.",
+  "an A/C note follows the answer",
+);
+eq(text({ ac_notes: "Bring your own" }, "ac"), null, "a note without an A/C answer gives no answer");
+eq(text({ ac_type: "none", ac_notes: "x".repeat(200) }, "ac"), "It does not come with air conditioning.", "an over-long note is left out");
 
 // Order and labels.
 eq(

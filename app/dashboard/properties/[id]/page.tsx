@@ -427,6 +427,7 @@ type Property = {
   lease_term: string | null;
   smoking: string | null;
   ac_type: string | null;
+  ac_notes: string | null;
   on_site_management: boolean | null;
   // Generated building identity (0049); resolves the per-building override.
   building_key: string | null;
@@ -1065,7 +1066,7 @@ export default async function PropertyDetailPage({
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, emergency_info, emergency_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at, photo_source_url, internet_included, renovated_year, nearby, exposure, exposure_view, parking_fee_cents, appliances, flooring, max_occupants",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, emergency_info, emergency_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, ac_notes, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at, photo_source_url, internet_included, renovated_year, nearby, exposure, exposure_view, parking_fee_cents, appliances, flooring, max_occupants",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -4879,6 +4880,18 @@ export default async function PropertyDetailPage({
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-600">
+                Air conditioning note, if any
+              </span>
+              <input
+                name="ac_notes"
+                defaultValue={p.ac_notes ?? ""}
+                maxLength={140}
+                placeholder="e.g. Bring a portable unit sized for the wall sleeve"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-gray-600">
