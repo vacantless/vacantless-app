@@ -31,8 +31,8 @@ ok("pages get the right video first", () => {
   assert.deepEqual(nums("/dashboard/properties/abc-123"), [1, 4]);
   assert.deepEqual(nums("/dashboard/properties/abc-123?tab=posting"), [1, 4]);
   assert.deepEqual(nums("/dashboard/availability"), [2]);
-  assert.deepEqual(nums("/dashboard/leads/xyz"), [3, 6]);
-  assert.deepEqual(nums("/dashboard/leads"), [3]);
+  assert.deepEqual(nums("/dashboard/leads/xyz"), [3, 11, 6]);
+  assert.deepEqual(nums("/dashboard/leads"), [3, 12]);
   // S816: Today, Leasing overview and Reports are pre-lease, not "After you lease".
   assert.deepEqual(nums("/dashboard"), [3, 6]);
   assert.deepEqual(nums("/dashboard/"), [3, 6]);
@@ -47,7 +47,7 @@ ok("pages get the right video first", () => {
   assert.deepEqual(nums("/dashboard/money/tax-package"), [10]);
   assert.deepEqual(nums("/dashboard/settings"), [7]);
   assert.deepEqual(nums("/dashboard/crew"), [10]);
-  assert.deepEqual(nums("/dashboard/people/p1"), [6, 10]);
+  assert.deepEqual(nums("/dashboard/people/p1"), [11, 6, 10]);
   assert.deepEqual(nums("/dashboard/numbers"), [7, 3]);
 });
 ok("no prefix swallows a neighbour (showings vs showing-agents, rent vs rental)", () => {

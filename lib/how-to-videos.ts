@@ -12,6 +12,8 @@ export const HOW_TO_VIDEOS: { n: number; title: string; line: string; seconds: n
   { n: 8, title: "Your agent's phone", line: "The agent's one link: call the renter, confirm, hand a viewing back, mark how it went.", seconds: 43 },
   { n: 9, title: "The paperwork", line: "The free Ontario tools: an N4 for unpaid rent, an N8 for late rent, an N12 for your own use, a rent increase with Form N1, and the Standard Lease.", seconds: 88 },
   { n: 10, title: "After you lease", line: "Start the tenancy from the renter, build the lease, fill the Ontario forms, collect rent, handle repairs and after-hours emergencies, rate your trades, inspections and rent receipts, a move-out date that relists the unit, the owner statement, and your T776 and accountant zip.", seconds: 179 },
+  { n: 11, title: "Application to offer", line: "Send the application, they sign it, add a co-applicant, check Landlord and Tenant Board orders for free, ask for a credit check, then send an offer each of them signs.", seconds: 130 },
+  { n: 12, title: "From your phone", line: "Screenshot a Marketplace chat, tap Share, then Send to Vacantless. The renter is saved and your reply is copied, ready to paste.", seconds: 42 },
 ];
 
 // S729: the count in words, so headings never go stale when a video is added.
@@ -33,6 +35,8 @@ export const HOW_TO_FILE_VERSION: Record<number, string> = {
   8: "46b772aa",
   9: "15ce89cf",
   10: "345f174c",
+  11: "302d1f1b",
+  12: "4bfe6faa",
 };
 
 export function howToVideoSrc(n: number): string {
