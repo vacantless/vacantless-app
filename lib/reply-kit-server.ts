@@ -119,7 +119,7 @@ export async function loadReplyKitCards(
  * saved from the phone: the Shortcut's note or Quick replies' Copy note
  * (lib/send-shortcut-server, lib/chat-leads chatLeadNoteManual).
  */
-export const PHONE_REPLY_NOTE_MARKS = ["Added from Quick replies", "Sent from the iPhone share menu"] as const;
+export const PHONE_REPLY_NOTE_MARKS = ["Added from Quick replies", "Sent from the iPhone share menu", "Sent from the Android share menu"] as const;
 export async function hasPhoneReplyRenter(supabase: SupabaseClient, orgId: string): Promise<boolean> {
   try {
     const { count } = await supabase

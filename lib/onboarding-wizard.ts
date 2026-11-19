@@ -20,10 +20,22 @@ export type OnboardingWizardStep = {
   status: OnboardingWizardStepStatus;
   optional?: boolean;
   canMarkHandled?: boolean;
+  /**
+   * S821b: "start" is the short path to a first ad (rental, viewing times,
+   * one site, Set Live). "later" is everything a new landlord can leave until
+   * a renter has written. Nine steps at once read as too much.
+   */
+  group: OnboardingWizardStepGroup;
 };
+
+export type OnboardingWizardStepGroup = "start" | "later";
 
 export type OnboardingWizardState = {
   steps: OnboardingWizardStep[];
+  /** S821b: the "Start here" steps only. */
+  startDoneCount: number;
+  startTotalCount: number;
+  startComplete: boolean;
   completedCount: number;
   totalCount: number;
   nextIncompleteStep: OnboardingWizardStep | null;
@@ -101,6 +113,7 @@ type StepDef = Omit<OnboardingWizardStep, "status">;
 const STEP_DEFS: StepDef[] = [
   {
     key: "property",
+    group: "start",
     label: "Add your first rental",
     description:
       "Start with the address, rent, beds and baths. You can add photos and the rest later.",
@@ -109,6 +122,7 @@ const STEP_DEFS: StepDef[] = [
   },
   {
     key: "viewing_times",
+    group: "start",
     label: "Set your viewing times",
     description:
       "Pick the hours renters can book a viewing. Without them, renters can only send their details and wait for you to reach out.",
@@ -117,14 +131,16 @@ const STEP_DEFS: StepDef[] = [
   },
   {
     key: "connect_sites",
+    group: "start",
     label: "Connect your rental sites",
     description:
-      "Connect your Facebook Page, install the helper for Marketplace, and sign in to Kijiji, Rentals.ca and Zumper. After this, Set Live posts each rental on every connected site. If a site signs you out, we tell you.",
+      "One site is enough to start. You can add the others later. Connect your Facebook Page, install the helper for Marketplace, or sign in to Kijiji, Rentals.ca or Zumper. After this, Set Live posts each rental on every connected site. If a site signs you out, we tell you.",
     href: "/dashboard/sites?from=getting-started",
     cta: "Connect sites",
   },
   {
     key: "renter_emails",
+    group: "start",
     label: "Get renter emails here",
     description:
       "Kijiji, Rentals.ca and Zumper email you when a renter writes. Send those emails to your Vacantless address once. Each renter then lands on Today and gets your booking link. Done when the first one comes in.",
@@ -133,6 +149,7 @@ const STEP_DEFS: StepDef[] = [
   },
   {
     key: "get_online",
+    group: "start",
     label: "Set your rental live",
     description:
       "Press Set Live on your rental. We post it to every site you connected and keep the ads up. Done when one ad is live.",
@@ -141,6 +158,7 @@ const STEP_DEFS: StepDef[] = [
   },
   {
     key: "see_it_work",
+    group: "later",
     label: "See it work",
     description:
       "Open your rental page and send yourself an inquiry. The reply with your booking link arrives in seconds. The renter lands on Today. Done when your first renter is in the list.",
@@ -149,14 +167,16 @@ const STEP_DEFS: StepDef[] = [
   },
   {
     key: "phone_replies",
+    group: "later",
     label: "Answer renters from your phone",
     description:
-      "Renters on Facebook write in Messenger, mostly on your phone. Open Quick replies on your phone and add it to your home screen. On iPhone, also add the Send to Vacantless Shortcut. Share a chat screenshot, and it saves the renter and copies your reply. Done when your first renter is saved this way.",
+      "Renters on Facebook write in Messenger, mostly on your phone. Open Quick replies on your phone and add it to your home screen. On iPhone, also add the Send to Vacantless Shortcut. On Android, installing the app is enough. Share a chat screenshot, and it saves the renter and gives you your reply. Done when your first renter is saved this way.",
     href: "/dashboard/replies?from=getting-started#send-shortcut",
     cta: "Set up my phone",
   },
   {
     key: "tenancy",
+    group: "later",
     label: "Add a tenancy and tenant",
     description:
       "After you find a tenant: record the lease and the primary tenant when you are ready to collect rent or track tenant messages.",
@@ -166,6 +186,7 @@ const STEP_DEFS: StepDef[] = [
   },
   {
     key: "rent_rail",
+    group: "later",
     label: "Set up rent collection",
     description:
       "After you find a tenant: connect Stripe or Rotessa in Banking, or mark this handled if you will collect rent another way for now.",
@@ -238,8 +259,14 @@ export function computeOnboardingState(
   const isComplete = completedCount === steps.length;
   const isDismissed = Boolean(input.dismissedAt);
 
+  const startSteps = steps.filter((step) => step.group === "start");
+  const startDoneCount = startSteps.filter((step) => step.status === "complete").length;
+
   return {
     steps,
+    startDoneCount,
+    startTotalCount: startSteps.length,
+    startComplete: startDoneCount === startSteps.length,
     completedCount,
     totalCount: steps.length,
     nextIncompleteStep: steps.find((step) => step.status === "current") ?? null,

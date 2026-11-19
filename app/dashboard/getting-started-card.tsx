@@ -10,7 +10,11 @@ export function GettingStartedCard({
 }) {
   if (!state.shouldShowCard) return null;
 
-  const pct = Math.round((state.completedCount / state.totalCount) * 100);
+  // S821b: until the first ad is live, count only the short "Start here" path.
+  const starting = !state.startComplete;
+  const doneCount = starting ? state.startDoneCount : state.completedCount;
+  const total = starting ? state.startTotalCount : state.totalCount;
+  const pct = Math.round((doneCount / total) * 100);
   const next = state.nextIncompleteStep;
 
   return (
@@ -37,8 +41,8 @@ export function GettingStartedCard({
                 role="progressbar"
                 aria-label="Getting started progress"
                 aria-valuemin={0}
-                aria-valuemax={state.totalCount}
-                aria-valuenow={state.completedCount}
+                aria-valuemax={total}
+                aria-valuenow={doneCount}
                 className="h-2 w-36 overflow-hidden rounded-full bg-gray-100"
               >
                 <div
@@ -47,7 +51,7 @@ export function GettingStartedCard({
                 />
               </div>
               <span className="text-xs font-medium text-gray-500">
-                {state.completedCount} of {state.totalCount} done
+                {starting ? `${doneCount} of ${total} to get your first ad up` : `${doneCount} of ${total} done`}
               </span>
             </div>
           </div>

@@ -64,6 +64,7 @@ export async function saveRenterFromShortcut(
   admin: SupabaseClient,
   owner: SendKeyOwner,
   image: { mediaType: string; base64: string },
+  opts: { via?: string } = {},
 ): Promise<SendSaved> {
   const rentals = await openRentalsForOrg(admin, owner.orgId);
   const read = await readScreenshotWithAi(image, rentals);
@@ -80,7 +81,7 @@ export async function saveRenterFromShortcut(
   const rentalLabel = rental?.address ?? null;
   const question = (read.question ?? "").trim().slice(0, 400);
   const source = sendSource(read.site);
-  const note = [question ? `Asked: ${question}` : null, "Sent from the iPhone share menu (chat screenshot)."]
+  const note = [question ? `Asked: ${question}` : null, opts.via ?? "Sent from the iPhone share menu (chat screenshot)."]
     .filter(Boolean)
     .join("\n");
 

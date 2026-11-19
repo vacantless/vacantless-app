@@ -1,0 +1,85 @@
+// S821b: Android "Share to Vacantless". The installed app shows in Android's
+// Share menu (app/manifest.ts share_target). A shared chat screenshot posts to
+// SHARE_TARGET_PATH with the landlord's own sign-in, so there is no Shortcut
+// and no key to set up. This file is the pure half: the words and the page.
+
+export const SHARE_TARGET_PATH = "/dashboard/replies/shared";
+export const SHARE_TARGET_FIELD = "screenshot";
+export const SHARE_PAGE_HEADERS = { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } as const;
+export const ANDROID_SHARE_NOTE = "Sent from the Android share menu (chat screenshot).";
+
+/** The three steps shown on Quick replies. Short sentences: many readers use a translator. */
+export const ANDROID_SHARE_STEPS = [
+  "Open this page in Chrome on your Android phone.",
+  "Tap the three dots at the top. Tap \"Add to Home screen\", then \"Install\".",
+  "Take a screenshot of the chat. Tap Share, then tap Vacantless.",
+] as const;
+
+/** True when the line says the renter is in Renters now (saved, or already there). */
+export function shareSaved(line: string): boolean {
+  return /^Saved /.test(line) || / is already in Renters/.test(line);
+}
+
+export function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+/**
+ * The page the landlord sees after sharing. Plain HTML with its own styles, so
+ * it loads fast on a phone and a browser translator can read every word.
+ */
+export function renderSharePage(input: { line: string; reply: string | null; link: string | null; ok: boolean }): string {
+  const lines = input.line.split("\n").filter((l) => l.trim());
+  const reply = input.reply?.trim() || null;
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Vacantless</title>
+<style>
+body{margin:0;background:#f4f4f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;font-size:17px;line-height:1.5}
+main{max-width:520px;margin:0 auto;padding:24px 16px}
+.card{background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:20px;margin-bottom:16px}
+h1{font-size:20px;margin:0 0 8px}
+p{margin:0 0 8px}
+pre{white-space:pre-wrap;word-break:break-word;font:inherit;background:#f4f4f5;border-radius:8px;padding:12px;margin:8px 0 12px}
+a.btn,button{display:block;width:100%;box-sizing:border-box;text-align:center;border-radius:10px;padding:14px;font-size:17px;font-weight:600;text-decoration:none;border:0;margin-top:8px}
+.primary{background:#176044;color:#fff}
+.plain{background:#fff;color:#176044;border:1px solid #d4d4d8 !important}
+</style>
+</head>
+<body>
+<main>
+<div class="card">
+<h1>${input.ok ? "Done" : "Not saved"}</h1>
+${lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n")}
+</div>
+${
+  reply
+    ? `<div class="card">
+<h1>Your reply</h1>
+<pre id="reply">${escapeHtml(reply)}</pre>
+<button class="primary" id="copy" type="button">Copy reply</button>
+<p id="copied" style="display:none;margin-top:8px">Copied. Go back to the chat and paste it.</p>
+</div>`
+    : ""
+}
+${input.link ? `<a class="btn plain" href="${escapeHtml(input.link)}">Open this renter</a>` : ""}
+<a class="btn plain" href="/dashboard/replies">Open Quick replies</a>
+</main>
+${
+  reply
+    ? `<script>
+document.getElementById("copy").addEventListener("click", function () {
+  var t = document.getElementById("reply").textContent || "";
+  function done() { document.getElementById("copied").style.display = "block"; }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, function () {});
+});
+</script>`
+    : ""
+}
+</body>
+</html>`;
+}

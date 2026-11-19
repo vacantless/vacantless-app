@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { SEND_SHORTCUT_STEPS, SEND_URL_PATH } from "@/lib/send-shortcut-copy";
+import { ANDROID_SHARE_STEPS } from "@/lib/share-target";
 import { makeSendToVacantlessKey, turnOffSendToVacantlessKey } from "./actions";
 
 // S816l: "Send to Vacantless" in the iPhone share menu. Make a key, put it in
@@ -53,6 +54,18 @@ export function SendShortcutCard({
         email.
       </p>
 
+      {/* S821b: Android needs no key and no Shortcut; the installed app is in the Share menu. */}
+      <div id="android-share" className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+        <p className="font-medium text-gray-900">On Android</p>
+        <ol className="mt-1 list-decimal space-y-1 pl-5">
+          {ANDROID_SHARE_STEPS.map((s, i) => (
+            <li key={i}>{s}</li>
+          ))}
+        </ol>
+        <p className="mt-2 text-xs text-gray-600">You do not need a key. We show your reply with a Copy button.</p>
+      </div>
+
+      <p className="mt-4 font-medium text-gray-900">On iPhone</p>
       {key ? (
         <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
           <p className="font-medium text-gray-900">Your key</p>

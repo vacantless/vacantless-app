@@ -23,7 +23,7 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com"
 // the selected account by RLS. Reads only what the public rental page shows,
 // plus which sites each ad is live on.
 
-export default async function QuickRepliesPage() {
+export default async function QuickRepliesPage({ searchParams }: { searchParams?: { share?: string } }) {
   const org = await getCurrentOrg();
   if (!org) redirect("/login?next=/dashboard/replies");
   const supabase = createClient();
@@ -62,6 +62,11 @@ export default async function QuickRepliesPage() {
         title="Quick replies"
         subtitle="Match the photo and price from the chat. Pick the site and what they asked. Copy it and paste it in the chat. Type the name first and Copy also saves the renter."
       />
+      {searchParams?.share === "signin" ? (
+        <p role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          You were signed out, so that screenshot was not saved. You are signed in now. Share the screenshot again.
+        </p>
+      ) : null}
       <ReplyKit cards={cards} phone={org.public_contact_phone ?? null} />
       <SendShortcutCard appUrl={APP_URL} hint={keyHint} lastUsed={keyLastUsed} shortcutUrl={shortcutUrl} />
       <details className="mt-6 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700">

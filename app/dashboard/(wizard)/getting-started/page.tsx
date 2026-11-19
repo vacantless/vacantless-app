@@ -21,6 +21,7 @@ import { Icons } from "@/components/icons";
 import { dismissGettingStarted, markRailStepHandled } from "./actions";
 import { FocusActiveStep } from "./focus-step";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
+import { teammateLimit } from "@/lib/team";
 import { HOW_TO_PATH, HOW_TO_COUNT_WORD, HOW_TO_VIDEOS } from "@/lib/how-to-videos";
 
 export const dynamic = "force-dynamic";
@@ -148,7 +149,15 @@ export default async function GettingStartedPage({
   const activeStepId = state.nextIncompleteStep
     ? `${stepDomId(state.nextIncompleteStep.key)}-step-heading`
     : null;
-  const pct = Math.round((state.completedCount / state.totalCount) * 100);
+  // S821b: the short path first. Until the first ad is up, the bar counts only
+  // the "Start here" steps; the rest wait under "Later, when you are ready".
+  const starting = !state.startComplete;
+  const barDone = starting ? state.startDoneCount : state.completedCount;
+  const barTotal = starting ? state.startTotalCount : state.totalCount;
+  const pct = Math.round((barDone / barTotal) * 100);
+  const startSteps = state.steps.filter((step) => step.group === "start");
+  const laterSteps = state.steps.filter((step) => step.group === "later");
+  const canInviteHelper = teammateLimit(org.plan) > 0;
 
   return (
     <div>
@@ -246,15 +255,15 @@ export default async function GettingStartedPage({
             Progress
           </h2>
           <span className="text-sm font-medium text-gray-500">
-            {state.completedCount} of {state.totalCount} done
+            {starting ? `${barDone} of ${barTotal} to get your first ad up` : `${barDone} of ${barTotal} done`}
           </span>
         </div>
         <div
           role="progressbar"
           aria-label="Getting started progress"
           aria-valuemin={0}
-          aria-valuemax={state.totalCount}
-          aria-valuenow={state.completedCount}
+          aria-valuemax={barTotal}
+          aria-valuenow={barDone}
           className="mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-100"
         >
           <div
@@ -264,18 +273,43 @@ export default async function GettingStartedPage({
         </div>
       </section>
 
+      {canInviteHelper && starting && (
+        <p className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+          Want help? A family member or a friend can set this up with you.{" "}
+          <Link href="/dashboard/settings?tab=team" className={`font-medium text-brand hover:underline ${FOCUS_CLASS}`}>
+            Invite them
+          </Link>
+          . They get their own sign-in.
+        </p>
+      )}
+
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Do these first</h2>
       <ol className="space-y-4">
-        {state.steps.map((step, index) => (
-          <WizardStepCard
-            key={step.key}
-            step={step}
-            index={index + 1}
-            showInlineError={
-              step.key === "rent_rail" && searchParams?.wizard === "save_error"
-            }
-          />
+        {startSteps.map((step, index) => (
+          <WizardStepCard key={step.key} step={step} index={index + 1} showInlineError={false} />
         ))}
       </ol>
+
+      {laterSteps.length > 0 && (
+        <details id="later-steps" className="mt-8" open={!starting || Boolean(searchParams?.wizard)}>
+          <summary className={`cursor-pointer text-sm font-semibold uppercase tracking-wide text-gray-500 ${FOCUS_CLASS}`}>
+            Later, when you are ready
+          </summary>
+          <p className="mb-3 mt-2 text-sm text-gray-600">
+            None of these are needed to get your first renter. Come back to them any time.
+          </p>
+          <ol className="space-y-4">
+            {laterSteps.map((step, index) => (
+              <WizardStepCard
+                key={step.key}
+                step={step}
+                index={startSteps.length + index + 1}
+                showInlineError={step.key === "rent_rail" && searchParams?.wizard === "save_error"}
+              />
+            ))}
+          </ol>
+        </details>
+      )}
       <HelperInstallTip />
     </div>
   );
