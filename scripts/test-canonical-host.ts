@@ -45,5 +45,26 @@ ok("legacy host moves any page", r("vacantless-app.vercel.app", "/r/abc", "?p=1"
 const mw = readFileSync("middleware.ts", "utf8");
 ok("middleware uses the helper and a permanent redirect", mw.includes("canonicalRedirect(") && mw.includes("308"));
 
+// S821: Google found the homepage on app.vacantless.com and /about on two
+// hosts with no canonical, so it picked one itself. Every public marketing page
+// names its www address.
+const CANONICAL_PAGES: [string, string][] = [
+  ["app/page.tsx", "/"],
+  ["app/about/page.tsx", "/about"],
+  ["app/compare/showinghero/page.tsx", "/compare/showinghero"],
+  ["app/data-deletion/page.tsx", "/data-deletion"],
+  ["app/how-to/page.tsx", "/how-to"],
+  ["app/legal/trade-terms/page.tsx", "/legal/trade-terms"],
+  ["app/privacy/page.tsx", "/privacy"],
+  ["app/realtors/page.tsx", "/realtors"],
+  ["app/terms/page.tsx", "/terms"],
+  ["app/tools/page.tsx", "/tools"],
+  ["app/ask/page.tsx", "/ask"],
+];
+for (const [file, path] of CANONICAL_PAGES) {
+  const src = readFileSync(file, "utf8");
+  ok(`${path} names its www canonical`, src.includes(`canonical: "https://www.vacantless.com${path}"`));
+}
+
 console.log(`\ncanonical-host: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

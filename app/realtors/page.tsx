@@ -11,6 +11,8 @@ import {
 // booking (/r), showing agents (/agent/[token], no login), Posting add-on.
 
 export const metadata = {
+  // S821: one address for Google (this page also answers on app.vacantless.com).
+  alternates: { canonical: "https://www.vacantless.com/realtors" },
   title: "Vacantless for realtors - lease your clients' rentals without phone tag",
   description:
     "Drop the MLS data sheet, share one link in every rental ad, and let renters book their own viewings. Hand viewings to a showing agent with one link. Free for one rental.",

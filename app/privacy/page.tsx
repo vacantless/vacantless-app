@@ -9,6 +9,8 @@ import { adTagConfig, adTagsOn } from "../../lib/ad-conversions";
 const AD_TAGS_ON = adTagsOn(adTagConfig(process.env));
 
 export const metadata = {
+  // S821: one address for Google (this page also answers on app.vacantless.com).
+  alternates: { canonical: "https://www.vacantless.com/privacy" },
   title: "Privacy Policy - Vacantless",
   description:
     "How Vacantless collects, uses, and protects personal information for landlords and their renters.",

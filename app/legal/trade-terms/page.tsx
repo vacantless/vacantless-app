@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  // S821: one address for Google (this page also answers on app.vacantless.com).
+  alternates: { canonical: "https://www.vacantless.com/legal/trade-terms" },
   title: "Vacantless Trade Terms",
 };
 

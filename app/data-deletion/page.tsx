@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { VacantlessMark } from "../../components/vacantless-mark";
 
 export const metadata = {
+  // S821: one address for Google (this page also answers on app.vacantless.com).
+  alternates: { canonical: "https://www.vacantless.com/data-deletion" },
   title: "Data Deletion Instructions - Vacantless",
   description:
     "How to delete the Facebook Page and Instagram data connected to Vacantless, and your other personal information.",

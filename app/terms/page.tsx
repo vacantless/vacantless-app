@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { VacantlessMark } from "../../components/vacantless-mark";
 
 export const metadata = {
+  // S821: one address for Google (this page also answers on app.vacantless.com).
+  alternates: { canonical: "https://www.vacantless.com/terms" },
   title: "Terms of Service - Vacantless",
   description:
     "The terms that govern use of the Vacantless leasing workspace, including billing and cancellation.",

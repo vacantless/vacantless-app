@@ -7,6 +7,8 @@ import { HOW_TO_COUNT_WORD, HOW_TO_VIDEOS, howToVideoSrc, howToPosterSrc } from 
 // only). Public, so the welcome email and the getting-started page can link
 // here. Files live in public/videos (720p, about 1 to 2 MB each).
 export const metadata = {
+  // S821: one address for Google (this page also answers on app.vacantless.com).
+  alternates: { canonical: "https://www.vacantless.com/how-to" },
   title: "How-to videos - Vacantless",
   description:
     `${HOW_TO_COUNT_WORD} short videos: add a rental, set viewing times, answer an inquiry, post to rental sites, showing agents, after the viewing, the little things that save you time, and your agent's phone.`,

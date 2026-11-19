@@ -12,6 +12,8 @@ import { VacantlessMark } from "../components/vacantless-mark";
 import { VisitBeacon } from "@/components/visit-beacon";
 
 export const metadata = {
+  // S821: one address for Google (this page also answers on app.vacantless.com).
+  alternates: { canonical: "https://www.vacantless.com/" },
   // S790b: the title and description say the whole job, not only showings:
   // this is what Google results and link previews show first.
   title: "Vacantless - Fill the vacancy, then the rental runs itself",

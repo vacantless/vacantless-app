@@ -13,6 +13,8 @@ import {
 const SHOWINGHERO_CHECKED = "November 10, 2026";
 
 export const metadata = {
+  // S821: one address for Google (this page also answers on app.vacantless.com).
+  alternates: { canonical: "https://www.vacantless.com/compare/showinghero" },
   title: "Vacantless vs ShowingHero - for Canadian landlords of any size",
   description:
     "ShowingHero's published pricing starts at US$450 a month (300 units or 25 listings). Vacantless is free for one rental and from CA$29 a month after that, built in Canada for Kijiji, Rentals.ca and Zumper.",

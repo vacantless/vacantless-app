@@ -5,6 +5,8 @@ import { LEASING_PROOF_STATS } from "@/lib/proof-stats";
 import { VacantlessMark } from "../../components/vacantless-mark";
 
 export const metadata = {
+  // S821: one address for Google (this page also answers on app.vacantless.com).
+  alternates: { canonical: "https://www.vacantless.com/about" },
   title: "About Vacantless - built by a landlord, for landlords",
   description:
     "Vacantless started as the system one operator built to fill his own rentals without losing the thread. Now it is open to other small landlords.",
