@@ -841,7 +841,8 @@ export default async function PropertiesPage({
                     <div className="min-w-0">
                       <Link
                         href={detailHref}
-                        className="block truncate font-semibold text-gray-900 hover:underline"
+                        className="notranslate block truncate font-semibold text-gray-900 hover:underline"
+                        translate="no"
                         title={p.address}
                       >
                         {shortAddress(p.address)}

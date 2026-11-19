@@ -22,6 +22,7 @@ import { dismissGettingStarted, markRailStepHandled } from "./actions";
 import { FocusActiveStep } from "./focus-step";
 import { distributionWizardEnabled } from "@/lib/stage-wizard-nav";
 import { teammateLimit } from "@/lib/team";
+import { TRANSLATE_HINT, TRANSLATE_LANGUAGE_NAMES } from "@/lib/translate-hint";
 import { HOW_TO_PATH, HOW_TO_COUNT_WORD, HOW_TO_VIDEOS } from "@/lib/how-to-videos";
 
 export const dynamic = "force-dynamic";
@@ -191,6 +192,17 @@ export default async function GettingStartedPage({
           ) : null
         }
       />
+
+      {/* S821e: how to read the app in another language (lib/translate-hint). */}
+      {starting && (
+        <p id="translate-hint" className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+          <span translate="no" className="notranslate font-medium text-gray-900">
+            {TRANSLATE_LANGUAGE_NAMES.join(" · ")}
+          </span>
+          <br />
+          {TRANSLATE_HINT}
+        </p>
+      )}
 
       {/* S726: the how-to videos, for landlords who would rather watch. */}
       <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">

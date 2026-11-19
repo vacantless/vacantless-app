@@ -357,6 +357,7 @@ export default async function LeadDetailPage({
       <PageHeader
         icon={<Icons.users />}
         title={l.name || l.email || "Unnamed renter"}
+        titleNoTranslate={Boolean(l.name || l.email)}
         subtitle={
           <>
             Received {new Date(l.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone })}

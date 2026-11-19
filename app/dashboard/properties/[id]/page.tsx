@@ -3477,6 +3477,7 @@ export default async function PropertyDetailPage({
         icon={<Icons.building />}
         eyebrow="Rental"
         title={p.address}
+        titleNoTranslate
         action={
           <div className="flex flex-wrap items-center gap-2">
             <span

@@ -56,7 +56,7 @@ const SAVED_MESSAGES: Record<string, string> = {
   settings: "Booking settings saved.",
   cluster: "Grouping settings saved.",
   double_booking: "Open-house booking setting saved.",
-  window: "Viewing window added.",
+  window: "Viewing time added.",
   preset: "Your viewing times are set. Renters can book now. Change them below any time.",
   dayoff: "Day off added.",
   override: "Specific-date hours added.",
@@ -286,7 +286,7 @@ export default async function AvailabilityPage({
       )}
 
       <p className={`mb-6 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 ${firstVisit ? "hidden" : ""}`}>
-        These windows apply to <strong>all of your rentals</strong>, so you keep
+        These times apply to <strong>all of your rentals</strong>, so you keep
         one viewing schedule instead of setting times per unit. To keep visits to
         the same building together on a given day, turn on &ldquo;Group viewings
         by building&rdquo; below.
@@ -301,15 +301,15 @@ export default async function AvailabilityPage({
       {/* Weekly windows */}
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Weekly windows
+          Weekly times
         </h3>
         <p className="mb-3 mt-1 text-sm text-gray-500">
-          These are the windows renters can choose from. Times that are already
+          These are the hours renters can choose from. Times that are already
           booked are removed automatically.
         </p>
 
         {/* S710 audit: Agile opens one date at a time and has no weekly
-            windows, yet this box said "No times yet" above its booked dates. */}
+            times, yet this box said "No times yet" above its booked dates. */}
         {rules.length === 0 && overrides.length === 0 && (
           <div className="mb-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">
             No times yet. Add your first below so renters can book a viewing
@@ -351,7 +351,7 @@ export default async function AvailabilityPage({
                     >
                       <input type="hidden" name="id" value={r.id} />
                       <button
-                        title="Remove this window"
+                        title="Remove this time"
                         className="group inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 text-sm text-gray-700 hover:border-red-300 hover:bg-red-50"
                       >
                         {minutesToLabel(r.start_minute)} –{" "}
@@ -414,7 +414,7 @@ export default async function AvailabilityPage({
             />
           </label>
           <button className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white">
-            Add window
+            Add time
           </button>
         </form>
       </div>
@@ -603,7 +603,7 @@ export default async function AvailabilityPage({
         </h3>
         <p className="mb-4 mt-1 text-sm text-gray-500">
           A quick visual of when renters can book across the week. Edit the
-          windows below.
+          times below.
         </p>
 
         <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
@@ -658,7 +658,7 @@ export default async function AvailabilityPage({
               <p className="mt-1 text-sm text-gray-600">
                 Booking the {WEEKDAY_LABELS[previewRule.weekday]}{" "}
                 {minutesToLabel(previewRule.start_minute)}–
-                {minutesToLabel(previewRule.end_minute)} window at your{" "}
+                {minutesToLabel(previewRule.end_minute)} time at your{" "}
                 {cfg.booking_slot_minutes}-minute slot length, renters pick from
                 times like these:
               </p>
@@ -678,8 +678,8 @@ export default async function AvailabilityPage({
                 )}
                 {previewStarts.length === 0 && (
                   <span className="text-xs text-gray-400">
-                    This window is shorter than one slot, so it produces no
-                    bookable times. Widen it or shorten the slot length.
+                    This time is shorter than one viewing, so renters cannot
+                    book it. Make it longer, or make each viewing shorter.
                   </span>
                 )}
               </div>
@@ -690,7 +690,7 @@ export default async function AvailabilityPage({
             </>
           ) : (
             <p className="mt-1 text-sm text-gray-500">
-              Add a window below to preview the times renters will be able to
+              Add a time below to preview the times renters will be able to
               book.
             </p>
           )}

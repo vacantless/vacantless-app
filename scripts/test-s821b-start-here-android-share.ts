@@ -8,6 +8,7 @@ import { PHONE_REPLY_NOTE_MARKS } from "../lib/reply-kit-server";
 import { sendResultLine } from "../lib/send-shortcut";
 import manifest from "../app/manifest";
 import { buildSitesSetup } from "../lib/sites-setup";
+import { TRANSLATE_HINT_EMAIL, TRANSLATE_LANGUAGE_NAMES } from "../lib/translate-hint";
 
 let pass = 0;
 let fail = 0;
@@ -110,6 +111,17 @@ ok("no em dash in the new copy", ![html, miss, ...ANDROID_SHARE_STEPS, connect.d
   const layout = read("app/dashboard/layout.tsx");
   ok("the brand is not translated", layout.includes('<span translate="no" className="notranslate">Vacantless</span>'));
   ok("the account name is not translated", layout.includes('<h1 translate="no" className="notranslate text-lg font-bold">{org.name}</h1>'));
+}
+
+// S821e: four translated walks (Punjabi, Hindi, Arabic, Chinese).
+{
+  const av = read("app/dashboard/availability/page.tsx");
+  const shown = av.split("\n").filter((l) => !/^\s*(\/\/|\{\/\*|\*)/.test(l) && !/[wW]indow(_invalid|:)|AvailabilityWindow/.test(l)).join("\n");
+  ok("viewing times page says times, never windows", !/[wW]indows?\b/.test(shown), shown.match(/.*[wW]indows?\b.*/)?.[0]);
+  ok("names and addresses are not translated", read("components/ui.tsx").includes("titleNoTranslate") && read("app/dashboard/properties/[id]/page.tsx").includes("titleNoTranslate") && read("app/dashboard/leads/[id]/page.tsx").includes("titleNoTranslate={Boolean(l.name || l.email)}") && read("app/dashboard/properties/page.tsx").includes('translate="no"'));
+  ok("language names are in their own script", TRANSLATE_LANGUAGE_NAMES.length === 5 && TRANSLATE_HINT_EMAIL.includes("Always translate"));
+  ok("Getting started shows the language line", read("app/dashboard/(wizard)/getting-started/page.tsx").includes('id="translate-hint"'));
+  ok("the welcome email carries it", read("lib/onboarding-emails.ts").includes("TRANSLATE_HINT_EMAIL,"));
 }
 
 console.log(`\ns821b: ${pass} passed, ${fail} failed`);

@@ -127,7 +127,8 @@ function QueueRow({
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href={`/dashboard/leads/${l.id}`}
-            className="font-semibold text-gray-900 hover:text-brand"
+            className={`font-semibold text-gray-900 hover:text-brand ${l.name || l.email ? "notranslate" : ""}`}
+            translate={l.name || l.email ? "no" : undefined}
           >
             {l.name || l.email || "Unnamed renter"}
           </Link>

@@ -161,7 +161,10 @@ export function PageHeader({
   eyebrow,
   icon,
   action,
+  titleNoTranslate,
 }: {
+  /** S821e: the title is a name or an address; a browser translator must leave it alone. */
+  titleNoTranslate?: boolean;
   title: ReactNode;
   subtitle?: ReactNode;
   eyebrow?: ReactNode;
@@ -178,7 +181,10 @@ export function PageHeader({
               {eyebrow}
             </p>
           )}
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+          <h1
+            translate={titleNoTranslate ? "no" : undefined}
+            className={`text-2xl font-bold tracking-tight text-gray-900 ${titleNoTranslate ? "notranslate" : ""}`}
+          >
             {title}
           </h1>
           {subtitle && (

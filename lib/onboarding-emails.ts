@@ -10,6 +10,7 @@
 import type { Stage } from "./new-account-watch";
 import { HOW_TO_COUNT_WORD } from "./how-to-videos";
 import { MARKETPLACE_HELPER_INSTALL_URL } from "./marketplace-helper";
+import { TRANSLATE_HINT_EMAIL } from "./translate-hint";
 
 export type OnboardingEmail = {
   step: 1 | 2;
@@ -91,8 +92,10 @@ export function decideOnboardingEmail(args: {
         // S751: the Chrome helper was only findable on a rental's Marketplace row.
         `Facebook Marketplace is where most renters look. Facebook only lets a person press Post there. On a computer, add the free Vacantless helper to Chrome once. It fills in the ad and photos, and you press Post: ${MARKETPLACE_HELPER_INSTALL_URL}`,
         // S817d: Marketplace renters write in Messenger; answer them from the phone.
-        "Marketplace renters write back in Messenger. On your phone, open Quick replies in Vacantless. On iPhone, add the Send to Vacantless Shortcut there. Share a chat screenshot, and it saves the renter and copies your reply.",
+        "Marketplace renters write back in Messenger. On your phone, open Quick replies in Vacantless. On iPhone, add the Send to Vacantless Shortcut there. On Android, install the app from Chrome. Share a chat screenshot, and it saves the renter and gives you your reply.",
         nextLine,
+        // S821e: the app reads well through Chrome's translator.
+        TRANSLATE_HINT_EMAIL,
         "Reply to this email if you get stuck. I read every one.",
         "Noam, founder of Vacantless",
       ].join("\n\n"),
