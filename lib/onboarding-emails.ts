@@ -74,7 +74,7 @@ export function decideOnboardingEmail(args: {
     const steps = [
       "1. Add your rental.",
       "2. Set the times you can show it.",
-      "3. Connect your rental sites once: your Facebook Page, the helper for Marketplace, and Kijiji, Rentals.ca and Zumper.",
+      "3. Connect your rental sites. One site is enough to begin: your Facebook Page, the helper for Marketplace, Kijiji, Rentals.ca or Zumper. Add the others later.",
       "4. Press Set Live. We post it on every site you connected.",
     ].join("\n");
     const nextLine = next

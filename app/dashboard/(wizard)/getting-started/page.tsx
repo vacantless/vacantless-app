@@ -193,35 +193,6 @@ export default async function GettingStartedPage({
         }
       />
 
-      {/* S821e: how to read the app in another language (lib/translate-hint). */}
-      {starting && (
-        <p id="translate-hint" className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-          <span translate="no" className="notranslate font-medium text-gray-900">
-            {TRANSLATE_LANGUAGE_NAMES.join(" · ")}
-          </span>
-          <br />
-          {TRANSLATE_HINT}
-        </p>
-      )}
-
-      {/* S726: the how-to videos, for landlords who would rather watch. */}
-      <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-        <p className="font-medium text-gray-900">Prefer to watch? {HOW_TO_COUNT_WORD} short videos, about a minute each.</p>
-        <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-          {HOW_TO_VIDEOS.map((v) => (
-            <a
-              key={v.n}
-              href={`${HOW_TO_PATH}#video-${v.n}`}
-              target="_blank"
-              rel="noopener"
-              className={`font-medium text-brand hover:underline ${FOCUS_CLASS}`}
-            >
-              {v.title}
-            </a>
-          ))}
-        </p>
-      </div>
-
       {searchParams?.wizard === "save_error" && (
         <div
           role="alert"
@@ -285,16 +256,6 @@ export default async function GettingStartedPage({
         </div>
       </section>
 
-      {canInviteHelper && starting && (
-        <p className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
-          Want help? A family member or a friend can set this up with you.{" "}
-          <Link href="/dashboard/settings?tab=team" className={`font-medium text-brand hover:underline ${FOCUS_CLASS}`}>
-            Invite them
-          </Link>
-          . They get their own sign-in.
-        </p>
-      )}
-
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Do these first</h2>
       <ol className="space-y-4">
         {startSteps.map((step, index) => (
@@ -322,6 +283,49 @@ export default async function GettingStartedPage({
           </ol>
         </details>
       )}
+      {/* S821g: the steps come first. On a new account four boxes sat above
+          step 1 and pushed Add rental off the first screen. */}
+      <div id="getting-started-more" className="mt-8">
+      {canInviteHelper && starting && (
+        <p className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+          Want help? A family member or a friend can set this up with you.{" "}
+          <Link href="/dashboard/settings?tab=team" className={`font-medium text-brand hover:underline ${FOCUS_CLASS}`}>
+            Invite them
+          </Link>
+          . They get their own sign-in.
+        </p>
+      )}
+
+      {/* S821e: how to read the app in another language (lib/translate-hint). */}
+      {starting && (
+        <p id="translate-hint" className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+          <span translate="no" className="notranslate font-medium text-gray-900">
+            {TRANSLATE_LANGUAGE_NAMES.join(" · ")}
+          </span>
+          <br />
+          {TRANSLATE_HINT}
+        </p>
+      )}
+
+      {/* S726: the how-to videos, for landlords who would rather watch. */}
+      <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+        <p className="font-medium text-gray-900">Prefer to watch? {HOW_TO_COUNT_WORD} short videos, about a minute each.</p>
+        <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+          {HOW_TO_VIDEOS.map((v) => (
+            <a
+              key={v.n}
+              href={`${HOW_TO_PATH}#video-${v.n}`}
+              target="_blank"
+              rel="noopener"
+              className={`font-medium text-brand hover:underline ${FOCUS_CLASS}`}
+            >
+              {v.title}
+            </a>
+          ))}
+        </p>
+      </div>
+
+      </div>
       <HelperInstallTip />
     </div>
   );

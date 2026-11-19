@@ -124,5 +124,14 @@ ok("no em dash in the new copy", ![html, miss, ...ANDROID_SHARE_STEPS, connect.d
   ok("the welcome email carries it", read("lib/onboarding-emails.ts").includes("TRANSLATE_HINT_EMAIL,"));
 }
 
+// S821g: found on the fresh S821 sign-up.
+{
+  const gs2 = read("app/dashboard/(wizard)/getting-started/page.tsx");
+  const first = gs2.indexOf(">Do these first</h2>");
+  ok("the steps come before the language, video and helper boxes", first > 0 && first < gs2.indexOf('id="translate-hint"') && first < gs2.indexOf("Prefer to watch?") && first < gs2.indexOf("canInviteHelper && starting"));
+  ok("progress stays above the steps", gs2.indexOf("wizard-progress-title") < first);
+  ok("welcome email says one site is enough", read("lib/onboarding-emails.ts").includes("One site is enough to begin"));
+}
+
 console.log(`\ns821b: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
