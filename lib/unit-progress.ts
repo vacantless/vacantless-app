@@ -1,3 +1,4 @@
+import { siteName } from "./ads-still-up";
 // S788b: unit progress links (PLAN-S788-UNIT-PROGRESS). Pure: no DB, no env.
 // A landlord's crew (manager, leasing, contractor, cleaner, photographer)
 // each get a no-login link (/crew/<token>) and tap each unit's stage. The
@@ -351,4 +352,18 @@ export function rentedLine(liveAds: number | undefined): string {
   if (liveAds === 1) return `Its ad is coming down. ${undo}`;
   if (typeof liveAds === "number") return `Its ${liveAds} ads are coming down. ${undo}`;
   return `Its ads are coming down. ${undo}`;
+}
+
+// S822: a unit's progress card says where its ads are live, so a unit whose
+// last tap was "Photos are in" but is already posted does not read unposted.
+// Takes portal keys of live ads (lib/ads-still-up adsStillUp), any order.
+export function advertisedLine(portals: readonly string[] | null | undefined): string {
+  const names: string[] = [];
+  for (const p of portals ?? []) {
+    const n = siteName(p);
+    if (!names.includes(n)) names.push(n);
+  }
+  if (names.length === 0) return "";
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `Advertised on ${list}.`;
 }

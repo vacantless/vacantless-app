@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { accessibleBrand, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { buildingsForOrg, crewFromToken, unitCardsForOrg, type UnitCard } from "@/lib/unit-progress-server";
-import { CREW_ROLE_LABEL, STAGE_DATE_LABEL, STAGE_LABEL, canAddUnit, isStage, stageDateLine, stageTakesDate, takesAdsDown, tapsFor, type Stage } from "@/lib/unit-progress";
+import { CREW_ROLE_LABEL, STAGE_DATE_LABEL, STAGE_LABEL, advertisedLine, canAddUnit, isStage, stageDateLine, stageTakesDate, takesAdsDown, tapsFor, type Stage } from "@/lib/unit-progress";
 import { addUnitFromCrewLink, tapStageFromCrewLink } from "./actions";
 import { drivePullLine, pullResultFromParam } from "@/lib/drive-import";
 import { CopyLinkButton } from "@/components/copy-link-button";
@@ -86,6 +86,7 @@ export default async function CrewPage({
             {c.stageBy ? ` by ${c.stageBy}` : ""}
           </p>
         )}
+        {c.liveSites.length > 0 && <p className="mt-1 text-sm text-emerald-800">{advertisedLine(c.liveSites)}</p>}
         {c.shootToken && canAddUnit(crew.role) && (
           <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
             <p>

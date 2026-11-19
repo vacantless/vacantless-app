@@ -1,6 +1,6 @@
 // Run with: npx tsx scripts/test-unit-progress.ts
 // S788b: unit progress stages, who can tap what, current stage.
-import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL, cleanDate, stageTakesDate, stageDateLine, canAddUnit, cleanUnitNumber, composeUnitAddress, tenancyEffect, tenancyEffectAction, stageChip, daysAgoText, shootLinkExpiry, shootLinkState, cleanPersonName, photographerLabel } from "../lib/unit-progress";
+import { canTap, tapsFor, currentStage, takesAdsDown, cleanNote, isCrewRole, isStage, TAP_ORDER, STAGE_LABEL, cleanDate, stageTakesDate, stageDateLine, canAddUnit, cleanUnitNumber, composeUnitAddress, tenancyEffect, tenancyEffectAction, stageChip, daysAgoText, shootLinkExpiry, shootLinkState, cleanPersonName, photographerLabel, advertisedLine } from "../lib/unit-progress";
 
 let pass = 0;
 let fail = 0;
@@ -92,5 +92,9 @@ ok("expired link", shootLinkState({ used_at: null, revoked_at: null, expires_at:
 ok("photographer name cleaned", cleanPersonName("  Sam   Lee ") === "Sam Lee" && cleanPersonName("") === null && cleanPersonName(null) === null && (cleanPersonName("x".repeat(200)) ?? "").length === 120);
 ok("photographer label", photographerLabel("Sam Lee") === "Photographer Sam Lee" && photographerLabel(null) === "The photographer" && photographerLabel("  ") === "The photographer");
 ok("photographer still taps only Photos are in", tapsFor("photographer", null).join() === "photos_in");
+// S822: the card says where the unit's ads are live.
+ok("no live ads, no line", advertisedLine([]) === "" && advertisedLine(null) === "");
+ok("one site", advertisedLine(["zumper"]) === "Advertised on Zumper.");
+ok("three sites in order, no repeats", advertisedLine(["rentals_ca", "zumper", "facebook", "zumper"]) === "Advertised on Rentals.ca, Zumper and Facebook Marketplace.");
 console.log(`unit-progress: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -13,6 +13,7 @@ import { copyBuildingPhotosTo } from "@/lib/building-photos-server";
 import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
 import { queueRobotTakedowns } from "@/lib/robot-takedown";
 import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
+import { adsStillUp } from "@/lib/ads-still-up";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 import { markLeaseWinner } from "@/lib/lease-winner-server";
 import { notifyWaitingRentersRented } from "@/lib/rented-notice-server";
@@ -277,6 +278,8 @@ export type UnitCard = {
   shootLinkId: string | null;
   shootToken: string | null;
   shootPhotographer: string | null;
+  /** S822: portal keys of the unit's live ads (empty when none). */
+  liveSites: string[];
 };
 
 /** The units a crew link shows: every rental in the account not archived, newest stage first. */
@@ -303,6 +306,24 @@ export async function unitCardsForOrg(admin: SupabaseClient, organizationId: str
   } catch {
     // a missing shoot list never hides the units
   }
+  // S822: where each unit's ads are live, so the card can say so.
+  const liveSites = new Map<string, string[]>();
+  try {
+    const { data: posts } = await admin
+      .from("listing_posts")
+      .select("id, property_id, portal, status, url")
+      .eq("organization_id", organizationId)
+      .eq("status", "live")
+      .in("property_id", rows.map((r) => r.id))
+      .limit(2000);
+    for (const p of adsStillUp((posts ?? []) as Array<{ id: string; property_id: string; portal: string; status: string; url: string | null }>)) {
+      const list = liveSites.get(p.property_id) ?? [];
+      if (!list.includes(p.portal)) list.push(p.portal);
+      liveSites.set(p.property_id, list);
+    }
+  } catch {
+    // a missing ad list never hides the units
+  }
   const latest = new Map<string, { stage: string; created_at: string; by: string | null; due: string | null }>();
   for (const e of (evs ?? []) as Array<{ property_id: string; stage: string; created_at: string; due_date: string | null; crew: { name: string | null } | Array<{ name: string | null }> | null }>) {
     if (latest.has(e.property_id) || !isStage(e.stage)) continue;
@@ -323,6 +344,7 @@ export async function unitCardsForOrg(admin: SupabaseClient, organizationId: str
       shootLinkId: shoots.get(r.id)?.id ?? null,
       shootToken: shoots.get(r.id)?.token ?? null,
       shootPhotographer: shoots.get(r.id)?.photographerName ?? null,
+      liveSites: r.status === "leased" ? [] : liveSites.get(r.id) ?? [],
     };
   });
 }

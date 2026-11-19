@@ -5,7 +5,7 @@ import { requireCapability } from "@/lib/membership";
 import { PageHeader, SectionHeading, PRIMARY_ACTION_CLASS, SECONDARY_ACTION_CLASS } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { CopyLinkButton } from "@/components/copy-link-button";
-import { CREW_ROLES, CREW_ROLE_LABEL, STAGE_LABEL, STAGE_TONE_CLASS, TAP_ORDER, stageChip, stageDateLine } from "@/lib/unit-progress";
+import { CREW_ROLES, CREW_ROLE_LABEL, STAGE_LABEL, advertisedLine, STAGE_TONE_CLASS, TAP_ORDER, stageChip, stageDateLine } from "@/lib/unit-progress";
 import { unitCardsForOrg } from "@/lib/unit-progress-server";
 import { addCrewMember, newCrewLink, setCrewMemberActive, setUnitStage, switchOffShootLink } from "./actions";
 
@@ -72,6 +72,7 @@ export default async function CrewPage({ searchParams }: { searchParams: { crew?
                   <p className="text-xs text-gray-500">
                     {l ? `${STAGE_LABEL[l.stage]}${p.stageDate ? `, ${stageDateLine(l.stage, p.stageDate).toLowerCase()}` : ""} · ${fmtWhen(l.at, tz)}${l.by ? ` by ${l.by}` : ""}` : "No stage yet"}
                   </p>
+                  {p.liveSites.length > 0 && <p className="text-xs text-emerald-800">{advertisedLine(p.liveSites)}</p>}
                   {p.shootToken && (
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <span className="text-xs text-sky-800">Photographer{p.shootPhotographer ? ` ${p.shootPhotographer}` : ""}: one-time link</span>
