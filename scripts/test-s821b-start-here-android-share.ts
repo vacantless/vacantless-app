@@ -102,7 +102,7 @@ ok("no em dash in the new copy", ![html, miss, ...ANDROID_SHARE_STEPS, connect.d
   const av = read("app/dashboard/availability/page.tsx");
   ok("viewing times: a first visit shows one-tap choices", av.includes("When can you show the rental?") && av.includes("VIEWING_PRESETS.map") && av.includes('name="from" value="availability"'));
   ok("viewing times: the rest waits under More settings", av.includes('<details id="more-settings"') && av.includes("open={!firstVisit}") && av.includes("</details>"));
-  ok("viewing times: first visit means nothing set at all", av.includes("const firstVisit = rules.length === 0 && overrides.length === 0;"));
+  ok("viewing times: first visit means never set, past dates count (S821f)", av.includes("const firstVisit = rules.length === 0 && (overridesData ?? []).length === 0;") && !av.includes("const firstVisit = rules.length === 0 && overrides.length === 0;"));
   ok("the preset stays on the page when started there", read("app/dashboard/availability/actions.ts").includes('redirect("/dashboard/availability?saved=preset")'));
 }
 

@@ -215,8 +215,10 @@ export default async function AvailabilityPage({
   // the operator sees exactly what a renter chooses from. Already-booked times
   // are hidden live; this static preview shows the full set from the window.
   const previewRule = rules.length > 0 ? rules[0] : null;
-  // S821d: nothing set yet, weekly or by date.
-  const firstVisit = rules.length === 0 && overrides.length === 0;
+  // S821d: this account has NEVER set a time, weekly or by date. S821f: past
+  // dates count. Agile opens one date at a time; the day its last date passed,
+  // Aaliyah got the newcomer screen with by-building settings folded away.
+  const firstVisit = rules.length === 0 && (overridesData ?? []).length === 0;
   const previewStarts = previewRule
     ? previewSlotStarts(
         previewRule.start_minute,
