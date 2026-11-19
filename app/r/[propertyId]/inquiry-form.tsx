@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useFormStatus } from "react-dom";
 import { HONEYPOT_FIELD } from "@/lib/public-submit-fields";
+import { suggestEmailFix } from "@/lib/email-typo";
 import {
   type DaySlots,
   selectedSlotIsRendered,
@@ -168,6 +169,8 @@ export function InquiryForm({
   // times reveal the details section without picking a slot.
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [emailChecked, setEmailChecked] = useState(false);
+  const emailFix = useMemo(() => suggestEmailFix(email), [email]);
   const [skipTime, setSkipTime] = useState(false);
   const [submitStarted, setSubmitStarted] = useState(false);
   const [refHost, setRefHost] = useState("");
@@ -462,8 +465,22 @@ export function InquiryForm({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onBlur={() => setEmailChecked(true)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
+              {/* S820a: catch "gmail.comc" before the reply bounces. */}
+              {emailChecked && emailFix ? (
+                <p className="mt-1 text-sm text-amber-800" aria-live="polite">
+                  Did you mean <span className="font-medium">{emailFix}</span>?{" "}
+                  <button
+                    type="button"
+                    onClick={() => setEmail(emailFix)}
+                    className="font-medium underline"
+                  >
+                    Yes, fix it
+                  </button>
+                </p>
+              ) : null}
             </div>
             <div>
               <label htmlFor="r_phone" className="mb-1 block text-sm font-medium text-gray-700">

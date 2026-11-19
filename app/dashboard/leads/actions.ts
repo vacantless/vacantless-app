@@ -11,7 +11,8 @@ import { canUseRentalApplications } from "@/lib/billing";
 import { normalizeEmail } from "@/lib/persons";
 import { resolvePersonId } from "@/lib/persons-server";
 import { normalizePhoneE164 } from "@/lib/sms";
-import { sendApplicationOfferInvite, sendCreditCheckInvite } from "@/lib/email";
+import { sendApplicationOfferInvite, sendAutoReply, sendCreditCheckInvite } from "@/lib/email";
+import { generateSlots, type Availability } from "@/lib/booking";
 import { startRentalApplication } from "@/lib/rental-application-server";
 import { parseOfferInput, offerTermLines, canSendNewOffer, type OfferParsed } from "@/lib/application-offer";
 import { createHash } from "crypto";
@@ -842,4 +843,84 @@ export async function textRenter(formData: FormData) {
   });
   revalidatePath(`/dashboard/leads/${id}`);
   redirect(`/dashboard/leads/${id}?text=${result.sent ? "sent" : "failed"}#text-back`);
+}
+
+// S820a: the renter's first reply bounced (Victor typed "gmail.comc" on
+// 2026-11-19). Fix the address on the renter and send the same welcome reply
+// again, with the booking page when the rental has open times.
+export async function resendWelcomeReply(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/leads?forbidden=1");
+  const id = formString(formData, "id");
+  if (!id) return;
+  const email = normalizeEmail(formString(formData, "email"));
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email)) redirect(`${leadPath(id)}?resent=bad#resend`);
+
+  const org = await getCurrentOrg();
+  if (!org) return;
+  const supabase = createClient();
+  const { data: row } = await supabase
+    .from("leads")
+    .select("id, name, email, property_id, property:properties(address, rent_cents)")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) return;
+  const lead = row as unknown as {
+    id: string;
+    name: string | null;
+    email: string | null;
+    property_id: string | null;
+    property: { address: string | null; rent_cents: number | null } | null;
+  };
+  if ((lead.email ?? "").trim().toLowerCase() !== email) {
+    await supabase.from("leads").update({ email }).eq("id", id);
+  }
+
+  const { data: tpl } = await supabase
+    .from("templates")
+    .select("subject, body")
+    .eq("organization_id", org.id)
+    .eq("kind", "auto_reply")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let bookingUrl: string | null = null;
+  if (lead.property_id) {
+    try {
+      const { data: avData } = await supabase.rpc("get_public_availability", { p_property_id: lead.property_id });
+      const av = avData as Availability | null;
+      if (av && generateSlots(av).some((d) => d.slots.length > 0)) bookingUrl = `${APP_URL}/r/${lead.property_id}`;
+    } catch {
+      bookingUrl = null;
+    }
+  }
+
+  const t = tpl as { subject: string | null; body: string | null } | null;
+  const result = await sendAutoReply({
+    lead_id: id,
+    org_id: org.id,
+    renter_name: lead.name,
+    renter_email: email,
+    org_name: org.name,
+    brand_color: org.brand_color ?? null,
+    logo_url: org.logo_url ?? null,
+    mail_alias: org.mail_alias ?? null,
+    reply_to_email: org.reply_to_email ?? null,
+    property_address: lead.property?.address ?? null,
+    rent_cents: lead.property?.rent_cents ?? null,
+    template_subject: t?.subject ?? null,
+    template_body: t?.body ?? null,
+    booking_url: bookingUrl,
+  });
+  if (result.sent) {
+    await supabase.from("messages").insert({
+      organization_id: org.id,
+      lead_id: id,
+      channel: "email",
+      direction: "outbound",
+      body: `Auto-reply sent again to ${email}${result.subject ? ` (${result.subject})` : ""}`,
+    });
+  }
+  revalidatePath(leadPath(id));
+  redirect(`${leadPath(id)}?resent=${result.sent ? "sent" : "failed"}#resend`);
 }

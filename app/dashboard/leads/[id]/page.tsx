@@ -34,7 +34,9 @@ import {
   setNextAction,
   clearNextAction,
   updateLeadStatus,
+  resendWelcomeReply,
 } from "../actions";
+import { suggestEmailFix } from "@/lib/email-typo";
 import { canUseRentalApplications } from "@/lib/billing";
 import { ApplicationCard, type CardApplication, type CardOffer } from "./application-card";
 import { OutcomeSelect } from "../../showings/outcome-select";
@@ -138,7 +140,7 @@ export default async function LeadDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { apply?: string; qa?: string; text?: string; book?: string; offer?: string; offer_err?: string };
+  searchParams: { apply?: string; qa?: string; text?: string; book?: string; offer?: string; offer_err?: string; resent?: string };
 }) {
   const supabase = createClient();
   const { data: lead } = await supabase
@@ -182,6 +184,29 @@ export default async function LeadDetailPage({
   const messages = ((msgs ?? []) as Message[]).map((m) =>
     demo ? { ...m, body: scrubContactText(m.body) } : m,
   );
+
+  // S820a: the first reply bounced, or the address looks like a slip
+  // ("gmail.comc"). Offer to fix it and send the welcome reply again.
+  const { data: bounceRows } = await supabase
+    .from("email_delivery_events")
+    .select("email, reason, occurred_at")
+    .eq("lead_id", l.id)
+    .eq("event", "bounced")
+    .order("occurred_at", { ascending: false })
+    .limit(1);
+  const bounce = ((bounceRows ?? []) as { email: string; reason: string | null; occurred_at: string }[])[0] ?? null;
+  const currentEmail = (rawLead.email ?? "").trim().toLowerCase();
+  const resentAfterBounce =
+    !!bounce &&
+    messages.some(
+      (m) =>
+        m.channel === "email" &&
+        m.direction === "outbound" &&
+        new Date(m.created_at) > new Date(bounce.occurred_at) &&
+        (!currentEmail || (m.body ?? "").toLowerCase().includes(currentEmail)),
+    );
+  const typoFix = demo ? null : suggestEmailFix(rawLead.email);
+  const showResend = !demo && !emailBlock && ((!!bounce && !resentAfterBounce) || !!typoFix);
 
   const { data: showingData } = await supabase
     .from("showings")
@@ -563,6 +588,43 @@ export default async function LeadDetailPage({
             {blockReasonWords(emailBlock.reason)}, so the email service drops every email to{" "}
             {l.email}. Automatic emails to them are paused. Text or call them instead.
           </p>
+        </div>
+      )}
+
+      {searchParams.resent === "sent" && (
+        <p id="resend" className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Sent. The welcome reply went to {l.email}.
+        </p>
+      )}
+      {showResend && (
+        <div id="resend" className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-medium">
+            {bounce && !resentAfterBounce
+              ? `Your reply to ${bounce.email} did not arrive.`
+              : `${l.email} looks mistyped.`}
+          </p>
+          <p className="mt-1">
+            {typoFix ? `Did you mean ${typoFix}? ` : "Check the address with the renter. "}
+            Fix it here and we send them the welcome reply again.
+          </p>
+          <form action={resendWelcomeReply} className="mt-2 flex flex-wrap items-center gap-2">
+            <input type="hidden" name="id" value={l.id} />
+            <input
+              name="email"
+              type="email"
+              required
+              defaultValue={typoFix ?? rawLead.email ?? ""}
+              className="min-w-[16rem] rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm"
+            />
+            <button type="submit" className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white">
+              Save and send the reply again
+            </button>
+          </form>
+          {searchParams.resent === "failed" ? (
+            <p className="mt-2 text-red-700">We could not send it. Try again, or text or call them.</p>
+          ) : searchParams.resent === "bad" ? (
+            <p className="mt-2 text-red-700">That does not look like an email address.</p>
+          ) : null}
         </div>
       )}
 
