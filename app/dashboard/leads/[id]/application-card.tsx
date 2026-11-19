@@ -151,6 +151,21 @@ export function ApplicationCard(p: {
               Change it
             </Link>
           </p>
+          {/* S820d: the free LTB check before approving in their own system. */}
+          {p.ontario && ltbSearchUrl(p.lead.name) ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              <a
+                href={ltbSearchUrl(p.lead.name) ?? undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={small}
+                title={LTB_CHECK_LINE}
+              >
+                Check LTB orders (free)
+              </a>
+              <span>{LTB_CHECK_LINE}</span>
+            </div>
+          ) : null}
         </div>
       ) : open.length === 0 ? (
         <form action={requestRentalApplication} className="mt-3 flex flex-wrap items-center gap-3">
@@ -301,7 +316,9 @@ export function ApplicationCard(p: {
       )}
       {p.ontario && signed.length > 0 ? <p className="mt-1 text-xs text-gray-500">{LTB_CHECK_LINE}</p> : null}
 
-      {/* 2. Offer */}
+      {/* 2. Offer. S820d: hidden for an account on its own application form
+          with nothing signed here: its offers happen in that system too. */}
+      {p.ownForm && signed.length === 0 && !offer ? null : (
       <div id="offer" className="mt-5 border-t border-gray-100 pt-4">
         <h4 className="text-xs font-medium uppercase tracking-wider text-gray-500">Offer</h4>
         {p.offerBanner === "sent" ? (
@@ -435,6 +452,7 @@ export function ApplicationCard(p: {
           </form>
         )}
       </div>
+      )}
     </div>
   );
 }

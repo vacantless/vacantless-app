@@ -221,6 +221,7 @@ import { sqftToSave } from "@/lib/sqft-estimate-server";
 import { copyBuildingPhotosTo, spreadBuildingPhotos } from "@/lib/building-photos-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
 import { notifyWaitingRentersRented } from "@/lib/rented-notice-server";
+import { markLeaseWinner } from "@/lib/lease-winner-server";
 import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
 import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
 import { queueRobotTakedowns, robotTakedownPending } from "@/lib/robot-takedown";
@@ -1304,6 +1305,8 @@ export async function updateProperty(formData: FormData) {
   }
 
   if (priorStatus !== "leased" && effectiveStatus === "leased" && orgAfterSave) {
+    // S820e: the one renter who was sent the application becomes Leased.
+    await markLeaseWinner({ client: supabase, organizationId: orgAfterSave.id, propertyId: id });
     await handleLeaseupAdLifecycle({ supabase, org: orgAfterSave, propertyId: id });
     // S742e: tell the renters still waiting on it, show them the other open
     // homes, and close their requests on this one.

@@ -14,6 +14,7 @@ import { takeDownFacebookPagePosts } from "@/lib/facebook-page-takedown";
 import { queueRobotTakedowns } from "@/lib/robot-takedown";
 import { notifyAdsStillUp } from "@/lib/ads-still-up-server";
 import { handleLeaseupAdLifecycle } from "@/lib/leaseup-takedown";
+import { markLeaseWinner } from "@/lib/lease-winner-server";
 import { notifyWaitingRentersRented } from "@/lib/rented-notice-server";
 import { closeStaleConciergeItems } from "@/lib/concierge-stale-close-server";
 import { cleanPhotoFolderUrl, photoSourceOf, pullsFrom, type DrivePullResult } from "@/lib/drive-import";
@@ -241,6 +242,8 @@ async function markRentedAndTakeDown(args: { admin: SupabaseClient; organization
     const org = orgRow as Org | null;
     if (!org) return;
     const steps: Array<() => Promise<unknown>> = [
+      // S820e: first, so the renter who got it is Leased before anyone is told it rented.
+      () => markLeaseWinner({ client: admin, organizationId, propertyId }),
       () => takeDownFacebookPagePosts({ supabase: admin, organizationId, propertyId }),
       () => queueRobotTakedowns({ supabase: admin, organizationId, propertyId }),
       () => notifyAdsStillUp({ supabase: admin, org, propertyId }),
