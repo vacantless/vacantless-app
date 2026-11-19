@@ -418,6 +418,7 @@ export async function requestRentalApplication(formData: FormData) {
     applicant,
     requestedBy: user?.id ?? null,
     sentByLabel: "your team",
+    addedByName: isCo ? lead.name : null,
   });
 
   revalidatePath(`/dashboard/leads/${id}`);
@@ -618,7 +619,8 @@ export async function sendApplicationOffer(formData: FormData) {
     .select("name, email, token");
 
   let emailed = 0;
-  for (const s of (signers ?? []) as { name: string | null; email: string | null; token: string }[]) {
+  const signerRows = (signers ?? []) as { name: string | null; email: string | null; token: string }[];
+  for (const s of signerRows) {
     if (!s.email) continue;
     try {
       const r = await sendApplicationOfferInvite({
@@ -632,6 +634,8 @@ export async function sendApplicationOffer(formData: FormData) {
         property_address: lead.property?.address ?? null,
         term_lines: offerTermLines(offer),
         offer_url: `${APP_URL}/offer/${s.token}`,
+        other_signers: signerRows.filter((o) => o.token !== s.token).map((o) => o.name ?? "the other applicant"),
+        conditions: offer.conditions,
       });
       if (r.sent) emailed++;
     } catch {

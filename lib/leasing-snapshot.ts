@@ -26,6 +26,8 @@ export type SnapshotLead = {
   source: string | null;
   property_address: string | null;
   created_at: string | null; // ISO; used only for sort
+  // S820c: saved from a chat screenshot, no email or phone: reply in the chat.
+  chat?: boolean;
 };
 
 export type SnapshotShowing = {
@@ -377,7 +379,9 @@ function leadLines(l: SnapshotLead, tz: string, withSince: boolean): string {
     snapshotPhone(l.phone),
     (() => {
       const src = (l.source ?? "").trim();
-      return src ? src.charAt(0).toUpperCase() + src.slice(1) : null;
+      const label = src ? src.charAt(0).toUpperCase() + src.slice(1) : null;
+      if (l.chat) return label ? `${label} chat, reply there` : "Chat, reply there";
+      return label;
     })(),
     (() => {
       const d = shortDate(l.move_in, tz, true);

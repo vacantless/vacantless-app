@@ -25,6 +25,8 @@ import {
   countOpenBookableSlots,
   openBookableDays,
   shouldAlertTripwire,
+  shouldAlertWaiting,
+  waitingSummary,
 } from "@/lib/availability-tripwire";
 import { localDateString } from "@/lib/leasing-snapshot";
 
@@ -298,7 +300,34 @@ export async function GET(req: NextRequest) {
         lastAlertOn: org.availability_tripwire_last_alert_on ?? null,
         todayLocal,
       });
-      const alert = force || decision.alert;
+      // S820c: renters who asked since the last alert and have no viewing.
+      stage = "load_waiting";
+      const sinceIso = org.availability_tripwire_last_alert_on
+        ? new Date(`${org.availability_tripwire_last_alert_on}T00:00:00Z`).toISOString()
+        : new Date(nowMs - 7 * DAY_MS).toISOString();
+      const { data: waitingRows } = await admin
+        .from("leads")
+        .select("id, name, showings(id)")
+        .eq("organization_id", org.id)
+        .in("status", ["new", "replied", "contacted"])
+        .gte("created_at", sinceIso)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      const waiting = ((waitingRows ?? []) as { id: string; name: string | null; showings: { id: string }[] | null }[])
+        .filter((r) => !r.showings || r.showings.length === 0);
+      const localHour = Number(
+        new Intl.DateTimeFormat("en-CA", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(now),
+      );
+      const waitingAlert = shouldAlertWaiting({
+        severity,
+        lastAlertOn: org.availability_tripwire_last_alert_on ?? null,
+        todayLocal,
+        localHour,
+        newWaiting: waiting.length,
+      });
+      const alert = force || decision.alert || waitingAlert;
+      if (waitingAlert && !decision.alert) decision.nextLastAlertOn = todayLocal;
+      const waitingLine = severity === "ok" ? "" : waitingSummary(waiting.map((w) => w.name ?? ""), waiting.length);
 
       const viewingTimesUrl = `${APP_URL}/dashboard/availability`;
       const described = describeTripwire({
@@ -316,6 +345,7 @@ export async function GET(req: NextRequest) {
         availability_summary: described.summary,
         window_days: String(lookaheadDays),
         viewing_times_url: viewingTimesUrl,
+        waiting_summary: waitingLine ? `${waitingLine}\n\n` : "",
       };
 
       if (dry) {

@@ -804,8 +804,8 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Viewing availability dropped",
     description:
-      "Alert when renters can book viewings on only one day (or very few times) in the coming week. It repeats at most once a week while that lasts. Owner admins are always copied so a staffing gap cannot be hidden by custom recipients.",
-    tokens: ["org_name", "open_slots", "open_days", "open_day_list", "window_days", "availability_headline", "availability_summary", "viewing_times_url"],
+      "Alert when renters can book viewings on only one day (or very few times) in the coming week. It repeats at most once a week while that lasts, or once a day while new renters are waiting to book. Owner admins are always copied so a staffing gap cannot be hidden by custom recipients.",
+    tokens: ["org_name", "open_slots", "open_days", "open_day_list", "window_days", "availability_headline", "availability_summary", "waiting_summary", "viewing_times_url"],
     // S699: the old copy said "almost no bookable viewing times" next to "12
     // slots across 1 day", which read as a contradiction. The alert fires on
     // DAYS as well as slots (classifyTripwire: openDays <= 1 is thin), so the
@@ -813,7 +813,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     defaultSubject:
       "{{org_name}}: {{availability_headline}}",
     defaultBody:
-      "{{availability_summary}}\n\nAdd viewing times: {{viewing_times_url}}",
+      "{{availability_summary}}\n\n{{waiting_summary}}Add viewing times: {{viewing_times_url}}",
     active: true,
   },
   // Rent-increase autopilot (the FREE compliance wedge — S339). The proactive

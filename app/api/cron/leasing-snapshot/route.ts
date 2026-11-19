@@ -1,4 +1,5 @@
 import { getUserByIdCached } from "@/lib/auth-email-cache";
+import { isChatPlaceholder } from "@/lib/chat-leads";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendOrgNotification } from "@/lib/notifications-server";
@@ -307,7 +308,7 @@ export async function GET(req: NextRequest) {
       // --- Bucket 1: new leads in the last 24h -----------------------------
       const { data: newRows } = await admin
         .from("leads")
-        .select("id, name, phone, move_in, source, created_at, properties(address)")
+        .select("id, name, phone, email, notes, move_in, source, created_at, properties(address)")
         .eq("organization_id", org.id)
         .gt("created_at", win.cutoff24hIso)
         .not(
@@ -323,6 +324,7 @@ export async function GET(req: NextRequest) {
         source: r.source,
         property_address: one<any>(r.properties)?.address ?? null,
         created_at: r.created_at,
+        chat: isChatPlaceholder({ email: r.email ?? null, phone: r.phone ?? null, notes: r.notes ?? null }),
       }));
 
       // --- Buckets 2 & 3: scheduled showings today / later this week -------
@@ -360,7 +362,7 @@ export async function GET(req: NextRequest) {
       );
       const { data: nudgeRows } = await admin
         .from("leads")
-        .select("id, name, phone, move_in, source, created_at, properties(address)")
+        .select("id, name, phone, email, notes, move_in, source, created_at, properties(address)")
         .eq("organization_id", org.id)
         // S740: 14 days, not 7. Ginger and Sandra (asked Oct 21, unbooked)
         // dropped off the Oct 29 email while still waiting.
@@ -377,6 +379,7 @@ export async function GET(req: NextRequest) {
           source: r.source,
           property_address: one<any>(r.properties)?.address ?? null,
           created_at: r.created_at,
+          chat: isChatPlaceholder({ email: r.email ?? null, phone: r.phone ?? null, notes: r.notes ?? null }),
         }));
 
       // --- Leasing Health: shared calendar + per-listing overlays ----------

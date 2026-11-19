@@ -132,3 +132,39 @@ export function describeTripwire(args: {
     summary: `Renters can book only ${times} in ${window}, on ${list}.`,
   };
 }
+
+// S820c: renters are waiting and nobody can book. Noam (2026-11-19): Agile had
+// 0 open times and 20 renters waiting, and the weekly alert had already gone.
+// While renters keep arriving with nothing open, the alert comes back once a
+// day (after 8 am local) and names them, so whoever sets viewing times sees
+// the cost of waiting. Pure.
+export const WAITING_ALERT_FROM_HOUR = 8;
+
+export function shouldAlertWaiting(args: {
+  severity: TripwireSeverity;
+  lastAlertOn: string | null;
+  todayLocal: string;
+  localHour: number;
+  newWaiting: number;
+}): boolean {
+  if (args.severity !== "zero" && args.severity !== "thin") return false;
+  if (args.newWaiting <= 0) return false;
+  if (args.localHour < WAITING_ALERT_FROM_HOUR) return false;
+  return args.lastAlertOn !== args.todayLocal;
+}
+
+/** "3 new renters are waiting to book: Lamar, Prabhas and Gaurav." Empty when none. */
+export function waitingSummary(names: string[], total: number): string {
+  if (total <= 0) return "";
+  const shown = names.map((n) => n.trim()).filter(Boolean).slice(0, 8);
+  const more = total - shown.length;
+  const list = shown.length === 0
+    ? ""
+    : more > 0
+      ? `: ${shown.join(", ")} and ${more} more`
+      : shown.length === 1
+        ? `: ${shown[0]}`
+        : `: ${shown.slice(0, -1).join(", ")} and ${shown[shown.length - 1]}`;
+  const head = total === 1 ? "1 new renter is waiting to book" : `${total} new renters are waiting to book`;
+  return `${head}${list}. Their reply has your booking link, but it shows no times yet.`;
+}

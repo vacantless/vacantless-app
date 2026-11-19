@@ -470,6 +470,33 @@ export async function sendBookingConfirmation(
 // capture; no sensitive identifiers are collected here (Model B).
 // ---------------------------------------------------------------------------
 
+// S820b: a plain-text copy for the application, credit check and offer
+// emails. Without one the mail service writes its own, which showed "$1500"
+// for "$1,500" in inbox previews. Links keep their address.
+export function plainTextOfEmail(html: string): string {
+  const body = html.replace(/^[\s\S]*?<body[^>]*>/i, "").replace(/<\/body>[\s\S]*$/i, "");
+  return body
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href: string, text: string) => {
+      const t = text.replace(/<[^>]+>/g, "").trim();
+      return t && t !== href ? `${t}: ${href}` : href;
+    })
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|li|ul|div)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l, i, a) => l || (i > 0 && a[i - 1]))
+    .join("\n")
+    .trim();
+}
+
 export type RentalApplicationInvitePayload = {
   applicant_name: string | null;
   applicant_email: string | null;
@@ -480,9 +507,11 @@ export type RentalApplicationInvitePayload = {
   reply_to_email: string | null;
   property_address: string | null;
   apply_url: string; // absolute /apply/<token> link
+  // S820b: set for a co-applicant: the renter who asked, so the email says who added them.
+  added_by_name?: string | null;
 };
 
-function rentalApplicationInviteHtml(p: RentalApplicationInvitePayload): string {
+export function rentalApplicationInviteHtml(p: RentalApplicationInvitePayload): string {
   const brand = p.brand_color || DEFAULT_BRAND_COLOR;
   const org = escapeHtml(p.org_name || "Our leasing team");
   const hi = escapeHtml(firstName(p.applicant_name));
@@ -491,9 +520,15 @@ function rentalApplicationInviteHtml(p: RentalApplicationInvitePayload): string 
   const logo = p.logo_url
     ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
     : "";
-  const propLine = addr
-    ? `<p style="margin:0 0 16px;">To move forward with <strong>${addr}</strong>, please complete your rental application.</p>`
-    : `<p style="margin:0 0 16px;">To move forward, please complete your rental application.</p>`;
+  const addedBy = p.added_by_name?.trim() ? escapeHtml(p.added_by_name.trim()) : null;
+  const propLine = addedBy
+    ? `<p style="margin:0 0 16px;">${addedBy} added you to their application${addr ? ` for <strong>${addr}</strong>` : ""}. Each adult fills in and signs their own, so please complete yours.</p>`
+    : addr
+      ? `<p style="margin:0 0 16px;">To move forward with <strong>${addr}</strong>, please complete your rental application.</p>`
+      : `<p style="margin:0 0 16px;">To move forward, please complete your rental application.</p>`;
+  const why = addedBy
+    ? `You are receiving this because ${addedBy} added you to their rental application with ${org}.`
+    : `You are receiving this because you inquired about a rental with ${org}.`;
 
   return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
   <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
@@ -511,7 +546,7 @@ function rentalApplicationInviteHtml(p: RentalApplicationInvitePayload): string 
       <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      You are receiving this because you inquired about a rental with ${org}. We will never ask for your SIN or banking details by email.
+      ${why} We will never ask for your SIN or banking details by email.
     </div>
   </div>
 </body></html>`;
@@ -543,6 +578,7 @@ export async function sendRentalApplicationInvite(
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: rentalApplicationInviteHtml(p),
+    textContent: plainTextOfEmail(rentalApplicationInviteHtml(p)),
     tags: ["kind:rental_application_invite"],
   };
 
@@ -635,6 +671,7 @@ export async function sendCreditCheckInvite(p: CreditCheckInvitePayload): Promis
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: creditCheckInviteHtml(p),
+    textContent: plainTextOfEmail(creditCheckInviteHtml(p)),
     tags: ["kind:credit_check_invite"],
   };
   try {
@@ -669,9 +706,12 @@ export type ApplicationOfferInvitePayload = {
   property_address: string | null;
   term_lines: string[];
   offer_url: string; // absolute /offer/<token> link
+  // S820b: what happens next. The other people signing, and the conditions.
+  other_signers?: string[];
+  conditions?: string | null;
 };
 
-function applicationOfferInviteHtml(p: ApplicationOfferInvitePayload): string {
+export function applicationOfferInviteHtml(p: ApplicationOfferInvitePayload): string {
   const brand = escapeHtml(p.brand_color || DEFAULT_BRAND_COLOR);
   const org = escapeHtml(p.org_name || "Our leasing team");
   const hi = escapeHtml(firstName(p.applicant_name));
@@ -681,6 +721,15 @@ function applicationOfferInviteHtml(p: ApplicationOfferInvitePayload): string {
     ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
     : "";
   const terms = p.term_lines.map((l) => `<li style="margin:0 0 4px;">${escapeHtml(l)}</li>`).join("");
+  const names = (p.other_signers ?? []).map((n) => n.trim()).filter(Boolean).map(escapeHtml);
+  const others = names.length
+    ? `<li style="margin:0 0 4px;">${names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`} ${names.length === 1 ? "gets their own link and signs too" : "get their own links and sign too"}.</li>`
+    : "";
+  const conditions = p.conditions?.trim()
+    ? `<p style="margin:0 0 16px;"><strong>Conditions:</strong> ${escapeHtml(p.conditions.trim())}</p>`
+    : "";
+  const directEmail = p.reply_to_email?.trim();
+  const direct = directEmail ? `, or write to ${escapeHtml(directEmail)}` : "";
   return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
   <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
     <div style="height:6px;background:${brand};"></div>
@@ -688,13 +737,24 @@ function applicationOfferInviteHtml(p: ApplicationOfferInvitePayload): string {
       ${logo}
       <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
       <p style="margin:0 0 12px;">Good news: ${org} is offering you ${addr ? `<strong>${addr}</strong>` : "the rental"}.</p>
-      <ul style="margin:0 0 20px;padding-left:18px;">${terms}</ul>
+      <ul style="margin:0 0 16px;padding-left:18px;">${terms}</ul>
+      ${conditions}
       <p style="margin:0 0 24px;">
         <a href="${url}" style="display:inline-block;background:${brand};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px;">Read and sign the offer</a>
       </p>
       <p style="margin:0 0 8px;color:#52525b;font-size:13px;">Or paste this link into your browser:</p>
       <p style="margin:0 0 16px;word-break:break-all;font-size:13px;"><a href="${url}" style="color:${brand};">${url}</a></p>
+      <p style="margin:0 0 8px;font-weight:600;">What happens next</p>
+      <ul style="margin:0 0 16px;padding-left:18px;">
+        <li style="margin:0 0 4px;">Read the offer and sign it by typing your name. If you would rather not go ahead, you can decline on the same page.</li>
+        ${others}
+        <li style="margin:0 0 4px;">Once everyone has signed, ${org} will be in touch about the lease and your move-in.</li>
+      </ul>
+      <p style="margin:0 0 16px;">Questions? Reply to this email${direct}.</p>
       <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you applied for a rental with ${org}. We will never ask for your SIN or banking details by email.
     </div>
   </div>
 </body></html>`;
@@ -712,6 +772,7 @@ export async function sendApplicationOfferInvite(p: ApplicationOfferInvitePayloa
     replyTo: replyToOf(p.reply_to_email, p.org_name),
     subject,
     htmlContent: applicationOfferInviteHtml(p),
+    textContent: plainTextOfEmail(applicationOfferInviteHtml(p)),
     tags: ["kind:application_offer"],
   };
   try {

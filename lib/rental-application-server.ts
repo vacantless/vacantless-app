@@ -39,6 +39,8 @@ export async function startRentalApplication(
     requestedBy?: string | null;
     sentByAgentId?: string | null;
     sentByLabel: string; // "you", "Maya (showing agent)"
+    // S820b: a co-applicant's invite says who added them.
+    addedByName?: string | null;
   },
 ): Promise<StartApplicationResult> {
   const name = (args.applicant.name ?? "").trim() || null;
@@ -64,6 +66,7 @@ export async function startRentalApplication(
           reply_to_email: args.org.reply_to_email,
           property_address: args.propertyAddress,
           apply_url: link,
+          added_by_name: args.addedByName ?? null,
         });
         sent = r.sent === true;
       } catch {
@@ -138,6 +141,7 @@ export async function startRentalApplication(
         reply_to_email: args.org.reply_to_email,
         property_address: args.propertyAddress,
         apply_url: applyUrl,
+        added_by_name: args.addedByName ?? null,
       });
       emailed = r.sent === true;
     } catch {
