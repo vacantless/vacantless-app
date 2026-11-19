@@ -28,7 +28,8 @@ function ok(name: string, cond: boolean) {
 }
 
 // --- Seats ------------------------------------------------------------------
-ok("free has no teammates", teammateLimit("free") === 0);
+ok("free has one helper seat (S821c)", teammateLimit("free") === 1 && teammateLimit("trial") === 1);
+ok("free: the one seat fills (S821c)", seatsLeft({ plan: "free", memberCount: 1, pendingInviteCount: 0 }) === 1 && seatsLeft({ plan: "free", memberCount: 1, pendingInviteCount: 1 }) === 0 && seatsLeft({ plan: "free", memberCount: 2, pendingInviteCount: 0 }) === 0);
 ok("unknown plan has no teammates", teammateLimit("gold") === 0 && teammateLimit(null) === 0);
 ok("growth has 2 teammates", teammateLimit("growth") === 2);
 ok("premium has 5 teammates", teammateLimit("premium") === 5);
@@ -36,7 +37,7 @@ ok("growth owner alone: 2 left", seatsLeft({ plan: "growth", memberCount: 1, pen
 ok("growth owner + 1 member: 1 left", seatsLeft({ plan: "growth", memberCount: 2, pendingInviteCount: 0 }) === 1);
 ok("open invites use seats", seatsLeft({ plan: "growth", memberCount: 2, pendingInviteCount: 1 }) === 0);
 ok("never negative", seatsLeft({ plan: "growth", memberCount: 5, pendingInviteCount: 3 }) === 0);
-ok("free owner: 0 left", seatsLeft({ plan: "free", memberCount: 1, pendingInviteCount: 0 }) === 0);
+ok("unknown plan owner: 0 left", seatsLeft({ plan: "gold", memberCount: 1, pendingInviteCount: 0 }) === 0);
 
 // --- Emails and tokens ------------------------------------------------------
 ok("normalizeEmail trims and lowercases", normalizeEmail("  Pat@Example.COM ") === "pat@example.com");

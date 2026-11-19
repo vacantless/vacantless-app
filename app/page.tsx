@@ -742,7 +742,7 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
     head: "Renters and viewings",
     items: [
       { text: "Renter wrote in a chat? Upload the screenshot and they land in your list." },
-      { text: "Quick replies on your phone. Booking links, next open times, and ready answers on pets, parking and utilities." },
+      { text: "Quick replies on your phone. Booking links, next open times, and ready answers on pets, parking and utilities. Each reply is written for you in clear English. Tap Copy and paste it in the chat." },
       { text: "Time not working for a renter? Suggest up to three open times. They pick one." },
       { text: "Not sure a renter is coming? One tap nudges them to confirm." },
       { text: "Renter not confirming? The time opens up again after the hours you choose." },
@@ -799,7 +799,7 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
       { text: "Log your tenant's insurance. Turn on the alert and you hear before it lapses." },
       { text: "Keep each tenant's files in one place. Share them by a link that expires." },
       { text: "A rent receipt for your tenant in one click." },
-      { text: "Add a teammate with their own login. No shared password.", plan: "paid plans" },
+      { text: "Add a helper with their own login. No shared password. One on Free, more on paid plans." },
     ],
   },
 ];

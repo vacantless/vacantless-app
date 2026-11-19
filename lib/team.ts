@@ -25,8 +25,10 @@ export const INVITABLE_ROLES: readonly OrgRole[] = ["operator"] as const;
 
 /** Teammates allowed beyond the first person on the account, per plan. */
 const TEAMMATE_LIMITS: Record<string, number> = {
-  free: 0,
-  trial: 0,
+  // S821c (Noam 2026-11-19): one helper seat on Free, so a family member or
+  // friend can set the account up with a newcomer. More seats stay paid.
+  free: 1,
+  trial: 1,
   starter: 2,
   growth: 2,
   portfolio: 5,

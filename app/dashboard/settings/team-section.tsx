@@ -132,7 +132,9 @@ export async function TeamSection({
             </p>
           ) : left === 0 ? (
             <p className="mt-2 text-sm text-gray-600">
-              All {limit} teammate seats are in use. Remove someone or cancel an invite to add another.
+              {limit === 1
+                ? "Your one helper seat is in use. Remove them or cancel the invite to add someone else. Starter and up come with more seats."
+                : `All ${limit} teammate seats are in use. Remove someone or cancel an invite to add another.`}
             </p>
           ) : (
             <form action={inviteTeammate} className="mt-3 space-y-3">
