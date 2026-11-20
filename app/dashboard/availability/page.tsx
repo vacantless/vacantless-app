@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
 import { getCurrentOrg } from "@/lib/org";
 import { WEEKDAY_LABELS, buildingLabel, minutesToLabel, previewSlotStarts } from "@/lib/booking";
 import {
@@ -236,6 +237,24 @@ export default async function AvailabilityPage({
     await setAllowDoubleBooking(formData.get("allow_double_booking") === "on");
   }
 
+  // S824g: say plainly that opening times tells the renters who found none.
+  const { count: waitingCount } = await supabase
+    .from("leads")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", org.id)
+    .eq("no_suitable_time", true)
+    .is("reopen_notified_at", null)
+    .in("status", ["new", "replied", "contacted"])
+    .gt("created_at", new Date(Date.now() - 30 * 86_400_000).toISOString());
+  const { data: tellRow } = await supabase
+    .from("organizations")
+    .select("viewing_times_opened_enabled, sms_enabled")
+    .eq("id", org.id)
+    .maybeSingle();
+  const tell = (tellRow ?? {}) as { viewing_times_opened_enabled?: boolean | null; sms_enabled?: boolean | null };
+  const waiting = waitingCount ?? 0;
+  const tellsRenters = tell.viewing_times_opened_enabled !== false;
+
   return (
     <div>
       <PageHeader
@@ -244,6 +263,18 @@ export default async function AvailabilityPage({
         title="Set viewing times"
         subtitle="Pick the hours when renters can book a viewing. Times that are booked come off by themselves."
       />
+
+      {waiting > 0 ? (
+        <p className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-900">
+          {waiting === 1 ? "1 renter found no time that worked." : `${waiting} renters found no time that worked.`}{" "}
+          {tellsRenters
+            ? `When you open times, they get an email${tell.sms_enabled ? " and a text" : ""}. Never at night.`
+            : "They are not told when you open times."}{" "}
+          <Link href="/dashboard/automations/every-message#viewing_times_opened_enabled" className="font-medium underline">
+            {tellsRenters ? "Turn this off" : "Turn this on"}
+          </Link>
+        </p>
+      ) : null}
 
       {savedMessage && (
         <p className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">

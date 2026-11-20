@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
         "no_suitable_time, reopen_notified_at, " +
         "properties(status, address, rent_cents, building_key), " +
         "organizations(id, name, brand_color, logo_url, mail_alias, reply_to_email, sms_enabled, plan, " +
-        "availability_reopened_at, availability_tripwire_lookahead_days, " +
+        "availability_reopened_at, availability_tripwire_lookahead_days, viewing_times_opened_enabled, " +
         "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days)",
     )
     .eq("no_suitable_time", true)
@@ -201,6 +201,27 @@ export async function GET(req: NextRequest) {
           dry,
         });
         summary.details.push({ org: orgId, skipped: "no_reopen_stamp", leads: group.leads.length });
+        continue;
+      }
+
+      // S824g: the account turned this message off (Every message we send).
+      // Nothing is stamped, so turning it back on reaches the same renters.
+      if (org.viewing_times_opened_enabled === false) {
+        skippedCount = group.leads.length;
+        summary.skipped += skippedCount;
+        logOrgReopenResult({
+          orgId,
+          outcome: "switched_off",
+          eligible: 0,
+          open,
+          toNotify: 0,
+          sent: 0,
+          skipped: skippedCount,
+          errors: 0,
+          force,
+          dry,
+        });
+        summary.details.push({ org: orgId, skipped: "switched_off", leads: group.leads.length });
         continue;
       }
 

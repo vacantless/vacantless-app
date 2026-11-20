@@ -60,7 +60,12 @@ const directMail = files.filter((f) => f !== "lib/email.ts" && /smtp\/email["`]/
 ok("only lib/email.ts sends email", directMail.length === 0, directMail);
 
 // 3. Every file that sends a text has a row.
-const smsFiles = files.filter((f) => f !== "lib/sms.ts" && /\bsendSms\(/.test(src.get(f) ?? ""));
+// S824g: a file can send through an injected sender (send = sendSms), so a
+// file that imports sendSms counts too, not only one that calls sendSms(.
+const SMS_IMPORT = /import\s*\{[^}]*\bsendSms\b[^}]*\}\s*from\s*["'](?:\.\/sms|@\/lib\/sms|\.\.\/lib\/sms)["']/;
+const smsFiles = files.filter(
+  (f) => f !== "lib/sms.ts" && (/\bsendSms\(/.test(src.get(f) ?? "") || SMS_IMPORT.test(src.get(f) ?? "")),
+);
 const missingSms = smsFiles.filter((f) => !listed.sms.has(f));
 ok("every text sender is listed", missingSms.length === 0, missingSms);
 const staleSms = [...listed.sms].filter((f) => !smsFiles.includes(f));
@@ -70,8 +75,12 @@ const twilioDirect = files.filter((f) => f !== "lib/sms.ts" && /Messages\.json/.
 ok("only lib/sms.ts sends texts", twilioDirect.length === 0, twilioDirect);
 
 // 4. Every direct use of the generic email sender has a row (events go through notifications-server).
+const NOTIFY_IMPORT = /import\s*\{[^}]*\bsendNotificationEmail\b[^}]*\}\s*from\s*["'](?:\.\/email|@\/lib\/email)["']/;
 const notifyFiles = files.filter(
-  (f) => f !== "lib/email.ts" && f !== "lib/notifications-server.ts" && /\bsendNotificationEmail\(/.test(src.get(f) ?? ""),
+  (f) =>
+    f !== "lib/email.ts" &&
+    f !== "lib/notifications-server.ts" &&
+    (/\bsendNotificationEmail\(/.test(src.get(f) ?? "") || NOTIFY_IMPORT.test(src.get(f) ?? "")),
 );
 const missingNotify = notifyFiles.filter((f) => !listed.notify.has(f));
 ok("every direct email is listed", missingNotify.length === 0, missingNotify);
@@ -82,6 +91,14 @@ ok("no listed direct email is gone", staleNotify.length === 0, staleNotify);
 const voiceFiles = files.filter((f) => /<Say>/.test(src.get(f) ?? ""));
 const missingVoice = voiceFiles.filter((f) => !listed.voice.has(f));
 ok("every call answer is listed", missingVoice.length === 0, missingVoice);
+
+// S824g: the two texts the first list missed are on it.
+ok("times-opened text listed", listed.sms.has("lib/availability-reopen-sms.ts"));
+ok("voicemail text listed", listed.sms.has("lib/ai-enquiry-ingest.ts"));
+const reopen = readFileSync("app/api/cron/availability-reopened-notify/route.ts", "utf8");
+ok("times-opened obeys its switch", reopen.includes("org.viewing_times_opened_enabled === false"));
+const avail = readFileSync("app/dashboard/availability/page.tsx", "utf8");
+ok("viewing times page says who is told", avail.includes("found no time that worked.") && avail.includes("every-message#viewing_times_opened_enabled"));
 
 // 6. The notification events: every one lands in a group, and the agent list is real.
 const keys = new Set(NOTIFICATION_EVENTS.map((e) => e.key));

@@ -27,6 +27,7 @@ export const MESSAGE_ORG_SWITCHES = [
   "availability_tripwire_enabled",
   "viewing_reminder_enabled",
   "compliance_calendar_enabled",
+  "viewing_times_opened_enabled",
 ] as const;
 export type MessageOrgSwitch = (typeof MESSAGE_ORG_SWITCHES)[number];
 
@@ -201,10 +202,11 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
     group: "renters",
     goesTo: "Renters who found no time that worked.",
     title: "New viewing times are open",
-    when: "When you open times for a renter who found none that worked.",
-    channels: ["email"],
-    control: { type: "always" },
-    code: { send: ["sendViewingTimesOpenedEmail"] },
+    when: "When you open times for a renter who found none that worked. Never at night.",
+    channels: ["email", "text"],
+    textNeedsTexting: true,
+    control: { type: "switch", column: "viewing_times_opened_enabled" },
+    code: { send: ["sendViewingTimesOpenedEmail"], sms: ["lib/availability-reopen-sms.ts"] },
   },
   {
     id: "renter-rented",
@@ -277,6 +279,17 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
     textNeedsTexting: true,
     control: { type: "button", where: "The renter's page, Text this renter" },
     code: { sms: ["app/dashboard/leads/actions.ts"] },
+  },
+  {
+    id: "renter-missed-call-text",
+    group: "renters",
+    goesTo: "Whoever left a voicemail on your texting number.",
+    title: "Text back after a voicemail",
+    when: "After a caller leaves a voicemail. It carries your booking link. Never at night.",
+    channels: ["text"],
+    textNeedsTexting: true,
+    control: { type: "always" },
+    code: { sms: ["lib/ai-enquiry-ingest.ts"] },
   },
   {
     id: "caller-voice",
