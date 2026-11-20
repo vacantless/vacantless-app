@@ -38,7 +38,7 @@
 
 import { normalizeSenderEmail } from "./email-ingest";
 
-export type PortalKey = "rentals_ca" | "kijiji" | "zumper";
+export type PortalKey = "rentals_ca" | "kijiji" | "zumper" | "realtor_ca";
 
 type PortalEntry = { addresses: string[]; domain: string };
 
@@ -83,6 +83,18 @@ export const PORTAL_REGISTRY: Record<PortalKey, PortalEntry> = {
     addresses: ["noreply@zumperchat.com"],
     domain: "zumperchat.com",
   },
+  // REALTOR.CA (S823d). Read off a real 2026-11 message in noam@royallepage.ca
+  // (Gmail "Show original"), not guessed: one fixed sender for every enquiry.
+  //   From:           noreply@leads.realtor.ca   (sent through SendGrid)
+  //   Reply-To:       the enquirer's REAL email
+  //   DKIM-Signature: d=leads.realtor.ca; s=s1   (dkim=pass, dmarc=pass)
+  //   SPF mailfrom:   em2630.leads.realtor.ca
+  // An agent gets these for SALE listings too, so the ingest files one only
+  // when its address is a rental in the account (see resolveRealtorCaTarget).
+  realtor_ca: {
+    addresses: ["noreply@leads.realtor.ca"],
+    domain: "realtor.ca",
+  },
 };
 
 // Back-compat flat list (some callers/tests want just the addresses).
@@ -90,6 +102,7 @@ export const KNOWN_PORTAL_SENDERS: Record<PortalKey, string[]> = {
   rentals_ca: PORTAL_REGISTRY.rentals_ca.addresses,
   kijiji: PORTAL_REGISTRY.kijiji.addresses,
   zumper: PORTAL_REGISTRY.zumper.addresses,
+  realtor_ca: PORTAL_REGISTRY.realtor_ca.addresses,
 };
 
 const ADDRESS_TO_ENTRY: ReadonlyMap<string, PortalEntry> = new Map(

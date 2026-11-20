@@ -3350,3 +3350,102 @@ export async function sendSiteMailCopy(p: SiteMailCopyPayload): Promise<SendResu
     return { sent: false, reason: `fetch_error:${(e as Error).message}` };
   }
 }
+
+// ---------------------------------------------------------------------------
+// S823c: "Offer times to a renter". The landlord hand-picked up to three
+// viewing times; the renter taps one and it is booked. No calendar link: the
+// only way forward is one of these times or a reply.
+// ---------------------------------------------------------------------------
+export type ViewingOfferPayload = {
+  lead_id: string;
+  renter_name: string | null;
+  renter_email: string | null;
+  org_name: string | null;
+  brand_color: string | null;
+  logo_url: string | null;
+  mail_alias?: string | null;
+  reply_to_email: string | null;
+  property_address: string | null;
+  offered_when_labels: string[];
+  offer_url: string;
+};
+
+function viewingOfferHtml(p: ViewingOfferPayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.renter_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : "the rental";
+  const offerUrl = escapeHtml(p.offer_url);
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+  const one = p.offered_when_labels.length === 1;
+  const times = p.offered_when_labels
+    .map((label) => timeChangeBlock("Viewing time", escapeHtml(label), "suggested", offerUrl))
+    .join("");
+
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 8px;">Thank you for asking about this rental. ${one ? "I can show it to you at this time:" : "I can show it to you at one of these times:"}</p>
+      <p style="margin:0 0 18px;color:#52525b;"><strong>${addr}</strong></p>
+      <div style="margin:0 0 18px;">${times}</div>
+      <p style="margin:0 0 12px;color:#52525b;font-size:13px;">Tap ${one ? "the time" : "the time that works"} to confirm it. It is booked right away and you get a confirmation email.</p>
+      <p style="margin:0 0 16px;color:#52525b;font-size:13px;">If ${one ? "it does not work" : "none of them work"}, reply to this email with what does and I will send new times.</p>
+      <p style="margin:0 0 8px;color:#52525b;font-size:13px;">Or paste this link into your browser:</p>
+      <p style="margin:0 0 16px;word-break:break-all;font-size:13px;"><a href="${offerUrl}" style="color:${escapeHtml(brand)};">${offerUrl}</a></p>
+      <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
+    </div>
+    <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
+      You are receiving this because you asked about one of our rentals.
+    </div>
+  </div>
+</body></html>`;
+}
+
+export async function sendViewingOffer(p: ViewingOfferPayload): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
+
+  const subject = p.property_address
+    ? `Viewing times for ${p.property_address}`
+    : "Viewing times for the rental";
+
+  const body = {
+    sender: senderOf(p.mail_alias, p.org_name),
+    to: [
+      {
+        email: p.renter_email,
+        ...(p.renter_name ? { name: p.renter_name } : {}),
+      },
+    ],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: viewingOfferHtml(p),
+    tags: ["kind:viewing_offer"],
+  };
+
+  try {
+    const res = await brevoFetch({
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}

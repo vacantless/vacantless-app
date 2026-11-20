@@ -14,8 +14,10 @@ import {
 import {
   addressMatchesZumperProperty,
   parsePortalLeadEmail,
+  parseRealtorCaAddress,
   parseZumperPropertyLine,
   portalLeadNote,
+  portalSiteName,
   type ParsedPortalLead,
 } from "@/lib/portal-lead-email";
 import { sourceLabelForPost } from "@/lib/listing-distribution";
@@ -325,6 +327,34 @@ async function resolveZumperTarget(
 }
 
 /**
+ * Realtor.ca (S823d). The subject's address is the only key: a Realtor.ca
+ * listing is not one of our tracked ads. It resolves only when exactly one
+ * rental in THIS account has that civic number, street and unit. An agent also
+ * gets enquiries for sale listings; those match nothing here and are not filed.
+ */
+async function resolveRealtorCaTarget(
+  admin: AdminClient,
+  orgId: string,
+  lead: ParsedPortalLead,
+): Promise<ResolvedTarget> {
+  const key = parseRealtorCaAddress(lead.subjectAddress);
+  if (!key) return { propertyId: null, listingPostId: null, how: "unresolved" };
+  const { data } = await admin
+    .from("properties")
+    .select("id, address")
+    .eq("organization_id", orgId)
+    .ilike("address", `${key.civic} ${key.streetWord}%`)
+    .limit(50);
+  const rows = ((data ?? []) as Array<{ id: string; address: string | null }>).filter((r) =>
+    addressMatchesZumperProperty(r.address, key),
+  );
+  if (rows.length === 1) {
+    return { propertyId: rows[0].id, listingPostId: null, how: "subject_address" };
+  }
+  return { propertyId: null, listingPostId: null, how: "unresolved" };
+}
+
+/**
  * Resolve the unit this lead is about, scoped to the org the token resolved to.
  * Never widens past that org: a portal ad id is not globally unique to us, and a
  * cross-org match would be the s566 contact leak in reverse.
@@ -335,6 +365,7 @@ async function resolveTarget(
   lead: ParsedPortalLead,
 ): Promise<ResolvedTarget> {
   if (lead.portal === "zumper") return resolveZumperTarget(admin, orgId, lead);
+  if (lead.portal === "realtor_ca") return resolveRealtorCaTarget(admin, orgId, lead);
   if (lead.adUrl) {
     const { data } = await admin
       .from("listing_posts")
@@ -789,6 +820,13 @@ export async function handleInboundLeadPost(
     await note("cross_org_refused");
     return NextResponse.json({ ok: true, handled: "cross_org_refused" });
   }
+  // S823d: a Realtor.ca enquiry that is not about one of this account's
+  // rentals (a sale listing, usually) is not a renter. It is left alone: the
+  // agent still has the email in the inbox it was forwarded from.
+  if (lead.portal === "realtor_ca" && !target.propertyId) {
+    console.warn("inbound/lead: realtor.ca enquiry matched no rental, not filed");
+    return NextResponse.json({ ok: true, handled: "realtor_ca_not_a_rental" });
+  }
   const notes = portalLeadNote(lead);
 
   // ---- Dedupe ---------------------------------------------------------------
@@ -868,6 +906,14 @@ export async function handleInboundLeadPost(
       // Tell the leasing team — the SAME alert a public /r lead fires, routed
       // through the same per-org recipients (S568). Best-effort, never throws.
       await note("lead_created");
+      // S823d: no tracked ad carries the source for Realtor.ca, so name it here.
+      if (
+        leadId &&
+        lead.portal === "realtor_ca" &&
+        !(rpcData && typeof rpcData === "object" && (rpcData as Record<string, unknown>).lead_returning === true)
+      ) {
+        await admin.from("leads").update({ source: "Realtor.ca" }).eq("id", leadId).eq("organization_id", orgId);
+      }
       if (leadId) {
         await notifyOperators(admin, {
           orgId,
@@ -881,7 +927,7 @@ export async function handleInboundLeadPost(
           rpcData && typeof rpcData === "object" &&
           (rpcData as Record<string, unknown>).lead_returning === true;
         if (returning && lead.message) {
-          const site = lead.portal === "kijiji" ? "Kijiji" : lead.portal === "zumper" ? "Zumper" : "Rentals.ca";
+          const site = portalSiteName(lead.portal);
           const { error: msgErr } = await admin.from("messages").insert({
             organization_id: orgId,
             lead_id: leadId,
@@ -901,7 +947,7 @@ export async function handleInboundLeadPost(
             listingPostId: target.listingPostId,
             payload: rpcData as AutoReplyPayload,
             question: lead.message ?? null,
-            site: lead.portal === "kijiji" ? "Kijiji" : lead.portal === "zumper" ? "Zumper" : "Rentals.ca",
+            site: portalSiteName(lead.portal),
           });
         }
       }
@@ -924,11 +970,7 @@ export async function handleInboundLeadPost(
 
   const source = target.listingPostId
     ? sourceLabelForPost({ portal: lead.portal })
-    : lead.portal === "kijiji"
-      ? "Kijiji"
-      : lead.portal === "zumper"
-        ? "Zumper"
-        : "Rentals.ca";
+    : portalSiteName(lead.portal);
   const directLead = {
     organization_id: orgId,
     property_id: target.propertyId,

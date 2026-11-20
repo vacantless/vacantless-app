@@ -89,11 +89,18 @@ export const ZUMPER_LEAD_SENDER = "noreply@zumperchat.com";
 
 /** Senders whose mail this parser understands. The route's per-org allow-list
  *  is a separate, stricter gate — this is only "can we read it at all". */
+// REALTOR.CA (S823d). One sender for every enquiry an agent gets off a
+// listing, read from a real message. The subject is
+// "Showing request for 124 - 251 MANITOBA STREET, Toronto (Mimico), Ontario
+// M8Y0C7, #W14120476" or "General inquiry for ...". Reply-To is the enquirer.
+export const REALTOR_CA_LEAD_SENDER = "noreply@leads.realtor.ca";
+
 export const PORTAL_LEAD_SENDERS: readonly string[] = [
   RENTALS_CA_LEAD_SENDER,
   RENTALS_CA_TOUR_SENDER,
   KIJIJI_LEAD_SENDER,
   ZUMPER_LEAD_SENDER,
+  REALTOR_CA_LEAD_SENDER,
 ];
 
 /** The template versions this parser was written against. Anything else still
@@ -104,7 +111,15 @@ export type PortalLeadKind = "inquiry" | "tour_request";
 
 /** Which portal a parsed lead came off. Mirrors PortalKey in portal-senders.ts;
  *  kept as its own type so this module stays pure and dependency-free. */
-export type ParsedLeadPortal = "rentals_ca" | "kijiji" | "zumper";
+export type ParsedLeadPortal = "rentals_ca" | "kijiji" | "zumper" | "realtor_ca";
+
+/** The site's name as a landlord reads it. */
+export function portalSiteName(portal: ParsedLeadPortal): string {
+  if (portal === "kijiji") return "Kijiji";
+  if (portal === "zumper") return "Zumper";
+  if (portal === "realtor_ca") return "Realtor.ca";
+  return "Rentals.ca";
+}
 
 export type ParsedPortalLead = {
   portal: ParsedLeadPortal;
@@ -138,6 +153,11 @@ export type ParsedPortalLead = {
   /** Zumper only (S701d): the renter's stated move-in date, verbatim
    *  ("October 06, 2026"). Kept as text for the note; never re-parsed here. */
   moveIn?: string | null;
+  /** Realtor.ca only (S823d): the MLS number off the subject, for the note. */
+  mlsNumber?: string | null;
+  /** Realtor.ca only: what the enquirer told Realtor.ca they plan to do
+   *  ("Rent a home"), verbatim. */
+  plansTo?: string | null;
 };
 
 export type PortalLeadParseInput = {
@@ -391,6 +411,9 @@ export function classifyPortalLeadEmail(
   const from = bareAddress(input.from);
   const subject = (input.subject ?? "").trim();
   if (from === ZUMPER_LEAD_SENDER) return "inquiry";
+  if (from === REALTOR_CA_LEAD_SENDER) {
+    return /^showing request\b/i.test(subject) ? "tour_request" : "inquiry";
+  }
   if (from === KIJIJI_LEAD_SENDER) {
     // Kijiji sends ONE message type. What varies is whether the renter used the
     // "request a viewing" template, and that shows up as a header, never in the
@@ -425,6 +448,9 @@ export function parsePortalLeadEmail(
   if (!kind) return { ok: false, reason: "not_a_recognized_portal_lead" };
   if (bareAddress(input.from) === KIJIJI_LEAD_SENDER) {
     return parseKijijiLeadEmail(input, kind);
+  }
+  if (bareAddress(input.from) === REALTOR_CA_LEAD_SENDER) {
+    return parseRealtorCaLeadEmail(input, kind);
   }
   if (bareAddress(input.from) === ZUMPER_LEAD_SENDER) {
     return parseZumperLeadEmail(input);
@@ -897,6 +923,154 @@ export function parseZumperLeadEmail(input: PortalLeadParseInput): PortalLeadPar
   };
 }
 
+// --- Realtor.ca (S823d) ---------------------------------------------------------
+
+/**
+ * "124 - 251 MANITOBA STREET, Toronto (Mimico), Ontario M8Y0C7" -> { civic
+ * "251", streetWord "manitoba", unit "124" }. Realtor.ca writes the unit
+ * first, then a spaced dash, then the civic number. A house has no unit:
+ * "18 SHORNCLIFFE AVENUE, Toronto ..." -> { civic "18", streetWord
+ * "shorncliffe", unit null }. Same shape as the Zumper key so
+ * addressMatchesZumperProperty() compares it to our own addresses.
+ */
+export function parseRealtorCaAddress(text: string | null | undefined): ZumperPropertyKey | null {
+  if (!text) return null;
+  const head = text.split(",")[0].trim();
+  const m = /^(?:#?\s*([a-z0-9]+)\s+-\s+)?(\d+[a-z]?)\s+([a-z][a-z'.-]*)\b/i.exec(head);
+  if (!m) return null;
+  return {
+    civic: m[2].toLowerCase(),
+    streetWord: m[3].toLowerCase().replace(/[.']/g, ""),
+    unit: m[1] ? m[1].toLowerCase() : null,
+  };
+}
+
+/** Address and MLS number off "Showing request for <address>, #W14120476". */
+export function realtorCaSubjectParts(
+  subject: string | null | undefined,
+): { address: string | null; mls: string | null } {
+  const s = (subject ?? "").replace(/\s+/g, " ").trim();
+  const m = /\bfor\s+(.+?)(?:,\s*#\s*([A-Z]{1,2}\d{5,}))?\s*$/i.exec(s);
+  if (!m) return { address: null, mls: null };
+  return { address: cleanText(m[1]), mls: m[2] ? m[2].toUpperCase() : null };
+}
+
+function isRealtorCaOwned(email: string | null): boolean {
+  const domain = (email ?? "").split("@")[1] ?? "";
+  return /(^|\.)(realtor|crea)\.ca$/i.test(domain);
+}
+
+export function parseRealtorCaLeadEmail(
+  input: PortalLeadParseInput,
+  kind: PortalLeadKind,
+): PortalLeadParseResult {
+  const warnings: string[] = [];
+  const html = input.htmlBody ? decodeQuotedPrintableIfNeeded(input.htmlBody) : "";
+  const htmlLines = html ? htmlToLines(html) : "";
+  const plain = input.textBody
+    ? decodeQuotedPrintableIfNeeded(input.textBody).replace(/\r/g, "")
+    : "";
+  const body = htmlLines.length >= plain.length ? htmlLines : plain;
+  const lines = body
+    .split("\n")
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter((l) => l.length > 0);
+
+  const { address, mls } = realtorCaSubjectParts(input.subject);
+  if (!address) warnings.push("no address in the subject line");
+
+  // Contact: Reply-To is the enquirer. Never Realtor.ca's own address.
+  let email = bareAddress(input.replyTo);
+  if (email && isRealtorCaOwned(email)) {
+    warnings.push(`discarded portal-owned email ${email}`);
+    email = null;
+  }
+  if (!email) {
+    const found = Array.from(html.matchAll(/href\s*=\s*["']mailto:([^"'?\s]+)/gi))
+      .map((x) => x[1].toLowerCase())
+      .find((a) => !isRealtorCaOwned(a));
+    if (found) {
+      email = found;
+      warnings.push("no Reply-To; took the email from the body");
+    }
+  }
+
+  // Name: "Message from <Name>:" is the cleanest line; the greeting line above
+  // it is the AGENT's own name and must never be read as the enquirer.
+  let name: string | null = null;
+  const fromIdx = lines.findIndex((l) => /^message from .+:$/i.test(l));
+  if (fromIdx >= 0) name = cleanText(lines[fromIdx].replace(/^message from\s+/i, "").replace(/:$/, ""));
+  if (!name) {
+    const about = lines.map((l) => /^more about (.+):$/i.exec(l)).find((x) => x != null);
+    if (about) name = cleanText(about[1]);
+  }
+  if (!name) {
+    const would = lines.map((l) => /^(.{2,60}?) would like\b/i.exec(l)).find((x) => x != null);
+    if (would) name = cleanText(would[1]);
+  }
+  if (!name) name = displayName(input.replyTo);
+
+  // Message: the lines under "Message from <Name>:" up to the next block.
+  let message: string | null = null;
+  if (fromIdx >= 0) {
+    const out: string[] = [];
+    for (const line of lines.slice(fromIdx + 1)) {
+      if (/^more about .+:$/i.test(line) || /^contact information:?$/i.test(line) || /^how was this lead/i.test(line)) break;
+      out.push(line);
+    }
+    const joined = out.join("\n").trim();
+    if (joined) message = joined;
+  }
+  if (!message) warnings.push("could not isolate the message from the body");
+
+  // Phone: only inside the "Contact Information" block, so Realtor.ca's own
+  // footer numbers are never read as the enquirer's.
+  let phone: string | null = null;
+  const contactIdx = lines.findIndex((l) => /^contact information:?$/i.test(l));
+  if (contactIdx >= 0) {
+    for (const line of lines.slice(contactIdx + 1, contactIdx + 8)) {
+      if (/^how was this lead/i.test(line) || /^rate this lead/i.test(line)) break;
+      const p = zumperPhoneLine(line);
+      if (p) {
+        phone = p;
+        break;
+      }
+    }
+  }
+
+  const requestedTimes: string[] = [];
+  const pref = lines.map((l) => /^preferred date\/times? for showing:\s*(.+)$/i.exec(l)).find((x) => x != null);
+  if (pref) requestedTimes.push(pref[1].trim());
+  const plans = lines.map((l) => /^plans to:\s*(.+)$/i.exec(l)).find((x) => x != null);
+
+  if (!email && !phone) return { ok: false, reason: "no_contact_details_found" };
+
+  return {
+    ok: true,
+    lead: {
+      portal: "realtor_ca",
+      kind,
+      name,
+      email,
+      phone,
+      message,
+      unit: null,
+      // The MLS number is NOT put in adId: ad ids are looked up in listing
+      // posts, and a Realtor.ca listing is not one of our tracked ads.
+      adId: null,
+      adUrl: null,
+      requestedTimes,
+      subjectAddress: address,
+      adTitle: null,
+      templateVersion: null,
+      confidence: email && address ? "exact" : "derived",
+      warnings,
+      mlsNumber: mls,
+      plansTo: plans ? plans[1].trim() : null,
+    },
+  };
+}
+
 /**
  * The note stored on the lead. Keeps the renter's own words first, then the
  * facts an operator needs to act, then anything the parser was unsure about.
@@ -905,14 +1079,13 @@ export function parseZumperLeadEmail(input: PortalLeadParseInput): PortalLeadPar
 export function portalLeadNote(lead: ParsedPortalLead): string {
   const parts: string[] = [];
   if (lead.message) parts.push(lead.message);
-  const portalName =
-    lead.portal === "kijiji" ? "Kijiji" : lead.portal === "zumper" ? "Zumper" : "Rentals.ca";
+  const portalName = portalSiteName(lead.portal);
   const kindWord =
     lead.kind === "tour_request"
-      ? lead.portal === "kijiji"
+      ? lead.portal === "kijiji" || lead.portal === "realtor_ca"
         ? "viewing request"
         : "tour request"
-      : lead.portal === "kijiji" || lead.portal === "zumper"
+      : lead.portal === "kijiji" || lead.portal === "zumper" || lead.portal === "realtor_ca"
         ? "inquiry"
         : "tenant lead";
   const facts: string[] = [`Received from ${portalName} (${kindWord}).`];
@@ -922,9 +1095,13 @@ export function portalLeadNote(lead: ParsedPortalLead): string {
     facts.push(
       lead.portal === "kijiji"
         ? `Renter asked to view on: ${lead.requestedTimes.join("; ")}.`
-        : `Requested tour times: ${lead.requestedTimes.join("; ")}.`,
+        : lead.portal === "realtor_ca"
+          ? `Preferred viewing time: ${lead.requestedTimes.join("; ")}.`
+          : `Requested tour times: ${lead.requestedTimes.join("; ")}.`,
     );
   }
+  if (lead.plansTo) facts.push(`Told Realtor.ca they plan to: ${lead.plansTo}.`);
+  if (lead.mlsNumber) facts.push(`MLS number: ${lead.mlsNumber}.`);
   if (lead.moveIn) facts.push(`Move-in date given: ${lead.moveIn}.`);
   if (lead.adTitle) facts.push(`Ad title: ${lead.adTitle}`);
   if (lead.unit) facts.push(`Unit as listed: ${lead.unit}.`);

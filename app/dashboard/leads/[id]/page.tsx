@@ -1,5 +1,9 @@
 import { blockReasonWords, blockedFromEvents, normEmail, type DeliveryRow } from "@/lib/renter-email-block";
 import { bookViewingForRenter } from "./book-actions";
+import { offerTimesToRenter, withdrawOfferedTimes } from "./offer-times-actions";
+import { OFFER_TIMES_MESSAGES, futureOfferSlots, offerReplyText, offerTimesTone } from "@/lib/viewing-offers";
+import { CopyTextButton } from "@/components/copy-text-button";
+import { formatSlotLong } from "@/lib/booking";
 import Link from "next/link";
 import { listingUrl, scrubEmDashes } from "@/lib/email";
 import { notFound } from "next/navigation";
@@ -140,7 +144,7 @@ export default async function LeadDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { apply?: string; qa?: string; text?: string; book?: string; offer?: string; offer_err?: string; resent?: string };
+  searchParams: { apply?: string; qa?: string; text?: string; book?: string; times?: string; offer?: string; offer_err?: string; resent?: string };
 }) {
   const supabase = createClient();
   const { data: lead } = await supabase
@@ -261,6 +265,19 @@ export default async function LeadDetailPage({
   const textBack = !!l.phone && !l.sms_opt_out && !!org && (await orgTextsRenters(org.id));
 
   const timeZone = org?.booking_timezone ?? "America/Toronto";
+  // S823c: the times this renter has been offered and has not picked yet.
+  const { data: timesOfferRow } = await supabase
+    .from("viewing_offers")
+    .select("token, proposed_slots")
+    .eq("lead_id", l.id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const pendingOffer = timesOfferRow as { token: string; proposed_slots: unknown } | null;
+  const offeredSlots = pendingOffer ? futureOfferSlots(pendingOffer.proposed_slots) : [];
+  const offeredLabels = offeredSlots.map((s) => formatSlotLong(s, timeZone));
+  const offerLink = pendingOffer ? `${APP_URL}/showing/offer/${pendingOffer.token}` : "";
   const orgName = org?.name ?? "Vacantless";
   const canApplications = canUseRentalApplications(org?.plan);
   // S758: every account sees the tenancy links (S710 hid them from leasing-only
@@ -733,6 +750,101 @@ export default async function LeadDetailPage({
         >
           {BOOK_MESSAGES[searchParams.book]}
         </div>
+      )}
+      {searchParams.times && OFFER_TIMES_MESSAGES[searchParams.times] && (
+        <div
+          className={`mb-3 rounded-xl border px-4 py-2 text-sm ${
+            offerTimesTone(searchParams.times) === "good"
+              ? "border-green-200 bg-green-50 text-green-800"
+              : "border-amber-200 bg-amber-50 text-amber-800"
+          }`}
+        >
+          {OFFER_TIMES_MESSAGES[searchParams.times]}
+        </div>
+      )}
+      {pendingOffer && (
+        <div className="mb-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-sm">
+          <p className="text-sm font-medium text-gray-900">
+            {offeredLabels.length > 0 ? "Times you offered this renter" : "The times you offered have passed"}
+          </p>
+          {offeredLabels.length > 0 ? (
+            <>
+              <ul className="mt-1 text-sm text-gray-800">
+                {offeredLabels.map((label) => (
+                  <li key={label}>{label}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-gray-600">
+                Nothing is booked until the renter taps one. Replying in a chat or another inbox? Copy the message
+                and paste it there.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <CopyTextButton
+                  value={offerReplyText({
+                    renterName: l.name,
+                    address: l.property?.address ?? null,
+                    whenLabels: offeredLabels,
+                    url: offerLink,
+                  })}
+                  label="Copy the message"
+                />
+                <CopyTextButton value={offerLink} label="Copy the link only" />
+                <form action={withdrawOfferedTimes}>
+                  <input type="hidden" name="lead_id" value={l.id} />
+                  <button type="submit" className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                    Withdraw these times
+                  </button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <p className="mt-1 text-xs text-gray-600">The renter did not pick one. Offer new times below.</p>
+          )}
+        </div>
+      )}
+      {l.property?.id && (
+        <details className="mb-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+          <summary className="cursor-pointer text-sm font-medium text-gray-900">Offer times to this renter</summary>
+          <form action={offerTimesToRenter} className="mt-3 space-y-3">
+            <input type="hidden" name="lead_id" value={l.id} />
+            <p className="text-xs text-gray-600">
+              Pick up to three times you can show the rental. The renter sees only these times, never your
+              calendar, and the one they tap is booked. Your viewing hours do not need to be open.
+            </p>
+            <input
+              type="datetime-local"
+              name="slot"
+              required
+              aria-label="First time"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              type="datetime-local"
+              name="slot"
+              aria-label="Second time, if you have one"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              type="datetime-local"
+              name="slot"
+              aria-label="Third time, if you have one"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            {l.email ? (
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" name="email_renter" value="yes" defaultChecked />
+                Email the times to the renter
+              </label>
+            ) : (
+              <p className="text-xs text-gray-600">
+                No email on file for this renter. After you save, copy the message and send it yourself.
+              </p>
+            )}
+            <button type="submit" className="rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white">
+              {pendingOffer ? "Replace the offered times" : "Offer these times"}
+            </button>
+          </form>
+        </details>
       )}
       {l.property?.id && (
         <details className="mb-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">

@@ -57,6 +57,9 @@ export function portalIngestEnabled(
   if (key === "kijiji") return env.KIJIJI_LEAD_INGEST_ENABLED === "true";
   // Zumper (S701d): dark until a real forwarded delivery has been watched.
   if (key === "zumper") return env.ZUMPER_LEAD_INGEST_ENABLED === "true";
+  // Realtor.ca (S823d): on, because it only ever files an enquiry whose address
+  // is a rental in the account. REALTOR_CA_LEAD_INGEST_ENABLED=false turns it off.
+  if (key === "realtor_ca") return env.REALTOR_CA_LEAD_INGEST_ENABLED !== "false";
   return true;
 }
 
@@ -66,6 +69,9 @@ export const PORTAL_INBOX_LABEL: Record<PortalKey, string> = {
   kijiji: "Kijiji",
   rentals_ca: "Rentals.ca",
   zumper: "Zumper",
+  // Not in PORTAL_INBOX_ORDER on purpose: only an agent has Realtor.ca
+  // enquiries, so the renter-email cards do not ask every landlord for it.
+  realtor_ca: "Realtor.ca",
 };
 
 export type PortalInboxSite = { key: PortalKey; label: string; senders: string[] };
