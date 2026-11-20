@@ -19,6 +19,8 @@ export type DemandInput = {
   renters7: number;
   /** Viewings booked for this rental, created in the last 14 days. */
   booked14: number;
+  /** S823b: viewing times open on the account (weekly or dated, still to come). null/undefined = not known. */
+  openTimes?: number | null;
 };
 
 export type DemandTone = "early" | "quiet" | "not_booking" | "strong" | "steady";
@@ -42,6 +44,17 @@ export function demandCheck(input: DemandInput): DemandCheck {
 
   if (days != null && days < 3 && r14 < 3) {
     return { tone: "early", headline: "Too early to tell", advice: "Check back after 3 days live.", facts };
+  }
+  // S823b: Agile's rental page said "Steady. Renters are coming in and
+  // booking." on a day no viewing time was open and 24 renters were waiting.
+  // With nothing open, nobody can book, whatever the last two weeks show.
+  if (input.openTimes === 0 && r14 > 0) {
+    return {
+      tone: "not_booking",
+      headline: "Renters cannot book",
+      advice: "No viewing times are open. Add times and the renters who asked can pick one.",
+      facts,
+    };
   }
   if (r14 === 0) {
     return {

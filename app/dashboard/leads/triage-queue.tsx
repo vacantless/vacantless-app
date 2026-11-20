@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   followUpStatus,
   followUpLabel,
+  rentalClosesFollowUps,
 } from "@/lib/lead-detail";
 import type { LeadStatus } from "@/lib/pipeline";
 import {
@@ -31,7 +32,7 @@ export type QueueLead = {
   next_action_at: string | null;
   qualified_out: boolean;
   qualify_out_reasons?: string[] | null;
-  property: { address: string } | null;
+  property: { address: string; status?: string | null } | null;
   /** S740: an auto-reply or any outbound email or text already went out. */
   answered?: boolean;
   /** S767: saved from a chat, name only (lib/chat-leads). */
@@ -64,6 +65,7 @@ export function TriageQueue({
       createdAt: l.created_at,
       nowMs,
       answered: l.answered,
+      rentalClosed: rentalClosesFollowUps(l.property?.status),
     }),
   }));
 

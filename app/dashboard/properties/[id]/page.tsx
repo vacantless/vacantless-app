@@ -1077,7 +1077,6 @@ export default async function PropertyDetailPage({
   // S790a: the unit's latest unit progress stage, shown as a chip in the header.
   const unitArchived = Boolean((property as { archived_at?: string | null }).archived_at);
   const latestUnitStage = unitArchived ? undefined : (await latestStages(supabase, p.organization_id, [p.id])).get(p.id);
-  const unitStage = unitArchived ? null : stageChip(latestUnitStage, new Date(nowMs));
   // S789e: how many photos have a touched-up and an original copy, and which shows now.
   const { data: touchRows } = await supabase
     .from("property_photos")
@@ -1123,6 +1122,8 @@ export default async function PropertyDetailPage({
   const liveListingPostCount = postRows.filter(
     (row) => row.status === "live" && Boolean(row.url?.trim()),
   ).length;
+  // S823b: a live ad outranks a before-posting crew tap on the chip.
+  const unitStage = unitArchived ? null : stageChip(latestUnitStage, new Date(nowMs), { liveAds: liveListingPostCount });
   const postCounts = countLeadsByPost(leadRows);
 
   // S723: Rentals.ca free accounts show 3 ads at a time; warn before a 4th.
@@ -1893,6 +1894,7 @@ export default async function PropertyDetailPage({
       renters14: r14.count ?? 0,
       renters7: r7.count ?? 0,
       booked14: b14.count ?? 0,
+      openTimes: availabilityOrg ? availabilityCount ?? 0 : null,
     });
   }
 
@@ -3024,6 +3026,7 @@ export default async function PropertyDetailPage({
         viewings: sinceLive.filter((l) => l.status === "booked" || l.status === "showed" || l.status === "applied" || l.status === "leased").length,
         tenancy: tenancyStatus === "active" || tenancyStatus === "upcoming" ? tenancyStatus : null,
         tracksTenancies,
+        openTimes: availabilityOrg ? availabilityCount ?? 0 : null,
       });
 
   const lifecycle = deriveRentalLifecycle(p.id, {

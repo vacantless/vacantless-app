@@ -6,6 +6,8 @@ import { PageHeader, StatCard } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import {
   buildFunnel,
+  buildRentedSummary,
+  type RentedOutcomeLite,
   buildChannelReport,
   buildPropertyReport,
   filterReportableProperties,
@@ -53,6 +55,7 @@ export default async function ReportsPage({
     { data: propsData },
     { data: feedbackData },
     { data: costsData },
+    { data: rentedData },
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -76,6 +79,13 @@ export default async function ReportsPage({
       .select("id, portal, label, amount_cents, spent_on, note")
       .eq("organization_id", org.id)
       .order("spent_on", { ascending: false }),
+    // S823b: rentals marked rented (one row each time a rental is set Rented).
+    supabase
+      .from("leased_outcomes")
+      .select("leased_at, days_on_market")
+      .eq("organization_id", org.id)
+      .order("leased_at", { ascending: false })
+      .limit(1000),
   ]);
 
   const allLeads = (leadsData ?? []) as LeadLite[];
@@ -119,6 +129,9 @@ export default async function ReportsPage({
   const costFlash = searchParams.cost ? COST_FLASH[searchParams.cost] ?? null : null;
 
   const leasedStep = funnel[funnel.length - 1];
+  const rentedSummary = buildRentedSummary((rentedData ?? []) as RentedOutcomeLite[], startMs);
+  // The larger of the two: a rental marked Rented, or a renter set to Leased.
+  const rentedCount = Math.max(rentedSummary.rented, leasedStep.count);
 
   return (
     <div>
@@ -161,9 +174,13 @@ export default async function ReportsPage({
           icon={<Icons.chat className="h-4 w-4" />}
         />
         <StatCard
-          label="Leased"
-          value={leasedStep.count}
-          hint={`${leasedStep.ofTotal}% of inquiries`}
+          label="Rented"
+          value={rentedCount}
+          hint={
+            rentedSummary.rented > 0
+              ? `${rentedSummary.rented} ${rentedSummary.rented === 1 ? "rental" : "rentals"} marked rented`
+              : `${leasedStep.ofTotal}% of inquiries`
+          }
           icon={<Icons.key className="h-4 w-4" />}
         />
         <StatCard
@@ -174,11 +191,13 @@ export default async function ReportsPage({
         />
         <StatCard
           label="Avg days to lease"
-          value={timing.avgDays == null ? "-" : String(timing.avgDays)}
+          value={timing.avgDays != null ? String(timing.avgDays) : rentedSummary.avgDays != null ? String(rentedSummary.avgDays) : "-"}
           hint={
-            timing.avgDays == null
-              ? "no dated leases yet"
-              : `${timing.withDate} lease${timing.withDate === 1 ? "" : "s"}`
+            timing.avgDays != null
+              ? `${timing.withDate} lease${timing.withDate === 1 ? "" : "s"}`
+              : rentedSummary.avgDays != null
+                ? `days on the market, ${rentedSummary.withDays} ${rentedSummary.withDays === 1 ? "rental" : "rentals"}`
+                : "no dated leases yet"
           }
           icon={<Icons.clock className="h-4 w-4" />}
         />

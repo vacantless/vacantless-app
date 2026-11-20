@@ -49,6 +49,8 @@ export type JourneyInput = {
   tenancy: "upcoming" | "active" | null;
   /** The account keeps tenancies in Vacantless (it has at least one). */
   tracksTenancies: boolean;
+  /** S823b: viewing times open on the account. null/undefined = not known. */
+  openTimes?: number | null;
 };
 
 export type Journey = {
@@ -121,8 +123,12 @@ function nextLine(step: JourneyStep | null, i: JourneyInput): string | null {
     case "renters":
       return "No renters yet. Check the ads are showing.";
     case "viewings":
+      if (i.openTimes === 0) return "No viewing times are open, so renters cannot book. Add viewing times.";
       return "Renters but no viewings yet. Check viewing times are open.";
     case "rented":
+      // S823b: never say viewings are booking on a day nothing is open.
+      if (i.openTimes === 0 && i.status === "available")
+        return "No viewing times are open, so renters cannot book. Add viewing times. Mark it rented when a lease is signed.";
       return "Viewings are booking. Mark it rented when a lease is signed.";
     case "moved_in":
       return "Add the tenancy so rent and the move-in start.";

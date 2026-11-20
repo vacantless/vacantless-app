@@ -42,5 +42,12 @@ ok("no tenancies: viewings -> rented current", nBooking.current === "rented");
 const nCrew = unitJourney({ ...noTrack, status: "available", crewStage: "rented" });
 ok("no tenancies: crew rented gap does not ask for a tenancy", nCrew.gap !== null && !nCrew.gap.includes("tenancy"));
 ok("no tenancies: crew moved_in on leased unit is no gap", unitJourney({ ...noTrack, status: "leased", crewStage: "moved_in" }).gap === null);
+// S823b: no viewing times open changes the Next line, never the steps.
+const nbClosed = unitJourney({ ...base, status: "available", photoCount: 8, hasBasics: true, liveAdCount: 3, renters: 5, viewings: 2, openTimes: 0 });
+ok("no times: still on rented step", nbClosed.current === "rented");
+ok("no times: next does not say booking", !!nbClosed.next && nbClosed.next.startsWith("No viewing times are open") && !nbClosed.next.includes("are booking"));
+ok("times open: next says booking", unitJourney({ ...base, status: "available", photoCount: 8, hasBasics: true, liveAdCount: 3, renters: 5, viewings: 2, openTimes: 4 }).next === booking.next);
+ok("times unknown: unchanged", booking.next === "Viewings are booking. Mark it rented when a lease is signed.");
+ok("no times, no viewings yet", unitJourney({ ...base, status: "available", photoCount: 8, hasBasics: true, liveAdCount: 3, renters: 5, openTimes: 0 }).next === "No viewing times are open, so renters cannot book. Add viewing times.");
 console.log(`test-unit-journey: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

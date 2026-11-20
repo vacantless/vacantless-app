@@ -263,6 +263,9 @@ const STAGE_TONE: Record<Stage, StageTone> = {
 /** Stages that end a turnover: the chip goes away 14 days after them. */
 const FINISHING: readonly Stage[] = ["live", "put_back_up", "rented", "lease_signed", "moved_in"];
 
+/** Stages that come after the turnover work and before the ads go up. */
+const BEFORE_POSTING: Stage[] = ["ready_for_photos", "photographer_booked", "photos_in", "touch_up", "ready_to_post"];
+
 export type LatestStage = { stage: string; at: string; date: string | null; by: string | null };
 export type StageChip = { label: string; detail: string; title: string; tone: StageTone };
 
@@ -281,7 +284,11 @@ export function daysAgoText(at: string, now: Date = new Date()): string {
  * no tap yet, a finished turnover more than 14 days old, or any stage more
  * than 60 days old.
  */
-export function stageChip(latest: LatestStage | null | undefined, now: Date = new Date()): StageChip | null {
+export function stageChip(
+  latest: LatestStage | null | undefined,
+  now: Date = new Date(),
+  opts: { liveAds?: number } = {},
+): StageChip | null {
   if (!latest || !isStage(latest.stage)) return null;
   const stage = latest.stage;
   const t = Date.parse(latest.at);
@@ -289,6 +296,18 @@ export function stageChip(latest: LatestStage | null | undefined, now: Date = ne
   const ageDays = (now.getTime() - t) / (24 * 3600 * 1000);
   if (ageDays > 60) return null;
   if (FINISHING.includes(stage) && ageDays > 14) return null;
+  // S823b: the fact wins over the last tap (same rule as lib/unit-journey).
+  // Agile's Unit 3 read "Ready to post" and Unit 36 "Photos are in" while both
+  // had live ads, because nobody tapped "Ads are up". With a live ad saved, a
+  // before-posting stage shows as "Ads are up".
+  if ((opts.liveAds ?? 0) > 0 && BEFORE_POSTING.includes(stage)) {
+    return {
+      label: STAGE_LABEL.live,
+      detail: "",
+      title: `Ads are up. The last tap was "${STAGE_LABEL[stage]}", ${daysAgoText(latest.at, now)}.`,
+      tone: STAGE_TONE.live,
+    };
+  }
   const label = STAGE_LABEL[stage];
   const dateLine = stageDateLine(stage, latest.date);
   const ago = daysAgoText(latest.at, now);

@@ -393,3 +393,25 @@ export function buildLeaseTiming(leads: LeadLite[]): LeaseTiming {
     avgDays: timing.averageDays,
   };
 }
+
+// S823b: rentals marked rented in the window. Agile's 90-day report said
+// "Leased 0" while two of its rentals were rented: the count needed a renter
+// set to Leased, and an account that signs leases elsewhere never does that.
+// A rental marked Rented writes a leased_outcomes row; count those. Pure.
+export type RentedOutcomeLite = { leased_at: string; days_on_market: number | null };
+export type RentedSummary = { rented: number; avgDays: number | null; withDays: number };
+
+export function buildRentedSummary(outcomes: RentedOutcomeLite[], startMs: number | null): RentedSummary {
+  const inWindow = outcomes.filter((o) => {
+    const t = Date.parse(o.leased_at);
+    return Number.isFinite(t) && (startMs == null || t >= startMs);
+  });
+  const days = inWindow
+    .map((o) => o.days_on_market)
+    .filter((d): d is number => typeof d === "number" && Number.isFinite(d) && d >= 0);
+  return {
+    rented: inWindow.length,
+    withDays: days.length,
+    avgDays: days.length === 0 ? null : Math.round(days.reduce((a, b) => a + b, 0) / days.length),
+  };
+}

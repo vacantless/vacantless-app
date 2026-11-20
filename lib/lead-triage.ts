@@ -12,7 +12,7 @@
 import { needsReplyToday, type LeadStatus } from "./pipeline";
 import type { FollowUpStatus } from "./lead-detail";
 
-export type TriageBucket = "needs_you" | "in_progress" | "gone_quiet" | "closed";
+export type TriageBucket = "needs_you" | "in_progress" | "gone_quiet" | "rental_closed" | "closed";
 
 export type LeadTriage = {
   bucket: TriageBucket;
@@ -32,6 +32,8 @@ export type TriageInput = {
   nowMs?: number;
   /** S740: an auto-reply or any outbound email or text already went out. */
   answered?: boolean;
+  /** S823b: the renter's rental is rented or off the market (lib/lead-detail rentalClosesFollowUps). */
+  rentalClosed?: boolean;
 };
 
 // Bucket bases keep the three groups contiguous when sorting the flat list.
@@ -39,6 +41,7 @@ const BASE: Record<TriageBucket, number> = {
   needs_you: 0,
   in_progress: 100,
   gone_quiet: 150,
+  rental_closed: 180,
   closed: 200,
 };
 
@@ -62,6 +65,14 @@ export function triageLead(input: TriageInput): LeadTriage {
       rank: BASE.closed + (status === "leased" ? 0 : 1),
       reason: null,
     };
+  }
+
+  // S823b: Agile's list held 191 renters under "Working", most of them on
+  // units rented months ago. An open renter whose rental is rented or off the
+  // market is nobody's work today; they get their own group below the rest.
+  // The renter's status is not changed.
+  if (input.rentalClosed) {
+    return { bucket: "rental_closed", rank: BASE.rental_closed, reason: null };
   }
 
   // Needs-you-now, most urgent first: a brand-new inquiry owed a first reply,
@@ -104,6 +115,7 @@ export const TRIAGE_BUCKET_LABEL: Record<TriageBucket, string> = {
   needs_you: "Needs you now",
   in_progress: "Working",
   gone_quiet: "Gone quiet: asked over two weeks ago, never booked",
+  rental_closed: "Asked about a rental that is now rented or off the market",
   closed: "Closed",
 };
 
@@ -112,5 +124,6 @@ export const TRIAGE_BUCKET_ORDER: TriageBucket[] = [
   "needs_you",
   "in_progress",
   "gone_quiet",
+  "rental_closed",
   "closed",
 ];

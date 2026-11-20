@@ -378,8 +378,23 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   const turnoverRows = (turnoverProps ?? []) as { id: string; address: string | null; status: string | null }[];
   const turnoverStages = await latestStages(supabase, org.id, turnoverRows.map((r) => r.id));
   const chipNow = new Date();
+  // S823b: live ads per unit, so a live unit never reads "Ready to post".
+  const { data: turnoverLivePosts } = await supabase
+    .from("listing_posts")
+    .select("property_id, url")
+    .eq("organization_id", org.id)
+    .eq("status", "live")
+    .limit(1000);
+  const turnoverLiveAds = new Map<string, number>();
+  for (const r of (turnoverLivePosts ?? []) as { property_id: string | null; url: string | null }[]) {
+    if (r.property_id && r.url?.trim()) turnoverLiveAds.set(r.property_id, (turnoverLiveAds.get(r.property_id) ?? 0) + 1);
+  }
   const unitsInProgress = turnoverRows
-    .map((r) => ({ id: r.id, address: r.address ?? "A unit", chip: stageChip(turnoverStages.get(r.id), chipNow) }))
+    .map((r) => ({
+      id: r.id,
+      address: r.address ?? "A unit",
+      chip: stageChip(turnoverStages.get(r.id), chipNow, { liveAds: turnoverLiveAds.get(r.id) ?? 0 }),
+    }))
     .filter((u): u is { id: string; address: string; chip: NonNullable<ReturnType<typeof stageChip>> } => u.chip !== null);
 
   // S807: a unit the crew marked "Ready to post" (or "Photos are in") that is

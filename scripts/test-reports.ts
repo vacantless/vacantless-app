@@ -14,6 +14,7 @@ import {
   buildShowingReport,
   buildLeaseTiming,
   buildFeedbackReport,
+  buildRentedSummary,
   UNKNOWN_SOURCE,
   type LeadLite,
   type ShowingLite,
@@ -238,6 +239,20 @@ eq(
   buildFeedbackReport([fb(0), fb(6), fb(3)]).avgRating,
   3,
 );
+
+// S823b: rentals marked rented in the window.
+{
+  const start = Date.parse("2026-08-21T00:00:00Z");
+  const rows = [
+    { leased_at: "2026-11-18T15:00:00Z", days_on_market: 20 },
+    { leased_at: "2026-10-31T15:00:00Z", days_on_market: 31 },
+    { leased_at: "2026-09-24T15:00:00Z", days_on_market: null },
+    { leased_at: "2026-07-01T15:00:00Z", days_on_market: 90 },
+  ];
+  eq("rented in window", buildRentedSummary(rows, start), { rented: 3, withDays: 2, avgDays: 26 });
+  eq("rented all time", buildRentedSummary(rows, null).rented, 4);
+  eq("rented none", buildRentedSummary([], start), { rented: 0, withDays: 0, avgDays: null });
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -120,8 +120,14 @@ const base: TriageInput = {
 
 // Metadata sanity.
 {
-  ok("bucket order has 4", TRIAGE_BUCKET_ORDER.length === 4);
-  ok("gone quiet sits before closed", TRIAGE_BUCKET_ORDER.indexOf("gone_quiet") === TRIAGE_BUCKET_ORDER.indexOf("closed") - 1);
+  ok("bucket order has 5", TRIAGE_BUCKET_ORDER.length === 5);
+  ok("gone quiet, then rental closed, then closed", TRIAGE_BUCKET_ORDER.indexOf("gone_quiet") === TRIAGE_BUCKET_ORDER.indexOf("rental_closed") - 1 && TRIAGE_BUCKET_ORDER.indexOf("rental_closed") === TRIAGE_BUCKET_ORDER.indexOf("closed") - 1);
+  // S823b: open renters on a rented or off-market rental get their own group.
+  ok("rental closed: contacted", triageLead({ status: "contacted", followUp: "none", qualifiedOut: false, rentalClosed: true }).bucket === "rental_closed");
+  ok("rental closed: new is not needs you", triageLead({ status: "new", followUp: "none", qualifiedOut: false, rentalClosed: true }).bucket === "rental_closed");
+  ok("rental closed: overdue is not needs you", triageLead({ status: "contacted", followUp: "overdue", qualifiedOut: false, rentalClosed: true }).bucket === "rental_closed");
+  ok("rental closed: leased stays closed", triageLead({ status: "leased", followUp: "none", qualifiedOut: false, rentalClosed: true }).bucket === "closed");
+  ok("rental open: unchanged", triageLead({ status: "contacted", followUp: "none", qualifiedOut: false, rentalClosed: false }).bucket === "in_progress");
   ok(
     "every bucket has a label",
     TRIAGE_BUCKET_ORDER.every((b) => TRIAGE_BUCKET_LABEL[b].length > 0),

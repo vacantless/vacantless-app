@@ -507,7 +507,7 @@ export default async function PropertiesPage({
         statusLabel,
         statusTone,
         cover: coverByProperty.get(p.id) ?? null,
-        stage: stageChip(stageByProperty.get(p.id), chipNow),
+        stage: stageChip(stageByProperty.get(p.id), chipNow, { liveAds: livePostCount }),
         journey: archivedView
           ? null
           : (() => {
@@ -524,6 +524,7 @@ export default async function PropertiesPage({
                 viewings: ls.filter((l) => ["booked", "showed", "applied", "leased"].includes(l.status)).length,
                 tenancy: journeyTenancy.get(p.id) ?? null,
                 tracksTenancies,
+                openTimes: availabilityCount ?? 0,
               });
             })(),
         canHardDelete: hardDeletable(p.status, leadCount, tenancyCount, postCount),

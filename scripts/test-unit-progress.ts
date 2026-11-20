@@ -96,5 +96,13 @@ ok("photographer still taps only Photos are in", tapsFor("photographer", null).j
 ok("no live ads, no line", advertisedLine([]) === "" && advertisedLine(null) === "");
 ok("one site", advertisedLine(["zumper"]) === "Advertised on Zumper.");
 ok("three sites in order, no repeats", advertisedLine(["rentals_ca", "zumper", "facebook", "zumper"]) === "Advertised on Rentals.ca, Zumper and Facebook Marketplace.");
+// S823b: a live ad outranks a before-posting tap on the chip.
+const lv = stageChip({ stage: "ready_to_post", at: ago(1), date: null, by: "Narayan" }, n2, { liveAds: 4 });
+ok("ready to post with live ads reads Ads are up", lv?.label === "Ads are up" && lv.detail === "" && lv.tone === stageChip({ stage: "live", at: ago(1), date: null, by: null }, n2)?.tone);
+ok("title keeps the last tap", lv?.title === 'Ads are up. The last tap was "Ready to post", yesterday.');
+ok("photos in with live ads reads Ads are up", stageChip({ stage: "photos_in", at: ago(3), date: null, by: null }, n2, { liveAds: 1 })?.label === "Ads are up");
+ok("no live ads: tap shows as before", stageChip({ stage: "ready_to_post", at: ago(1), date: null, by: null }, n2, { liveAds: 0 })?.label === "Ready to post");
+ok("turnover work is not overridden", stageChip({ stage: "being_cleaned", at: ago(1), date: null, by: null }, n2, { liveAds: 2 })?.label === "Being cleaned");
+ok("rented is not overridden", stageChip({ stage: "waiting_deposit", at: ago(1), date: null, by: null }, n2, { liveAds: 2 })?.label === "Waiting for deposit");
 console.log(`unit-progress: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
