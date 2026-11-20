@@ -50,7 +50,8 @@ ok("the checklist is not complete yet", !live.isComplete && live.shouldShowCard)
 const connect = fresh.steps.find((s) => s.key === "connect_sites")!;
 ok("connect step says one site is enough", connect.description.startsWith("One site is enough to start."));
 const phone = fresh.steps.find((s) => s.key === "phone_replies")!;
-ok("phone step names Android", /On Android, installing the app is enough\./.test(phone.description) && !/Marketplace/.test(phone.description));
+// S824d: one QR scan sets up either phone.
+ok("phone step names Android", /iPhone or Android/.test(phone.description) && /Show a code for my phone/.test(phone.description) && !/Marketplace/.test(phone.description));
 
 const gs = read("app/dashboard/(wizard)/getting-started/page.tsx");
 ok("page has Do these first and Later", gs.includes("Do these first") && gs.includes("Later, when you are ready"));

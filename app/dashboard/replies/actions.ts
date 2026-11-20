@@ -8,7 +8,9 @@ import { roleCan } from "@/lib/roles";
 import { cleanRenterName } from "@/lib/chat-leads";
 import { addQuickReplyRenter } from "@/lib/chat-leads-server";
 import { createClient } from "@/lib/supabase/server";
-import { hashSendKey, makeSendKey, sendKeyHint } from "@/lib/send-shortcut";
+import { createPhoneSetupLink, makeSendKeyFor } from "@/lib/phone-setup-server";
+import { PHONE_SETUP_MINUTES, phoneSetupUrl } from "@/lib/phone-setup";
+import { qrSvg } from "@/lib/qr-svg";
 
 // S767 (PLAN-S766 item A): "Add this renter" on Quick replies. The phone has
 // no helper, so the landlord adds the chat renter by name. Same rules as the
@@ -55,21 +57,9 @@ export async function makeSendToVacantlessKey(): Promise<{ ok: boolean; key?: st
   if (!org || !admin || !user || !roleCan(role, "manage_leads")) {
     return { ok: false, message: "Your sign-in can't add renters in this account." };
   }
-  const now = new Date().toISOString();
-  await admin
-    .from("capture_keys")
-    .update({ revoked_at: now })
-    .eq("user_id", user.id)
-    .eq("organization_id", org.id)
-    .is("revoked_at", null);
-  const key = makeSendKey();
-  const { error } = await admin.from("capture_keys").insert({
-    organization_id: org.id,
-    user_id: user.id,
-    key_hash: hashSendKey(key),
-    key_hint: sendKeyHint(key),
-  });
-  if (error) return { ok: false, message: "We could not make a key. Try again." };
+  // S824d: shared with the phone setup page (lib/phone-setup-server).
+  const key = await makeSendKeyFor(admin, org.id, user.id);
+  if (!key) return { ok: false, message: "We could not make a key. Try again." };
   revalidatePath("/dashboard/replies");
   return { ok: true, key };
 }
@@ -90,4 +80,28 @@ export async function turnOffSendToVacantlessKey(): Promise<{ ok: boolean }> {
     .is("revoked_at", null);
   revalidatePath("/dashboard/replies");
   return { ok: true };
+}
+
+const PHONE_APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/+$/, "");
+
+/**
+ * S824d: a QR code the phone scans to set itself up (sign in, and on iPhone
+ * the Send to Vacantless key). Works once, for PHONE_SETUP_MINUTES.
+ */
+export async function showPhoneSetupCode(): Promise<{ ok: boolean; url?: string; svg?: string; minutes?: number; message?: string }> {
+  const org = await getCurrentOrg();
+  const role = await getCurrentRole();
+  const admin = createAdminClient();
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!org || !admin || !user || !roleCan(role, "manage_leads")) {
+    return { ok: false, message: "Your sign-in can't add renters in this account." };
+  }
+  const token = await createPhoneSetupLink(admin, org.id, user.id);
+  if (!token) return { ok: false, message: "We could not make a code. Try again." };
+  const url = phoneSetupUrl(PHONE_APP_URL, token);
+  const svg = await qrSvg(url, { width: 200 });
+  return { ok: true, url, svg: svg ?? undefined, minutes: PHONE_SETUP_MINUTES };
 }

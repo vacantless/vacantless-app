@@ -170,7 +170,7 @@ const STEP_DEFS: StepDef[] = [
     group: "later",
     label: "Answer renters from your phone",
     description:
-      "Renters on Facebook write in Messenger, mostly on your phone. Open Quick replies on your phone and add it to your home screen. On iPhone, also add the Send to Vacantless Shortcut. On Android, installing the app is enough. Share a chat screenshot, and it saves the renter and gives you your reply. Done when your first renter is saved this way.",
+      "Renters on Facebook write in Messenger, mostly on your phone. Open Quick replies and tap Show a code for my phone. Scan it with your phone. One tap sets up iPhone or Android, with no sign-in. Then share a chat screenshot. It saves the renter and gives you your reply. Done when your first renter is saved this way.",
     href: "/dashboard/replies?from=getting-started#send-shortcut",
     cta: "Set up my phone",
   },
