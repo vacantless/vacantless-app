@@ -1,5 +1,6 @@
 // Unit tests for the pure lead-detail logic.
 // Run: npx tsx scripts/test-lead-detail.ts
+import { readFileSync } from "node:fs";
 import {
   resolveLeadSource,
   noSuitableTimeBadge,
@@ -301,5 +302,13 @@ ok("open date drops on a rented rental", openFollowUpDate("2026-09-14", "leased"
 ok("open date kept on a live rental", openFollowUpDate("2026-09-14", "available") === "2026-09-14" && openFollowUpDate(null, "available") === null);
 
 // ---------------------------------------------------------------------------
+// S824c: the renter page checks the rental has times before it links to them.
+{
+  const page = readFileSync("app/dashboard/leads/[id]/page.tsx", "utf8");
+  ok("s824c reads times", page.includes("await rentalHasViewingTimes(supabase, l.property.id)"));
+  ok("s824c no booking link when there is no time to pick", page.includes("l.property?.id && rentalHasTimes ? listingUrl(l.property.id) : null"));
+  ok("s824c Offer times opens for a renter who could not book", page.includes("<details open={openOfferCard}"));
+  ok("s824c the old empty line is gone", !page.includes("If\n          nothing is bookable, check"));
+}
 console.log(`\nlead-detail: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

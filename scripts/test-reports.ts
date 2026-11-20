@@ -7,6 +7,7 @@ import {
   windowStartMs,
   filterByWindow,
   buildFunnel,
+  withRentedStep,
   buildChannelReport,
   buildPropertyReport,
   isReportableRental,
@@ -254,5 +255,25 @@ eq(
   eq("rented none", buildRentedSummary([], start), { rented: 0, withDays: 0, avgDays: null });
 }
 
+// S824b: the funnel's last bar matches the Rented card.
+{
+
+  const base = [
+    { key: "leads", label: "Inquiries", count: 10, ofTotal: 100, ofPrev: 100 },
+    { key: "contacted", label: "Contacted", count: 4, ofTotal: 40, ofPrev: 40 },
+    { key: "booked", label: "Booked", count: 2, ofTotal: 20, ofPrev: 50 },
+    { key: "showed", label: "Showed", count: 0, ofTotal: 0, ofPrev: 0 },
+    { key: "leased", label: "Leased", count: 0, ofTotal: 0, ofPrev: 0 },
+  ];
+  const out = withRentedStep(base, 1);
+  eq("s824b length", out.length, 5);
+  // Nothing reached Showed, so "% of showed" stays 0, like every other bar.
+  eq("s824b rented bar", out[4], { key: "leased", label: "Rented", count: 1, ofTotal: 10, ofPrev: 0 });
+  const showed = base.map((st) => (st.key === "showed" ? { ...st, count: 2 } : st));
+  eq("s824b rented of showed", withRentedStep(showed, 1)[4].ofPrev, 50);
+  eq("s824b capped at 100", withRentedStep(showed, 5)[4].ofPrev, 100);
+  eq("s824b input unchanged", base[4].count, 0);
+  eq("s824b zero", withRentedStep(base, 0)[4].count, 0);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

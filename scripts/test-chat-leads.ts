@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import {
+  askedAgainNote,
   CHAT_LEAD_NOTE_HELPER,
   chatLeadNoteManual,
   chatLeadSource,
@@ -183,6 +184,19 @@ if (existsSync("../vacantless-extension/app-bridge.js")) {
   assert.ok(req.slice(0, 3000).includes("startRentalApplication("), "the request uses the shared starter");
   const starter = readFileSync("lib/rental-application-server.ts", "utf8");
   assert.ok(starter.includes('from("messages").insert'), "an application request writes an activity row");
+}
+
+
+// S824a: a renter already saved keeps their new question as a page note.
+{
+  assert.equal(askedAgainNote("  Is   parking included? "), "Asked again, sent from the phone share menu: Is parking included?");
+  assert.equal(askedAgainNote(""), null);
+  assert.equal(askedAgainNote(null), null);
+  const server = readFileSync("lib/chat-leads-server.ts", "utf8");
+  assert.ok(server.includes("if (input.question) await addAskedAgainNote(admin, input.orgId, existing.id, input.question);"));
+  const share = readFileSync("lib/send-shortcut-server.ts", "utf8");
+  assert.ok(share.includes("addAskedAgainNote(admin, owner.orgId, hit.id, question)"), "the contact match keeps the question");
+  assert.ok(share.includes("question: question || null,"), "the chat-name path passes the question");
 }
 
 console.log("PASS test-chat-leads");

@@ -51,6 +51,7 @@ import { orgTextsRenters } from "@/lib/sms";
 import { displayCanadianNumber } from "@/lib/texting-setup-emails";
 import { buildAiReplyDraft } from "@/lib/ai-reply";
 import { loadPropertyKnowledge } from "@/lib/property-qa";
+import { rentalHasViewingTimes } from "@/lib/rental-viewing-times";
 import { PropertyQaPanel } from "../property-qa-panel";
 import {
   isFeatureEnabledForOrg,
@@ -301,7 +302,12 @@ export default async function LeadDetailPage({
   const followText = followClosed ? "Closed: this rental is no longer on the market." : followUpLabel(l.next_action_at, today);
   const quickStages = suggestedNextStageOptions(l.status);
   // S724: every draft carries the rental page so the renter can book alone.
-  const bookingUrl = l.property?.id ? listingUrl(l.property.id) : null;
+  // S824c: but only when that page has a time to pick (same check as the
+  // Marketplace replies, S743); otherwise the draft offers to share times.
+  const rentalHasTimes = l.property?.id ? await rentalHasViewingTimes(supabase, l.property.id) : true;
+  const bookingUrl = l.property?.id && rentalHasTimes ? listingUrl(l.property.id) : null;
+  // S824c: open the Offer times card for a renter who could not book.
+  const openOfferCard = !pendingOffer && (l.no_suitable_time === true || !rentalHasTimes);
   const replyDraft = buildReplyDraft(l, orgName, bookingUrl);
   const canUseAiReply =
     org != null &&
@@ -803,7 +809,7 @@ export default async function LeadDetailPage({
         </div>
       )}
       {l.property?.id && (
-        <details className="mb-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+        <details open={openOfferCard} className="mb-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
           <summary className="cursor-pointer text-sm font-medium text-gray-900">Offer times to this renter</summary>
           <form action={offerTimesToRenter} className="mt-3 space-y-3">
             <input type="hidden" name="lead_id" value={l.id} />
@@ -872,15 +878,18 @@ export default async function LeadDetailPage({
       )}
       {showings.length === 0 ? (
         <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
-          No viewings booked yet. Renters book from your listing page. If
-          nothing is bookable, check{" "}
-          <Link
-            href="/dashboard/availability"
-            className="font-medium text-brand hover:underline"
-          >
-            Set viewing times
-          </Link>
-          .
+          {rentalHasTimes ? (
+            <>No viewings booked yet. Renters book from your listing page, or offer this renter a few times above.</>
+          ) : (
+            <>
+              No viewings booked yet. This rental has no viewing times open, so offer this renter a few times
+              above, or{" "}
+              <Link href="/dashboard/availability" className="font-medium text-brand hover:underline">
+                set viewing times
+              </Link>
+              .
+            </>
+          )}
         </div>
       ) : (
         <>

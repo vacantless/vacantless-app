@@ -89,6 +89,8 @@ export function sendResultLine(input: {
   outcome: "saved" | "exists" | "no_renter" | "unreadable" | "not_available" | "failed";
   name?: string | null;
   rental?: string | null;
+  /** S824a: the renter was already saved and their new question was added. */
+  questionAdded?: boolean;
 }): string {
   const who = input.name?.trim() || "This renter";
   const where = input.rental?.trim() ? ` for ${input.rental.trim()}` : "";
@@ -98,7 +100,9 @@ export function sendResultLine(input: {
         ? `Saved ${who}${where} in Renters.`
         : `Saved ${who} in Renters. We could not tell which rental, so pick it on their page.`;
     case "exists":
-      return `${who} is already in Renters${where}.`;
+      return input.questionAdded
+        ? `${who} is already in Renters${where}. Their new question is on their page.`
+        : `${who} is already in Renters${where}.`;
     case "not_available":
       return `${input.rental || "That rental"} is not available, so no renter was added.`;
     case "no_renter":

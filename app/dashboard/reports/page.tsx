@@ -6,6 +6,7 @@ import { PageHeader, StatCard } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import {
   buildFunnel,
+  withRentedStep,
   buildRentedSummary,
   type RentedOutcomeLite,
   buildChannelReport,
@@ -132,6 +133,8 @@ export default async function ReportsPage({
   const rentedSummary = buildRentedSummary((rentedData ?? []) as RentedOutcomeLite[], startMs);
   // The larger of the two: a rental marked Rented, or a renter set to Leased.
   const rentedCount = Math.max(rentedSummary.rented, leasedStep.count);
+  // S824b: the funnel's last bar counts what the Rented card counts.
+  const funnelShown = withRentedStep(funnel, rentedCount);
 
   return (
     <div>
@@ -206,7 +209,7 @@ export default async function ReportsPage({
       {/* Funnel */}
       <Section
         title="Inquiry to lease"
-        subtitle="Each inquiry is counted at the furthest stage it reached. Booked means the inquiry got to the Booked stage (whether it self-booked online or you moved it there), not the number of viewings on your calendar. For actual viewings, see the Viewings section below."
+        subtitle="Each inquiry is counted at the furthest stage it reached; Rented also counts rentals you marked rented. Booked means the inquiry got to the Booked stage (whether it self-booked online or you moved it there), not the number of viewings on your calendar. For actual viewings, see the Viewings section below."
       >
         {funnel[0].count === 0 ? (
           <Empty>
@@ -215,9 +218,9 @@ export default async function ReportsPage({
           </Empty>
         ) : (
           <div className="space-y-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            {funnel.map((step, i) => {
+            {funnelShown.map((step, i) => {
               const widthPct = funnel[0].count && step.count
-                ? Math.max(4, Math.round((step.count / funnel[0].count) * 100))
+                ? Math.min(100, Math.max(4, Math.round((step.count / funnel[0].count) * 100)))
                 : 0;
               return (
                 <div key={step.key} className="flex items-end gap-3">
@@ -230,7 +233,7 @@ export default async function ReportsPage({
                       {i > 0 && (
                         <span className="truncate text-xs text-gray-500">
                           {step.ofTotal}% of inquiries
-                          {i > 1 && ` · ${step.ofPrev}% of ${funnel[i - 1].label.toLowerCase()}`}
+                          {i > 1 && ` · ${step.ofPrev}% of ${funnelShown[i - 1].label.toLowerCase()}`}
                         </span>
                       )}
                     </div>

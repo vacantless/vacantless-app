@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizePhoneE164 } from "@/lib/sms";
 import { normalizeEmail } from "@/lib/persons";
 import { roleCan } from "@/lib/roles";
-import { saveChatRenter } from "@/lib/chat-leads-server";
+import { addAskedAgainNote, saveChatRenter } from "@/lib/chat-leads-server";
 import { cleanRenterName, CHAT_LEAD_MATCH_DAYS } from "@/lib/chat-leads";
 import { openRentalsForOrg, readScreenshotWithAi } from "@/lib/ai-enquiry-server";
 import { hashSendKey, nextWindow, planSend, sendResultLine, sendSource } from "@/lib/send-shortcut";
@@ -98,8 +98,13 @@ export async function saveRenterFromShortcut(
       sourceDetail: null,
       listingPostId: null,
       note,
+      question: question || null,
     });
-    return { line: sendResultLine({ outcome: r, name, rental: rentalLabel }), leadId: null, ...ctx };
+    return {
+      line: sendResultLine({ outcome: r, name, rental: rentalLabel, questionAdded: r === "exists" && !!question }),
+      leadId: null,
+      ...ctx,
+    };
   }
 
   if (plan.kind === "contact") {
@@ -115,7 +120,15 @@ export async function saveRenterFromShortcut(
         .or(ors)
         .limit(1);
       const hit = (dupes as { id: string }[] | null)?.[0];
-      if (hit) return { line: sendResultLine({ outcome: "exists", name, rental: rentalLabel }), leadId: hit.id, ...ctx };
+      if (hit) {
+        // S824a: the renter is already saved; keep the new question on their page.
+        const added = question ? await addAskedAgainNote(admin, owner.orgId, hit.id, question) : false;
+        return {
+          line: sendResultLine({ outcome: "exists", name, rental: rentalLabel, questionAdded: added }),
+          leadId: hit.id,
+          ...ctx,
+        };
+      }
     }
   }
 

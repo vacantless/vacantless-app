@@ -3,6 +3,7 @@ import { localDateString } from "@/lib/leasing-snapshot";
 import {
   CHAT_LEAD_MATCH_DAYS,
   CHAT_LEAD_NOTE_HELPER,
+  askedAgainNote,
   chatLeadNoteManual,
   chatLeadSource,
   cleanRenterName,
@@ -57,6 +58,44 @@ async function recentLeads(admin: SupabaseClient, orgId: string, propertyId: str
 }
 
 /**
+ * S824a: put a renter's new question on their page as an activity note.
+ * Skips an empty question and one already noted word for word. Returns true
+ * when a note was added.
+ */
+export async function addAskedAgainNote(
+  admin: SupabaseClient,
+  orgId: string,
+  leadId: string,
+  question: string,
+): Promise<boolean> {
+  const body = askedAgainNote(question);
+  if (!body) return false;
+  try {
+    const { data: same } = await admin
+      .from("messages")
+      .select("id")
+      .eq("organization_id", orgId)
+      .eq("lead_id", leadId)
+      .eq("channel", "note")
+      .eq("body", body)
+      .limit(1);
+    if ((same ?? []).length > 0) return false;
+    const { error } = await admin.from("messages").insert({
+      organization_id: orgId,
+      lead_id: leadId,
+      channel: "note",
+      direction: "outbound",
+      body,
+    });
+    if (error) console.warn(`[asked-again] lead ${leadId}: ${error.message}`);
+    return !error;
+  } catch (e) {
+    console.warn(`[asked-again] lead ${leadId}: ${e instanceof Error ? e.message : String(e)}`);
+    return false;
+  }
+}
+
+/**
  * Save one chat renter on an available rental unless the same renter already
  * has an open lead there. Returns "saved", "exists", "not_available" or "failed".
  */
@@ -70,6 +109,8 @@ export async function saveChatRenter(
     sourceDetail: string | null;
     listingPostId: string | null;
     note: string;
+    /** S824a: kept on the existing renter's page when they are already saved. */
+    question?: string | null;
   },
 ): Promise<"saved" | "exists" | "not_available" | "failed"> {
   const name = cleanRenterName(input.name);
@@ -84,7 +125,11 @@ export async function saveChatRenter(
   if (!p || p.archived_at || p.status !== "available") return "not_available";
   const leads = await recentLeads(admin, input.orgId, input.propertyId);
   if (!leads) return "failed";
-  if (findExistingChatLead(leads, { propertyId: input.propertyId, name })) return "exists";
+  const existing = findExistingChatLead(leads, { propertyId: input.propertyId, name });
+  if (existing) {
+    if (input.question) await addAskedAgainNote(admin, input.orgId, existing.id, input.question);
+    return "exists";
+  }
   const { error } = await admin.from("leads").insert({
     organization_id: input.orgId,
     property_id: input.propertyId,

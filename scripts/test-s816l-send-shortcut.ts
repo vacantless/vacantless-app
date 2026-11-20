@@ -136,4 +136,9 @@ ok(replySiteKey("Kijiji") === "kijiji" && replySiteKey("texts") === "direct", "o
   const pageSrc = readFileSync("app/dashboard/replies/page.tsx", "utf8");
   ok(pageSrc.includes("loadReplyKitCards("), "Quick replies and the Shortcut share one loader");
 }
+// S824a: the phone line says the new question was kept.
+assert.equal(
+  sendResultLine({ outcome: "exists", name: "Maria", rental: "833 Pillette Rd, Unit 3", questionAdded: true }),
+  "Maria is already in Renters for 833 Pillette Rd, Unit 3. Their new question is on their page.",
+);
 console.log(`s816l send shortcut: ${n} passed, 0 failed`);

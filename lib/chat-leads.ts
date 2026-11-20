@@ -187,3 +187,13 @@ export function mergedChatNote(placeholderNotes: string | null, day: string): st
     ? `First wrote in the chat on ${day}, added from Quick replies.`
     : `First wrote in the Marketplace chat on ${day}.`;
 }
+
+/**
+ * S824a: a renter already in Renters sent again from the phone share menu.
+ * Their new question goes on their page as an activity note (dated by the
+ * note itself) instead of being dropped. Null when there is no question.
+ */
+export function askedAgainNote(question: string | null | undefined): string | null {
+  const q = (question ?? "").replace(/\s+/g, " ").trim().slice(0, 400);
+  return q ? `Asked again, sent from the phone share menu: ${q}` : null;
+}

@@ -138,6 +138,27 @@ export function buildFunnel(leads: LeadLite[]): FunnelStep[] {
   });
 }
 
+/**
+ * S824b: the funnel's last bar matches the Rented card at the top of Reports.
+ * The card counts the larger of rentals marked Rented and renters set to
+ * Leased; the bar used only renters, so it could read 0 under a card of 1.
+ * Percentages stop at 100 (a rental can be marked Rented with no renter moved).
+ */
+export function withRentedStep(funnel: FunnelStep[], rentedCount: number): FunnelStep[] {
+  if (funnel.length < 2) return funnel;
+  const total = funnel[0].count;
+  const prev = funnel[funnel.length - 2].count;
+  const count = Math.max(rentedCount, funnel[funnel.length - 1].count);
+  const last: FunnelStep = {
+    key: "leased",
+    label: "Rented",
+    count,
+    ofTotal: Math.min(100, pct(count, total)),
+    ofPrev: Math.min(100, pct(count, prev)),
+  };
+  return [...funnel.slice(0, -1), last];
+}
+
 // ---------------------------------------------------------------------------
 // By channel (lead source).
 // ---------------------------------------------------------------------------
