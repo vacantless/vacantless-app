@@ -84,4 +84,12 @@ const page = readFileSync("app/showing/offer/[token]/page.tsx", "utf8");
 assert.ok(!page.includes("/r/"), "no link to the open calendar from an offer");
 assert.ok(page.includes("acceptOfferedTime"));
 
+// S825b: the three time boxes carry visible names, not only screen-reader labels.
+{
+  const leadPage = readFileSync("app/dashboard/leads/[id]/page.tsx", "utf8");
+  for (const lab of ["First time", "Second time, if you have one", "Third time, if you have one"]) {
+    assert.ok(leadPage.includes(`text-gray-700">${lab}</span>`), `visible label: ${lab}`);
+  }
+}
+
 console.log("ok test-viewing-offers");

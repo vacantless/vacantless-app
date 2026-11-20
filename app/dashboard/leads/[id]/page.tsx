@@ -817,25 +817,31 @@ export default async function LeadDetailPage({
               Pick up to three times you can show the rental. The renter sees only these times, never your
               calendar, and the one they tap is booked. Your viewing hours do not need to be open.
             </p>
-            <input
-              type="datetime-local"
-              name="slot"
-              required
-              aria-label="First time"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="datetime-local"
-              name="slot"
-              aria-label="Second time, if you have one"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="datetime-local"
-              name="slot"
-              aria-label="Third time, if you have one"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-700">First time</span>
+              <input
+                type="datetime-local"
+                name="slot"
+                required
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-700">Second time, if you have one</span>
+              <input
+                type="datetime-local"
+                name="slot"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-gray-700">Third time, if you have one</span>
+              <input
+                type="datetime-local"
+                name="slot"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </label>
             {l.email ? (
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" name="email_renter" value="yes" defaultChecked />
