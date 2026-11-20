@@ -297,6 +297,15 @@ export default async function AutomationsPage({
         subtitle="Choose which reminders and updates send automatically, who receives them, and what they say."
       />
 
+      {/* S824e: the full list, by who gets it, with timing and texts. */}
+      <Link
+        href="/dashboard/automations/every-message"
+        className="mt-6 block rounded-xl border border-brand bg-white px-4 py-3 text-sm shadow-sm hover:bg-gray-50"
+      >
+        <span className="font-medium text-gray-900">See every message we send</span>
+        <span className="block text-gray-600">Renters, tenants, agents, trades and you. When each goes out, by email or text.</span>
+      </Link>
+
       <div className="mt-6 space-y-6">
         {errMsg && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
@@ -444,6 +453,7 @@ export default async function AutomationsPage({
                 return (
                   <form
                     key={event.key}
+                    id={`event-${event.key}`}
                     action={saveNotificationSetting}
                     className={[
                       "rounded-xl border bg-white p-5 shadow-sm",

@@ -72,6 +72,11 @@ const SURFACES: Surface[] = [
   { file: "app/dashboard/replies/page.tsx", mode: "ui" },
   { file: "app/dashboard/replies/reply-kit.tsx", mode: "ui" },
   { file: "app/dashboard/replies/send-shortcut-card.tsx", mode: "ui" },
+  // S824d+e: phone setup by QR code, and every message we send.
+  { file: "app/phone/[token]/phone-setup.tsx", mode: "ui" },
+  { file: "lib/phone-setup.ts", mode: "ui" },
+  { file: "app/dashboard/automations/every-message/page.tsx", mode: "ui" },
+  { file: "lib/message-catalog.ts", mode: "ui" },
   { file: "lib/send-shortcut.ts", mode: "ui" },
   { file: "lib/send-shortcut-copy.ts", mode: "ui" },
   // S760: the one-time "Connect your rental sites" step.
