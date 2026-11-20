@@ -6,6 +6,7 @@ import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { postedResultsNextSteps, postedResultsSites } from "@/lib/posted-results";
 import { resultsEmail, resultsEmailDecision, type ResultsEmailPost } from "@/lib/posted-results-email";
 import { claimNull } from "@/lib/claim-stamp";
+import { loadExtraRecipients, withExtras } from "@/lib/message-recipients-server";
 
 // S737 (review item 2): email the landlord the list of live ads once per
 // rental turn, two hours after the first ad went live (lib/posted-results-email).
@@ -122,12 +123,15 @@ export async function GET(req: NextRequest) {
       .select("user_id")
       .eq("organization_id", p.organization_id)
       .eq("role", "owner_admin");
-    const seen = new Set<string>();
+    const ownerEmails: string[] = [];
     for (const m of (members ?? []) as { user_id: string }[]) {
       const { data } = await getUserByIdCached(admin, m.user_id);
-      const to = data.user?.email?.trim().toLowerCase();
-      if (!to || seen.has(to)) continue;
-      seen.add(to);
+      const e = data.user?.email?.trim().toLowerCase();
+      if (e) ownerEmails.push(e);
+    }
+    // S824j: plus the addresses added under "Also send to".
+    const recipients = withExtras(ownerEmails, await loadExtraRecipients(admin, p.organization_id, "you-posted-results"));
+    for (const to of recipients) {
       const res = await sendNotificationEmail({
         to_email: to,
         subject: mail.subject,

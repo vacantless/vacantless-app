@@ -13,6 +13,7 @@ import {
   loadOrganizationFeatureFlags,
 } from "@/lib/feature-entitlements";
 import { sendIncidentReportNotification } from "@/lib/email";
+import { loadExtraRecipients, withExtras } from "@/lib/message-recipients-server";
 import { emergencyAlertText, emergencyTextTarget, type EmergencyKind } from "@/lib/tenant-emergency";
 import { normalizePhoneE164, sendSms } from "@/lib/sms";
 import { orgOwnSmsNumber } from "@/lib/org-sms-numbers";
@@ -92,10 +93,11 @@ export async function notifyOperatorsOfNewReport(
     members.push({ role: m.role, email: u?.user?.email ?? null });
   }
 
-  const recipients = resolveIncidentNotifyEmails(members, [
-    org.reply_to_email,
-    org.public_contact_email,
-  ]).slice(0, MAX_NOTIFY_RECIPIENTS);
+  // S824j: plus the addresses added under "Also send to".
+  const recipients = withExtras(
+    resolveIncidentNotifyEmails(members, [org.reply_to_email, org.public_contact_email]).slice(0, MAX_NOTIFY_RECIPIENTS),
+    await loadExtraRecipients(admin, organizationId, "you-incident-report"),
+  );
   if (recipients.length === 0) return;
 
   await Promise.allSettled(

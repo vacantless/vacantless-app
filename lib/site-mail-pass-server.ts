@@ -4,6 +4,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getUserByIdCached } from "./auth-email-cache";
+import { loadExtraRecipients, withExtras } from "./message-recipients-server";
 import { sendSiteMailCopy } from "./email";
 import { linkOnSite, siteConfirmLink, siteMailCopyLead, siteMailCopySubject } from "./site-mail-pass";
 
@@ -95,7 +96,9 @@ export async function passSiteMailToOwners(
     }
     const fallback = (org as { reply_to_email: string | null } | null)?.reply_to_email?.trim().toLowerCase();
     if (emails.length === 0 && fallback) emails.push(fallback);
-    const to = emails.slice(0, MAX_COPIES);
+    // S824j: plus "Also send to" addresses, never on a closed account.
+    const extras = closedBy ? [] : await loadExtraRecipients(admin, opts.orgId, "you-site-mail");
+    const to = withExtras(emails.slice(0, MAX_COPIES), extras);
     const results = await Promise.allSettled(
       to.map((email) =>
         sendSiteMailCopy({

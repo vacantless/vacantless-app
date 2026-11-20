@@ -15,12 +15,14 @@ import {
   eventGoesTo,
   eventGroup,
   eventIsOn,
+  EXTRA_RECIPIENT_MESSAGE_IDS,
   isDraftOnlyEvent,
+  PHONE_LINKS,
   type CatalogMessage,
   type MessageGroup,
   type MessageOrgSwitch,
 } from "@/lib/message-catalog";
-import { saveMessageSwitch } from "./actions";
+import { saveExtraRecipients, saveMessageSwitch } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Every message we send", robots: { index: false, follow: false } };
@@ -70,7 +72,7 @@ const STATE_CLASS: Record<State, string> = {
 export default async function EveryMessagePage({
   searchParams,
 }: {
-  searchParams: { saved?: string; error?: string };
+  searchParams: { saved?: string; error?: string; row?: string };
 }) {
   const org = await getCurrentOrg();
   if (!org) redirect("/login?next=/dashboard/automations/every-message");
@@ -93,6 +95,15 @@ export default async function EveryMessagePage({
     .eq("organization_id", org.id);
   const settingByKey = new Map<string, { enabled: boolean }>();
   for (const r of (settingRows ?? []) as { event_key: string; enabled: boolean }[]) settingByKey.set(r.event_key, r);
+
+  // S824j: extra addresses per owner alert.
+  const { data: extraRows } = await supabase
+    .from("message_extra_recipients")
+    .select("message_id, emails")
+    .eq("organization_id", org.id);
+  const extrasById = new Map<string, string[]>();
+  for (const r of (extraRows ?? []) as { message_id: string; emails: string[] | null }[]) extrasById.set(r.message_id, r.emails ?? []);
+  const extraIds = EXTRA_RECIPIENT_MESSAGE_IDS as readonly string[];
 
   const rowsByGroup = new Map<MessageGroup, Row[]>();
   const push = (g: MessageGroup, r: Row) => rowsByGroup.set(g, [...(rowsByGroup.get(g) ?? []), r]);
@@ -197,7 +208,13 @@ export default async function EveryMessagePage({
 
       {searchParams.error ? (
         <p role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {searchParams.error === "forbidden" ? "Your sign-in can't change these. Ask the account owner." : "That did not save. Try again."}
+          {searchParams.error === "forbidden"
+            ? "Your sign-in can't change these. Ask the account owner."
+            : searchParams.error === "bad_email"
+              ? "One of those email addresses is not right. Check it and save again."
+              : searchParams.error === "too_many"
+                ? "That is more than 20 addresses. Remove some and save again."
+                : "That did not save. Try again."}
         </p>
       ) : null}
 
@@ -245,7 +262,7 @@ export default async function EveryMessagePage({
               </summary>
               <ul className="divide-y divide-gray-100 border-t border-gray-100">
                 {rows.map((r) => (
-                  <li key={r.id} id={r.action.kind === "switch" ? r.action.column : r.id} className="px-5 py-3 text-sm">
+                  <li key={r.id} id={r.action.kind === "switch" ? r.action.column : r.id} className="scroll-mt-6 px-5 py-3 text-sm">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900">{r.title}</p>
@@ -262,6 +279,35 @@ export default async function EveryMessagePage({
                           {channelLabel(r.channels)}
                           {r.textOff ? ". The text waits until texting is on." : ""}
                         </p>
+                        {extraIds.includes(r.id) ? (
+                          canChange ? (
+                            <form action={saveExtraRecipients} className="mt-2 max-w-md">
+                              <input type="hidden" name="message_id" value={r.id} />
+                              <label className="block text-xs font-medium text-gray-700" htmlFor={`extra-${r.id}`}>
+                                Also send to
+                              </label>
+                              <textarea
+                                id={`extra-${r.id}`}
+                                name="emails"
+                                rows={2}
+                                defaultValue={(extrasById.get(r.id) ?? []).join("\n")}
+                                placeholder="name@example.com, one per line"
+                                className="mt-1 w-full rounded-lg border border-gray-300 px-2 py-1 text-xs"
+                              />
+                              <div className="mt-1 flex items-center gap-3">
+                                <button type="submit" className="rounded-lg border border-gray-300 px-3 py-1 text-xs font-medium text-gray-800 hover:bg-gray-50">
+                                  Save
+                                </button>
+                                <span className="text-xs text-gray-500">You still get it. Up to 20 addresses.</span>
+                                {searchParams.saved === r.id ? <span className="text-xs text-emerald-700">Saved</span> : null}
+                              </div>
+                            </form>
+                          ) : (extrasById.get(r.id) ?? []).length > 0 ? (
+                            <p className="mt-1 text-xs text-gray-600">
+                              <span className="font-medium text-gray-700">Also sent to:</span> {(extrasById.get(r.id) ?? []).join(", ")}
+                            </p>
+                          ) : null
+                        ) : null}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-2">
                         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATE_CLASS[r.state]}`}>
@@ -275,6 +321,11 @@ export default async function EveryMessagePage({
                               {r.action.on ? "Turn off" : "Turn on"}
                             </button>
                           </form>
+                        ) : null}
+                        {PHONE_LINKS[r.id] ? (
+                          <Link href={PHONE_LINKS[r.id].href} className="text-xs font-medium text-brand hover:underline">
+                            {PHONE_LINKS[r.id].label}
+                          </Link>
                         ) : null}
                         {r.action.kind === "link" ? (
                           <Link href={r.action.href} className="text-xs font-medium text-brand hover:underline">

@@ -12,6 +12,7 @@ import {
 } from "@/lib/site-signin";
 import { signinLostAction, signinLostEmail, signinLostText, signinLostTextAction } from "@/lib/signin-lost";
 import { claimNull } from "@/lib/claim-stamp";
+import { loadExtraRecipients, withExtras } from "@/lib/message-recipients-server";
 
 // S736: email the landlord once when Kijiji, Zumper or Rentals.ca signs them
 // out (lib/signin-lost). Runs in the 15-minute sweep. Only accounts with the
@@ -155,12 +156,15 @@ export async function GET(req: NextRequest) {
       report.push({ org: r.organization_id, channel: r.channel, action: claim.outcome === "taken" ? "already_claimed" : `claim_failed:${claim.error}` });
       continue;
     }
-    const seen = new Set<string>();
+    const ownerEmails: string[] = [];
     for (const m of (members ?? []) as { user_id: string }[]) {
       const { data } = await getUserByIdCached(admin, m.user_id);
-      const to = data.user?.email?.trim().toLowerCase();
-      if (!to || seen.has(to)) continue;
-      seen.add(to);
+      const e = data.user?.email?.trim().toLowerCase();
+      if (e) ownerEmails.push(e);
+    }
+    // S824j: plus the addresses added under "Also send to".
+    const recipients = withExtras(ownerEmails, await loadExtraRecipients(admin, r.organization_id, "you-signin-lost"));
+    for (const to of recipients) {
       const res = await sendNotificationEmail({
         to_email: to,
         subject: mail.subject,

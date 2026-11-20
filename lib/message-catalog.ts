@@ -647,3 +647,19 @@ export const EVENT_INCLUDES: Record<string, string> = {
   "leasing.showing_assigned": "A link to their viewings page with your access instructions.",
   "leasing.showing_rescheduled": "The new time and a link to their viewings page.",
 };
+
+/** S824j: alerts that take extra addresses on Every message we send (migration 0317). */
+export const EXTRA_RECIPIENT_MESSAGE_IDS = [
+  "you-posted-results",
+  "you-signin-lost",
+  "you-site-mail",
+  "you-incident-report",
+] as const;
+export type ExtraRecipientMessageId = (typeof EXTRA_RECIPIENT_MESSAGE_IDS)[number];
+
+/** S824j: rows whose phone number is set on another page. */
+export const PHONE_LINKS: Record<string, { href: string; label: string }> = {
+  "renter-booking-confirmation": { href: "/dashboard/settings?tab=comms", label: "Change the arrival phone" },
+  "renter-viewing-reminders": { href: "/dashboard/settings?tab=comms", label: "Change the arrival phone" },
+  "you-emergency-text": { href: "/dashboard/maintenance", label: "Change the emergency phone" },
+};
