@@ -47,7 +47,8 @@ ok("day-before text skips it", !dayBefore.includes("Buzz 20"), dayBefore);
 
 // Emails render it once, escaped, in the shared logistics block.
 const email = read("lib/email.ts");
-ok("email renders the note", email.includes("<strong>When you arrive:</strong> ${escapeHtml(note)}"));
+ok("email renders the note", email.includes("<strong>When you arrive:</strong> ${escapeHtml(note)}${call}"));
+ok("the number sits beside the note", email.includes("S824i: the number sits right after the note"));
 ok("all three logistics calls pass it", (email.match(/arrival_note: p\.arrival_note, brand \}\)/g) ?? []).length === 3);
 
 // Every renter path passes it.

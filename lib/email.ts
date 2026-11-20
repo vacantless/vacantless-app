@@ -341,7 +341,11 @@ function viewingLogisticsHtml(p: {
   const rows: string[] = [];
   // S824f: how to get in, before the map and the call line.
   if (note) {
-    rows.push(`<p style="margin:0 0 12px;"><strong>When you arrive:</strong> ${escapeHtml(note)}</p>`);
+    // S824i: the number sits right after the note, so "text or call" has it.
+    const call = phone
+      ? ` Call or text <a href="tel:${escapeHtml(telDialString(phone))}" style="color:${brand};font-weight:600;">${escapeHtml(phone)}</a>.`
+      : "";
+    rows.push(`<p style="margin:0 0 12px;"><strong>When you arrive:</strong> ${escapeHtml(note)}${call}</p>`);
   }
   if (url) {
     rows.push(
