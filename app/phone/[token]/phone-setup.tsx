@@ -10,10 +10,15 @@ export function PhoneSetup({
   token,
   kind,
   shortcutUrl,
+  stateLine,
 }: {
   token: string;
   kind: "iphone" | "android" | "other";
   shortcutUrl: string;
+  /** S825a: set when the code is used up or expired. Kept in the same place
+   * in the page so the "key copied" panel survives the refresh that the
+   * phone's sign-in causes. */
+  stateLine: string | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -32,7 +37,11 @@ export function PhoneSetup({
       return;
     }
     setDone({ key: r.key, copied });
-    window.location.href = shortcutUrl;
+    // S825a: let the sign-in's page refresh finish first. Leaving mid-load
+    // made iPhone Safari show the crash page ("Load failed").
+    window.setTimeout(() => {
+      window.location.href = shortcutUrl;
+    }, 800);
   }
 
   async function android() {
@@ -44,7 +53,9 @@ export function PhoneSetup({
       setMessage(r.message ?? "Something went wrong. Try again in a minute.");
       return;
     }
-    window.location.href = "/dashboard/replies#android-share";
+    window.setTimeout(() => {
+      window.location.href = "/dashboard/replies#android-share";
+    }, 800);
   }
 
   if (done) {
@@ -77,6 +88,12 @@ export function PhoneSetup({
           Open Quick replies on this phone
         </a>
       </div>
+    );
+  }
+
+  if (stateLine) {
+    return (
+      <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{stateLine}</p>
     );
   }
 

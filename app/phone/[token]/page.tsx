@@ -26,13 +26,13 @@ export default async function PhoneSetupPage({ params }: { params: { token: stri
   return (
     <main className="mx-auto max-w-md px-5 py-10 text-gray-800">
       <h1 className="text-xl font-semibold text-gray-900">Set up Vacantless on this phone</h1>
-      {state === "ready" ? (
-        <PhoneSetup token={params.token} kind={kind} shortcutUrl={shortcutUrl} />
-      ) : (
-        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {PHONE_SETUP_STATE_LINE[state]}
-        </p>
-      )}
+      {/* S825a: one component either way, so its "key copied" panel stays after the sign-in refresh. */}
+      <PhoneSetup
+        token={params.token}
+        kind={kind}
+        shortcutUrl={shortcutUrl}
+        stateLine={state === "ready" ? null : PHONE_SETUP_STATE_LINE[state]}
+      />
     </main>
   );
 }

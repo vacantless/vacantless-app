@@ -67,5 +67,11 @@ ok("one tap on iphone", card.includes('device === "iphone" && shortcutUrl') && c
 const actions = read("app/dashboard/replies/actions.ts");
 ok("code needs a sign-in that can add renters", actions.includes("export async function showPhoneSetupCode") && actions.includes('roleCan(role, "manage_leads")'));
 
+// S825a: the "key copied" panel survives the sign-in refresh, and the page waits before opening the Shortcut.
+const setupUi = read("app/phone/[token]/phone-setup.tsx");
+ok("page always renders PhoneSetup", page.includes("stateLine={state === \"ready\" ? null") && !page.includes('state === "ready" ? (\n'));
+ok("done panel shows before the used line", setupUi.indexOf("if (done)") < setupUi.indexOf("if (stateLine)"));
+ok("shortcut opens after a pause", /setTimeout\(\(\) => \{\s*window\.location\.href = shortcutUrl;/.test(setupUi));
+
 console.log(`\ns824d phone setup: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
