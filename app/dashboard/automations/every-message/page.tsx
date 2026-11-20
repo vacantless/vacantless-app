@@ -155,6 +155,14 @@ export default async function EveryMessagePage({
   const all = [...rowsByGroup.values()].flat();
   const count = (s: State) => all.filter((r) => r.state === s).length;
 
+  // S824h: only say "with your arrival note" when a rental has one.
+  const { count: noteCount } = await supabase
+    .from("properties")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", org.id)
+    .is("archived_at", null)
+    .not("renter_arrival_note", "is", null);
+  const noteLine = (noteCount ?? 0) > 0 ? ", with your arrival note" : "";
   const nurtureOn = o.nurture_enabled === true;
   const feedbackOn = o.feedback_enabled === true;
   const week: { when: string; what: string; on: boolean }[] = [
@@ -162,7 +170,7 @@ export default async function EveryMessagePage({
     { when: "Day 2 and day 5, if not booked", what: "Follow-ups, by email", on: nurtureOn },
     {
       when: "When they book",
-      what: texting ? "Viewing booked, by email and text, with your arrival note" : "Viewing booked, by email, with your arrival note",
+      what: `Viewing booked, by email${texting ? " and text" : ""}${noteLine}`,
       on: true,
     },
     { when: "The day before", what: texting ? "Reminder by email, plus a text if not confirmed" : "Reminder by email", on: true },

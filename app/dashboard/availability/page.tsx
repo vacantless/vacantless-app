@@ -268,7 +268,7 @@ export default async function AvailabilityPage({
         <p className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-900">
           {waiting === 1 ? "1 renter found no time that worked." : `${waiting} renters found no time that worked.`}{" "}
           {tellsRenters
-            ? `When you open times, they get an email${tell.sms_enabled ? " and a text" : ""}. Never at night.`
+            ? `When you open times at their building, they hear by email${tell.sms_enabled ? " and text" : ""}. Never at night.`
             : "They are not told when you open times."}{" "}
           <Link href="/dashboard/automations/every-message#viewing_times_opened_enabled" className="font-medium underline">
             {tellsRenters ? "Turn this off" : "Turn this on"}

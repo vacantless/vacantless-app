@@ -98,7 +98,7 @@ ok("voicemail text listed", listed.sms.has("lib/ai-enquiry-ingest.ts"));
 const reopen = readFileSync("app/api/cron/availability-reopened-notify/route.ts", "utf8");
 ok("times-opened obeys its switch", reopen.includes("org.viewing_times_opened_enabled === false"));
 const avail = readFileSync("app/dashboard/availability/page.tsx", "utf8");
-ok("viewing times page says who is told", avail.includes("found no time that worked.") && avail.includes("every-message#viewing_times_opened_enabled"));
+ok("viewing times page says who is told", avail.includes("found no time that worked.") && avail.includes("When you open times at their building") && avail.includes("every-message#viewing_times_opened_enabled"));
 
 // 6. The notification events: every one lands in a group, and the agent list is real.
 const keys = new Set(NOTIFICATION_EVENTS.map((e) => e.key));
@@ -128,6 +128,7 @@ ok("eight groups", MESSAGE_GROUPS.length === 8);
 
 // 9. The page reads the catalog and every event, and the switch action checks the column list.
 const page = readFileSync("app/dashboard/automations/every-message/page.tsx", "utf8");
+ok("renter week names the note only when one exists", page.includes('const noteLine = (noteCount ?? 0) > 0 ? ", with your arrival note" : "";'));
 ok("page lists catalog", page.includes("CATALOG_MESSAGES"));
 ok("page lists events", page.includes("activeNotificationEvents()"));
 const act = readFileSync("app/dashboard/automations/every-message/actions.ts", "utf8");
