@@ -144,6 +144,8 @@ async function attemptBooking(
         let orgPlan: string | null = null;
         let bookingRequiresConfirmation = false;
         let mailAlias: string | null = b.mail_alias ?? null;
+        // S824f: the rental's renter arrival note.
+        let arrivalNote: string | null = null;
         {
           const { data: extras } = await supabase.rpc(
             "get_booking_confirmation_extras",
@@ -152,6 +154,7 @@ async function attemptBooking(
           const e = extras as
             | {
                 leasing_phone?: string | null;
+                arrival_note?: string | null;
                 plan?: string | null;
                 mail_alias?: string | null;
                 booking_requires_confirmation?: boolean | null;
@@ -159,6 +162,7 @@ async function attemptBooking(
             | null;
           if (e) {
             leasingPhone = e.leasing_phone ?? null;
+            arrivalNote = e.arrival_note ?? null;
             orgPlan = e.plan ?? null;
             mailAlias = e.mail_alias ?? mailAlias;
             bookingRequiresConfirmation = e.booking_requires_confirmation === true;
@@ -180,6 +184,7 @@ async function attemptBooking(
             ? `${APP_URL}/showing/cancel/${b.cancel_token}`
             : null,
           leasing_phone: leasingPhone,
+          arrival_note: arrivalNote,
           booking_requires_confirmation: bookingRequiresConfirmation,
           calendar_url: viewingCalendarUrl(b.showing_id ?? null),
         });
@@ -207,6 +212,7 @@ async function attemptBooking(
               when_label: whenLabel,
               booking_requires_confirmation: bookingRequiresConfirmation,
               arrival_phone: leasingPhone,
+              arrival_note: arrivalNote,
             }),
           });
           if (sms.sent) {

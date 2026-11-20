@@ -371,6 +371,7 @@ type Property = {
   description: string | null;
   showing_instructions: string | null;
   showing_arrival_phone: string | null;
+  renter_arrival_note: string | null;
   emergency_info?: string | null;
   emergency_phone?: string | null;
   viewing_earliest_date: string | null;
@@ -1060,13 +1061,15 @@ export default async function PropertyDetailPage({
     sc_pdate?: string;
     sc_total?: string;
     scanexp?: string;
+    /** S824f: the arrival note was refused because it read like a code. */
+    arrival?: string;
   };
 }) {
   const supabase = createClient();
   const { data: property } = await supabase
     .from("properties")
     .select(
-      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, emergency_info, emergency_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, ac_notes, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at, photo_source_url, internet_included, renovated_year, nearby, exposure, exposure_view, parking_fee_cents, appliances, flooring, max_occupants",
+      "id, organization_id, address, address_display_mode, rent_cents, beds, baths, parking, description, showing_instructions, showing_arrival_phone, renter_arrival_note, emergency_info, emergency_phone, viewing_earliest_date, viewing_lead_hours, viewing_requires_confirmation, viewing_group_size, status, available_since, price_drop_pending_cents, available_date, virtual_tour_url, sqft, sqft_estimated, floor, unit_type, for_rent_by, structure_type, laundry, air_conditioning, balcony, furnished, pet_friendly, pets_cats, pets_dogs, pets_dog_size, pets_notes, heat_included, hydro_included, water_included, has_smart_lock, photos_ready, lease_term, smoking, ac_type, ac_notes, on_site_management, building_key, heating_type, parking_type, parking_count, security_deposit_cents, income_requirement, video_url, amenities, archived_at, photo_source_url, internet_included, renovated_year, nearby, exposure, exposure_view, parking_fee_cents, appliances, flooring, max_occupants",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -4035,14 +4038,18 @@ export default async function PropertyDetailPage({
           </div>
         </details>
 
-        <details className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <details
+          id="showing-access"
+          open={searchParams.arrival === "code"}
+          className="rounded-2xl border border-gray-200 bg-white shadow-sm scroll-mt-6"
+        >
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
             <div className="min-w-0">
               <h3 className="text-sm font-semibold text-gray-900">
                 Showing instructions
               </h3>
               <p className="mt-1 text-xs text-gray-500">
-                Optional: access notes for the showing agent.
+                Access notes for the showing agent, and how renters get in.
               </p>
             </div>
             <span className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700">
@@ -4092,6 +4099,34 @@ export default async function PropertyDetailPage({
             can add an extension (for example 226-778-0014 ext 5). Leave blank to use your default
             arrival phone from Settings.
           </p>
+        </div>
+        {/* S824f: what renters who book are told about getting in. Never a code. */}
+        <div className="border-t border-gray-100 px-5 py-4">
+          <label htmlFor="property-renter-arrival-note" className="mb-1 block text-xs font-medium text-gray-600">
+            Arrival note for renters
+          </label>
+          {searchParams.arrival === "code" ? (
+            <p role="alert" className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              That looks like a door or lockbox code, so it was not saved. Renters see this note. Put codes in the
+              agent box above.
+            </p>
+          ) : null}
+          <textarea
+            id="property-renter-arrival-note"
+            name="renter_arrival_note"
+            defaultValue={p.renter_arrival_note ?? ""}
+            rows={2}
+            maxLength={300}
+            placeholder="e.g. Buzz 20 at the front door. Park in the visitor spots."
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Renters who book see it in their confirmation, reminders and day-of texts. Keep codes out of it.
+          </p>
+          <label className="mt-2 flex items-center gap-2 text-xs text-gray-700">
+            <input type="checkbox" name="renter_arrival_note_building" value="yes" />
+            Use this note for the other units at this address too
+          </label>
         </div>
         </details>
 

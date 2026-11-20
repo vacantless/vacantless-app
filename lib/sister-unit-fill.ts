@@ -45,6 +45,7 @@ export const SISTER_FILL_FIELDS = [
   "amenities",
   "showing_instructions",
   "showing_arrival_phone",
+  "renter_arrival_note",
   "emergency_info",
   "emergency_phone",
   // S808 (0303): building facts. Exposure, view and renovation year are this

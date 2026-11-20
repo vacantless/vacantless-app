@@ -68,7 +68,7 @@ const maint = readFileSync("app/dashboard/maintenance/page.tsx", "utf8");
 ok("inbox shows the chip and emergency phone form", maint.includes("Emergency: {emergencyLabel(r.emergency_kind)}") && maint.includes('name="emergency_phone"'));
 const rental = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
 const pactions = readFileSync("app/dashboard/properties/actions.ts", "utf8");
-ok("rental has the emergency info field", rental.includes('name="emergency_info"') && rental.includes("showing_arrival_phone, emergency_info,") && pactions.includes('formData.has("emergency_info")'));
+ok("rental has the emergency info field", rental.includes('name="emergency_info"') && rental.includes("showing_arrival_phone, renter_arrival_note, emergency_info,") && pactions.includes('formData.has("emergency_info")'));
 
 const m2 = readFileSync("supabase/migrations/0282_rental_emergency_phone.sql", "utf8");
 ok("0282 adds the rental phone and puts it first for the tenant", m2.includes("add column if not exists emergency_phone text") && m2.includes("coalesce(v_prop_phone,"));

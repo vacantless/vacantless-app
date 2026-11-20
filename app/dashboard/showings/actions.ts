@@ -718,7 +718,7 @@ export async function nudgeRenterForConfirmation(formData: FormData) {
     .from("showings")
     .select(
       "id, cancel_token, scheduled_at, outcome, confirmed_at, lead_id, " +
-        "lead:leads(id, name, email), property:properties(id, address, showing_arrival_phone)",
+        "lead:leads(id, name, email), property:properties(id, address, showing_arrival_phone, renter_arrival_note)",
     )
     .eq("id", id)
     .eq("organization_id", org.id)
@@ -736,6 +736,7 @@ export async function nudgeRenterForConfirmation(formData: FormData) {
       id: string;
       address: string | null;
       showing_arrival_phone: string | null;
+      renter_arrival_note?: string | null;
     } | null;
   };
   if (
@@ -768,6 +769,7 @@ export async function nudgeRenterForConfirmation(formData: FormData) {
       org.showing_arrival_phone,
       org.public_contact_phone,
     ),
+    arrival_note: property?.renter_arrival_note ?? null,
     cancel_token: showing.cancel_token ?? null,
     when_label: formatSlotLong(showing.scheduled_at, org.booking_timezone ?? "America/Toronto"),
   });
@@ -841,7 +843,7 @@ export async function rescheduleShowing(formData: FormData) {
   const { data: showingRow } = await supabase
     .from("showings")
     .select(
-      "id, outcome, scheduled_at, assigned_agent_id, cancel_token, lead:leads(id, name, email), property:properties(id, address)",
+      "id, outcome, scheduled_at, assigned_agent_id, cancel_token, lead:leads(id, name, email), property:properties(id, address, showing_arrival_phone, renter_arrival_note)",
     )
     .eq("id", id)
     .eq("organization_id", org.id)
@@ -853,7 +855,12 @@ export async function rescheduleShowing(formData: FormData) {
     assigned_agent_id: string | null;
     cancel_token: string | null;
     lead: { id: string; name: string | null; email: string | null } | null;
-    property: { id: string; address: string } | null;
+    property: {
+      id: string;
+      address: string;
+      showing_arrival_phone?: string | null;
+      renter_arrival_note?: string | null;
+    } | null;
   };
   // Only an OPEN viewing can be rescheduled (scheduled or a legacy NULL outcome).
   if (showing.outcome != null && showing.outcome !== "scheduled") return;
@@ -927,6 +934,13 @@ export async function rescheduleShowing(formData: FormData) {
       property_address: showing.property?.address ?? null,
       when_label: newLabel,
       old_when_label: oldLabel,
+      // S824f: the moved-viewing email carries the same arrival help as the booking.
+      leasing_phone: resolveArrivalPhone(
+        showing.property?.showing_arrival_phone,
+        org.showing_arrival_phone,
+        org.public_contact_phone,
+      ),
+      arrival_note: showing.property?.renter_arrival_note ?? null,
       cancel_url: showing.cancel_token
         ? `${APP_URL}/showing/cancel/${showing.cancel_token}`
         : null,

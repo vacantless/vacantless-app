@@ -1,5 +1,6 @@
 "use server";
 
+import { cleanArrivalNote, looksLikeAccessCode } from "@/lib/arrival-note";
 import { cleanPhotoFolderUrl, photoSourceOf, pullResultParam, pullsFrom } from "@/lib/drive-import";
 import { pullFolderPhotos } from "@/lib/photo-folder-pull-server";
 import { dropboxListSharedTree, fetchDropboxSharedFile, getDropboxAccessToken } from "@/lib/dropbox-import-server";
@@ -1055,6 +1056,15 @@ export async function updateProperty(formData: FormData) {
   const address = String(formData.get("address") ?? "").trim();
   if (!id || !address) return;
 
+  // S824f: the renter arrival note. Renters see it, so a note that reads like
+  // a lockbox or door code is refused before anything saves.
+  const arrivalNote = formData.has("renter_arrival_note")
+    ? cleanArrivalNote(formData.get("renter_arrival_note"))
+    : undefined;
+  if (arrivalNote && looksLikeAccessCode(arrivalNote)) {
+    redirect(`/dashboard/properties/${id}?arrival=code#showing-access`);
+  }
+
   const statusRaw = String(formData.get("status") ?? "available");
   const status = (PROPERTY_STATUSES as readonly string[]).includes(statusRaw)
     ? statusRaw
@@ -1177,6 +1187,7 @@ export async function updateProperty(formData: FormData) {
       // S471: per-property override of the org showing arrival phone (the number
       // renters text/call on arrival). Blank clears -> falls back to the org default.
       showing_arrival_phone: String(formData.get("showing_arrival_phone") ?? "").trim() || null,
+      ...(arrivalNote !== undefined ? { renter_arrival_note: arrivalNote } : {}),
       // S776 (0281): shut-offs and the like, shown on the tenant's repair link in an
       // emergency. Only written when the field is on the form.
       ...(formData.has("emergency_info")
@@ -1271,6 +1282,25 @@ export async function updateProperty(formData: FormData) {
       on_site_management: parseTriStateBool(formData, "on_site_management"),
     })
     .eq("id", id);
+
+  // S824f: the same arrival note for the other units at this address.
+  if (arrivalNote !== undefined && formData.get("renter_arrival_note_building") === "yes") {
+    const orgId = (prior as { organization_id?: string | null } | null)?.organization_id ?? null;
+    if (orgId) {
+      const { data: sibs } = await supabase
+        .from("properties")
+        .select("id, address")
+        .eq("organization_id", orgId)
+        .neq("id", id)
+        .is("archived_at", null);
+      const ids = ((sibs ?? []) as { id: string; address: string | null }[])
+        .filter((r) => sameBuilding(r.address, address))
+        .map((r) => r.id);
+      if (ids.length > 0) {
+        await supabase.from("properties").update({ renter_arrival_note: arrivalNote }).in("id", ids);
+      }
+    }
+  }
 
   let orgAfterSave: Org | null = null;
   if (

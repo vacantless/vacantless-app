@@ -275,7 +275,7 @@ export async function GET(req: NextRequest) {
     .select(
       "id, cancel_token, scheduled_at, confirmed_at, reminder_24h_sent_at, reminder_sameday_sent_at, reminder_2h_sent_at, " +
         "reminder_24h_sms_sent_at, reminder_sameday_sms_sent_at, reminder_2h_sms_sent_at, organization_id, lead_id, " +
-        "leads:leads!showings_lead_id_fkey(name, email, phone, sms_opt_out), properties(address, showing_arrival_phone), " +
+        "leads:leads!showings_lead_id_fkey(name, email, phone, sms_opt_out), properties(address, showing_arrival_phone, renter_arrival_note), " +
         "organizations(name, brand_color, logo_url, mail_alias, reply_to_email, booking_timezone, sms_enabled, plan, showing_arrival_phone, public_contact_phone)",
     )
     .eq("outcome", "scheduled")
@@ -398,6 +398,8 @@ export async function GET(req: NextRequest) {
       org?.showing_arrival_phone,
       org?.public_contact_phone,
     );
+    // S824f: how to get in, in the reminder email and the day-of texts.
+    const arrivalNote: string | null = property?.renter_arrival_note ?? null;
 
     let didSomething = false;
 
@@ -465,6 +467,7 @@ export async function GET(req: NextRequest) {
         reply_to_email: org?.reply_to_email ?? null,
         property_address: addr,
         leasing_phone: leasingPhone,
+        arrival_note: arrivalNote,
         cancel_token: row.cancel_token ?? null,
         when_label: whenLabel,
         confirmed: row.confirmed_at != null,
@@ -514,6 +517,7 @@ export async function GET(req: NextRequest) {
             cancel_url: cancelUrl,
             confirmed: row.confirmed_at != null,
             arrival_phone: leasingPhone,
+            arrival_note: arrivalNote,
           },
           kind,
         ),

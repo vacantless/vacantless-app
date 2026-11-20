@@ -46,6 +46,10 @@ export type CatalogMessage = {
   title: string;
   when: string;
   channels: MessageChannel[];
+  /** S824f: who receives it. */
+  goesTo: string;
+  /** S824f: what it carries that a landlord would want to know. */
+  includes?: string;
   control: MessageControl;
   /** Texts go only when the account has texting on. */
   textNeedsTexting?: boolean;
@@ -69,6 +73,8 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-auto-reply",
     group: "renters",
+    goesTo: "The renter who wrote in.",
+    includes: "Your rental page link, and an answer to their question.",
     title: "Thanks for your interest",
     when: "Right after a renter writes in without booking. It carries your rental page and answers their question when it can.",
     channels: ["email"],
@@ -78,6 +84,8 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-booking-confirmation",
     group: "renters",
+    goesTo: "The renter who booked.",
+    includes: "Your arrival note, who to call, a map and a photo ID line.",
     title: "Viewing booked",
     when: "Right after a viewing is booked. The renter, you or offered times can book it.",
     channels: ["email", "text"],
@@ -91,6 +99,8 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-viewing-reminders",
     group: "renters",
+    goesTo: "The renter who booked.",
+    includes: "Your arrival note, who to call on arrival, and a confirm link.",
     title: "Viewing reminders",
     when: "The day before, by email. A text too if they have not confirmed. About 4 hours before, a text. With texting off, an email.",
     channels: ["email", "text"],
@@ -101,6 +111,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-auto-released",
     group: "renters",
+    goesTo: "The renter who booked.",
     title: "Viewing released",
     when: "When an unconfirmed viewing is released, ahead of its time.",
     channels: ["email"],
@@ -115,6 +126,8 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-rescheduled",
     group: "renters",
+    goesTo: "The renter who booked.",
+    includes: "The new time, your arrival note, who to call, a map.",
     title: "Your viewing moved",
     when: "When you move a booked viewing to a new time.",
     channels: ["email"],
@@ -124,6 +137,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-reschedule-proposal",
     group: "renters",
+    goesTo: "The renter who booked.",
     title: "New times to pick from",
     when: "When you suggest new viewing times.",
     channels: ["email"],
@@ -133,6 +147,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-reschedule-nudge",
     group: "renters",
+    goesTo: "The renter who booked.",
     title: "Reminder to pick a new time",
     when: "24 hours after you suggested new times. Only if none was picked.",
     channels: ["email"],
@@ -142,6 +157,8 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-reschedule-accepted",
     group: "renters",
+    goesTo: "The renter who booked.",
+    includes: "The new time, your arrival note, who to call, a map.",
     title: "New time confirmed",
     when: "When the renter picks one of your suggested times.",
     channels: ["email"],
@@ -151,6 +168,8 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-offer-times",
     group: "renters",
+    goesTo: "The renter you offered times to.",
+    includes: "Up to three times. The one they tap is booked.",
     title: "Times offered to you",
     when: "When you offer a renter up to three times on their page.",
     channels: ["email"],
@@ -160,6 +179,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-feedback",
     group: "renters",
+    goesTo: "The renter who came to the viewing.",
     title: "How was your viewing?",
     when: "A few hours after a viewing, 2 hours unless you change it.",
     channels: ["email"],
@@ -169,6 +189,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-follow-ups",
     group: "renters",
+    goesTo: "The renter who wrote in.",
     title: "Follow-ups to quiet renters",
     when: "Day 2 and day 5 after they wrote in. Only if not booked.",
     channels: ["email"],
@@ -178,6 +199,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-times-opened",
     group: "renters",
+    goesTo: "Renters who found no time that worked.",
     title: "New viewing times are open",
     when: "When you open times for a renter who found none that worked.",
     channels: ["email"],
@@ -187,6 +209,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-rented",
     group: "renters",
+    goesTo: "Renters still waiting on that rental.",
     title: "This one rented, here are the others",
     when: "When you mark a rental rented, to renters still waiting on it.",
     channels: ["email"],
@@ -196,6 +219,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-price-drop",
     group: "renters",
+    goesTo: "Renters who asked about that rental.",
     title: "Price drop",
     when: "When you lower the rent and choose to tell renters who asked.",
     channels: ["email"],
@@ -205,6 +229,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-waitlist",
     group: "renters",
+    goesTo: "Renters on that waitlist.",
     title: "A unit opened up",
     when: "When you tell your waitlist about a vacancy.",
     channels: ["email", "text"],
@@ -215,6 +240,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-application",
     group: "renters",
+    goesTo: "The renter you picked.",
     title: "Rental application link",
     when: "When you send a renter your application form.",
     channels: ["email"],
@@ -224,6 +250,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-credit-check",
     group: "renters",
+    goesTo: "The renter you picked.",
     title: "Credit check link",
     when: "When you ask a renter for a credit check.",
     channels: ["email"],
@@ -233,6 +260,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-offer",
     group: "renters",
+    goesTo: "The renter you picked.",
     title: "Your offer",
     when: "When you send a renter an offer to rent.",
     channels: ["email"],
@@ -242,6 +270,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "renter-text",
     group: "renters",
+    goesTo: "The renter you picked.",
     title: "Your text to a renter",
     when: "When you type and send a text on a renter's page.",
     channels: ["text"],
@@ -252,6 +281,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "caller-voice",
     group: "renters",
+    goesTo: "Whoever calls your texting number.",
     title: "Answer to a phone call",
     when: "When anyone calls your texting number. A short message says to text instead.",
     channels: ["call"],
@@ -264,6 +294,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "tenant-messages",
     group: "tenants",
+    goesTo: "The tenants you pick.",
     title: "Your notes to tenants",
     when: "When you send one, or on the date you scheduled it.",
     channels: ["email", "text"],
@@ -278,6 +309,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "tenant-lease-signature",
     group: "tenants",
+    goesTo: "The tenants on that lease.",
     title: "Sign your lease",
     when: "When you send a lease for signing.",
     channels: ["email"],
@@ -287,6 +319,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "tenant-repair-reminder-text",
     group: "tenants",
+    goesTo: "The tenant who asked for the repair.",
     title: "Repair visit reminder by text",
     when: "The day before and the same day as a confirmed repair visit. The email part is the repair visit reminder below.",
     channels: ["text"],
@@ -297,6 +330,8 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "tenant-repair-text-reply",
     group: "tenants",
+    goesTo: "The tenant who texted.",
+    includes: "A link to add photos and details.",
     title: "We got your repair request",
     when: "Right after a tenant texts in a repair.",
     channels: ["text"],
@@ -309,6 +344,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "team-invite",
     group: "agents",
+    goesTo: "The person you invite.",
     title: "Join the team",
     when: "When you invite someone to your account.",
     channels: ["email"],
@@ -320,6 +356,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "trade-dispatch",
     group: "trades",
+    goesTo: "The trade you pick.",
     title: "New job for you",
     when: "When you send a repair job to a trade.",
     channels: ["email"],
@@ -331,6 +368,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "you-emergency-text",
     group: "you",
+    goesTo: "The rental's emergency phone, else your account's.",
     title: "Emergency repair text",
     when: "Right after a tenant reports an emergency, to your emergency phone.",
     channels: ["text"],
@@ -341,6 +379,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "you-incident-report",
     group: "you",
+    goesTo: "Your team members who handle repairs.",
     title: "A tenant filed a report",
     when: "Right after a tenant sends a report.",
     channels: ["email"],
@@ -350,6 +389,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "you-site-mail",
     group: "you",
+    goesTo: "Account owners and admins.",
     title: "Emails from your rental site accounts",
     when: "When Kijiji, Rentals.ca or Zumper emails your account. Codes and sign-up links go to owners and admins.",
     channels: ["email"],
@@ -359,6 +399,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "you-posted-results",
     group: "you",
+    goesTo: "Account owners and admins.",
     title: "Where your ads are live",
     when: "Two hours after a rental's first ad goes live, once per vacancy.",
     channels: ["email"],
@@ -368,6 +409,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "you-signin-lost",
     group: "you",
+    goesTo: "Account owners and admins.",
     title: "A rental site signed you out",
     when: "Once, when Kijiji, Zumper or Rentals.ca signs out the robot. A text too on Growth with your mobile saved.",
     channels: ["email", "text"],
@@ -378,6 +420,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "you-marketplace-phone",
     group: "you",
+    goesTo: "You, the person who pressed it.",
     title: "Your Marketplace ad, for your phone",
     when: "When you press Email it to me on a rental's Marketplace kit.",
     channels: ["email"],
@@ -387,6 +430,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "you-sites-computer",
     group: "you",
+    goesTo: "You, the person who pressed it.",
     title: "Finish this on your computer",
     when: "When you send a site step to your computer.",
     channels: ["email"],
@@ -396,6 +440,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "you-sender-confirm",
     group: "you",
+    goesTo: "The address you added.",
     title: "Confirm a forwarding address",
     when: "When you add an address that forwards renter emails to Vacantless.",
     channels: ["email"],
@@ -405,6 +450,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "you-test-email",
     group: "you",
+    goesTo: "You, the person who pressed it.",
     title: "Test email",
     when: "When you press Send a test email.",
     channels: ["email"],
@@ -416,6 +462,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "account-welcome",
     group: "account",
+    goesTo: "The person who signed up.",
     title: "Welcome, and one step to your first booking",
     when: "At sign-up. Then once the next day, if setup is not done.",
     channels: ["email"],
@@ -425,6 +472,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "account-texting-on",
     group: "account",
+    goesTo: "Account owners and admins.",
     title: "Your texting number is on",
     when: "Once, when your texting number is ready.",
     channels: ["email"],
@@ -434,6 +482,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "account-founding",
     group: "account",
+    goesTo: "The billing email on your account.",
     title: "Your founding free time ends soon",
     when: "A few days before a founding free period ends.",
     channels: ["email"],
@@ -443,6 +492,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "account-tips",
     group: "account",
+    goesTo: "Account owners.",
     title: "Tips for landlords with tenants",
     when: "Off for every account today. When on, one tip at a time for Free accounts with tenants.",
     channels: ["email"],
@@ -452,6 +502,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "account-signin",
     group: "account",
+    goesTo: "The person signing in.",
     title: "Sign-in emails",
     when: "When you sign up, reset a password or ask for a sign-in link.",
     channels: ["email"],
@@ -463,6 +514,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "staff-requests",
     group: "vacantless",
+    goesTo: "Vacantless staff.",
     title: "Your requests to us",
     when: "When you ask us for an alias or brokerage help. Also when you close your account.",
     channels: ["email"],
@@ -472,6 +524,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "staff-checks",
     group: "vacantless",
+    goesTo: "Vacantless staff.",
     title: "Our daily checks",
     when: "Each morning, and when a background job or texting setup fails.",
     channels: ["email"],
@@ -489,6 +542,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "others-payments",
     group: "others",
+    goesTo: "Your tenants and you.",
     title: "Rent and billing receipts",
     when: "Stripe and Rotessa email your tenants and you about payments.",
     channels: ["email"],
@@ -498,6 +552,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
   {
     id: "others-sites",
     group: "others",
+    goesTo: "You.",
     title: "Rental sites and Buildium",
     when: "Kijiji, Rentals.ca, Zumper, Facebook and Buildium send their own emails.",
     channels: ["email"],
@@ -543,6 +598,7 @@ export function catalogProblems(list: CatalogMessage[] = CATALOG_MESSAGES): stri
     if (!groups.has(m.group)) out.push(`${m.id}: unknown group`);
     if (!m.when.trim() || !m.title.trim()) out.push(`${m.id}: empty title or when`);
     if (m.channels.length === 0) out.push(`${m.id}: no way to send`);
+    if (!m.goesTo.trim()) out.push(`${m.id}: no recipient`);
   }
   return out;
 }
@@ -562,3 +618,19 @@ export function eventIsOn(
   if (OPT_IN_EVENT_KEYS.has(e.key) || e.sendMode === "approve_to_send") return row?.enabled === true;
   return row ? row.enabled : true;
 }
+
+/** S824f: who gets a notification event, by its audience. */
+export function eventGoesTo(e: { key: string; audience: "operator" | "tenant" | "trade" }): string {
+  if (AGENT_EVENT_KEYS.has(e.key)) {
+    return e.key === "leasing.crew_progress_reminder" ? "The crew member asked about the unit." : "The assigned showing agent.";
+  }
+  if (e.audience === "tenant") return "The tenant, plus anyone you add on its card.";
+  if (e.audience === "trade") return "The trade on the job, plus anyone you add.";
+  return "Your team, or the addresses on its card.";
+}
+
+/** S824f: what an event carries, where it matters. */
+export const EVENT_INCLUDES: Record<string, string> = {
+  "leasing.showing_assigned": "A link to their viewings page with your access instructions.",
+  "leasing.showing_rescheduled": "The new time and a link to their viewings page.",
+};

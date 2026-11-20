@@ -11,6 +11,8 @@ import {
   CATALOG_MESSAGES,
   MESSAGE_GROUPS,
   channelLabel,
+  EVENT_INCLUDES,
+  eventGoesTo,
   eventGroup,
   eventIsOn,
   isDraftOnlyEvent,
@@ -41,6 +43,8 @@ type Row = {
   id: string;
   title: string;
   when: string;
+  goesTo: string;
+  includes?: string;
   channels: CatalogMessage["channels"];
   state: State;
   textOff: boolean;
@@ -123,6 +127,8 @@ export default async function EveryMessagePage({
       id: m.id,
       title: m.title,
       when,
+      goesTo: m.goesTo,
+      includes: m.includes,
       channels: m.channels,
       state,
       textOff: Boolean(m.textNeedsTexting && !texting && m.channels.includes("text") && !textOnly),
@@ -137,6 +143,8 @@ export default async function EveryMessagePage({
       id: `event-${e.key}`,
       title: e.label,
       when: e.description,
+      goesTo: eventGoesTo(e),
+      includes: EVENT_INCLUDES[e.key],
       channels: ["email"],
       state: !on ? "off" : draft ? "draft" : "on",
       textOff: false,
@@ -152,7 +160,11 @@ export default async function EveryMessagePage({
   const week: { when: string; what: string; on: boolean }[] = [
     { when: "Right away", what: "Thanks for your interest, by email", on: true },
     { when: "Day 2 and day 5, if not booked", what: "Follow-ups, by email", on: nurtureOn },
-    { when: "When they book", what: texting ? "Viewing booked, by email and text" : "Viewing booked, by email", on: true },
+    {
+      when: "When they book",
+      what: texting ? "Viewing booked, by email and text, with your arrival note" : "Viewing booked, by email, with your arrival note",
+      on: true,
+    },
     { when: "The day before", what: texting ? "Reminder by email, plus a text if not confirmed" : "Reminder by email", on: true },
     { when: "About 4 hours before", what: texting ? "Reminder by text" : "Reminder by email", on: true },
     {
@@ -230,6 +242,14 @@ export default async function EveryMessagePage({
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900">{r.title}</p>
                         <p className="mt-0.5 text-gray-600">{r.when}</p>
+                        <p className="mt-1 text-xs text-gray-600">
+                          <span className="font-medium text-gray-700">Goes to:</span> {r.goesTo}
+                        </p>
+                        {r.includes ? (
+                          <p className="mt-0.5 text-xs text-gray-600">
+                            <span className="font-medium text-gray-700">Includes:</span> {r.includes}
+                          </p>
+                        ) : null}
                         <p className="mt-1 text-xs text-gray-500">
                           {channelLabel(r.channels)}
                           {r.textOff ? ". The text waits until texting is on." : ""}

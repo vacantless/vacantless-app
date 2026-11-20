@@ -25,6 +25,7 @@
 // they are exempt from quiet-hours throttling; the quiet-hours helper below is
 // kept pure + tested for any future promotional path.
 
+import { arrivalNoteForSms } from "@/lib/arrival-note";
 import { builtInSwitchOn, orgHasSwitch } from "./platform-switches";
 import { orgOwnSmsNumber, routeSms } from "./org-sms-numbers";
 import { createHmac, timingSafeEqual } from "crypto";
@@ -180,12 +181,20 @@ export type SmsCopyInput = {
    * 36, 2026-11-05) replied "We are here" to the reminder and no one saw it.
    */
   arrival_phone?: string | null;
+  /** S824f: the rental's renter arrival note; the text carries its first part. */
+  arrival_note?: string | null;
 };
 
 /** S754c: "When you arrive, call 226-778-0014." or "" when no number is set. */
 export function arrivalLine(phone: string | null | undefined): string {
   const s = (phone ?? "").trim();
   return s ? `When you arrive, call ${s}. ` : "";
+}
+
+/** S824f: the arrival note, then who to call. "" when neither is set. */
+export function arrivalLines(p: { arrival_phone?: string | null; arrival_note?: string | null }): string {
+  const note = arrivalNoteForSms(p.arrival_note);
+  return `${note ? `${note} ` : ""}${arrivalLine(p.arrival_phone)}`;
 }
 
 /** Booking-confirmation text. The renter just self-booked; first SMS touch. */
@@ -196,12 +205,12 @@ export function bookingConfirmationSms(p: SmsCopyInput): string {
     return noEmDash(
       `${org}: your viewing request at ${addr} for ${p.when_label} is in. ` +
         `Someone from our team will reach out to confirm before your viewing. ` +
-        `${arrivalLine(p.arrival_phone)}Reply here if you need to reschedule. ${OPT_OUT_LINE}`,
+        `${arrivalLines(p)}Reply here if you need to reschedule. ${OPT_OUT_LINE}`,
     );
   }
   return noEmDash(
     `${org}: your viewing at ${addr} is confirmed for ${p.when_label}. ` +
-      `${arrivalLine(p.arrival_phone)}Reply here if you need to reschedule. ${OPT_OUT_LINE}`,
+      `${arrivalLines(p)}Reply here if you need to reschedule. ${OPT_OUT_LINE}`,
   );
 }
 
@@ -232,7 +241,7 @@ export function showingReminderSms(p: SmsCopyInput, kind: "24h" | "sameday" | "2
   // account's monthly allowance.
   const actionLine = confirm ? `Confirm, change or cancel: ${confirm}` : "Reply here to reschedule.";
   // S754c: the day-of texts say who to call on arrival.
-  const arrive = kind === "24h" ? "" : arrivalLine(p.arrival_phone);
+  const arrive = kind === "24h" ? "" : arrivalLines(p);
   return noEmDash(
     `${org}: ${lead} at ${addr} for ${p.when_label}. ${arrive}${actionLine} ${OPT_OUT_LINE}`,
   );

@@ -119,6 +119,7 @@ async function sendRenterAcceptedConfirmation(
     let leasingPhone: string | null = null;
     let bookingRequiresConfirmation = false;
     let mailAlias: string | null = r.mail_alias ?? null;
+    let arrivalNote: string | null = null;
     if (r.property_id) {
       const { data: extras } = await supabase.rpc("get_booking_confirmation_extras", {
         p_property_id: r.property_id,
@@ -126,11 +127,13 @@ async function sendRenterAcceptedConfirmation(
       const e = extras as
         | {
             leasing_phone?: string | null;
+            arrival_note?: string | null;
             mail_alias?: string | null;
             booking_requires_confirmation?: boolean | null;
           }
         | null;
       leasingPhone = e?.leasing_phone ?? null;
+      arrivalNote = e?.arrival_note ?? null;
       mailAlias = e?.mail_alias ?? mailAlias;
       bookingRequiresConfirmation = e?.booking_requires_confirmation === true;
     }
@@ -153,6 +156,7 @@ async function sendRenterAcceptedConfirmation(
         ? `${APP_URL}/showing/cancel/${r.cancel_token}`
         : null,
       leasing_phone: leasingPhone,
+      arrival_note: arrivalNote,
       booking_requires_confirmation: bookingRequiresConfirmation,
       calendar_url: viewingCalendarUrl(r.showing_id ?? null),
     });

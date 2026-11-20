@@ -10,6 +10,7 @@
 // Generate a v3 API key under SMTP & API → API Keys (NOT the SMTP login used by
 // Zapier) and set it in Vercel as BREVO_API_KEY (server-only, no NEXT_PUBLIC_).
 
+import { cleanArrivalNote } from "@/lib/arrival-note";
 import { emergencyEmailSubject, emergencyLabel, parseEmergencyKind } from "./tenant-emergency";
 import { nurtureCopy, type NurtureCopy } from "@/lib/nurture";
 import { TEST_SAMPLE, TEST_SUBJECT_PREFIX } from "@/lib/test-email";
@@ -290,6 +291,8 @@ export type BookingPayload = {
   // to call/text if late (S448). Optional; the line renders only when present.
   // (showing_instructions dropped S473/S474 — it's an agent-only lockbox note.)
   leasing_phone?: string | null;
+  // S824f: the rental's renter arrival note ("Buzz 20..."); renders only when set.
+  arrival_note?: string | null;
   // S490: copy-only gate. The slot is still reserved, but the renter is told an
   // agent will confirm before the viewing. Default false preserves old copy.
   booking_requires_confirmation?: boolean | null;
@@ -328,12 +331,18 @@ function mapsUrl(address: string | null | undefined): string | null {
 function viewingLogisticsHtml(p: {
   property_address: string | null;
   leasing_phone?: string | null;
+  arrival_note?: string | null;
   brand: string;
 }): string {
   const brand = escapeHtml(p.brand);
   const url = mapsUrl(p.property_address);
   const phone = p.leasing_phone?.trim();
+  const note = cleanArrivalNote(p.arrival_note);
   const rows: string[] = [];
+  // S824f: how to get in, before the map and the call line.
+  if (note) {
+    rows.push(`<p style="margin:0 0 12px;"><strong>When you arrive:</strong> ${escapeHtml(note)}</p>`);
+  }
   if (url) {
     rows.push(
       `<p style="margin:0 0 12px;"><strong>Map + directions:</strong> <a href="${escapeHtml(url)}" style="color:${brand};font-weight:600;">Open in Google Maps</a></p>`,
@@ -383,7 +392,7 @@ function bookingHtml(p: BookingPayload): string {
         <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
         <p style="margin:0;color:#3f3f46;">${visitNote}</p>
       </div>
-      ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, brand })}
+      ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, arrival_note: p.arrival_note, brand })}
       ${calendarLineHtml(p.calendar_url, brand)}
       ${
         p.cancel_url
@@ -938,6 +947,7 @@ function rescheduleAcceptedConfirmationHtml(
   const logistics = viewingLogisticsHtml({
     property_address: p.property_address,
     leasing_phone: p.leasing_phone,
+    arrival_note: p.arrival_note,
     brand,
   });
   return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
@@ -1044,7 +1054,7 @@ function rescheduleHtml(p: ReschedulePayload): string {
         ${old ? `<p style="margin:0 0 6px;color:#a1a1aa;text-decoration:line-through;">Previous time: ${old}</p>` : ""}
         <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
       </div>
-      ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, brand })}
+      ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, arrival_note: p.arrival_note, brand })}
       ${calendarLineHtml(p.calendar_url, brand, true)}
       ${
         p.cancel_url
@@ -1134,6 +1144,8 @@ export type ReminderPayload = {
   // only). leasing_phone = resolved arrival phone (property override -> org
   // default -> public contact). (showing_instructions dropped S473/S474 = agent-only.)
   leasing_phone?: string | null;
+  // S824f: the rental's renter arrival note ("Buzz 20..."); renders only when set.
+  arrival_note?: string | null;
   // Public per-showing token. When present, reminder email renders scanner-safe
   // action links: GET opens the confirm/reschedule pages; only POST confirms.
   cancel_token?: string | null;
@@ -1189,7 +1201,7 @@ function reminderHtml(p: ReminderPayload): string {
         <p style="margin:0 0 6px;color:#3f3f46;">${when}</p>
         <p style="margin:0;color:#3f3f46;">This is an in-person walk-through at the property, not a phone or video call. Please arrive at the address above at your scheduled time.</p>
       </div>
-      ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, brand })}
+      ${viewingLogisticsHtml({ property_address: p.property_address, leasing_phone: p.leasing_phone, arrival_note: p.arrival_note, brand })}
       ${
         confirmUrl && rescheduleUrl && cancelUrl
           ? `<p style="margin:0 0 14px;text-align:center;">

@@ -42,13 +42,15 @@ async function confirmToRenter(
     if (!r.lead_id || !r.scheduled_at || !r.renter_email) return;
     const timeZone = r.timezone || "America/Toronto";
     let leasingPhone: string | null = null;
+    let arrivalNote: string | null = null;
     let mailAlias: string | null = r.mail_alias ?? null;
     if (r.property_id) {
       const { data: extras } = await supabase.rpc("get_booking_confirmation_extras", {
         p_property_id: r.property_id,
       });
-      const e = extras as { leasing_phone?: string | null; mail_alias?: string | null } | null;
+      const e = extras as { leasing_phone?: string | null; arrival_note?: string | null; mail_alias?: string | null } | null;
       leasingPhone = e?.leasing_phone ?? null;
+      arrivalNote = e?.arrival_note ?? null;
       mailAlias = e?.mail_alias ?? mailAlias;
     }
     const result = await sendBookingConfirmation({
@@ -65,6 +67,7 @@ async function confirmToRenter(
       when_label: formatSlotLong(r.scheduled_at, timeZone),
       cancel_url: r.cancel_token ? `${APP_URL}/showing/cancel/${r.cancel_token}` : null,
       leasing_phone: leasingPhone,
+      arrival_note: arrivalNote,
       // The landlord offered this time, so it is confirmed the moment it is picked.
       booking_requires_confirmation: false,
       calendar_url: viewingCalendarUrl(r.showing_id ?? null),

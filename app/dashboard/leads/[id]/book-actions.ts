@@ -1,5 +1,6 @@
 "use server";
 
+import { resolveArrivalPhone } from "@/lib/showing-contact";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -41,7 +42,7 @@ export async function bookViewingForRenter(formData: FormData) {
   const supabase = createClient();
   const { data: leadRow } = await supabase
     .from("leads")
-    .select("id, organization_id, name, email, phone, sms_opt_out, property_id, property:properties(id, address, status)")
+    .select("id, organization_id, name, email, phone, sms_opt_out, property_id, property:properties(id, address, status, showing_arrival_phone, renter_arrival_note)")
     .eq("id", leadId)
     .eq("organization_id", org.id)
     .maybeSingle();
@@ -52,7 +53,13 @@ export async function bookViewingForRenter(formData: FormData) {
     phone: string | null;
     sms_opt_out: boolean | null;
     property_id: string | null;
-    property: { id: string; address: string | null; status: string | null } | null;
+    property: {
+      id: string;
+      address: string | null;
+      status: string | null;
+      showing_arrival_phone?: string | null;
+      renter_arrival_note?: string | null;
+    } | null;
   } | null;
   if (!lead) back("error");
   if (!lead!.property_id) back("no_rental");
@@ -89,6 +96,11 @@ export async function bookViewingForRenter(formData: FormData) {
   });
 
   if (tell) {
+    const arrivalPhone = resolveArrivalPhone(
+      lead!.property?.showing_arrival_phone,
+      org.showing_arrival_phone,
+      org.public_contact_phone,
+    );
     if (lead!.email) {
       try {
         await sendBookingConfirmation({
@@ -104,7 +116,9 @@ export async function bookViewingForRenter(formData: FormData) {
           property_address: lead!.property?.address ?? null,
           when_label: label,
           cancel_url: showing.cancel_token ? `${APP_URL}/showing/cancel/${showing.cancel_token}` : null,
-          leasing_phone: org.showing_arrival_phone ?? org.public_contact_phone ?? null,
+          // S824f: the rental's own arrival phone first (it was skipped here), then the note.
+          leasing_phone: arrivalPhone,
+          arrival_note: lead!.property?.renter_arrival_note ?? null,
           booking_requires_confirmation: false,
           calendar_url: viewingCalendarUrl(showing.id),
         });
@@ -122,7 +136,8 @@ export async function bookViewingForRenter(formData: FormData) {
             property_address: lead!.property?.address ?? null,
             when_label: label,
             booking_requires_confirmation: false,
-            arrival_phone: org.showing_arrival_phone ?? org.public_contact_phone ?? null,
+            arrival_phone: arrivalPhone,
+            arrival_note: lead!.property?.renter_arrival_note ?? null,
           }),
         });
       } catch {
