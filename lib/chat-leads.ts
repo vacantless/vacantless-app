@@ -27,6 +27,13 @@ export function chatLeadNoteManual(siteLabel: string): string {
   return `Added from Quick replies, ${siteLabel} chat.`;
 }
 const NOTE_PREFIXES = [CHAT_LEAD_NOTE_HELPER, "Added from Quick replies, "];
+/**
+ * S823a: a renter saved from the phone share menu (iPhone Shortcut or Android
+ * share) with no email or phone is a chat renter too. Its note starts with
+ * "Asked: ..." and carries this marker (lib/send-shortcut-server,
+ * lib/share-target ANDROID_SHARE_NOTE), so it is matched anywhere in the note.
+ */
+const SHARE_MENU_MARKER = "share menu (chat screenshot)";
 
 /** The short line under a chat renter in Renters. */
 export const CHAT_LEAD_LIST_LINE = "From the chat, no email or phone yet";
@@ -92,12 +99,15 @@ export function normalizeRenterName(name: string | null | undefined): string {
 /**
  * Same renter by name: the first names match, and when both have a last name
  * its first letter matches ("Tess Smith" = "Tess S." = "Tess"; "Tess Smith" is
- * not "Tess Brown").
+ * not "Tess Brown"). S823a: a one-word name also matches the last name of a
+ * full name ("Chidi" = "Victor Chidi"): a chat often shows only one of the two.
  */
 export function sameRenterName(a: string | null | undefined, b: string | null | undefined): boolean {
   const x = normalizeRenterName(a).split(" ").filter(Boolean);
   const y = normalizeRenterName(b).split(" ").filter(Boolean);
   if (x.length === 0 || y.length === 0) return false;
+  if (x.length === 1 && y.length > 1 && x[0] === y[y.length - 1]) return true;
+  if (y.length === 1 && x.length > 1 && y[0] === x[x.length - 1]) return true;
   if (x[0] !== y[0]) return false;
   if (x.length > 1 && y.length > 1) return x[x.length - 1][0] === y[y.length - 1][0];
   return true;
@@ -123,7 +133,7 @@ function recent(c: ChatLeadCandidate, nowMs: number): boolean {
 export function isChatPlaceholder(c: { email: string | null; phone: string | null; notes: string | null }): boolean {
   if ((c.email ?? "").trim() || (c.phone ?? "").trim()) return false;
   const n = (c.notes ?? "").trim();
-  return NOTE_PREFIXES.some((p) => n.startsWith(p));
+  return NOTE_PREFIXES.some((p) => n.startsWith(p)) || n.includes(SHARE_MENU_MARKER);
 }
 
 /** An open lead on this rental, same renter, last 14 days: saving again would make a second one. */
@@ -167,7 +177,13 @@ export function findChatPlaceholderToMerge(
 
 /** The line added to the booked lead's notes when it takes a chat renter's place. */
 export function mergedChatNote(placeholderNotes: string | null, day: string): string {
-  return (placeholderNotes ?? "").includes("Quick replies")
+  const notes = placeholderNotes ?? "";
+  if (notes.includes(SHARE_MENU_MARKER)) {
+    // S823a: keep the renter's question from the screenshot.
+    const asked = notes.split("\n").find((l) => l.startsWith("Asked: "));
+    return `First wrote in the chat on ${day}, sent from the phone share menu.${asked ? ` ${asked}` : ""}`;
+  }
+  return notes.includes("Quick replies")
     ? `First wrote in the chat on ${day}, added from Quick replies.`
     : `First wrote in the Marketplace chat on ${day}.`;
 }

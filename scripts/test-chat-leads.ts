@@ -35,6 +35,11 @@ assert.ok(sameRenterName("Zoë", "Zoe Brown"));
 assert.ok(!sameRenterName("Tess Smith", "Tess Brown"));
 assert.ok(!sameRenterName("Tess", "Tessa"));
 assert.ok(!sameRenterName("", "Tess"));
+// S823a: one word matches a full name's last name (a chat shows one of the two)
+assert.ok(sameRenterName("Chidi", "Victor chidi"));
+assert.ok(sameRenterName("Victor Chidi", "chidi"));
+assert.ok(!sameRenterName("Chidi", "Victor Smith"));
+assert.ok(!sameRenterName("Smith", "Tess Brown"));
 
 // helper payload
 const cleaned = cleanRepliedChats(
@@ -85,6 +90,30 @@ assert.ok(isChatPlaceholder(base({ notes: chatLeadNoteManual("Marketplace") })))
 assert.ok(!isChatPlaceholder(base({ email: "t@x.ca" })));
 assert.ok(!isChatPlaceholder(base({ phone: "5195550100" })));
 assert.ok(!isChatPlaceholder(base({ notes: "called her" })));
+// S823a: phone share menu renters (iPhone Shortcut, Android share) are chat renters
+const SHORTCUT_NOTE = "Asked: Is this 1 bed 1 bath apartment available?\nSent from the iPhone share menu (chat screenshot).";
+assert.ok(isChatPlaceholder(base({ notes: SHORTCUT_NOTE })));
+assert.ok(isChatPlaceholder(base({ notes: "Sent from the Android share menu (chat screenshot)." })));
+assert.ok(!isChatPlaceholder(base({ notes: SHORTCUT_NOTE, email: "s@x.ca" })));
+// Shnya case: Shortcut first, then the booking takes its place
+assert.equal(
+  findChatPlaceholderToMerge([base({ id: "sc", name: "Shnya", notes: SHORTCUT_NOTE })], {
+    propertyId: P,
+    name: "Shnya SarwatSleman",
+    newLeadId: "new",
+    now,
+  })?.id,
+  "sc",
+);
+// Chidi case: booked first, a later Shortcut save finds the booking
+assert.equal(
+  findExistingChatLead([base({ id: "v", name: "Victor chidi", email: "v@x.ca", notes: null, status: "new" })], {
+    propertyId: P,
+    name: "Chidi",
+    now,
+  })?.id,
+  "v",
+);
 
 // existing open lead: no second save (any open lead, contact or not)
 assert.equal(findExistingChatLead([base({ id: "a" })], { propertyId: P, name: "Tess Smith", now })?.id, "a");
@@ -120,6 +149,11 @@ for (const o of [{ propertyId: "other" }, { status: "lost" }, { createdAt: new D
 }
 assert.equal(mergedChatNote(CHAT_LEAD_NOTE_HELPER, "2026-11-08"), "First wrote in the Marketplace chat on 2026-11-08.");
 assert.equal(mergedChatNote(chatLeadNoteManual("Kijiji"), "2026-11-08"), "First wrote in the chat on 2026-11-08, added from Quick replies.");
+assert.equal(
+  mergedChatNote(SHORTCUT_NOTE, "2026-11-19"),
+  "First wrote in the chat on 2026-11-19, sent from the phone share menu. Asked: Is this 1 bed 1 bath apartment available?",
+);
+assert.equal(mergedChatNote("Sent from the Android share menu (chat screenshot).", "2026-11-19"), "First wrote in the chat on 2026-11-19, sent from the phone share menu.");
 
 // The helper half (the extension sits beside the app on the Mac only; CI skips this).
 if (existsSync("../vacantless-extension/app-bridge.js")) {
