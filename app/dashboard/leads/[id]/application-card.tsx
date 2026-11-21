@@ -102,7 +102,7 @@ export function ApplicationCard(p: {
   hasScreeningLink: boolean;
   ontario: boolean;
   /** S818b: the account's own application form (Buildium and the like). */
-  ownForm: { url: string; name: string | null } | null;
+  ownForm: { url: string; name: string | null; sentAt?: string | null } | null;
   tenancyId: string | null;
 }) {
   const banner = p.applyBanner ? BANNERS[p.applyBanner] ?? null : null;
@@ -144,9 +144,14 @@ export function ApplicationCard(p: {
             </button>
             <CopyTextButton value={p.ownForm.url} label="Copy the link" />
           </form>
+          {p.ownForm.sentAt ? (
+            <p className="text-xs font-medium text-gray-700">
+              Sent {fmt(p.ownForm.sentAt, p.timeZone)}. Pressing again sends it again.
+            </p>
+          ) : null}
           <p className="text-xs text-gray-500">
             {p.lead.email ? `Emails your application form to ${p.lead.email}, with this rental's address. ` : ""}
-            Applications come back in {p.ownForm.name || "your own system"}, not here.{" "}
+            Applications come back in {p.ownForm.name || "your own system"}, not here. Move the renter to Applied when they do.{" "}
             <Link href="/dashboard/settings?tab=brand#application-form" className="text-brand hover:underline">
               Change it
             </Link>

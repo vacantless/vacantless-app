@@ -23,7 +23,7 @@ const ext = srv.indexOf("if (args.org.application_link_url)");
 const dup = srv.indexOf("One open application per person");
 ok("own form branch runs before any Vacantless row", ext > 0 && dup > ext);
 ok("own form emails the account's link", srv.slice(ext, dup).includes("apply_url: link"));
-ok("own form notes the timeline", srv.slice(ext, dup).includes("application link sent to"));
+ok("own form notes the timeline", srv.slice(ext, dup).includes("ownFormSentNote(")); // S826a: wording lives in lib/own-form-sent.ts
 ok("own form inserts no application row", !srv.slice(ext, dup).includes('from("rental_applications")'));
 
 ok("lead action passes the link", read("app/dashboard/leads/actions.ts").includes("application_link_url: org.application_link_url ?? null"));
@@ -34,7 +34,7 @@ const card = read("app/dashboard/leads/[id]/application-card.tsx");
 ok("card own form button", card.includes("Send your {p.ownForm.name || \"own\"} application"));
 ok("card copy link", card.includes('<CopyTextButton value={p.ownForm.url} label="Copy the link" />'));
 ok("card banners", card.includes("ext_sent:") && card.includes("ext_copy:"));
-ok("lead page passes ownForm", read("app/dashboard/leads/[id]/page.tsx").includes("ownForm={org?.application_link_url"));
+ok("lead page passes ownForm", /ownForm=\{\s*org\?\.application_link_url/.test(read("app/dashboard/leads/[id]/page.tsx")));
 
 const settings = read("app/dashboard/settings/page.tsx");
 ok("settings box", settings.includes('id="application-form"') && settings.includes("updateApplicationLink"));

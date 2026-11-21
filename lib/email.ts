@@ -522,6 +522,8 @@ export type RentalApplicationInvitePayload = {
   apply_url: string; // absolute /apply/<token> link
   // S820b: set for a co-applicant: the renter who asked, so the email says who added them.
   added_by_name?: string | null;
+  // S826a: the link is the account's own form (Buildium and the like), not ours.
+  own_form?: boolean;
 };
 
 export function rentalApplicationInviteHtml(p: RentalApplicationInvitePayload): string {
@@ -542,6 +544,15 @@ export function rentalApplicationInviteHtml(p: RentalApplicationInvitePayload): 
   const why = addedBy
     ? `You are receiving this because ${addedBy} added you to their rental application with ${org}.`
     : `You are receiving this because you inquired about a rental with ${org}.`;
+  // S826a: their own form does not know which home this is: say what to enter.
+  const whichHome =
+    p.own_form && addr
+      ? `<p style="margin:0 0 20px;">When the form asks which home you want, enter: <strong>${addr}</strong>.</p>`
+      : "";
+  // Their own form may ask for a SIN on its secure page, so only promise the email part.
+  const never = p.own_form
+    ? "We will never ask for your banking details by email."
+    : "We will never ask for your SIN or banking details by email.";
 
   return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
   <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
@@ -551,6 +562,7 @@ export function rentalApplicationInviteHtml(p: RentalApplicationInvitePayload): 
       <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
       ${propLine}
       <p style="margin:0 0 20px;">It only takes a few minutes. You can save time by having your current address, employment, and reference details handy.</p>
+      ${whichHome}
       <p style="margin:0 0 24px;">
         <a href="${url}" style="display:inline-block;background:${escapeHtml(brand)};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px;">Start your application</a>
       </p>
@@ -559,7 +571,7 @@ export function rentalApplicationInviteHtml(p: RentalApplicationInvitePayload): 
       <p style="margin:24px 0 0;color:#52525b;">Thank you,<br/><strong>${org}</strong></p>
     </div>
     <div style="padding:14px 28px;background:#fafafa;border-top:1px solid #e4e4e7;font-size:12px;color:#a1a1aa;">
-      ${why} We will never ask for your SIN or banking details by email.
+      ${why} ${never}
     </div>
   </div>
 </body></html>`;

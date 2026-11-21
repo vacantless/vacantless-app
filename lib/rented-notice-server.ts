@@ -3,9 +3,12 @@
 // Best effort and never throws: a lease-up must never fail on an email.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Org } from "./org";
+import { OWN_FORM_SENT_PHRASE, isOwnFormSentNote } from "./own-form-sent";
+import { isNurturableStatus } from "./nurture";
 import { sendRentedNoticeEmail, type RentedNoticeOtherUnit } from "./email";
 import {
   RENTED_NOTICE_OTHER_UNITS,
+  expandSkipByEmail,
   leadsToCloseQuietly,
   leadsToNotify,
   type WaitingLead,
@@ -45,8 +48,24 @@ export async function notifyWaitingRentersRented(args: {
       .order("created_at", { ascending: false })
       .limit(500);
     const leads = (leadRows ?? []) as WaitingLead[];
-    const toNotify = leadsToNotify(leads, nowMs);
-    const toClose = leadsToCloseQuietly(leads, toNotify);
+    // S826a: renters sent the account's own application form stay as they are.
+    const skipIds = new Set<string>();
+    const openIds = leads.filter((l) => isNurturableStatus(l.status)).map((l) => l.id);
+    if (openIds.length > 0) {
+      const { data: sentRows } = await client
+        .from("messages")
+        .select("lead_id, channel, body")
+        .eq("organization_id", org.id)
+        .eq("channel", "note")
+        .in("lead_id", openIds)
+        .ilike("body", `%${OWN_FORM_SENT_PHRASE}%`);
+      for (const m of (sentRows ?? []) as { lead_id: string | null; channel: string | null; body: string | null }[]) {
+        if (m.lead_id && isOwnFormSentNote(m.body, m.channel)) skipIds.add(m.lead_id);
+      }
+    }
+    const skip = expandSkipByEmail(leads, skipIds);
+    const toNotify = leadsToNotify(leads, nowMs, skip);
+    const toClose = leadsToCloseQuietly(leads, toNotify, skip);
     if (toNotify.length === 0 && toClose.length === 0) {
       report.skipped = "nobody_waiting";
       return report;

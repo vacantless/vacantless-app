@@ -18,10 +18,24 @@ export type WaitingLead = {
 };
 
 /** Which leads get the email: open stage, recent, with an email, one per address. Pure. */
-export function leadsToNotify(leads: WaitingLead[], nowMs: number): WaitingLead[] {
+/** S826a: widen a skip list to every row with the same email (one person, two rows). Pure. */
+export function expandSkipByEmail(leads: WaitingLead[], skipIds: ReadonlySet<string>): Set<string> {
+  const emails = new Set(
+    leads.filter((l) => skipIds.has(l.id)).map((l) => (l.email ?? "").trim().toLowerCase()).filter(Boolean),
+  );
+  const out = new Set(skipIds);
+  for (const l of leads) if (emails.has((l.email ?? "").trim().toLowerCase())) out.add(l.id);
+  return out;
+}
+
+// S826a: a renter sent the account's own application form (Buildium) may be
+// the one who applied there; Vacantless cannot see it, so they are never told
+// "it rented" or closed as Lost by the rental going Rented.
+export function leadsToNotify(leads: WaitingLead[], nowMs: number, skipIds: ReadonlySet<string> = new Set()): WaitingLead[] {
   const seen = new Set<string>();
   const out: WaitingLead[] = [];
   for (const l of leads) {
+    if (skipIds.has(l.id)) continue;
     if (!(NURTURABLE_STATUSES as readonly string[]).includes(l.status ?? "")) continue;
     const email = (l.email ?? "").trim().toLowerCase();
     if (!email) continue;
@@ -36,9 +50,13 @@ export function leadsToNotify(leads: WaitingLead[], nowMs: number): WaitingLead[
 }
 
 /** The open leads on the rental that cannot be emailed still close as Lost. Pure. */
-export function leadsToCloseQuietly(leads: WaitingLead[], notified: WaitingLead[]): WaitingLead[] {
+export function leadsToCloseQuietly(
+  leads: WaitingLead[],
+  notified: WaitingLead[],
+  skipIds: ReadonlySet<string> = new Set(),
+): WaitingLead[] {
   const sent = new Set(notified.map((l) => l.id));
   return leads.filter(
-    (l) => (NURTURABLE_STATUSES as readonly string[]).includes(l.status ?? "") && !sent.has(l.id),
+    (l) => (NURTURABLE_STATUSES as readonly string[]).includes(l.status ?? "") && !sent.has(l.id) && !skipIds.has(l.id),
   );
 }

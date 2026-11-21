@@ -1,4 +1,5 @@
 import { blockReasonWords, blockedFromEvents, normEmail, type DeliveryRow } from "@/lib/renter-email-block";
+import { lastOwnFormSentAt } from "@/lib/own-form-sent";
 import { bookViewingForRenter } from "./book-actions";
 import { offerTimesToRenter, withdrawOfferedTimes } from "./offer-times-actions";
 import { OFFER_TIMES_MESSAGES, futureOfferSlots, offerReplyText, offerTimesTone } from "@/lib/viewing-offers";
@@ -949,7 +950,11 @@ export default async function LeadDetailPage({
         screeningName={org?.screening_link_name ?? null}
         hasScreeningLink={!!org?.screening_link_url}
         ontario={isOntarioRental(l.property)}
-        ownForm={org?.application_link_url ? { url: org.application_link_url, name: org.application_link_name ?? null } : null}
+        ownForm={
+          org?.application_link_url
+            ? { url: org.application_link_url, name: org.application_link_name ?? null, sentAt: lastOwnFormSentAt(messages) }
+            : null
+        }
         tenancyId={existingTenancyId}
       />
 

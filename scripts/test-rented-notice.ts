@@ -83,6 +83,7 @@ function fakeClient(tables: Record<string, Row[]>, log: { updates: Row[]; insert
         select: () => q, eq: (c: string, v: unknown) => { q._filters.push([c, v]); return q; },
         is: () => q, neq: (c: string, v: unknown) => { q._filters.push([`neq:${c}`, v]); return q; },
         in: (c: string, v: unknown) => { q._filters.push([`in:${c}`, v]); return q; },
+        ilike: (c: string, v: unknown) => { q._filters.push([`ilike:${c}`, v]); return q; },
         order: () => q, limit: () => q,
         maybeSingle: async () => ({ data: (tables[table] ?? [])[0] ?? null }),
         update: (patch: Row) => { log.updates.push({ table, patch }); return q; },
@@ -92,7 +93,16 @@ function fakeClient(tables: Record<string, Row[]>, log: { updates: Row[]; insert
           const neq = q._filters.find((f: any) => String(f[0]).startsWith("neq:"));
           if (neq) rows = rows.filter((r) => r.id !== neq[1]);
           const inn = q._filters.find((f: any) => String(f[0]).startsWith("in:"));
-          if (inn) rows = rows.filter((r) => (inn[1] as string[]).includes(r.id as string));
+          if (inn) {
+            const col = String(inn[0]).slice(3);
+            rows = rows.filter((r) => (inn[1] as string[]).includes(r[col] as string));
+          }
+          const il = q._filters.find((f: any) => String(f[0]).startsWith("ilike:"));
+          if (il) {
+            const col = String(il[0]).slice(6);
+            const needle = String(il[1]).replace(/%/g, "").toLowerCase();
+            rows = rows.filter((r) => String(r[col] ?? "").toLowerCase().includes(needle));
+          }
           return res({ data: rows, error: null });
         },
       };
@@ -117,6 +127,25 @@ async function main() {
   ok("the other home is in the email", JSON.stringify(sent[0]).includes("14 Main St, Unit 1"));
   ok("every open request closed as lost", log.updates.some((u) => (u.patch as Row).status === "lost") && r.closed === 5);
   ok("one timeline line per email", log.inserts.filter((i) => i.table === "messages").length === 2 && String(log.inserts[0].body).startsWith("Rented notice sent to"));
+
+  // S826a: a renter sent the account's own form (Buildium) is not told it rented
+  sent.length = 0;
+  const logB = { updates: [] as Row[], inserts: [] as Row[] };
+  const rB = await notifyWaitingRentersRented({
+    client: fakeClient({
+      properties: [{ id: "p1", address: "12 Main St, Unit 2", status: "leased" }],
+      leads: leads as Row[],
+      messages: [
+        { id: "m1", lead_id: "a", channel: "note", body: "Buildium application link sent to Ann by you (emailed)." },
+        { id: "m2", lead_id: "b", channel: "note", body: "Called, left a voicemail." },
+      ],
+    }, logB),
+    org, propertyId: "p1", now: new Date(now),
+  });
+  ok("S826a: the Buildium renter gets no rented email", !sent.some((x) => x.to[0].email === "ann@x.test") && rB.sent === 1);
+  ok("S826a: the Buildium renter (both rows) is not closed as lost", rB.closed === 3);
+  ok("S826a: others on the rental are still told", sent.some((x) => x.to[0].email === "BO@x.test"));
+  sent.length = 0;
 
   // not leased: nothing happens
   sent.length = 0;

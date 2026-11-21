@@ -8,6 +8,7 @@ import { normalizeEmail } from "@/lib/persons";
 import { resolvePersonId } from "@/lib/persons-server";
 import { normalizePhoneE164 } from "@/lib/sms";
 import { sendRentalApplicationInvite } from "@/lib/email";
+import { ownFormSentNote } from "@/lib/own-form-sent";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
 
@@ -67,6 +68,7 @@ export async function startRentalApplication(
           property_address: args.propertyAddress,
           apply_url: link,
           added_by_name: args.addedByName ?? null,
+          own_form: true,
         });
         sent = r.sent === true;
       } catch {
@@ -78,7 +80,7 @@ export async function startRentalApplication(
       lead_id: args.leadId,
       channel: "note",
       direction: "outbound",
-      body: `${formName ?? "Your own"} application link sent to ${name ?? email ?? phone} by ${args.sentByLabel}${sent ? " (emailed)" : ""}.`,
+      body: ownFormSentNote({ formName, to: name ?? email ?? phone ?? "the renter", by: args.sentByLabel, emailed: sent }),
     });
     return { ok: true, external: true, applyUrl: link, emailed: sent, formName };
   }
