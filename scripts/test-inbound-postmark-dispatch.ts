@@ -108,5 +108,25 @@ Message : I came across your listing for 50 Glenrose Avenue and would be interes
   ok("gmail code without a token is not a lead", result.target !== "lead", result);
 }
 
+// S827c: a site's account mail reaches the lead path (where it is passed on).
+{
+  const activation = routePostmarkInbound(basePayload({
+    FromFull: { Email: "noreply@kijiji.ca" },
+    Subject: "Activate your Kijiji account",
+    TextBody: "Click the link below to activate your account.",
+  }));
+  ok("Kijiji activation goes to the lead path", activation.target === "lead", activation);
+  const code = routePostmarkInbound(basePayload({
+    FromFull: { Email: "no-reply@accounts.rentals.ca" },
+    Subject: "Your code",
+    TextBody: "Your verification code is 123456",
+  }));
+  ok("Rentals.ca code goes to the lead path", code.target === "lead", code);
+  const receipt = routePostmarkInbound(basePayload());
+  ok("a landlord's receipt stays on the capture path", receipt.target === "asset", receipt);
+  const lookalike = routePostmarkInbound(basePayload({ FromFull: { Email: "noreply@kijiji.ca.evil.com" } }));
+  ok("a look-alike domain is not site mail", lookalike.target === "asset", lookalike);
+}
+
 console.log(`\ninbound-postmark-dispatch: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

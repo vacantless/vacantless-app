@@ -3,6 +3,7 @@ import { parsePortalLeadEmail } from "./portal-lead-email";
 import { isKnownPortalSender } from "./portal-senders";
 import { isGmailForwardingSender } from "./portal-inbox";
 import { looksLikeEnquiryText } from "./ai-enquiry";
+import { siteMailDomain } from "./site-mail-pass";
 
 const MAIN_MAIL_DOMAIN = "vacantless.com";
 
@@ -112,6 +113,12 @@ export function routePostmarkInbound(
 
   if (token) {
     if (looksLikePortalLead(payload)) return { target: "lead", token, alias: null };
+    // S827c: a rental site's own account mail (Kijiji's activation link,
+    // Rentals.ca's code, a password reset) goes to the lead path, which passes
+    // it on to the owner after checking the site's authentication. On the
+    // capture path the loop guard dropped it: Kijiji's activation for a new
+    // account on the Vacantless address was thrown away.
+    if (siteMailDomain(postmarkFrom(payload))) return { target: "lead", token, alias: null };
     // S702: any other forwarded email that reads like a rental enquiry, with
     // no attachments, goes to the lead path where the AI reader handles it.
     // Receipts and documents (attachments) keep the capture path.
