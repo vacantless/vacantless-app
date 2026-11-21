@@ -545,6 +545,19 @@ export default async function PropertiesPage({
   // S775: Marketplace ads are counted apart; Facebook decides when Renew opens.
   const marketplaceOld = renewItems.filter((i) => i.portal === "facebook").length;
   const todo = archivedView ? "" : todoSummary(coverage.gaps, renewItems.length - marketplaceOld, marketplaceOld);
+  // S827: the banner names each rental and the sites it is missing, as links.
+  // Before this it said "1 rental is missing a site" with nothing to click.
+  const gapItems = archivedView
+    ? []
+    : coverage.rows
+        .filter((r) => r.missing.length > 0)
+        .map((r) => ({
+          id: r.propertyId,
+          label: shortAddress(r.address),
+          sites: r.missing.map(coverageLabel),
+          robot: r.missingRobot.length > 0,
+        }));
+  const firstNeedId = archivedView ? null : viewRows.find((v) => v.needsYou)?.p.id ?? null;
   const postedNotice = searchParams.posted
     ? searchParams.posted === "0"
       ? "Those sites need you first: a sign-in or a paid ad. Open the rental to do that."
@@ -648,9 +661,13 @@ export default async function PropertiesPage({
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Rented</p>
             <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">{headline.rented}</p>
           </div>
-          <div
-            className={`rounded-2xl border px-4 py-3 shadow-sm ${
-              headline.needYou > 0 ? "border-amber-200 bg-gradient-to-br from-amber-50 to-white" : "border-gray-200 bg-white"
+          <a
+            href={headline.needYou > 0 && firstNeedId ? `#rental-${firstNeedId}` : undefined}
+            title={headline.needYou > 0 ? "Show the rental that needs you" : undefined}
+            className={`block rounded-2xl border px-4 py-3 shadow-sm ${
+              headline.needYou > 0
+                ? "border-amber-200 bg-gradient-to-br from-amber-50 to-white transition hover:border-amber-300 hover:shadow"
+                : "border-gray-200 bg-white"
             }`}
           >
             <p
@@ -663,7 +680,10 @@ export default async function PropertiesPage({
             <p className="mt-1 text-2xl font-semibold tabular-nums text-gray-900">
               {headline.needYou > 0 ? headline.needYou : "All set"}
             </p>
-          </div>
+            {headline.needYou > 0 && firstNeedId ? (
+              <p className="mt-0.5 text-[11px] font-medium text-amber-700">Show me</p>
+            ) : null}
+          </a>
         </div>
       )}
 
@@ -682,8 +702,25 @@ export default async function PropertiesPage({
           <p className="text-sm text-amber-900">
             <span className="font-semibold">{todo}</span>
             <span className="ml-2 text-xs text-amber-800">
-              {renewItems.some((i) => i.portal === "facebook") ? `${FACEBOOK_RENEW_HOW} ` : ""}Each one is marked on its row.
+              {renewItems.some((i) => i.portal === "facebook") ? `${FACEBOOK_RENEW_HOW} ` : ""}
+              {renewItems.length > 0 ? "Each old ad is marked on its row." : ""}
             </span>
+            {gapItems.length > 0 && (
+              <span className="mt-1 flex flex-col gap-1">
+                {gapItems.slice(0, 5).map((g) => (
+                  <Link
+                    key={g.id}
+                    href={`/dashboard/properties/${g.id}?tab=distribute#distribute-header`}
+                    className="text-sm text-amber-900 underline decoration-amber-400 underline-offset-2 hover:text-amber-950"
+                  >
+                    {g.label}: not on {g.sites.join(", ")} yet. Post it
+                  </Link>
+                ))}
+                {gapItems.length > 5 ? (
+                  <span className="text-xs text-amber-800">and {gapItems.length - 5} more, marked on their rows.</span>
+                ) : null}
+              </span>
+            )}
           </p>
           {renewItems.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
@@ -814,7 +851,7 @@ export default async function PropertiesPage({
               .join(" · ");
             const primaryIsPostMissing = v.missingRobot.length > 0;
             return (
-              <li key={p.id} className="group px-4 py-3.5 first:rounded-t-2xl transition-colors hover:bg-gray-50/70">
+              <li key={p.id} id={`rental-${p.id}`} className="group scroll-mt-24 px-4 py-3.5 first:rounded-t-2xl transition-colors hover:bg-gray-50/70">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
                   <div className="flex min-w-0 flex-1 items-center gap-3.5">
                     <Link
@@ -891,9 +928,9 @@ export default async function PropertiesPage({
                                 key={l.key}
                                 href={kitHref}
                                 title="Not on Marketplace yet. Open the Marketplace kit."
-                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[11px] font-medium text-gray-400 transition hover:border-gray-400 hover:text-gray-600"
+                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 transition hover:border-amber-400 hover:bg-amber-100"
                               >
-                                + {l.label}
+                                + Post to {l.label}
                               </Link>
                             ) : l.choice ? (
                               <Link
