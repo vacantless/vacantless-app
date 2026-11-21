@@ -598,6 +598,10 @@ function extractDescription(lines: string[]): string | null {
   );
   // A generic "Some Label: value" line marks the end of a remarks block.
   const genericLabelRe = /^[A-Z][A-Za-z .\/]{1,28}:\s*\S/;
+  // S827b: a TRREB sheet follows the remarks with empty labels ("Extras:",
+  // "Inclusions:", "Exclusions:", "Rental Items:"). They ended up in the ad.
+  const emptyLabelRe = /^[A-Z][A-Za-z .\/]{1,28}:\s*$/;
+  const trailingLabelsRe = /(?:\s+(?:Extras|Inclusions|Exclusions|Rental Items|Rental Equipment)\s*:)+\s*$/i;
 
   for (let i = 0; i < lines.length; i++) {
     const m = labelRe.exec(lines[i]);
@@ -605,10 +609,10 @@ function extractDescription(lines: string[]): string | null {
     const parts: string[] = [];
     if (m[1].trim()) parts.push(m[1].trim());
     for (let j = i + 1; j < lines.length; j++) {
-      if (genericLabelRe.test(lines[j])) break;
+      if (genericLabelRe.test(lines[j]) || emptyLabelRe.test(lines[j])) break;
       parts.push(lines[j]);
     }
-    const joined = parts.join(" ").replace(/\s+/g, " ").trim();
+    const joined = parts.join(" ").replace(/\s+/g, " ").replace(trailingLabelsRe, "").trim();
     if (joined.length >= 20) return joined;
   }
 

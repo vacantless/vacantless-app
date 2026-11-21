@@ -21,7 +21,7 @@ export const metadata = {
 const STEPS: { title: string; body: string }[] = [
   {
     title: "Drop the data sheet",
-    body: "Choose Copy from an existing ad, then drop the MLS data sheet PDF or paste the listing text from realtor.ca. Address, rent, beds, baths, size and description fill in. Add the photos and check it.",
+    body: "Choose Import from MLS or an existing ad, then drop the MLS data sheet PDF. The form fills in by itself: address, rent, beds, baths, size, unit type and description. You can paste the listing text from realtor.ca instead. Add the photos and check it.",
   },
   {
     title: "Share one link in every ad",

@@ -1,7 +1,7 @@
 "use server";
 
 import { cleanArrivalNote, looksLikeAccessCode } from "@/lib/arrival-note";
-import { cleanPhotoFolderUrl, photoSourceOf, pullResultParam, pullsFrom } from "@/lib/drive-import";
+import { cleanPhotoFolderUrl, photoSourceOf, pullResultParam, pullsFrom, splitShootLinks } from "@/lib/drive-import";
 import { pullFolderPhotos } from "@/lib/photo-folder-pull-server";
 import { dropboxListSharedTree, fetchDropboxSharedFile, getDropboxAccessToken } from "@/lib/dropbox-import-server";
 import { parseGroupSize } from "@/lib/group-viewing";
@@ -915,7 +915,10 @@ export async function createPropertyV2(formData: FormData) {
         : null;
   const tourRaw = String(formData.get("virtual_tour_url") ?? "").trim();
   const videoRaw = String(formData.get("video_url") ?? "").trim();
-  const virtualTourUrl = tourRaw ? normalizeVirtualTourUrl(tourRaw) : null;
+  // S827b: the photo link box takes a Dropbox or Drive folder and an iGUIDE
+  // (or Matterport, YouTube) tour, in any order.
+  const shootLinks = splitShootLinks(String(formData.get("photo_folder_url") ?? ""));
+  const virtualTourUrl = tourRaw ? normalizeVirtualTourUrl(tourRaw) : shootLinks.tour;
   const videoUrl = videoRaw ? normalizeVirtualTourUrl(videoRaw) : null;
   const amenities = normalizeAmenities(formData.getAll("amenities"));
   const coords =
@@ -990,7 +993,41 @@ export async function createPropertyV2(formData: FormData) {
   const newId = (inserted as { id: string } | null)?.id ?? null;
   if (!newId) redirect("/dashboard/properties?import=failed");
 
+  // S827b: a Dropbox or Google Drive link on Add rental. The photos come in
+  // from the link at full size, so nothing big rides this save.
+  const folderRaw = shootLinks.folder ?? "";
+  const folderUrl = folderRaw ? cleanPhotoFolderUrl(folderRaw) : null;
+  if (folderUrl) {
+    await supabase
+      .from("properties")
+      .update({ photo_source_url: folderUrl })
+      .eq("id", newId)
+      .eq("organization_id", org.id);
+  }
+
   const files = photoFilesFromForm(formData);
+  if (files.length === 0 && folderRaw) {
+    const done = (v: string): never =>
+      redirect(`/dashboard/properties/${newId}?created=1&folder=${v}#photo-folder`);
+    if (!folderUrl) done("badlink");
+    if (!pullsFrom(photoSourceOf(folderUrl))) {
+      revalidatePath(`/dashboard/properties/${newId}`);
+      done("saved");
+    }
+    const admin = createAdminClient();
+    if (!admin) done("failed");
+    const result =
+      (await pullFolderPhotos({
+        admin: admin!,
+        organizationId: org.id,
+        propertyId: newId,
+        folderUrl: folderUrl as string,
+        touchUp: false,
+        markOnly: false,
+      })) ?? { ok: false as const, reason: "badlink" as const };
+    revalidatePath(`/dashboard/properties/${newId}`);
+    done(pullResultParam(result));
+  }
   if (files.length > 0) {
     const result = await uploadPhotosForProperty(supabase, org, newId, files, []);
     revalidatePath(`/dashboard/properties/${newId}`);

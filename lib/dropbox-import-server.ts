@@ -8,7 +8,7 @@ import { MAX_PHOTO_BYTES, extForType, nextSortOrder, photoStoragePath, type Phot
 import { sniffImageType } from "@/lib/image-url-import";
 import { photoCapForPlan } from "@/lib/billing";
 import { touchUpPhoto } from "@/lib/photo-touchup";
-import { groupImagesByParentPath, parseDropboxFolderUrl, sortGalleryEntries, type DropboxEntry } from "@/lib/dropbox-import";
+import { groupImagesByParentPath, parseDropboxFolderUrl, pickFolderForAddress, sortGalleryEntries, type DropboxEntry } from "@/lib/dropbox-import";
 import type { DrivePullResult } from "@/lib/drive-import";
 import { mergeSeenRefs } from "@/lib/drive-import";
 
@@ -306,10 +306,23 @@ export async function pullDropboxPhotos(args: {
   if (groups.size === 0) {
     return entries.some((e) => e.tag === "folder") ? { ok: false, reason: "nested", subfolders: [] } : { ok: false, reason: "empty" };
   }
+  let chosenKey = [...groups.keys()][0];
   if (groups.size > 1) {
-    return { ok: false, reason: "nested", subfolders: [...groups.keys()].map((k) => k || "the top folder") };
+    // S827b: a photographer's master folder holds every property they shot.
+    // Pick this rental's Gallery by its address; otherwise ask as before.
+    const { data: propRow } = await admin
+      .from("properties")
+      .select("address")
+      .eq("id", propertyId)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    const picked = pickFolderForAddress([...groups.keys()], (propRow as { address: string | null } | null)?.address ?? null);
+    if (!picked) {
+      return { ok: false, reason: "nested", subfolders: [...groups.keys()].map((k) => k || "the top folder") };
+    }
+    chosenKey = picked;
   }
-  const images = sortGalleryEntries([...groups.values()][0]);
+  const images = sortGalleryEntries(groups.get(chosenKey) ?? []);
 
   const { data: org } = await admin.from("organizations").select("plan").eq("id", organizationId).maybeSingle();
   const plan = (org as { plan: string | null } | null)?.plan ?? null;

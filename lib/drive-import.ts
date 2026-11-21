@@ -9,6 +9,7 @@
 // Drive's thumbnail link at 2400 px wide: a JPEG well under the 10 MB photo
 // limit even when the original is a 20 MB pro shot, and plenty for an ad.
 import { isDropboxImageName, sortGalleryEntries } from "./dropbox-import";
+import { normalizeVirtualTourUrl } from "./virtual-tour";
 
 export type DriveFolderRef = { folderId: string; resourceKey: string | null };
 
@@ -245,4 +246,31 @@ export function markedLine(n: number): string {
 export function mergeSeenRefs(seen: readonly string[] | null | undefined, add: readonly string[], cap = 2000): string[] {
   const out = [...new Set([...(seen ?? []), ...add])];
   return out.length > cap ? out.slice(out.length - cap) : out;
+}
+
+/**
+ * S827b: Add rental's photo link box. Several links may be pasted together
+ * (a photographer sends a Dropbox folder and an iGUIDE tour). Returns the
+ * first photo folder and the first tour link found.
+ */
+export function splitShootLinks(raw: string | null | undefined): { folder: string | null; tour: string | null } {
+  const urls = String(raw ?? "").match(/https?:\/\/[^\s<>"',]+/gi) ?? [];
+  let folder: string | null = null;
+  let tour: string | null = null;
+  for (const u of urls) {
+    const src = photoSourceOf(u);
+    if (!folder && (src === "gdrive" || src === "dropbox")) {
+      folder = u;
+      continue;
+    }
+    if (!tour) {
+      const t = normalizeVirtualTourUrl(u);
+      if (t) {
+        tour = t;
+        continue;
+      }
+    }
+    if (!folder && src === "other" && cleanPhotoFolderUrl(u)) folder = u;
+  }
+  return { folder, tour };
 }

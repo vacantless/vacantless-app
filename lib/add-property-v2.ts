@@ -155,13 +155,39 @@ function addField(fields: string[], label: string, condition: boolean) {
   if (condition && !fields.includes(label)) fields.push(label);
 }
 
+/**
+ * S827b: "Basement" or "Lower level" when the remarks describe the rental
+ * itself as a basement or lower-level apartment, suite or unit. A house "with a
+ * finished basement" does not count.
+ */
+export function lowerLevelUnitFromText(text: string | null | undefined): "Basement" | "Lower level" | null {
+  if (!text) return null;
+  const m = /\b(basement|lower[\s-]level)\s+(?:one[\s-]bedroom\s+|two[\s-]bedroom\s+|\d[\s-]bed(?:room)?\s+)?(apartment|apt|suite|unit|studio|bachelor|rental)\b/i.exec(text);
+  if (!m) return null;
+  return /basement/i.test(m[1]) ? "Basement" : "Lower level";
+}
+
+/**
+ * S827b: true when the pasted listing is an agent's (an MLS data sheet or a
+ * realtor.ca page), so "Listed by" should read Real estate professional.
+ */
+export function listingLooksAgentListed(text: string | null | undefined): boolean {
+  if (!text) return false;
+  return /\bMLS\s*(?:\u00ae|#|number|no\b)|\brealtor\.ca\b|\bBrokerage\b|\bList(?:ing)? Brokerage\b|\bTRREB\b/i.test(text);
+}
+
 export function addPropertyV2DraftFromListing(
   parsed: ParsedListing,
   aiDraft?: ListingDraft | null,
 ): { draft: AddPropertyV2Draft; filledFields: string[] } {
-  const mappedUnitType = mapUnitTypeFromRaw(
+  const typeFromSheet = mapUnitTypeFromRaw(
     parsed.propertyType ?? aiDraft?.propertyType ?? null,
   );
+  // S827b: an MLS sheet for a basement rental says "Detached" (the building),
+  // so the form picked House. The remarks say what is for rent.
+  const lowerUnit = lowerLevelUnitFromText(parsed.description);
+  const mappedUnitType =
+    lowerUnit && (typeFromSheet == null || typeFromSheet === "house") ? "basement-apartment" : typeFromSheet;
   const draft: AddPropertyV2Draft = {
     ...EMPTY_ADD_PROPERTY_V2_DRAFT,
     address: parsed.address ?? "",
@@ -171,6 +197,7 @@ export function addPropertyV2DraftFromListing(
     unit_type: mappedUnitType ?? "",
     available_date: parsed.availableDate ?? "",
     sqft: numberInput(parsed.sqft),
+    floor: lowerUnit ?? "",
     parking: parsed.parking ?? "",
     description: parsed.description ?? "",
     virtual_tour_url: parsed.virtualTourUrl ?? "",
@@ -206,6 +233,7 @@ export function addPropertyV2DraftFromListing(
 
   const filledFields = [...parsed.foundFields];
   addField(filledFields, "Property type", draft.unit_type !== "");
+  addField(filledFields, "Floor", draft.floor !== "");
   addField(filledFields, "Internet included", draft.internet_included !== "");
   addField(filledFields, "Cable included", draft.cable_included !== "");
   addField(filledFields, "Amenities", draft.amenities.length > 0);

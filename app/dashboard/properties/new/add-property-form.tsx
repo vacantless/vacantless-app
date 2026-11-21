@@ -9,6 +9,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { useFormStatus } from "react-dom";
 import { SubmitButton } from "@/components/submit-button";
 import {
   PRIMARY_ACTION_CLASS,
@@ -44,6 +45,7 @@ import { assembleDocumentText, type PdfTextItemLike } from "@/lib/pdf-text";
 import {
   EMPTY_ADD_PROPERTY_V2_DRAFT,
   buildAddPropertyV2ReadinessInput,
+  listingLooksAgentListed,
   type AddPropertyV2Draft,
 } from "@/lib/add-property-v2";
 import {
@@ -55,6 +57,25 @@ import {
 import type { GeocodeSuggestion } from "@/lib/geocode";
 import { mergeAddressSuggestion } from "@/lib/address-merge";
 import { POSTING_ADDON_HREF } from "@/lib/billing";
+import { PHOTO_SAVE_BUDGET_BYTES, saveFailedMessage, shrinkPhotos, tooBigToSaveMessage } from "@/lib/photo-shrink";
+
+// S827b: the save always leaves this page when it works. If it stops pending
+// and we are still here, it did not go through (a 413 showed nothing at all).
+function SaveWatcher({ onFail }: { onFail: () => void }) {
+  const { pending } = useFormStatus();
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if (pending) {
+      wasPending.current = true;
+      return;
+    }
+    if (!wasPending.current) return;
+    wasPending.current = false;
+    const t = setTimeout(onFail, 2500);
+    return () => clearTimeout(t);
+  }, [pending, onFail]);
+  return null;
+}
 
 const PDF_WORKER_SRC = "/pdf.worker.min.mjs";
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
@@ -302,6 +323,9 @@ export function AddPropertyV2Form({
   );
   const [listingText, setListingText] = useState("");
   const [photoCount, setPhotoCount] = useState(0);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [imageCount, setImageCount] = useState(0);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [pdfMessage, setPdfMessage] = useState<string | null>(null);
@@ -430,7 +454,34 @@ export function AddPropertyV2Form({
     }
   }
 
-  function applyPrefill(formData: FormData) {
+  // S827b: photographer files are 2 to 3 MB each and the save refuses more than
+  // about 4.5 MB in total. Make them smaller here, before the save, and say so.
+  async function photosPicked(input: HTMLInputElement) {
+    const picked = Array.from(input.files ?? []);
+    setPhotoMessage(null);
+    if (picked.length === 0) {
+      setPhotoCount(0);
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      const result = await shrinkPhotos(picked);
+      if (result.message) {
+        const dt = new DataTransfer();
+        for (const f of result.files) dt.items.add(f);
+        input.files = dt.files;
+        setPhotoMessage(result.message);
+      }
+      setPhotoCount(input.files?.length ?? 0);
+    } catch {
+      setPhotoCount(picked.length);
+      setPhotoMessage("These photos are large. If the save fails, save without photos and add them on the rental's page.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  function applyPrefill(formData: FormData, sourceText?: string) {
     setImportMessage(null);
     startImportTransition(async () => {
       const result = await prefillAddPropertyV2(formData);
@@ -445,6 +496,11 @@ export function AddPropertyV2Form({
       }));
       setAddressCoords({ latitude: "", longitude: "" });
       clearAddressSuggestions();
+      // S827b: an MLS sheet or realtor.ca page means an agent listed it.
+      if (listingLooksAgentListed(sourceText)) {
+        const listedBy = formRef.current?.querySelector<HTMLSelectElement>('select[name="for_rent_by"]');
+        if (listedBy) listedBy.value = "professional";
+      }
       setMode("fresh");
       setImportMessage(
         `Prefilled ${result.filledFields.length} fields from ${
@@ -507,7 +563,11 @@ export function AddPropertyV2Form({
         return;
       }
       setListingText(assembled);
-      setPdfMessage(`Read ${file.name}.`);
+      setPdfMessage(`Read ${file.name}. Filling in the form.`);
+      // S827b: dropping the sheet fills the form; no second button to find.
+      const fd = new FormData();
+      fd.set("listing_text", assembled);
+      applyPrefill(fd, assembled);
     } catch {
       setPdfMessage("Couldn't read that PDF. Paste the listing text instead.");
     }
@@ -516,7 +576,7 @@ export function AddPropertyV2Form({
   function prefillFromText() {
     const fd = new FormData();
     fd.set("listing_text", listingText);
-    applyPrefill(fd);
+    applyPrefill(fd, listingText);
   }
 
   function prefillFromImages() {
@@ -581,6 +641,20 @@ export function AddPropertyV2Form({
         ref={formRef}
         action={createPropertyV2}
         encType="multipart/form-data"
+        onSubmit={(e) => {
+          setSaveMessage(null);
+          if (photoBusy) {
+            e.preventDefault();
+            setSaveMessage("Still getting your photos ready. Press Save draft again in a moment.");
+            return;
+          }
+          const photosInput = e.currentTarget.querySelector<HTMLInputElement>('input[name="photos"]');
+          const bytes = Array.from(photosInput?.files ?? []).reduce((sum, f) => sum + f.size, 0);
+          if (bytes > PHOTO_SAVE_BUDGET_BYTES * 1.2) {
+            e.preventDefault();
+            setSaveMessage(tooBigToSaveMessage(bytes));
+          }
+        }}
         className="space-y-5"
       >
         <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -605,7 +679,7 @@ export function AddPropertyV2Form({
                   : SECONDARY_ACTION_CLASS
               }
             >
-              Copy from an existing ad
+              Import from MLS or an existing ad
             </button>
           </div>
 
@@ -630,7 +704,10 @@ export function AddPropertyV2Form({
                 className="cursor-pointer rounded-lg border-2 border-dashed border-gray-300 px-4 py-5 text-center hover:bg-gray-50"
               >
                 <p className="text-sm font-medium text-gray-700">
-                  Drop a data-sheet PDF, or click to choose
+                  Drop your MLS or Realm data sheet here, or click to choose
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  A PDF of your own listing. We fill in the form for you, then you check it.
                 </p>
                 <input
                   ref={pdfInputRef}
@@ -664,7 +741,7 @@ export function AddPropertyV2Form({
                   disabled={isImportPending || listingText.trim().length === 0}
                   className={`${SECONDARY_ACTION_CLASS} disabled:cursor-not-allowed disabled:opacity-50`}
                 >
-                  {isImportPending ? "Prefilling..." : "Prefill from listing"}
+                  {isImportPending ? "Filling in the form..." : "Fill in the form from this text"}
                 </button>
                 {aiImageImportEnabled && (
                   <div className="flex flex-wrap items-center gap-2">
@@ -922,10 +999,31 @@ export function AddPropertyV2Form({
               type="file"
               accept="image/*"
               multiple
-              onChange={(e) => setPhotoCount(e.target.files?.length ?? 0)}
+              onChange={(e) => void photosPicked(e.currentTarget)}
               className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
             />
           </Field>
+          <Field label="Or the photographer’s links" htmlFor="photo_folder_url">
+            <input
+              id="photo_folder_url"
+              name="photo_folder_url"
+              type="text"
+              inputMode="url"
+              placeholder="Dropbox or Google Drive folder, and an iGUIDE tour link"
+              className={inputClass()}
+            />
+          </Field>
+          <p className="mt-1 text-xs text-gray-500">
+            Paste one or both. Photos come in from the folder when you save. A master folder works too. We find this address. A tour link goes on the listing.
+          </p>
+          {photoBusy && (
+            <p className="mt-2 text-xs font-medium text-gray-600">Getting your photos ready...</p>
+          )}
+          {photoMessage && !photoBusy && (
+            <p className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-700">
+              {photoMessage}
+            </p>
+          )}
         </section>
 
         <p className="text-xs text-gray-500">
@@ -1341,6 +1439,12 @@ export function AddPropertyV2Form({
             Saves as a private draft. Renters can&apos;t see it yet.
           </span>
         </div>
+        <SaveWatcher onFail={() => setSaveMessage(saveFailedMessage())} />
+        {saveMessage && (
+          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+            {saveMessage}
+          </p>
+        )}
       </form>
 
       <ReadinessMeter

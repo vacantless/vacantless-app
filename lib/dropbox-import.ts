@@ -330,3 +330,60 @@ export function dropboxImportErrorMessage(reason: string): string {
       return "Sorry, importing from Dropbox didn't work. Please try again.";
   }
 }
+
+// --- S827b: a photographer's master folder ----------------------------------
+
+/**
+ * A photographer such as Leading Image sends one "Master Dropbox Link" that
+ * holds every property they shot for the agent, each with a Gallery (web and
+ * MLS size) and a High Res folder. Pick this rental's Gallery from the address.
+ * Returns null when it is not clear which folder is this rental's.
+ */
+export function pickFolderForAddress(keys: string[], address: string | null | undefined): string | null {
+  const addr = parseUnitAddress(address);
+  if (!addr || keys.length === 0) return null;
+  const norm = (s: string) => ` ${s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+  const streetRe = new RegExp(`(?:^| )(?:([a-z0-9]{1,5}) )?${addr.number} ${addr.street}(?: |$)`);
+  const matches: Array<{ key: string; unit: string | null }> = [];
+  for (const key of keys) {
+    // Only the folder names count, not the file names under them.
+    const m = streetRe.exec(norm(key));
+    if (!m) continue;
+    const after = norm(key).slice((m.index ?? 0) + m[0].length);
+    const unitAfter = /^(?:(?:ave|avenue|st|street|rd|road|dr|drive|blvd|cres|ct|pl|way|lane|ln|terr|terrace|cir|sq|pkwy|gate|trl|crt) )?(?:unit |suite |apt |# )?([a-z]|\d{1,4})(?= |$)/.exec(after.trim() + " ");
+    const unit = m[1] ?? (unitAfter && /unit|suite|apt/.test(after.slice(0, 12)) ? unitAfter[1] : null);
+    matches.push({ key, unit: unit ? unit.toLowerCase() : null });
+  }
+  if (matches.length === 0) return null;
+  let mine = matches;
+  if (addr.unit) {
+    mine = matches.filter((x) => x.unit === addr.unit);
+  } else if (new Set(matches.map((x) => x.unit)).size > 1) {
+    return null; // several units at this address and the rental names none
+  }
+  if (mine.length === 0) return null;
+  const gallery = mine.filter((x) => /(?:^|\/)[^/]*(gallery|mls|web)[^/]*$/i.test(x.key));
+  const notHighRes = mine.filter((x) => !/high ?res|hi ?res|print/i.test(x.key));
+  const pool = gallery.length > 0 ? gallery : notHighRes.length > 0 ? notHighRes : mine;
+  // One property folder may still hold a few galleries; take them only when
+  // there is exactly one left.
+  return pool.length === 1 ? pool[0].key : null;
+}
+
+/** "50 Glenrose Ave, Unit B, Toronto" -> { number: "50", street: "glenrose", unit: "b" }. */
+export function parseUnitAddress(address: string | null | undefined): { number: string; street: string; unit: string | null } | null {
+  if (!address) return null;
+  const first = address.split(",")[0].trim();
+  const lead = /^(?:([a-z0-9]{1,5})\s*-\s*)?(\d{1,6})\s+([a-z][a-z'.]*)/i.exec(first);
+  if (!lead) return null;
+  const unitPart =
+    lead[1] ??
+    /\b(?:unit|suite|apt|apartment|#)\s*([a-z0-9]{1,5})\b/i.exec(address)?.[1] ??
+    /^\d{1,6}\s+.*\s([a-z])$/i.exec(first)?.[1] ??
+    null;
+  return {
+    number: lead[2],
+    street: lead[3].toLowerCase().replace(/[^a-z0-9]/g, ""),
+    unit: unitPart ? unitPart.toLowerCase() : null,
+  };
+}
