@@ -137,7 +137,8 @@ export async function GET(req: NextRequest) {
         .eq("alive", false),
       brevoProblems(),
       // S748: page crashes (app_errors, migration 0269). A read error leaves it "not checked".
-      admin.from("app_errors").select("path").gte("at", since).limit(500),
+      // S825c: a dropped connection the page retried by itself (kind network) is not a crash.
+      admin.from("app_errors").select("path").gte("at", since).neq("kind", "network").limit(500),
     ]);
   // S748: keep the crash log to 30 days.
   await admin

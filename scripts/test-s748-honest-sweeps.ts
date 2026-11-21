@@ -11,7 +11,7 @@ import {
   sweepDetails,
   sweepFailed,
 } from "../lib/cron-sweeps";
-import { appErrorLines, cleanAppError } from "../lib/app-errors";
+import { appErrorLines, cleanAppError, isNetworkErrorMessage } from "../lib/app-errors";
 import { buildHealthDigest, type HealthInput } from "../lib/health-digest";
 
 let passed = 0;
@@ -85,6 +85,15 @@ ok("clean drops the query string", cleanAppError({ path: "/r/abc?p=secret#x", me
 ok("clean caps message", (cleanAppError({ path: "/", message: "x".repeat(900) })?.message ?? "").length === 300);
 ok("clean rejects empty", cleanAppError({}) === null && cleanAppError(null) === null && cleanAppError("x") === null);
 ok("clean kind", cleanAppError({ path: "/", kind: "global" })?.kind === "global" && cleanAppError({ path: "/", kind: "evil" })?.kind === "page");
+// S825c: a dropped connection is kept as network and left out of the crash count.
+ok("network kind kept", cleanAppError({ path: "/", kind: "network" })?.kind === "network");
+ok("network messages", isNetworkErrorMessage("Load failed") && isNetworkErrorMessage("Failed to fetch") && isNetworkErrorMessage("NetworkError when attempting to fetch resource.") && !isNetworkErrorMessage("Cannot read properties of undefined"));
+{
+  const route = readFileSync("app/api/cron/health-digest/route.ts", "utf8");
+  ok("digest skips network drops", route.includes('.neq("kind", "network")'));
+  const ep = readFileSync("app/error.tsx", "utf8");
+  ok("error page retries a drop once", ep.includes("isNetworkErrorMessage") && ep.includes("RETRY_WINDOW_MS") && ep.includes("router.refresh()"));
+}
 ok("clean strips control chars", cleanAppError({ path: "/", message: "a\u0000b\nc" })?.message === "a b c");
 const lines = appErrorLines([
   { path: "/r/11111111-2222-3333-4444-555555555555" },

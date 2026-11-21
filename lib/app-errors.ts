@@ -21,7 +21,7 @@ export function cleanAppError(body: unknown): AppErrorRow | null {
   if (path) path = path.split("?")[0].split("#")[0] || "/";
   const digest = clip(b.digest, 64);
   const message = clip(b.message, 300);
-  const kind = b.kind === "global" ? "global" : "page";
+  const kind = b.kind === "global" ? "global" : b.kind === "network" ? "network" : "page";
   if (!path && !digest && !message) return null;
   return { path, digest, message, kind };
 }
@@ -38,4 +38,11 @@ export function appErrorLines(rows: { path: string | null }[], max = 8): string[
     .sort((a, b) => b[1] - a[1])
     .slice(0, max)
     .map(([p, n]) => `${p}: ${n} crash${n === 1 ? "" : "es"}.`);
+}
+
+/** S825c: a dropped connection, not a bug in the page (Safari "Load failed",
+ * Chrome "Failed to fetch", Firefox "NetworkError..."). Pure. */
+export function isNetworkErrorMessage(message: string | null | undefined): boolean {
+  const m = (message ?? "").trim().toLowerCase();
+  return m === "load failed" || m === "failed to fetch" || m.startsWith("networkerror") || m === "network error";
 }
