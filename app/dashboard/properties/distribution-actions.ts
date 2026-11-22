@@ -13,6 +13,7 @@
 // or org id we then trust. createClient() is RLS-scoped to the operator's org, so
 // a read of another org's row returns null and the action stops.
 
+import { shouldReleaseToRobot } from "@/lib/approve-release";
 import { triggerPaidCapture, triggerPostNow, triggerRentalsTakedown } from "@/lib/post-now";
 import { offersIPaid, paidPressedNote } from "@/lib/paid-capture-note";
 import { takenDownNote } from "@/lib/ads-still-up";
@@ -445,8 +446,9 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
   // robot's queue on approval. The robot only picks up needs_operator; without
   // this the approval sat at needs_payment forever. A post the robot already
   // built to the checkout (operator_action_url set) is unchanged.
-  const releaseToRobot =
-    pendingItem?.publish_status === "needs_payment" && !pendingItem.operator_action_url;
+  // S829: a saved link that is only Kijiji's empty post form is not a
+  // checkout, so that post goes back to the robot too (lib/approve-release).
+  const releaseToRobot = pendingItem ? shouldReleaseToRobot(pendingItem) : false;
   // S713: approving a robot post (Kijiji, Rentals.ca, Zumper) needs the
   // Posting add-on. Checked before anything is approved or the robot is woken.
   if (pendingItem?.channel && isRobotPostedChannel(pendingItem.channel)) {
@@ -535,7 +537,7 @@ export async function authorizeAutopilotSubmit(formData: FormData) {
         .update({
           operator_submit_approved_at: now,
           operator_submit_approved_by: uid,
-          ...(releaseToRobot ? { publish_status: "needs_operator" } : {}),
+          ...(releaseToRobot ? { publish_status: "needs_operator", operator_action_url: null } : {}),
           // S713d: a fresh approval clears the robot's last named blocker (for
           // example a Zumper renter account the landlord has since upgraded).
           error_code: null,
