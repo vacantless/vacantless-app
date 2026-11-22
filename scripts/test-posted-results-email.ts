@@ -56,6 +56,16 @@ ok("booking link is in the body", mail.body.includes("https://app.vacantless.com
 ok("next step link is absolute", mail.body.includes("https://app.vacantless.com/dashboard/properties/abc?tab=distribute#for-you-facebook"));
 ok("button", mail.actionLabel === "Open your rental");
 ok("no em dash", !/—/.test(mail.subject + mail.body));
+// S828: Marketplace may already be up with no saved link; the Zumper link is the public ad.
+ok("marketplace line covers an ad already posted", mail.body.includes("Not on Facebook Marketplace yet?") && mail.body.includes("Already posted it?") && !mail.body.includes("Want more renters? Add Facebook"));
+const zmail = resultsEmail({
+  address: null,
+  posts: [{ portal: "zumper", status: "live", url: "https://www.zumper.com/manage/properties/listing/65839621", createdAt: new Date().toISOString() }],
+  bookingUrl: "u",
+  appUrl: "a",
+  nextStep: null,
+});
+ok("zumper link is the public ad, not the manage page", !zmail.body.includes("/manage/properties/") && /zumper\.com/.test(zmail.body));
 ok("no next step line when there is none", !resultsEmail({ address: null, posts: [post("kijiji", 5)], bookingUrl: "u", appUrl: "a", nextStep: null }).body.includes("Want more renters"));
 ok("without an address", resultsEmail({ address: null, posts: [], bookingUrl: "u", appUrl: "a", nextStep: null }).subject === "Your rental is live");
 

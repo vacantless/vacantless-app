@@ -71,5 +71,11 @@ ok("h: owner line unchanged", firstRunCostLine("kijiji") === "1 free ad per pers
 ok("h: other sites ignore the flag", firstRunCostLine("zumper", { professional: true }) === firstRunCostLine("zumper"));
 ok("h: the row passes the rental's Listed by", pe.includes('listedByProfessional={String(basics.forRentBy ?? "").toLowerCase() === "professional"}') && pe.includes("listedByProfessional={listedByProfessional}"));
 
+// S828b: a rental the login cannot open says which login this is
+const signout = readFileSync("app/auth/signout/route.ts", "utf8");
+ok("wrong account: no bare not found when signed in", detail.includes("This rental is in another account") && detail.includes("if (!viewer) notFound();"));
+ok("wrong account: demo login is named", detail.includes("This is the demo account."));
+ok("wrong account: sign out comes back to the rental", detail.includes('name="next" value={`/dashboard/properties/${params.id}?tab=distribute`}') && signout.includes('target.searchParams.set("next", next)') && signout.includes("safeNextPath(raw)"));
+
 console.log(`\ns828-fixes: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

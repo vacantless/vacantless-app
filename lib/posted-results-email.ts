@@ -4,6 +4,7 @@
 // Pure and tested in scripts/test-posted-results-email.ts; the sweep is
 // app/api/cron/posted-results-email.
 import { postedResultsSites, type PostedResultsNext } from "@/lib/posted-results";
+import { publicAdUrl } from "@/lib/rental-list-view";
 
 /** Wait this long after the first live ad, so the other sites can catch up. */
 export const RESULTS_EMAIL_WAIT_MS = 2 * 60 * 60 * 1000;
@@ -55,7 +56,9 @@ export function resultsEmail(input: {
     `${headline}.`,
     "",
     `Your Vacantless page: ${input.bookingUrl}`,
-    ...sites.map((s) => `${s.label}: ${s.url}`),
+    // S828: the ad a renter sees. Zumper saves the owner's manage link, which
+    // asks for a Zumper sign-in (S773 fixed this on the Rentals list only).
+    ...sites.map((s) => `${s.label}: ${publicAdUrl(s.key, s.url)}`),
     "",
     "Every ad points renters to your booking link.",
     `Send it to anyone who asks: ${input.bookingUrl}`,
@@ -66,7 +69,19 @@ export function resultsEmail(input: {
   ];
   if (input.nextStep) {
     const href = input.nextStep.href.startsWith("http") ? input.nextStep.href : `${input.appUrl}${input.nextStep.href}`;
-    lines.push("", `Want more renters? Add ${input.nextStep.title}.`, href);
+    if (input.nextStep.key === "marketplace") {
+      // S828: Vacantless only knows a Marketplace ad once its link is saved,
+      // so "Add Marketplace" reached a landlord whose ad was already up
+      // (50 Glenrose B). Say both cases.
+      lines.push(
+        "",
+        "Not on Facebook Marketplace yet? It is free, and most renters look there first.",
+        href,
+        "Already posted it? Open the rental and paste the ad's link, so we track it.",
+      );
+    } else {
+      lines.push("", `Want more renters? Add ${input.nextStep.title}.`, href);
+    }
   }
   return {
     subject: headline,

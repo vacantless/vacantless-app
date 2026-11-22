@@ -7,6 +7,7 @@ import { loadMadeRoom, loadRentalsSlotChoice, madeRoomLine, slotIsStuck } from "
 import { captureNote, paidPressedAt } from "@/lib/paid-capture-note";
 import { siteRenters, siteRowFacts } from "@/lib/site-row-facts";
 import Link from "next/link";
+import { demoEmail, isDemoEmail } from "@/lib/demo-account";
 import { buildAdPreview } from "@/lib/ad-preview";
 import { showRelistButton } from "@/lib/relist-visibility";
 import { countViewingTimes } from "@/lib/viewing-times-count";
@@ -1074,7 +1075,37 @@ export default async function PropertyDetailPage({
     .eq("id", params.id)
     .maybeSingle();
 
-  if (!property) notFound();
+  if (!property) {
+    // S828: an emailed "Open your rental" opened on a phone signed in to the
+    // demo account (Lakeview) showed a bare "not found". Say which login this
+    // is and offer the right one, then come back here.
+    const {
+      data: { user: viewer },
+    } = await supabase.auth.getUser();
+    if (!viewer) notFound();
+    const viewerIsDemo = isDemoEmail(viewer.email, demoEmail(process.env));
+    return (
+      <div className="mx-auto max-w-lg rounded-2xl border border-amber-200 bg-amber-50 p-6">
+        <h1 className="text-base font-semibold text-gray-900">This rental is in another account</h1>
+        <p className="mt-2 text-sm leading-relaxed text-gray-700">
+          {viewerIsDemo
+            ? "This is the demo account. Your own rentals do not open here."
+            : `You are signed in as ${viewer.email ?? "another account"}. This rental is not in that account, or it was deleted.`}
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <form action="/auth/signout" method="post">
+            <input type="hidden" name="next" value={`/dashboard/properties/${params.id}?tab=distribute`} />
+            <button type="submit" className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm">
+              {viewerIsDemo ? "Leave the demo and sign in" : "Sign in with another account"}
+            </button>
+          </form>
+          <Link href="/dashboard/properties" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700">
+            Go to my rentals
+          </Link>
+        </div>
+      </div>
+    );
+  }
   const p = property as Property;
   const nowMs = Date.now();
   // S790a: the unit's latest unit progress stage, shown as a chip in the header.
