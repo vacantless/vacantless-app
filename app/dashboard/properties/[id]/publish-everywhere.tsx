@@ -98,6 +98,8 @@ export type PublishEverywhereRunItem = {
   checkoutUrl?: string | null;
   /** S709: the pay instruction for checkoutUrl (Kijiji: My Ads > Activate Ad). */
   checkoutHint?: string | null;
+  /** S829f: which site account to sign in to before paying. */
+  checkoutAccountLine?: string | null;
   /** S713d: a step only the landlord can do on the site (Zumper renter account). */
   siteSetup?: { message: string; href: string; action: string } | null;
   /** S719 (KI1303): the landlord has clicked Approve for this item. */
@@ -1305,6 +1307,9 @@ function ForYouRow({
             {item.checkoutHint ??
               "Your ad is built and waiting at checkout. You pay only when you press Pay. Pick your saved card, type its security code and press Pay."}
           </p>
+          {item.checkoutAccountLine ? (
+            <p className="mt-1 text-base font-medium text-emerald-900">{item.checkoutAccountLine}</p>
+          ) : null}
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <a
               href={item.checkoutUrl}

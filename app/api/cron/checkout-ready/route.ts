@@ -22,10 +22,19 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
 // (same rule as posted-results-email).
 const SKIP_ORG_IDS = new Set(["921f7c08-98af-428f-a238-36f4a781b0de"]);
 
-function authorized(req: NextRequest): boolean {
+// S829f: CRON_SECRET, or the database's own sweep secret (migration 0245), so
+// the 0320 trigger can call this the moment an ad reaches checkout.
+async function authorized(req: NextRequest): Promise<boolean> {
+  const auth = req.headers.get("authorization") ?? "";
+  if (!auth.startsWith("Bearer ")) return false;
+  const presented = auth.slice("Bearer ".length).trim();
+  if (!presented) return false;
   const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  return req.headers.get("authorization") === `Bearer ${secret}`;
+  if (secret && presented === secret) return true;
+  const admin = createAdminClient();
+  if (!admin) return false;
+  const { data, error } = await admin.rpc("sweep_trigger_secret_matches", { p_secret: presented });
+  return !error && data === true;
 }
 
 type ItemRow = {
@@ -40,7 +49,7 @@ type ItemRow = {
 };
 
 export async function GET(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ ok: false, reason: "unauthorized" }, { status: 401 });
+  if (!(await authorized(req))) return NextResponse.json({ ok: false, reason: "unauthorized" }, { status: 401 });
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ ok: false, reason: "service_role_not_configured" }, { status: 500 });
   const dry = req.nextUrl.searchParams.get("dry") === "1";
@@ -99,11 +108,32 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
+    // S829f: name the site account to sign in to, when we know it.
+    const [{ data: sess }, { data: acct }] = await Promise.all([
+      admin
+        .from("distribution_channel_session_status")
+        .select("account_label")
+        .eq("organization_id", r.organization_id)
+        .eq("channel", r.channel)
+        .maybeSingle(),
+      admin
+        .from("distribution_channel_accounts")
+        .select("external_account_label")
+        .eq("organization_id", r.organization_id)
+        .eq("channel", r.channel)
+        .maybeSingle(),
+    ]);
+    const accountLabel =
+      (sess as { account_label: string | null } | null)?.account_label ??
+      (acct as { external_account_label: string | null } | null)?.external_account_label ??
+      null;
+
     const mail = checkoutReadyEmail({
       siteLabel: siteName(r.channel),
       where: address ? shortAddress(address) : "your rental",
       priceCents: (CHANNEL_COST_CENTS as Record<string, number | undefined>)[r.channel] || null,
       reminder: action === "remind",
+      accountLabel,
     });
     const url = propertyId
       ? `${APP_URL}/dashboard/properties/${propertyId}?tab=distribute`

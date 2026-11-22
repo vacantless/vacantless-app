@@ -16,6 +16,9 @@
 import type { SiteRowNote } from "@/lib/site-row-notes";
 import { slotIsStuck, type RentalsSlotChoice } from "@/lib/rentals-slots";
 import { captureNote, paidPressedAt } from "@/lib/paid-capture-note";
+import { checkoutAccountLine } from "@/lib/checkout-ready";
+import { siteName } from "@/lib/ads-still-up";
+
 import { Icons } from "@/components/icons";
 import { CopyLink } from "./copy-link";
 import {
@@ -311,6 +314,7 @@ export function DistributeTab({
   adPreview = null,
   more = null,
   moreOpen = false,
+  siteAccountLabels = {},
 }: {
   propertyId: string;
   basics: GetOnlineBasics;
@@ -323,6 +327,8 @@ export function DistributeTab({
   channelCards: DistributeChannelCard[];
   otherPosts: DistributePostRow[];
   promotionNote: string | null;
+  /** S829f: the known sign-in name of each site account, by channel. */
+  siteAccountLabels?: Record<string, string | null>;
   launchRun: LaunchRunData;
   replyInputs: ReplyInputs;
   runNotice: DistributeRunNotice | null;
@@ -448,7 +454,13 @@ export function DistributeTab({
           externalUrl: it.externalUrl,
           ...(() => {
             const checkoutUrl = siteCheckoutUrl(it.publishStatus, it.operatorActionUrl);
-            return { checkoutUrl, checkoutHint: checkoutUrl ? siteCheckoutHint(checkoutUrl) : null };
+            return {
+              checkoutUrl,
+              checkoutHint: checkoutUrl ? siteCheckoutHint(checkoutUrl) : null,
+              checkoutAccountLine: checkoutUrl
+                ? checkoutAccountLine(siteName(it.channel), siteAccountLabels[it.channel] ?? null)
+                : null,
+            };
           })(),
           siteSetup: siteSetupNotice(it.publishStatus, it.errorCode, it.errorMessage),
           photoNote: photoRefusedNote(it.errorCode, it.errorMessage),

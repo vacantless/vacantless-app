@@ -5296,6 +5296,9 @@ export default async function PropertyDetailPage({
         )}
       >
         <DistributeTab
+          siteAccountLabels={Object.fromEntries(
+            [...channelAccountByKey].map(([k, v]) => [k, v.externalAccountLabel]),
+          )}
           propertyId={p.id}
           basics={getOnlineBasics}
           linkIsLive={linkIsLive}

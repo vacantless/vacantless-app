@@ -424,7 +424,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
     group: "you",
     goesTo: "Account owners and admins.",
     title: "A paid ad is ready to pay",
-    when: "When a paid ad waits at a site's checkout. Once more after 4 hours if unpaid.",
+    when: "The moment a paid ad waits at a site's checkout. Once more after 4 hours if unpaid.",
     channels: ["email"],
     control: { type: "always" },
     code: { notify: ["app/api/cron/checkout-ready/route.ts"] },
