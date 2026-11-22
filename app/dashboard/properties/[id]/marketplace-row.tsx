@@ -97,6 +97,16 @@ export function MarketplaceRow({
   const [open, setOpen] = useState(kit.sendNotice != null);
   const helper = useMarketplaceHelper();
   const [sentToHelper, setSentToHelper] = useState(false);
+  // S829g: the "after you post" steps must still be here when the landlord
+  // comes back from Facebook, even after a reload. Kept for this tab only.
+  const filledKey = `vl-mkt-filled-${propertyId}`;
+  useEffect(() => {
+    try {
+      if (window.sessionStorage.getItem(filledKey)) setSentToHelper(true);
+    } catch {
+      /* no storage: the steps show until the page reloads */
+    }
+  }, [filledKey]);
   const helperKit = kit.helperKit ?? null;
   return (
     <div className="mt-2">
@@ -115,15 +125,46 @@ export function MarketplaceRow({
             onClick={() => {
               sendKitToHelper(helperKit);
               setSentToHelper(true);
+              try {
+                window.sessionStorage.setItem(filledKey, "1");
+              } catch {
+                /* no storage */
+              }
             }}
             className="mt-2 inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-emerald-800"
           >
             Fill Marketplace for me →
           </button>
           {sentToHelper && (
-            <p className="mt-2 text-[12px] text-emerald-900">
-              Marketplace is opening in a new tab. When the ad is up, paste its link in step 4 below.
-            </p>
+            <div className="mt-3 rounded-lg border border-emerald-300 bg-white p-3">
+              <p className="text-[12.5px] font-semibold text-emerald-900">After you press Post on Facebook</p>
+              <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-[12.5px] text-emerald-900">
+                <li>Open your new ad on Facebook once.</li>
+                <li>Come back to this tab. The ad shows as live here.</li>
+              </ol>
+              <form action={addListingPost} className="mt-2 flex flex-wrap items-center gap-2">
+                <input type="hidden" name="property_id" value={propertyId} />
+                <input type="hidden" name="portal" value="facebook" />
+                <input type="hidden" name="status" value="live" />
+                <label htmlFor={`mkt-link-${propertyId}`} className="text-[12px] text-gray-700">
+                  Not showing as live? Paste the ad's link:
+                </label>
+                <input
+                  id={`mkt-link-${propertyId}`}
+                  name="url"
+                  type="url"
+                  required
+                  placeholder="https://www.facebook.com/marketplace/item/..."
+                  className="min-w-[220px] flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-[12.5px]"
+                />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-emerald-700 px-3 py-1.5 text-[12.5px] font-semibold text-emerald-800 hover:bg-emerald-50"
+                >
+                  Save link
+                </button>
+              </form>
+            </div>
           )}
         </div>
       )}

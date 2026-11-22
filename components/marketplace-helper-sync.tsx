@@ -130,10 +130,20 @@ export function MarketplaceHelperSync({
       }
     };
     window.addEventListener("message", onMessage);
+    // S829g: the landlord posts on Facebook in another tab and comes back to
+    // this one. Ask the helper again then, so the new ad's link saves without
+    // a reload (it used to wait for the next page they opened).
+    const onBack = () => {
+      if (synced && document.visibilityState === "visible") post({ type: "get_captured" });
+    };
+    document.addEventListener("visibilitychange", onBack);
+    window.addEventListener("focus", onBack);
     const ping = () => window.postMessage({ source: MARKETPLACE_HELPER_APP_SOURCE, type: "ping" }, window.location.origin);
     const timers = [0, 800, 2500].map((ms) => window.setTimeout(ping, ms));
     return () => {
       window.removeEventListener("message", onMessage);
+      document.removeEventListener("visibilitychange", onBack);
+      window.removeEventListener("focus", onBack);
       timers.forEach((t) => window.clearTimeout(t));
     };
   }, [loadAds, saveCaptured, saveRenewed, saveRenewWaits, saveRejected, saveReplied, router]);
