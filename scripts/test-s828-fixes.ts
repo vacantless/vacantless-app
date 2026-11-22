@@ -66,7 +66,7 @@ ok("f: the fill-for-me form is for the other sites", signin.includes('channel !=
 
 // (h) Professional rental on Kijiji
 const pro = firstRunCostLine("kijiji", { professional: true }) ?? "";
-ok("h: professional line names the fee and no free ad", /no free ad for a real estate professional/.test(pro) && /\$33\.84/.test(pro) && /checkout/.test(pro));
+ok("h: professional line names the fee and no free ad", /one free basic ad per account/.test(pro) && /\$33\.84/.test(pro) && /checkout/.test(pro));
 ok("h: owner line unchanged", firstRunCostLine("kijiji") === "1 free ad per personal account, then $33.84 each.");
 ok("h: other sites ignore the flag", firstRunCostLine("zumper", { professional: true }) === firstRunCostLine("zumper"));
 ok("h: the row passes the rental's Listed by", pe.includes('listedByProfessional={String(basics.forRentBy ?? "").toLowerCase() === "professional"}') && pe.includes("listedByProfessional={listedByProfessional}"));

@@ -789,9 +789,11 @@ export function firstRunCostLine(
     case "facebook":
       return "Free. Your team posts it from your own Facebook.";
     case "kijiji":
-      // S828h: Kijiji has no free ad for a real estate professional.
+      // S828d: as a real estate professional, Kijiji still gives one free
+      // basic ad per personal account (seen on Davis, 2026-11-22: "$0, 10
+      // photos" for a first listing). Later ads wait at Kijiji's checkout.
       if (opts.professional) {
-        return `Kijiji has no free ad for a real estate professional. This ad costs ${formatChannelMoney(CHANNEL_COST_CENTS.kijiji ?? 0)}. It waits at Kijiji's checkout until you pay there.`;
+        return `As a real estate professional you get one free basic ad per account. After that, each ad costs ${formatChannelMoney(CHANNEL_COST_CENTS.kijiji ?? 0)} and waits at Kijiji's checkout for you.`;
       }
       return `1 free ad per personal account, then ${formatChannelMoney(CHANNEL_COST_CENTS.kijiji ?? 0)} each.`;
     case "rentals_ca":

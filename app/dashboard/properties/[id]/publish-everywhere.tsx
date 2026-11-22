@@ -1104,7 +1104,7 @@ function ForYouRow({
       {!isLive && firstRunCostLine(row.key, { professional: listedByProfessional }) ? (
         <p
           className={`mt-1 text-sm leading-snug ${
-            listedByProfessional && row.key === "kijiji" ? "font-medium text-amber-800" : "text-gray-500"
+            "text-gray-500"
           }`}
         >
           {firstRunCostLine(row.key, { professional: listedByProfessional })}
