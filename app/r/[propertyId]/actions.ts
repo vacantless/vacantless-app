@@ -1,5 +1,6 @@
 "use server";
 
+import { availabilityLine, notesWithAvailability, requestNoteLine } from "@/lib/viewing-request";
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
@@ -249,7 +250,7 @@ async function attemptBooking(
 // supplies the default audience + the {{token}} values.
 async function notifyOperatorsOfNewLead(
   payload: AutoReplyPayload,
-  extra: { phone: string; moveIn: string; noSuitableTime: boolean; noTimesOpen?: boolean },
+  extra: { phone: string; moveIn: string; noSuitableTime: boolean; noTimesOpen?: boolean; availability?: string | null },
 ): Promise<void> {
   try {
     const admin = createAdminClient();
@@ -261,6 +262,13 @@ async function notifyOperatorsOfNewLead(
       .eq("id", payload.org_id)
       .maybeSingle();
     if (!org) return;
+    // S828c: a landlord who books each viewing themselves is not told to open times.
+    const { data: byRequestRow } = await admin
+      .from("organizations")
+      .select("viewings_by_request")
+      .eq("id", payload.org_id)
+      .maybeSingle();
+    const byRequest = (byRequestRow as { viewings_by_request?: boolean } | null)?.viewings_by_request === true;
 
     // Org members -> resolve each one's auth email, then keep the leasing roles.
     const { data: memberRows } = await admin
@@ -318,11 +326,13 @@ async function notifyOperatorsOfNewLead(
         move_in: extra.moveIn.trim() || "(not specified)",
         // S799c: a landlord with no hours set was told the renter "could not
         // find a workable time", which hid the real cause.
-        no_suitable_time_note: extra.noTimesOpen
-          ? "No viewing times were open, so this renter could not book one. Open your times and they can pick."
-          : extra.noSuitableTime
-            ? "This renter could not find a workable viewing time. Offer other times."
-            : "",
+        // S828c: plus when the renter said they can come.
+        no_suitable_time_note: requestNoteLine({
+          noTimesOpen: extra.noTimesOpen === true,
+          noSuitableTime: extra.noSuitableTime,
+          byRequest,
+          availability: extra.availability ?? null,
+        }),
         screening,
         renter_message: "",
         dashboard_url: `${APP_URL}/dashboard/leads/${payload.lead_id}`,
@@ -373,6 +383,8 @@ export async function submitLead(formData: FormData) {
   const slot = String(formData.get("slot") ?? "").trim();
   const noSuitableTime = formData.get("no_suitable_time") === "1";
   const noTimesOpen = formData.get("no_times_open") === "1";
+  // S828c: when the renter can come (pills plus a short line), on request-only rentals.
+  const availability = availabilityLine(formData.getAll("avail"), formData.get("avail_note"));
   // Source-tracking: a per-post tracked link carries ?p=<listing_post_id>. The
   // RPC validates it belongs to this property before stamping the lead's
   // source; an absent/foreign value safely falls back to 'website'.
@@ -425,7 +437,7 @@ export async function submitLead(formData: FormData) {
     p_email: email || null,
     p_phone: phone || null,
     p_move_in: moveInRaw || null,
-    p_notes: notes || null,
+    p_notes: notesWithAvailability(notes, availability),
     p_listing_post_id: listingPostId || null,
     p_income_cents: incomeCents,
     p_occupants: occupants,
@@ -531,6 +543,7 @@ export async function submitLead(formData: FormData) {
       moveIn: moveInRaw,
       noSuitableTime,
       noTimesOpen,
+      availability,
     });
   }
 

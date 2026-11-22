@@ -14,6 +14,7 @@ import {
   removeAvailabilityOverride,
   saveBuildingViewingDays,
   openViewingPreset,
+  setViewingsByRequest,
 } from "./actions";
 import { VIEWING_PRESETS } from "@/lib/viewing-presets";
 import { PageHeader } from "@/components/ui";
@@ -62,6 +63,8 @@ const SAVED_MESSAGES: Record<string, string> = {
   dayoff: "Day off added.",
   override: "Specific-date hours added.",
   building_days: "Viewing days for the building saved.",
+  by_request_on: "Saved. You book each viewing yourself, and renters send a request with when they can come.",
+  by_request_off: "Saved. Vacantless reminds you to set viewing times again.",
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -100,7 +103,7 @@ export default async function AvailabilityPage({
       supabase
         .from("organizations")
         .select(
-          "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, booking_requires_confirmation, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, allow_double_booking, viewing_reminder_enabled, viewing_reminder_weekday, viewing_reminder_hour",
+          "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, booking_requires_confirmation, clustering_enabled, clustering_buffer_minutes, showing_block_capacity, allow_double_booking, viewing_reminder_enabled, viewing_reminder_weekday, viewing_reminder_hour, viewings_by_request",
         )
         .eq("id", org.id)
         .maybeSingle(),
@@ -275,6 +278,27 @@ export default async function AvailabilityPage({
           </Link>
         </p>
       ) : null}
+
+      {/* S828c: no open calendar on purpose. */}
+      <form action={setViewingsByRequest} className="mb-6 rounded-2xl border border-gray-200 bg-white p-4">
+        <label className="flex items-start gap-3 text-sm text-gray-800">
+          <input
+            type="checkbox"
+            name="viewings_by_request"
+            defaultChecked={(orgRow as { viewings_by_request?: boolean } | null)?.viewings_by_request === true}
+            className="mt-0.5"
+          />
+          <span>
+            <span className="font-semibold">I book each viewing myself</span>
+            <span className="block text-gray-600">
+              Renters send a request with when they can come. Vacantless stops asking you to set viewing times.
+            </span>
+          </span>
+        </label>
+        <button type="submit" className="mt-3 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          Save
+        </button>
+      </form>
 
       {savedMessage && (
         <p className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">

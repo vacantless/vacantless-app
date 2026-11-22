@@ -483,6 +483,14 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   // S740 (review item 1): live rentals with no viewing time open.
   const openViewingTimes =
     (liveRentalCount ?? 0) > 0 ? await countViewingTimes(supabase, org.id, timeZone) : 1;
+  // S828c: a landlord who books each viewing themselves is not asked to open times.
+  const { data: byRequestRow } = await supabase
+    .from("organizations")
+    .select("viewings_by_request")
+    .eq("id", org.id)
+    .maybeSingle();
+  const viewingsByRequest =
+    (byRequestRow as { viewings_by_request?: boolean } | null)?.viewings_by_request === true;
   const notBookedRecent = allLeads.filter(
     (l) =>
       (l.status === "new" || l.status === "replied" || l.status === "contacted") &&
@@ -505,7 +513,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     .eq("archived", false);
   const hasShowingAgents = (agentCount ?? 0) > 0;
   const todayItems = buildTodayLane({
-    noViewingTimes: openViewingTimes === 0 ? { waiting: notBookedRecent } : null,
+    noViewingTimes: openViewingTimes === 0 && !viewingsByRequest ? { waiting: notBookedRecent } : null,
     // S708: only leads from the last 14 days; older `new` leads stay in Renters.
     inquiriesNeedingReply: allLeads.filter((l) =>
       needsReplyToday(l.status, l.created_at, Date.now(), answeredIds.has(l.id)),
@@ -1000,14 +1008,18 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
                 ? "No viewings are assigned to you right now."
                 : openViewingTimes > 0
                   ? "Your viewing hours are set. When a renter books, the viewing shows up here."
-                  : "Set your viewing times so renters can book their own viewings online."
+                  : viewingsByRequest
+                    ? "You book each viewing yourself. Renters send a request with the times that suit them."
+                    : "Set your viewing times so renters can book their own viewings online."
             }
             cta={
               assignedView === "mine"
                 ? undefined
                 : openViewingTimes > 0
                   ? { href: "/dashboard/availability", label: "See viewing hours" }
-                  : { href: "/dashboard/availability", label: "Set viewing times" }
+                  : viewingsByRequest
+                    ? undefined
+                    : { href: "/dashboard/availability", label: "Set viewing times" }
             }
           />
         </div>

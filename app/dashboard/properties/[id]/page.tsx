@@ -1207,6 +1207,12 @@ export default async function PropertyDetailPage({
   const availabilityCount = availabilityOrg
     ? await countViewingTimes(supabase, availabilityOrg.id, availabilityOrg.booking_timezone || undefined)
     : 0;
+  // S828c: a landlord who books each viewing themselves has nothing to set.
+  const { data: byRequestRow } = availabilityOrg
+    ? await supabase.from("organizations").select("viewings_by_request").eq("id", availabilityOrg.id).maybeSingle()
+    : { data: null };
+  const viewingsByRequest =
+    (byRequestRow as { viewings_by_request?: boolean } | null)?.viewings_by_request === true;
 
   // The unit's tenancy (active preferred, else most recent) — lets the
   // lifecycle rail's Lease/Tenanted steps deep-link into THIS unit's tenancy
@@ -2030,6 +2036,7 @@ export default async function PropertyDetailPage({
     photoCount: photoRows.length,
     availabilityWindowCount: availabilityCount ?? 0,
     replyToEmail: org?.reply_to_email ?? null,
+    viewingsByRequest,
   });
   const publishPlanCap = listingCapForPlan(org?.plan);
   let otherLiveListingCount = 0;
@@ -3071,7 +3078,7 @@ export default async function PropertyDetailPage({
     photoCount: photoRows.length,
     listingPostCount: postRows.length,
     liveListingPostCount,
-    hasAvailability: (availabilityCount ?? 0) > 0,
+    hasAvailability: (availabilityCount ?? 0) > 0 || viewingsByRequest,
     leadStatuses: leadRows.map((l) => l.status),
     tenancyId,
     tenancyStatus,
@@ -3159,7 +3166,7 @@ export default async function PropertyDetailPage({
     linkIsLive: publicPageIsBookable,
     listingPostCount: postRows.length,
     liveListingPostCount,
-    hasAvailability: (availabilityCount ?? 0) > 0,
+    hasAvailability: (availabilityCount ?? 0) > 0 || viewingsByRequest,
     openInquiryCount: leadRows.filter(
       (l) =>
         l.status === "new" || l.status === "replied" || l.status === "contacted",

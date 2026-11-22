@@ -86,8 +86,9 @@ ok(
 );
 ok(
   "action: adds operator note when renter could not find a time",
+  // S828c: the wording lives in lib/viewing-request (requestNoteLine).
   actions.includes("no_suitable_time_note") &&
-    actions.includes("could not find a workable viewing time"),
+    readFileSync("lib/viewing-request.ts", "utf8").includes("could not find a workable viewing time"),
 );
 
 // --- operator notification --------------------------------------------------

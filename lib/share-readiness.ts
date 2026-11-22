@@ -31,6 +31,8 @@ export type ShareReadinessInput = {
   photoCount: number;
   availabilityWindowCount: number;
   replyToEmail: string | null;
+  /** S828c: the landlord books each viewing themselves. */
+  viewingsByRequest?: boolean;
 };
 
 export type ShareReadiness = {
@@ -98,7 +100,7 @@ export function buildShareReadiness(
     {
       key: "viewing_times",
       label: "Viewing availability set",
-      ok: input.availabilityWindowCount > 0,
+      ok: input.availabilityWindowCount > 0 || input.viewingsByRequest === true,
       required: false,
       hint: "Set weekly viewing windows so renters can self-book a viewing online.",
     },

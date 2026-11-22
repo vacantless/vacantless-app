@@ -341,6 +341,14 @@ export default async function PropertiesPage({
       runProperty.set(run.id, run.property_id);
     }
   }
+  // S828c: a landlord who books each viewing themselves is not told to set times.
+  const { data: byRequestRow } = await supabase
+    .from("organizations")
+    .select("viewings_by_request")
+    .eq("id", org.id)
+    .maybeSingle();
+  const viewingsByRequest =
+    (byRequestRow as { viewings_by_request?: boolean } | null)?.viewings_by_request === true;
   const postingNow = postingNowByProperty(
     inFlightRows.map((r): InFlightRunItem => {
       return {
@@ -511,6 +519,7 @@ export default async function PropertiesPage({
         description: p.description,
         photoCount,
         availabilityWindowCount: availabilityCount ?? 0,
+        viewingsByRequest,
       });
       const launch = rentalLaunchState({
         row: p,

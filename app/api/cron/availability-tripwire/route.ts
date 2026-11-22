@@ -179,7 +179,7 @@ export async function GET(req: NextRequest) {
         "booking_timezone, booking_slot_minutes, booking_lead_hours, booking_horizon_days, " +
         "availability_tripwire_enabled, availability_tripwire_lookahead_days, " +
         "availability_tripwire_thin_slots, availability_tripwire_last_state, " +
-        "availability_tripwire_last_alert_on",
+        "availability_tripwire_last_alert_on, viewings_by_request",
     );
   if (onlyOrg) orgQuery = orgQuery.eq("id", onlyOrg);
   const { data: orgs, error: orgErr } = await orgQuery;
@@ -202,6 +202,12 @@ export async function GET(req: NextRequest) {
       if (!org.availability_tripwire_enabled) {
         summary.skipped++;
         summary.details.push({ org: org.id, skipped: "disabled" });
+        continue;
+      }
+      // S828c: the landlord books each viewing themselves; no "times ran out" email.
+      if (org.viewings_by_request === true) {
+        summary.skipped++;
+        summary.details.push({ org: org.id, skipped: "by_request" });
         continue;
       }
 

@@ -117,6 +117,20 @@ export async function updateClusteringSettings(formData: FormData) {
   redirect("/dashboard/availability?saved=cluster");
 }
 
+// S828c: the landlord books each viewing themselves (no open calendar).
+export async function setViewingsByRequest(formData: FormData) {
+  const org = await getCurrentOrg();
+  if (!org) return;
+  await requireCapability("manage_availability", "/dashboard/availability?forbidden=1");
+  const on = formData.get("viewings_by_request") === "on";
+  const supabase = createClient();
+  await supabase.from("organizations").update({ viewings_by_request: on }).eq("id", org.id);
+  revalidatePath("/dashboard/availability");
+  revalidatePath("/dashboard/properties");
+  revalidatePath("/dashboard");
+  redirect(`/dashboard/availability?saved=${on ? "by_request_on" : "by_request_off"}`);
+}
+
 export async function setAllowDoubleBooking(enabled: boolean) {
   const org = await getCurrentOrg();
   if (!org) return;

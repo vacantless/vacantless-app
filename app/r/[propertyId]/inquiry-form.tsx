@@ -1,5 +1,6 @@
 "use client";
 
+import { AVAILABILITY_NOTE_MAX, AVAILABILITY_PILLS } from "@/lib/viewing-request";
 import { timezoneLabel } from "@/lib/timezone-label";
 import {
   useEffect,
@@ -172,6 +173,8 @@ export function InquiryForm({
   const [emailChecked, setEmailChecked] = useState(false);
   const emailFix = useMemo(() => suggestEmailFix(email), [email]);
   const [skipTime, setSkipTime] = useState(false);
+  // S828c: when the renter can come, on a rental with no open times.
+  const [avail, setAvail] = useState<string[]>([]);
   const [submitStarted, setSubmitStarted] = useState(false);
   const [refHost, setRefHost] = useState("");
 
@@ -432,6 +435,43 @@ export function InquiryForm({
                 Can&apos;t make these times? Send your details instead →
               </button>
             )}
+          </fieldset>
+        )}
+
+        {/* S828c: no open times, so the renter says when they can come in a
+            few taps. Whoever books the viewing calls with the times in hand. */}
+        {!hasSlots && (
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-semibold text-gray-800">When can you come?</legend>
+            <div className="flex flex-wrap gap-2">
+              {AVAILABILITY_PILLS.map((label) => {
+                const active = avail.includes(label);
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() =>
+                      setAvail((cur) => (cur.includes(label) ? cur.filter((x) => x !== label) : [...cur, label]))
+                    }
+                    className={chipClass(active)}
+                    style={chipStyle(active)}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            {avail.map((label) => (
+              <input key={label} type="hidden" name="avail" value={label} />
+            ))}
+            <input
+              name="avail_note"
+              type="text"
+              maxLength={AVAILABILITY_NOTE_MAX}
+              placeholder="Anything else? For example: after 6 on Tuesday"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
           </fieldset>
         )}
 

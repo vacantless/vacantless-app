@@ -45,6 +45,8 @@ export type RentalReadinessInput = {
   photoCount: number;
   /** Org-wide weekly viewing windows (one number for the whole org). */
   availabilityWindowCount: number;
+  /** S828c: the landlord books each viewing themselves (no open calendar). */
+  viewingsByRequest?: boolean;
 };
 
 // Friendly names for the feed-required fields listingFeedReadiness reports.
@@ -147,7 +149,7 @@ function photosSignal(status: string, photoCount: number): ReadinessSignal {
   };
 }
 
-function viewingsSignal(status: string, windowCount: number): ReadinessSignal {
+function viewingsSignal(status: string, windowCount: number, byRequest = false): ReadinessSignal {
   const closed = closedPublicStatus(status);
   // S740 (review item 4): an off-market rental showed "Needs viewing times";
   // renters cannot book it, so it is muted. A draft keeps the warning (set
@@ -183,6 +185,18 @@ function viewingsSignal(status: string, windowCount: number): ReadinessSignal {
       tone: "ok",
       detail: "set",
       hint: "Weekly viewing windows are set, so renters can self-book a viewing online.",
+    };
+  }
+  // S828c: no open calendar on purpose. Renters send a request with when
+  // they can come, so nothing is missing.
+  if (byRequest) {
+    return {
+      key: "viewings",
+      label: "Viewings",
+      ok: true,
+      tone: "ok",
+      detail: "by request",
+      hint: "You book each viewing yourself. Renters send a request with the times that suit them.",
     };
   }
   return {
@@ -258,7 +272,7 @@ export function rentalRowReadiness(
   return [
     linkSignal(input.status),
     photosSignal(input.status, input.photoCount),
-    viewingsSignal(input.status, input.availabilityWindowCount),
+    viewingsSignal(input.status, input.availabilityWindowCount, input.viewingsByRequest === true),
     feedSignal(input),
   ];
 }
