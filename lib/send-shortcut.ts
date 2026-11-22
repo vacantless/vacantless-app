@@ -6,7 +6,8 @@
 import { createHash, randomBytes } from "crypto";
 import { screenshotSource } from "./ai-screenshot-lead";
 import { replyKitText, type ReplyKitCard } from "./reply-kit";
-import type { ReplyAnswerKey } from "./reply-answers";
+import { answerReplyText, REPLY_ANSWER_KEYS, type ReplyAnswerKey } from "./reply-answers";
+import type { EnquiryRental } from "./ai-enquiry";
 
 export const SEND_KEY_PREFIX = "vl_";
 /** Screenshots read per key per hour. Each one is an AI read. */
@@ -91,11 +92,13 @@ export function planSend(read: SendRead): SendPlan {
 
 /** The line the Shortcut shows. Plain words, one or two sentences, no dashes. */
 export function sendResultLine(input: {
-  outcome: "saved" | "exists" | "no_renter" | "not_renter" | "unreadable" | "not_available" | "failed";
+  outcome: "saved" | "exists" | "no_renter" | "not_renter" | "unreadable" | "not_available" | "rented" | "failed";
   name?: string | null;
   rental?: string | null;
   /** S824a: the renter was already saved and their new question was added. */
   questionAdded?: boolean;
+  /** S830f: matched by a one-word name, so it may be a different person with the same first name. */
+  firstNameOnly?: boolean;
 }): string {
   const who = input.name?.trim() || "This renter";
   const where = input.rental?.trim() ? ` for ${input.rental.trim()}` : "";
@@ -104,12 +107,16 @@ export function sendResultLine(input: {
       return input.rental
         ? `Saved ${who}${where} in Renters.`
         : `Saved ${who} in Renters. We could not tell which rental, so pick it on their page.`;
-    case "exists":
-      return input.questionAdded
+    case "exists": {
+      const base = input.questionAdded
         ? `${who} is already in Renters${where}. Their new question is on their page.`
         : `${who} is already in Renters${where}.`;
+      return input.firstNameOnly ? `${base} If this is someone new, add them on Renters.` : base;
+    }
     case "not_available":
       return `${input.rental || "That rental"} is not available, so no renter was added.`;
+    case "rented":
+      return `${input.rental || "That rental"} is rented, so no renter was added.`;
     case "not_renter":
       return "No one was added. This looks like an agent, a seller or an ad, not a renter.";
     case "no_renter":
@@ -177,6 +184,28 @@ export function answerKeyForTopic(topic: string | null | undefined): ReplyAnswer
   return t as ReplyAnswerKey;
 }
 
+/**
+ * S830e: rented rentals the reader may also see, so a chat about a rented unit
+ * says "rented" instead of "we could not tell which rental". A rented rental
+ * that shares its rent with an open one is left out: price is often the only
+ * tell, and a real renter must never be matched to the rented twin.
+ */
+export function rentedForReader(open: EnquiryRental[], rented: EnquiryRental[]): EnquiryRental[] {
+  const openRents = new Set(open.map((r) => r.rentDollars).filter((n): n is number => typeof n === "number"));
+  return rented
+    .filter((r) => typeof r.rentDollars === "number" && !openRents.has(r.rentDollars))
+    .map((r) => ({ ...r, address: `${r.address}, rented now` }));
+}
+
+/** S830f: up to two topics the reader named ("pets, move_in"). */
+export function answerKeysForTopic(topic: string | null | undefined): ReturnType<typeof answerKeyForTopic>[] {
+  return String(topic ?? "")
+    .split(/[,+&/]| and /)
+    .map((t) => answerKeyForTopic(t))
+    .filter((k) => k != null)
+    .slice(0, 2);
+}
+
 /** The card's site button for the chat's site; "direct" when that ad is not tracked. */
 export function replySiteKey(site: string | null | undefined): string {
   const s = String(site ?? "").toLowerCase();
@@ -205,7 +234,27 @@ export function shortcutReply(input: {
   const want = replySiteKey(input.site);
   const site = card.sites.find((x) => x.key === want) ?? card.sites.find((x) => x.key === "direct") ?? card.sites[0];
   if (!site) return { text: null, why: "no_rental" };
-  const fromTopic = card.available ? answerKeyForTopic(input.topic) : "first";
+  // S830f: two questions with both answers on file get one reply with both.
+  const two = card.available ? answerKeysForTopic(input.topic) : [];
+  const recordKeys = new Set<string>(REPLY_ANSWER_KEYS);
+  if (two.length === 2 && two.every((k) => typeof k === "string" && recordKeys.has(k))) {
+    const answers = two.map((k) => card.answers.find((a) => a.key === k));
+    if (answers.every(Boolean)) {
+      const want2 = replySiteKey(input.site);
+      const site2 = card.sites.find((x) => x.key === want2) ?? card.sites.find((x) => x.key === "direct") ?? card.sites[0];
+      const [a1, a2] = answers as NonNullable<(typeof answers)[number]>[];
+      return {
+        text: answerReplyText({
+          answer: { ...a1, text: `${a1.text} ${a2.text}` },
+          bookingUrl: site2.bookingUrl,
+          hasViewingTimes: card.hasViewingTimes,
+          renterName: input.renterName,
+        }),
+        why: "ok",
+      };
+    }
+  }
+  const fromTopic = card.available ? (two[0] ?? answerKeyForTopic(input.topic)) : "first";
   if (fromTopic === "none") return { text: null, why: "no_answer" };
   const key = !card.available || fromTopic === "first" ? null : fromTopic ?? answerKeyForQuestion(input.question);
   if (key && !card.answers.some((a) => a.key === key)) return { text: null, why: "no_answer" };

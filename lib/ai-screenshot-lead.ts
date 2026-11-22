@@ -49,6 +49,8 @@ export function buildScreenshotPrompt(rentals: EnquiryRental[]): string {
     "applied (says they already filled out the form, sent the request or booked), rent (offers a lower rent or asks if the price can change),",
     "lease (lease length or term), pets, utilities (what is included), parking, laundry, move_in (when they can move in), appliances, ac (air conditioning),",
     "other (any other question). A renter who says they have no pets is not asking about pets.",
+    "When the renter asked two things, give both topics separated by a comma, for example \"pets, move_in\".",
+    "A rental ending in \"rented now\" is no longer available. Pick it only when the chat clearly points to it.",
     "not_renter is true for an agent offering to find tenants for a fee, a promoter or marketer, or spam. An agent asking for a client who wants to rent is a renter.",
     "Pick rental_id when the chat points to one rental by address, unit, price, beds or ad title. A Marketplace listing line such as \"CA$1,250 · 1 Bed 1 Bath\" matches the rental with that monthly price.",
     "When two rentals in the list have the same price and nothing else in the chat tells them apart, use null for rental_id.",

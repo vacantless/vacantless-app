@@ -1,7 +1,7 @@
 // S830a/b: Send to Vacantless on Noam's real Marketplace chats (REVIEW-S830).
 // Run: npx tsx scripts/test-s830-shortcut-topics.ts
 import assert from "node:assert/strict";
-import { answerKeyForQuestion, answerKeyForTopic, planSend, sendResultLine, shortcutReply } from "../lib/send-shortcut";
+import { answerKeyForQuestion, answerKeyForTopic, answerKeysForTopic, planSend, rentedForReader, sendResultLine, shortcutReply } from "../lib/send-shortcut";
 import { buildReplyKitCards } from "../lib/reply-kit";
 import { buildScreenshotPrompt } from "../lib/ai-screenshot-lead";
 import { normalizeEnquiryRead } from "../lib/ai-enquiry";
@@ -74,3 +74,29 @@ ok(read?.topic === "other" && read?.notRenter === true, "topic and not_renter ar
 ok(normalizeEnquiryRead({ is_enquiry: true, name: "Ann" }, [])?.notRenter === false, "missing not_renter is false");
 
 console.log(`s830 shortcut topics: ${n} passed, 0 failed`);
+
+// S830e: rented units, never the rented twin of an open price.
+{
+  const open = [{ id: "p3", address: "833 Pillette Rd, Unit 3", rentDollars: 1250, beds: 1 }];
+  const rented = [
+    { id: "b303", address: "1195 Bruce Ave, Unit 303", rentDollars: 1250, beds: 1 },
+    { id: "p20", address: "833 Pillette Rd, Unit 20", rentDollars: 1195, beds: 1 },
+  ];
+  const seen = rentedForReader(open, rented);
+  if (seen.length !== 1 || seen[0].id !== "p20" || !seen[0].address.endsWith(", rented now")) throw new Error("rented list wrong");
+  if (!/is rented, so no renter was added/.test(sendResultLine({ outcome: "rented", rental: "833 Pillette Rd, Unit 20" }))) throw new Error("rented line");
+  if (!/is not available/.test(sendResultLine({ outcome: "not_available" }))) throw new Error("draft line unchanged");
+  console.log("ok   S830e rented units");
+}
+// S830f: two answers in one reply; same first name hint.
+{
+  if (JSON.stringify(answerKeysForTopic("pets, move_in")) !== '["pets","move_in"]') throw new Error("two topics");
+  const both = shortcutReply({ card, site: "Facebook Marketplace", question: "1 cat, move in dec 1st", topic: "pets, utilities", phone: null, renterName: "Koby" });
+  if (!both.text || !/pets are not allowed/.test(both.text) || !/Heat is included/.test(both.text)) throw new Error(`two answers: ${both.text}`);
+  const oneMissing = shortcutReply({ card, site: "Facebook Marketplace", question: "", topic: "pets, parking", phone: null, renterName: "Koby" });
+  if (!oneMissing.text || !/pets are not allowed/.test(oneMissing.text)) throw new Error("one missing falls back to the first");
+  const hint = sendResultLine({ outcome: "exists", name: "Brittany", rental: "Unit 9", firstNameOnly: true });
+  if (!/If this is someone new, add them on Renters\./.test(hint)) throw new Error("first name hint");
+  if (/someone new/.test(sendResultLine({ outcome: "exists", name: "Brittany Cunningham", rental: "Unit 9" }))) throw new Error("no hint on a full name");
+  console.log("ok   S830f two answers and first-name hint");
+}

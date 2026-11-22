@@ -5,7 +5,25 @@ import { roleCan } from "@/lib/roles";
 import { addAskedAgainNote, saveChatRenter } from "@/lib/chat-leads-server";
 import { cleanRenterName, CHAT_LEAD_MATCH_DAYS } from "@/lib/chat-leads";
 import { openRentalsForOrg, readScreenshotWithAi } from "@/lib/ai-enquiry-server";
-import { hashSendKey, nextWindow, planSend, sendResultLine, sendSource } from "@/lib/send-shortcut";
+import { hashSendKey, nextWindow, planSend, rentedForReader, sendResultLine, sendSource } from "@/lib/send-shortcut";
+import type { EnquiryRental } from "@/lib/ai-enquiry";
+
+/** S830e: the account's rented rentals (not archived), for the reader's list. */
+async function rentedRentalsForOrg(admin: SupabaseClient, orgId: string): Promise<EnquiryRental[]> {
+  const { data } = await admin
+    .from("properties")
+    .select("id, address, rent_cents, beds")
+    .eq("organization_id", orgId)
+    .is("archived_at", null)
+    .in("status", ["leased", "rented"])
+    .limit(60);
+  return ((data ?? []) as Array<{ id: string; address: string | null; rent_cents: number | null; beds: number | null }>).map((p) => ({
+    id: p.id,
+    address: p.address ?? "",
+    rentDollars: typeof p.rent_cents === "number" ? Math.round(p.rent_cents / 100) : null,
+    beds: p.beds,
+  }));
+}
 
 // S816l: the server half of "Send to Vacantless". Everything here runs with
 // the service-role client, scoped to the key's own account.
@@ -94,12 +112,25 @@ export async function saveRenterFromShortcut(
       }),
     )
   ).flat();
-  const read = await readScreenshotWithAi(image, rentals);
+  // S830e: rented units too (never one that shares a rent with an open one),
+  // so a chat about a rented unit says so instead of saving a stray renter.
+  const rented = rentedForReader(
+    rentals,
+    (await Promise.all(orgIds.map((id) => rentedRentalsForOrg(admin, id).catch(() => [] as EnquiryRental[])))).flat(),
+  );
+  const rentedIds = new Set(rented.map((r) => r.id));
+  const read = await readScreenshotWithAi(image, [...rentals, ...rented]);
   if (!read) return { line: sendResultLine({ outcome: "unreadable" }), leadId: null };
   // Which fields came back (never the values), so a miss can be traced.
   console.log(
     `[shortcut/renter] read org=${owner.orgId} name=${Boolean(read.name)} email=${Boolean(read.email)} phone=${Boolean(read.phone)} rental=${Boolean(read.rentalId)} site=${read.site ?? "none"} topic=${read.topic ?? "none"} not_renter=${Boolean(read.notRenter)}`,
   );
+
+  if (read.rentalId && rentedIds.has(read.rentalId)) {
+    const r = rented.find((x) => x.id === read.rentalId);
+    const label = r?.address.replace(/, rented now$/, "") ?? null;
+    return { line: sendResultLine({ outcome: "rented", rental: label }), leadId: null };
+  }
 
   const name = cleanRenterName(read.name);
   const email = normalizeEmail(read.email ?? "") || null;
@@ -131,7 +162,14 @@ export async function saveRenterFromShortcut(
       question: question || null,
     });
     return {
-      line: sendResultLine({ outcome: r, name, rental: rentalLabel, questionAdded: r === "exists" && !!question }),
+      line: sendResultLine({
+        outcome: r,
+        name,
+        rental: rentalLabel,
+        questionAdded: r === "exists" && !!question,
+        // S830f: a one-word name may be a different person with that first name.
+        firstNameOnly: r === "exists" && !!name && !/\s/.test(name.trim()),
+      }),
       leadId: null,
       ...ctx,
     };
