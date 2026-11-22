@@ -20,6 +20,9 @@ export type OnboardingWizardStep = {
   status: OnboardingWizardStepStatus;
   optional?: boolean;
   canMarkHandled?: boolean;
+  /** S830d: a second, plain button (e.g. "Have someone set it up for me"). */
+  helpHref?: string;
+  helpCta?: string;
   /**
    * S821b: "start" is the short path to a first ad (rental, viewing times,
    * one site, Set Live). "later" is everything a new landlord can leave until
@@ -168,11 +171,15 @@ const STEP_DEFS: StepDef[] = [
   {
     key: "phone_replies",
     group: "later",
-    label: "Answer renters from your phone",
+    // S830d (PLAN-S829 item 2b): one step for both tools, and a way to have a
+    // family member or friend do it. Noam found the phone setup hard himself.
+    label: "Set up your phone and computer",
     description:
-      "Renters on Facebook write in Messenger, mostly on your phone. Open Quick replies and tap Show a code for my phone. Scan it with your phone. One tap sets up iPhone or Android, with no sign-in. Then share a chat screenshot. It saves the renter and gives you your reply. Done when your first renter is saved this way.",
+      "On your phone: open Quick replies, tap Show a code for my phone and scan it. It works on iPhone or Android. Then share a chat screenshot to save the renter and copy your reply. On your computer: add the Vacantless helper to Chrome. It fills your Facebook ads for you. It works in Chrome on a computer, not on a phone. Done when your first renter is saved from your phone.",
     href: "/dashboard/replies?from=getting-started#send-shortcut",
     cta: "Set up my phone",
+    helpHref: "/dashboard/settings?tab=team&helpsetup=1#add-teammate",
+    helpCta: "Have someone set it up for me",
   },
   {
     key: "tenancy",

@@ -359,7 +359,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
     group: "agents",
     goesTo: "The person you invite.",
     title: "Join the team",
-    when: "When you invite someone to your account.",
+    when: "When you invite someone to your account. A setup invite also lists the two tools to set up.",
     channels: ["email"],
     control: { type: "button", where: "Settings, team" },
     code: { send: ["sendTeamInvite"] },

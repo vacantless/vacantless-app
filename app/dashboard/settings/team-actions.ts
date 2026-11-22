@@ -42,6 +42,8 @@ export async function inviteTeammate(formData: FormData) {
     token: result.token,
     brand_color: org.brand_color,
     reply_to_email: org.reply_to_email || user.email || null,
+    // S830d: "Have someone set it up for me" adds the two tools to the email.
+    setup: String(formData.get("purpose") ?? "") === "setup",
   });
   redirect(`${BACK}&team=${sent.sent ? "sent" : "email_failed"}`);
 }

@@ -36,12 +36,15 @@ export async function TeamSection({
   callerUserId,
   canManage,
   flash,
+  setup = false,
 }: {
   orgId: string;
   plan: string | null;
   callerUserId: string | null;
   canManage: boolean;
   flash?: string;
+  /** S830d: came from "Have someone set it up for me"; the invite email lists the tools to set up. */
+  setup?: boolean;
 }) {
   const team = await loadTeam(orgId);
   const note = flash ? FLASH[flash] : undefined;
@@ -121,8 +124,14 @@ export async function TeamSection({
       </div>
 
       {canManage && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div id="add-teammate" className="rounded-2xl border border-gray-200 bg-white p-5">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">Add a teammate</h3>
+          {setup && (
+            <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900">
+              Invite a family member or a friend who is good with phones. Our email tells them what to set up. One
+              tool goes on your phone. The other goes in Chrome on your computer. They get their own sign-in.
+            </p>
+          )}
           {limit === 0 ? (
             <p className="mt-2 text-sm text-gray-600">
               Teammates come with Starter and up. Right now only you can sign in.{" "}
@@ -138,6 +147,7 @@ export async function TeamSection({
             </p>
           ) : (
             <form action={inviteTeammate} className="mt-3 space-y-3">
+              {setup && <input type="hidden" name="purpose" value="setup" />}
               <p className="text-sm text-gray-500">
                 We email them a link. They sign in with their own email. {left} of {limit} seats left.
               </p>

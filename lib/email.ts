@@ -21,6 +21,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { gateRenterEmail, kindFromTags } from "@/lib/renter-email-block";
 import { renterUnsubscribeUrl } from "@/lib/renter-unsubscribe-server";
 import { demoEmail, isDemoEmail } from "@/lib/demo-account";
+import { MARKETPLACE_HELPER_INSTALL_URL } from "@/lib/marketplace-helper";
 
 const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
@@ -2654,7 +2655,19 @@ export type TeamInvitePayload = {
   token: string;
   brand_color?: string | null;
   reply_to_email?: string | null;
+  /** S830d: the owner asked them to set up the phone and computer tools. */
+  setup?: boolean;
 };
+
+/** S830d: the two tools a helper sets up, in plain steps. */
+export function teamInviteSetupHtml(): string {
+  const store = escapeHtml(MARKETPLACE_HELPER_INSTALL_URL);
+  return `<div style="margin:0 0 16px;padding:14px 16px;background:#eff6ff;border-radius:8px;font-size:14px;color:#1e3a8a;">
+        <p style="margin:0 0 8px;font-weight:600;">They asked you to set up two tools with them</p>
+        <p style="margin:0 0 8px;"><strong>1. Their phone.</strong> Join first. On a computer, open Quick replies in Vacantless and tap Show a code for my phone. Scan the code with their phone and follow the steps. It works on iPhone and Android.</p>
+        <p style="margin:0;"><strong>2. Their computer.</strong> In Chrome, add the Vacantless helper: <a href="${store}" style="color:#1d4ed8;">Chrome Web Store</a>. It only works in Chrome on a computer, not on a phone.</p>
+      </div>`;
+}
 
 export function teamInviteUrl(token: string): string {
   return `${APP_BASE_URL}/join/${encodeURIComponent(token)}`;
@@ -2677,6 +2690,7 @@ export function teamInviteHtml(p: TeamInvitePayload): string {
       <p style="margin:0 0 16px;font-size:16px;">You're invited to join <strong>${org}</strong></p>
       <p style="margin:0 0 16px;">${who} added you as a ${escapeHtml(p.role_label.toLowerCase())}. You'll share their rentals, renters and viewings.</p>
       <p style="margin:0 0 16px;">Use <strong>${to}</strong> to log in or create your login.</p>
+      ${p.setup ? teamInviteSetupHtml() : ""}
       <p style="margin:0 0 16px;text-align:center;">
         <a href="${url}" style="display:inline-block;background:${escapeHtml(
           brand,

@@ -359,6 +359,7 @@ export default async function SettingsPage({
     distribution?: string; // Distribution → channel account/setup flash
     fb?: string; // Distribution → Facebook Page connect/disconnect flash (S705)
     team?: string; // S744: Team tab flash
+    helpsetup?: string; // S830d: "Have someone set it up for me" from Getting started
   };
 }) {
   const org = await getCurrentOrg();
@@ -3104,6 +3105,7 @@ export default async function SettingsPage({
           callerUserId={user?.id ?? null}
           canManage={currentOrgRole != null && roleCan(currentOrgRole, "manage_team")}
           flash={searchParams.team}
+          setup={searchParams.helpsetup === "1"}
         />
       )}
     </div>
