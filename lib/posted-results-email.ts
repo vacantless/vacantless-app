@@ -5,6 +5,7 @@
 // app/api/cron/posted-results-email.
 import { postedResultsSites, type PostedResultsNext } from "@/lib/posted-results";
 import { publicAdUrl } from "@/lib/rental-list-view";
+import { shortAddress } from "@/lib/posting-coverage";
 
 /** Wait this long after the first live ad, so the other sites can catch up. */
 export const RESULTS_EMAIL_WAIT_MS = 2 * 60 * 60 * 1000;
@@ -41,34 +42,58 @@ export function resultsEmailDecision(args: {
   return "send";
 }
 
+function listWords(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/**
+ * S829 (Noam's read of the 251 Manitoba email): the count is rental sites
+ * only (the Vacantless page is not a site), the address is short, the page
+ * link appears once, the viewing line matches how the landlord books, and the
+ * next step rides the button instead of a second long link.
+ */
 export function resultsEmail(input: {
   address: string | null;
   posts: readonly ResultsEmailPost[];
   bookingUrl: string;
   appUrl: string;
   nextStep: PostedResultsNext | null;
-}): { subject: string; body: string; actionLabel: string } {
+  /** organizations.viewings_by_request (S828c): the landlord books each viewing. */
+  viewingsByRequest?: boolean;
+  /** The rental's own page, the button when there is no next step. */
+  rentalHref?: string;
+}): { subject: string; body: string; actionLabel: string; actionHref: string | null } {
   const sites = postedResultsSites(input.posts);
-  const where = input.address || "Your rental";
-  const count = sites.length + 1;
-  const headline = count === 1 ? `${where} is live` : `${where} is live on ${count} sites`;
+  const where = input.address ? shortAddress(input.address) : "Your rental";
+  const names = sites.map((s) => s.label);
+  const headline =
+    sites.length === 0
+      ? `${where} is live`
+      : sites.length === 1
+        ? `${where} is live on ${names[0]}`
+        : `${where} is live on ${sites.length} rental sites`;
   const lines = [
-    `${headline}.`,
+    sites.length > 1 ? `${where} is live on ${listWords(names)}.` : `${headline}.`,
     "",
-    `Your Vacantless page: ${input.bookingUrl}`,
     // S828: the ad a renter sees. Zumper saves the owner's manage link, which
     // asks for a Zumper sign-in (S773 fixed this on the Rentals list only).
     ...sites.map((s) => `${s.label}: ${publicAdUrl(s.key, s.url)}`),
+    ...(sites.length > 0 ? [""] : []),
+    `Your Vacantless page, to send anyone who asks: ${input.bookingUrl}`,
     "",
-    "Every ad points renters to your booking link.",
-    `Send it to anyone who asks: ${input.bookingUrl}`,
-    "",
-    "A renter writes on any of these sites.",
-    "They show up in Renters, and our reply carries your booking link.",
-    "Renters pick a viewing time themselves.",
+    "Renters who write on a site show up in Renters.",
+    "Our reply sends them to your page.",
+    input.viewingsByRequest
+      ? "They ask for a viewing, and you choose who to show it to."
+      : "They book a viewing there, or ask for one when no times are open.",
   ];
+  let actionLabel = "Open your rental";
+  let actionHref: string | null = input.rentalHref ?? null;
   if (input.nextStep) {
     const href = input.nextStep.href.startsWith("http") ? input.nextStep.href : `${input.appUrl}${input.nextStep.href}`;
+    actionHref = href;
     if (input.nextStep.key === "marketplace") {
       // S828: Vacantless only knows a Marketplace ad once its link is saved,
       // so "Add Marketplace" reached a landlord whose ad was already up
@@ -76,16 +101,18 @@ export function resultsEmail(input: {
       lines.push(
         "",
         "Not on Facebook Marketplace yet? It is free, and most renters look there first.",
-        href,
-        "Already posted it? Open the rental and paste the ad's link, so we track it.",
+        "Already posted it? Paste the ad's link on the rental, so we track it.",
       );
+      actionLabel = "Post to Marketplace";
     } else {
-      lines.push("", `Want more renters? Add ${input.nextStep.title}.`, href);
+      lines.push("", `Want more renters? Add ${input.nextStep.title}.`);
+      actionLabel = `Add ${input.nextStep.title}`;
     }
   }
   return {
     subject: headline,
     body: lines.join("\n"),
-    actionLabel: "Open your rental",
+    actionLabel,
+    actionHref,
   };
 }

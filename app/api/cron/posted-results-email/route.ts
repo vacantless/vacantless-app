@@ -41,6 +41,7 @@ type PropRow = {
     closed_at: string | null;
     brand_color: string | null;
     logo_url: string | null;
+    viewings_by_request: boolean | null;
   } | null;
 };
 
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
   const { data: props, error } = await admin
     .from("properties")
     .select(
-      "id, organization_id, address, status, results_emailed_at, organization:organizations!properties_organization_id_fkey(name, plan, posting_addon_active, closed_at, brand_color, logo_url)",
+      "id, organization_id, address, status, results_emailed_at, organization:organizations!properties_organization_id_fkey(name, plan, posting_addon_active, closed_at, brand_color, logo_url, viewings_by_request)",
     )
     .in("id", ids);
   if (error) return NextResponse.json({ ok: false, reason: `read:${error.code ?? "failed"}` }, { status: 500 });
@@ -110,6 +111,8 @@ export async function GET(req: NextRequest) {
       bookingUrl: `${APP_URL}/r/${p.id}`,
       appUrl: APP_URL,
       nextStep: next,
+      viewingsByRequest: org.viewings_by_request === true,
+      rentalHref: `${APP_URL}/dashboard/properties/${p.id}?tab=distribute`,
     });
     // S742c: claim the stamp first (kept even with no owner email, so the
     // sweep does not retry every 15 minutes); a second runner skips.
@@ -137,7 +140,7 @@ export async function GET(req: NextRequest) {
         subject: mail.subject,
         body: mail.body,
         action_label: mail.actionLabel,
-        action_url: `${APP_URL}/dashboard/properties/${p.id}?tab=distribute`,
+        action_url: mail.actionHref ?? `${APP_URL}/dashboard/properties/${p.id}?tab=distribute`,
         org_name: org.name ?? "Vacantless",
         brand_color: org.brand_color ?? null,
         logo_url: org.logo_url ?? null,

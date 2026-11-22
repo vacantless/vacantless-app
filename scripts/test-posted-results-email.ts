@@ -49,15 +49,31 @@ const mail = resultsEmail({
   appUrl: "https://app.vacantless.com",
   nextStep: { key: "marketplace", title: "Facebook Marketplace, free", body: "", href: "/dashboard/properties/abc?tab=distribute#for-you-facebook", action: "Open" },
 });
-ok("subject counts our page plus 3 sites", mail.subject === "88 Lakeview Ave, Unit 2 is live on 4 sites");
+// S829: rental sites only, short address, the page link once, no second long link.
+ok("subject counts rental sites only", mail.subject === "88 Lakeview Ave, Unit 2 is live on 3 rental sites");
+ok("first line names the sites", mail.body.startsWith("88 Lakeview Ave, Unit 2 is live on Kijiji, Zumper and Facebook Page.") || /is live on .+ and .+\./.test(mail.body.split("\n")[0]));
 ok("body lists each live site with its link", mail.body.includes("Kijiji: https://example.com/kijiji") && mail.body.includes("Zumper: https://example.com/zumper"));
 ok("removed ads are not listed twice", mail.body.split("Kijiji:").length === 2);
-ok("booking link is in the body", mail.body.includes("https://app.vacantless.com/r/abc"));
-ok("next step link is absolute", mail.body.includes("https://app.vacantless.com/dashboard/properties/abc?tab=distribute#for-you-facebook"));
-ok("button", mail.actionLabel === "Open your rental");
+ok("booking link is in the body once", mail.body.split("https://app.vacantless.com/r/abc").length === 2);
+ok("next step rides the button, not a body link", !mail.body.includes("#for-you-facebook") && mail.actionHref === "https://app.vacantless.com/dashboard/properties/abc?tab=distribute#for-you-facebook");
+ok("marketplace button", mail.actionLabel === "Post to Marketplace");
 ok("no em dash", !/—/.test(mail.subject + mail.body));
+ok("no booking-link wording twice", !mail.body.includes("Every ad points renters") && !mail.body.includes("booking link"));
 // S828: Marketplace may already be up with no saved link; the Zumper link is the public ad.
 ok("marketplace line covers an ad already posted", mail.body.includes("Not on Facebook Marketplace yet?") && mail.body.includes("Already posted it?") && !mail.body.includes("Want more renters? Add Facebook"));
+const manitoba = resultsEmail({
+  address: "251 Manitoba St, Suite 124, Toronto, ON M8Y 0C7",
+  posts: [post("zumper", 5)],
+  bookingUrl: "https://app.vacantless.com/r/m",
+  appUrl: "https://app.vacantless.com",
+  nextStep: null,
+  viewingsByRequest: true,
+  rentalHref: "https://app.vacantless.com/dashboard/properties/m?tab=distribute",
+});
+ok("one site: named in the subject, short address", manitoba.subject === "251 Manitoba St, Suite 124 is live on Zumper");
+ok("by request: renters ask, landlord chooses", manitoba.body.includes("They ask for a viewing, and you choose who to show it to.") && !manitoba.body.includes("book a viewing"));
+ok("no next step: button opens the rental", manitoba.actionLabel === "Open your rental" && manitoba.actionHref === "https://app.vacantless.com/dashboard/properties/m?tab=distribute");
+ok("open times: book or ask", resultsEmail({ address: null, posts: [post("kijiji", 5)], bookingUrl: "u", appUrl: "a", nextStep: null }).body.includes("They book a viewing there, or ask for one when no times are open."));
 const zmail = resultsEmail({
   address: null,
   posts: [{ portal: "zumper", status: "live", url: "https://www.zumper.com/manage/properties/listing/65839621", createdAt: new Date().toISOString() }],
