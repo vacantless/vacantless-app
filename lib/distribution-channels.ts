@@ -779,13 +779,20 @@ export function channelCostCapLine(
  * CHANNEL_FREE_CAP so it cannot drift from the connect-tile lines above.
  * Null for channels with no posting path yet.
  */
-export function firstRunCostLine(channelKey: unknown): string | null {
+export function firstRunCostLine(
+  channelKey: unknown,
+  opts: { professional?: boolean } = {},
+): string | null {
   const channel = channelByKey(channelKey);
   if (!channel) return null;
   switch (channel.key) {
     case "facebook":
       return "Free. Your team posts it from your own Facebook.";
     case "kijiji":
+      // S828h: Kijiji has no free ad for a real estate professional.
+      if (opts.professional) {
+        return `Kijiji has no free ad for a real estate professional. This ad costs ${formatChannelMoney(CHANNEL_COST_CENTS.kijiji ?? 0)}. It waits at Kijiji's checkout until you pay there.`;
+      }
       return `1 free ad per personal account, then ${formatChannelMoney(CHANNEL_COST_CENTS.kijiji ?? 0)} each.`;
     case "rentals_ca":
       return `Free: up to ${CHANNEL_FREE_CAP.rentals_ca ?? 0} listings per account.`;

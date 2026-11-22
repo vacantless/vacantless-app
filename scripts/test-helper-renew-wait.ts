@@ -60,7 +60,8 @@ if (existsSync(`${ext}/facebook-watch.js`)) {
   ok("helper notes the wait only for an available ad Facebook greys out", watch.includes("if (entry.available && state && !state.now && state.days) noteRenewWait(found.itemId, state.days);"));
   ok("helper reads only the menu on screen (S775)", watch.includes(".filter((m) => m.getClientRects().length > 0)"));
   ok("bridge answers get_renew_waits and forgets saved ones", bridge.includes('data.type === "get_renew_waits"') && bridge.includes('data.type === "renew_waits_saved"'));
-  ok("helper version is 1.2.6", config.includes('VERSION: "1.2.6"') && readFileSync(`${ext}/manifest.json`, "utf8").includes('"version": "1.2.6"'));
+  // S828x: 1.2.7 keeps the renew-wait report.
+  ok("helper version is 1.2.6 or later", /VERSION: "1\.2\.([6-9]|\d\d)"/.test(config) && /"version": "1\.2\.([6-9]|\d\d)"/.test(readFileSync(`${ext}/manifest.json`, "utf8")));
 }
 
 console.log(`helper-renew-wait: ${p} passed, ${f} failed`);

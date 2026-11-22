@@ -3705,7 +3705,7 @@ export default async function PropertyDetailPage({
               {(pullsFrom(source) || !folderUrl) && (
                 <label className="flex w-full items-center gap-2 text-xs text-gray-700">
                   <input type="checkbox" name="touch_up" defaultChecked />
-                  Touch the photos up: brighter and clearer. The originals are kept.
+                  Touch up the photos this folder brings in: brighter and clearer. The originals are kept. Photos you upload yourself are left as they are.
                 </label>
               )}
             </form>

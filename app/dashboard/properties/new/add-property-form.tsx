@@ -1026,6 +1026,41 @@ export function AddPropertyV2Form({
           )}
         </section>
 
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-1 text-sm font-semibold text-gray-900">
+            Pets <span className="font-normal text-gray-400">· needed for rental sites</span>
+          </h2>
+          <p className="mb-4 text-xs text-gray-500">
+            Rentals.ca will not post without it. Other sites post No pets if it
+            is empty. Dog size and pet notes are under Pets, smoking, money, and
+            media.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
+            {(
+              [
+                ["pets_cats", "Cats"],
+                ["pets_dogs", "Dogs"],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key} className="sm:col-span-2">
+                <Field label={label} htmlFor={key}>
+                  <select
+                    id={key}
+                    name={key}
+                    value={draft[key]}
+                    onChange={(e) => update(key, e.target.value)}
+                    className={selectClass()}
+                  >
+                    <option value="">Unknown</option>
+                    <option value="true">Welcome</option>
+                    <option value="false">Not welcome</option>
+                  </select>
+                </Field>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <p className="text-xs text-gray-500">
           These make your ads stronger. Kijiji and Zumper also need square
           footage. It is under Size, layout, and amenities.
@@ -1265,28 +1300,6 @@ export function AddPropertyV2Form({
             Pets, smoking, money, and media
           </summary>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-6">
-            {(
-              [
-                ["pets_cats", "Cats"],
-                ["pets_dogs", "Dogs"],
-              ] as const
-            ).map(([key, label]) => (
-              <div key={key} className="sm:col-span-2">
-                <Field label={label} htmlFor={key}>
-                  <select
-                    id={key}
-                    name={key}
-                    value={draft[key]}
-                    onChange={(e) => update(key, e.target.value)}
-                    className={selectClass()}
-                  >
-                    <option value="">Unknown</option>
-                    <option value="true">Welcome</option>
-                    <option value="false">Not welcome</option>
-                  </select>
-                </Field>
-              </div>
-            ))}
             <div className="sm:col-span-2">
               <Field label="Dog size" htmlFor="pets_dog_size">
                 <select

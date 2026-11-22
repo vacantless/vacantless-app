@@ -73,6 +73,56 @@ function siteLightUrl(key: string, url: string | undefined): string | null {
   return url ? publicAdUrl(key, url) : null;
 }
 
+/** S828d: a robot post the rental row should show as under way. */
+export type InFlightRunItem = {
+  propertyId: string | null;
+  channel: string;
+  mode: string | null;
+  publishStatus: string | null;
+  approved: boolean;
+  updatedAt: string | null;
+};
+
+/** How long an approved item that is waiting on the robot still reads as posting. */
+export const POSTING_NOW_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * S828d: the sites each rental is being posted to right now, from the same
+ * states the rental page calls "Posting" (lib/for-you-row-state): queued,
+ * submitting, submitted, or approved and waiting on the robot. An approved
+ * item untouched for an hour is no longer called posting, so a run that
+ * stopped does not read as busy forever.
+ */
+export function postingNowByProperty(
+  items: InFlightRunItem[],
+  nowMs: number,
+): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const it of items) {
+    if (!it.propertyId || it.mode !== "concierge") continue;
+    const s = it.publishStatus;
+    const running = s === "queued" || s === "submitting" || s === "submitted";
+    const fresh =
+      it.updatedAt != null && nowMs - Date.parse(it.updatedAt) < POSTING_NOW_WINDOW_MS;
+    const approvedWaiting =
+      it.approved && (s === "needs_operator" || s === "needs_payment") && fresh;
+    if (!running && !approvedWaiting) continue;
+    const set = out.get(it.propertyId) ?? new Set<string>();
+    set.add(it.channel);
+    out.set(it.propertyId, set);
+  }
+  return out;
+}
+
+/** "Posting to Kijiji", "Posting to Kijiji and Zumper", "Posting to 3 sites". */
+export function postingNowLabel(channels: string[]): string {
+  const names = channels.map(coverageLabel);
+  if (names.length === 0) return "";
+  if (names.length === 1) return `Posting to ${names[0]}`;
+  if (names.length === 2) return `Posting to ${names[0]} and ${names[1]}`;
+  return `Posting to ${names.length} sites`;
+}
+
 /** "Post to Kijiji", "Post to Kijiji and Zumper", "Post to 3 sites". */
 export function postMissingLabel(missingRobot: string[]): string {
   const names = missingRobot.map(coverageLabel);

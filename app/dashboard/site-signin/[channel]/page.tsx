@@ -255,7 +255,41 @@ export default async function SiteSigninPage({
 
       {/* S736 (item 7 second half): no account yet. We open the sign-up page
           and fill in these details; the landlord chooses the password. */}
-      {canStart && recent?.status !== "done" && (
+      {/* S828f (KI1748): Kijiji never finishes a sign-up in the secure window
+          (Register spins and no account is made). Send a new Kijiji account to
+          kijiji.ca in the landlord's own browser; sign in here afterwards. */}
+      {canStart && recent?.status !== "done" && channel === "kijiji" && (
+        <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5">
+          <p className="text-sm font-semibold text-gray-900">No Kijiji account yet?</p>
+          <ol className="mt-2 space-y-1.5 text-sm text-gray-700">
+            <li>
+              1.{" "}
+              <a
+                href="https://www.kijiji.ca/register/personal"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-brand underline"
+              >
+                Open Kijiji&apos;s sign-up page
+              </a>{" "}
+              in your own browser. Kijiji does not finish a sign-up in our secure window.
+            </li>
+            {vacantlessAddress ? (
+              <li>
+                2. Use this email:{" "}
+                <span className="select-all rounded bg-white px-1.5 py-0.5 font-mono text-xs text-gray-900">
+                  {vacantlessAddress}
+                </span>
+                . Renters who write on Kijiji come straight in, and Kijiji&apos;s confirm email is passed on to {user?.email ?? "you"}.
+              </li>
+            ) : (
+              <li>2. Use the email you want renters&apos; Kijiji messages to reach.</li>
+            )}
+            <li>3. Open Kijiji&apos;s confirm email, then come back here and press Sign in to Kijiji.</li>
+          </ol>
+        </div>
+      )}
+      {canStart && recent?.status !== "done" && channel !== "kijiji" && (
         <form action={startSiteSignin} className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5">
           <input type="hidden" name="channel" value={channel} />
           <input type="hidden" name="mode" value="signup" />

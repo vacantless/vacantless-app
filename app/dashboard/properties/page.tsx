@@ -46,6 +46,9 @@ import { UnitJourneyLine } from "@/components/unit-journey-line";
 import {
   siteLights,
   postMissingLabel,
+  postingNowByProperty,
+  postingNowLabel,
+  type InFlightRunItem,
   renewLine,
   listRank,
   sortForList,
@@ -308,10 +311,49 @@ export default async function PropertiesPage({
 
   // S737: old ads across every rental, for the Renew box (lib/renew-list-load).
   // S754: which sites each available rental is on (lib/posting-coverage-load).
-  const [renewItems, coverage] = await Promise.all([
+  const [renewItems, coverage, inFlightRes] = await Promise.all([
     loadRenewItems(supabase, org.id, org.booking_timezone || "America/Toronto"),
     readRobotPostingAccess(supabase, org.id).then((a) => loadPostingCoverage(supabase, org.id, a.allowed)),
+    // S828d: robot posts under way, so the row says "Posting to Kijiji"
+    // instead of offering a second "Post to Kijiji".
+    supabase
+      .from("distribution_run_items")
+      .select("run_id, channel, mode, publish_status, operator_submit_approved_at, updated_at")
+      .eq("organization_id", org.id)
+      .in("publish_status", ["queued", "submitting", "submitted", "needs_operator", "needs_payment"]),
   ]);
+  const inFlightRows = (inFlightRes.data ?? []) as {
+    run_id: string | null;
+    channel: string;
+    mode: string | null;
+    publish_status: string | null;
+    operator_submit_approved_at: string | null;
+    updated_at: string | null;
+  }[];
+  const inFlightRunIds = Array.from(new Set(inFlightRows.map((r) => r.run_id).filter((id): id is string => Boolean(id))));
+  const runProperty = new Map<string, string | null>();
+  if (inFlightRunIds.length > 0) {
+    const { data: runRows } = await supabase
+      .from("distribution_runs")
+      .select("id, property_id")
+      .in("id", inFlightRunIds);
+    for (const run of (runRows ?? []) as { id: string; property_id: string | null }[]) {
+      runProperty.set(run.id, run.property_id);
+    }
+  }
+  const postingNow = postingNowByProperty(
+    inFlightRows.map((r): InFlightRunItem => {
+      return {
+        propertyId: r.run_id ? runProperty.get(r.run_id) ?? null : null,
+        channel: r.channel,
+        mode: r.mode,
+        publishStatus: r.publish_status,
+        approved: r.operator_submit_approved_at != null,
+        updatedAt: r.updated_at,
+      };
+    }),
+    Date.now(),
+  );
 
   const allRows = (properties ?? []) as PropertyRow[];
   const activeRows = allRows.filter((row) => !row.archived_at);
@@ -481,7 +523,10 @@ export default async function PropertiesPage({
       const cov = coverageByProperty.get(p.id);
       const renew = archivedView ? [] : renewByProperty.get(p.id) ?? [];
       const lights = !archivedView && cov ? siteLights(cov, adUrls.get(p.id) ?? new Map()) : [];
-      const missingRobot = bookable ? cov?.missingRobot ?? [] : [];
+      const posting = postingNow.get(p.id) ?? new Set<string>();
+      const missingAll = bookable ? cov?.missingRobot ?? [] : [];
+      const missingRobot = missingAll.filter((k) => !posting.has(k));
+      const postingNowSites = missingAll.filter((k) => posting.has(k));
       const statusLabel = archivedView
         ? "Archived"
         : p.status === "leased"
@@ -503,6 +548,7 @@ export default async function PropertiesPage({
         renew,
         lights,
         missingRobot,
+        postingNowSites,
         madeRoomFor: !archivedView ? cov?.madeRoomFor ?? null : null,
         statusLabel,
         statusTone,
@@ -550,12 +596,21 @@ export default async function PropertiesPage({
   const gapItems = archivedView
     ? []
     : coverage.rows
-        .filter((r) => r.missing.length > 0)
-        .map((r) => ({
+        // S828d: a site being posted to now is not "missing" in the banner.
+        .map((r) => {
+          const posting = postingNow.get(r.propertyId) ?? new Set<string>();
+          return {
+            r,
+            missing: r.missing.filter((k) => !posting.has(k)),
+            robotMissing: r.missingRobot.filter((k) => !posting.has(k)),
+          };
+        })
+        .filter((x) => x.missing.length > 0)
+        .map(({ r, missing, robotMissing }) => ({
           id: r.propertyId,
           label: shortAddress(r.address),
-          sites: r.missing.map(coverageLabel),
-          robot: r.missingRobot.length > 0,
+          sites: missing.map(coverageLabel),
+          robot: robotMissing.length > 0,
         }));
   const firstNeedId = archivedView ? null : viewRows.find((v) => v.needsYou)?.p.id ?? null;
   const postedNotice = searchParams.posted
@@ -994,6 +1049,16 @@ export default async function PropertiesPage({
                       <DeleteOrArchiveControl propertyId={p.id} hardDelete={v.canHardDelete} archived />
                     ) : (
                       <>
+                        {v.postingNowSites.length > 0 && (
+                          <Link
+                            href={`/dashboard/properties/${p.id}?tab=distribute`}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800"
+                            title="The robot is posting this rental now. It can take up to half an hour."
+                          >
+                            <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" />
+                            {postingNowLabel(v.postingNowSites)}
+                          </Link>
+                        )}
                         {primaryIsPostMissing ? (
                           <form action={postToMissingSites}>
                             <input type="hidden" name="property_id" value={p.id} />

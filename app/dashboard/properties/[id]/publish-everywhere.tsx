@@ -123,6 +123,8 @@ export type PublishEverywherePostingBlocker = {
   action: string;
   /** S700 (dress rehearsal F12): every missing detail at once, each with its own link. */
   items?: { label: string; href: string }[];
+  /** S828b: the missing details in plain words ("pet policy"), for each site row. */
+  needs?: string[];
 };
 
 // --- per-channel presentation (mode -> chip) -------------------------------
@@ -796,6 +798,7 @@ export function PublishEverywhere({
             wizardEnabled={wizardEnabled}
             allSetSummary={liveForYouAllSet}
             postingBlocker={postingBlocker}
+            listedByProfessional={String(basics.forRentBy ?? "").toLowerCase() === "professional"}
             marketplaceKit={marketplaceKit}
             brokerage={brokerage}
             robotPostingAllowed={robotPostingAllowed}
@@ -856,6 +859,7 @@ function ForYouHandoff({
   wizardEnabled = false,
   allSetSummary,
   postingBlocker,
+  listedByProfessional = false,
   marketplaceKit = null,
   brokerage = null,
   robotPostingAllowed = false,
@@ -892,6 +896,7 @@ function ForYouHandoff({
   wizardEnabled?: boolean;
   allSetSummary: boolean;
   postingBlocker?: PublishEverywherePostingBlocker | null;
+  listedByProfessional?: boolean;
 }) {
   const itemByChannel = new Map(runItems.map((it) => [it.channel, it]));
   return (
@@ -935,6 +940,9 @@ function ForYouHandoff({
             conciergeDeskEnabled={conciergeDeskEnabled}
             wizardEnabled={wizardEnabled}
             postingBlocked={Boolean(postingBlocker)}
+            blockedNeeds={postingBlocker?.needs ?? []}
+            blockedHref={postingBlocker?.href ?? null}
+            listedByProfessional={listedByProfessional}
             marketplaceKit={row.key === "facebook" ? marketplaceKit : null}
             addonLocked={locked(row)}
             capNote={capNotes[row.key] ?? null}
@@ -1011,6 +1019,9 @@ function ForYouRow({
   conciergeDeskEnabled,
   wizardEnabled = false,
   postingBlocked: postingBlockedProp,
+  blockedNeeds = [],
+  blockedHref = null,
+  listedByProfessional = false,
   marketplaceKit = null,
   addonLocked = false,
   capNote = null,
@@ -1035,6 +1046,9 @@ function ForYouRow({
   conciergeDeskEnabled: boolean;
   wizardEnabled?: boolean;
   postingBlocked?: boolean;
+  blockedNeeds?: string[];
+  blockedHref?: string | null;
+  listedByProfessional?: boolean;
 }) {
   const [approveOpen, setApproveOpen] = useState(false);
   // S762: the row's state lives in lib/for-you-row-state, so the green card's
@@ -1087,8 +1101,14 @@ function ForYouRow({
           {stateChip.label}
         </span>
       </div>
-      {!isLive && firstRunCostLine(row.key) ? (
-        <p className="mt-1 text-sm leading-snug text-gray-500">{firstRunCostLine(row.key)}</p>
+      {!isLive && firstRunCostLine(row.key, { professional: listedByProfessional }) ? (
+        <p
+          className={`mt-1 text-sm leading-snug ${
+            listedByProfessional && row.key === "kijiji" ? "font-medium text-amber-800" : "text-gray-500"
+          }`}
+        >
+          {firstRunCostLine(row.key, { professional: listedByProfessional })}
+        </p>
       ) : null}
       {!isLive && roomNote ? (
         <p className="mt-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-base leading-relaxed text-gray-700">
@@ -1105,8 +1125,24 @@ function ForYouRow({
 
       {locked ? null : postingBlocked && !isLive ? (
         <p className="mt-2 text-base leading-relaxed text-indigo-900/70">
-          Finish your listing first. Sign-in and any site fee come after the
-          details are complete.
+          {blockedNeeds.length > 0 ? (
+            <>
+              <span className="font-semibold text-amber-800">
+                Needs: {blockedNeeds.join(", ")}.
+              </span>{" "}
+              {blockedHref ? (
+                <a href={blockedHref} className="font-semibold text-indigo-700 hover:underline">
+                  Add it
+                </a>
+              ) : null}
+              {blockedHref ? ". " : ""}Sign-in and any site fee come after.
+            </>
+          ) : (
+            <>
+              Finish your listing first. Sign-in and any site fee come after the
+              details are complete.
+            </>
+          )}
         </p>
       ) : isLive ? (
         <>

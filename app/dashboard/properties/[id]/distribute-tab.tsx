@@ -412,6 +412,7 @@ export function DistributeTab({
           href: firstListingPacketAction.href,
           action: firstListingPacketAction.action,
           items: listingPacketMissingItems,
+          needs: listingPacket.missingRequired.map((m) => m.label.toLowerCase()),
         }
       : null;
   const publishEverywhereSurface = (
