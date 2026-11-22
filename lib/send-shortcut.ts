@@ -68,16 +68,21 @@ export type SendRead = {
   email: string | null;
   phone: string | null;
   rentalId: string | null;
+  /** S830b: the reader says this is an agent selling leads, a promoter or spam. */
+  notRenter?: boolean;
 };
 
 /** What to do with what the AI read. */
 export type SendPlan =
   | { kind: "no_renter" }
+  | { kind: "not_renter" }
   | { kind: "contact"; propertyId: string | null }
   | { kind: "chat_name"; propertyId: string }
   | { kind: "name_no_rental" };
 
 export function planSend(read: SendRead): SendPlan {
+  // S830b: never save someone who is selling to the landlord (REVIEW-S830).
+  if (read.notRenter) return { kind: "not_renter" };
   const hasContact = Boolean(read.email || read.phone);
   if (hasContact) return { kind: "contact", propertyId: read.rentalId };
   if (!read.name) return { kind: "no_renter" };
@@ -86,7 +91,7 @@ export function planSend(read: SendRead): SendPlan {
 
 /** The line the Shortcut shows. Plain words, one or two sentences, no dashes. */
 export function sendResultLine(input: {
-  outcome: "saved" | "exists" | "no_renter" | "unreadable" | "not_available" | "failed";
+  outcome: "saved" | "exists" | "no_renter" | "not_renter" | "unreadable" | "not_available" | "failed";
   name?: string | null;
   rental?: string | null;
   /** S824a: the renter was already saved and their new question was added. */
@@ -105,6 +110,8 @@ export function sendResultLine(input: {
         : `${who} is already in Renters${where}.`;
     case "not_available":
       return `${input.rental || "That rental"} is not available, so no renter was added.`;
+    case "not_renter":
+      return "No one was added. This looks like an agent, a seller or an ad, not a renter.";
     case "no_renter":
       return "We could not find a renter's name, email or phone in that picture. Send a screenshot that shows their name.";
     case "unreadable":
@@ -131,7 +138,14 @@ export const SEND_ERRORS = {
 export function answerKeyForQuestion(question: string | null | undefined): ReplyAnswerKey | null {
   const q = String(question ?? "").toLowerCase();
   if (!q.trim()) return null;
+  // S830a: the order matters. A form already sent, then a viewing time, then
+  // a rent offer, before the record's topics: "when are you available for
+  // viewing" is a viewing, not a move-in date; "$1,200 all inclusive" is an
+  // offer, not a utilities question (REVIEW-S830).
   const rules: [ReplyAnswerKey, RegExp][] = [
+    ["applied", /\b(submit+ed|filled (it|the form|out|in)|sent (the|my|a|in) (form|request)|completed the form|set up a viewing|already (booked|sent|applied|submit+ed)|i (did|do) it)\b/],
+    ["viewing", /\b(view(ing)?|visit|tour|showing|come (see|by|look|check|to see)|see (it|the|this|inside)|look (at it|inside)|check (it|this) out|\d{1,2} ?(am|pm))\b/],
+    ["rent", /(\$\s?\d|\b(negotiable|negotiate|max (to pay|budget)|would you (consider|take|accept)|best price|discount|lower (the )?(rent|price))\b)/],
     ["pets", /\b(pets?|cats?|dogs?|kitten|puppy|animals?)\b/],
     ["utilities", /\b(utilit(y|ies)|hydro|heat|heating|water|electric(ity)?|internet|wifi|bills?|inclusive|included)\b/],
     ["parking", /\b(park(ing)?|garage|driveway|car)\b/],
@@ -142,6 +156,25 @@ export function answerKeyForQuestion(question: string | null | undefined): Reply
   ];
   for (const [key, re] of rules) if (re.test(q)) return key;
   return null;
+}
+
+/** S830a: the topics the screenshot reader may name. */
+export const SEND_TOPICS = [
+  "available", "viewing", "applied", "rent", "lease", "pets", "utilities", "parking",
+  "laundry", "move_in", "appliances", "ac", "other",
+] as const;
+
+/**
+ * The answer key for the reader's topic. "first" is the "still available"
+ * reply, "none" means a real question with no answer kind (lease, other),
+ * null means the reader named no known topic (then the word rules decide).
+ */
+export function answerKeyForTopic(topic: string | null | undefined): ReplyAnswerKey | "first" | "none" | null {
+  const t = String(topic ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (!t || !(SEND_TOPICS as readonly string[]).includes(t)) return null;
+  if (t === "available") return "first";
+  if (t === "lease" || t === "other") return "none";
+  return t as ReplyAnswerKey;
 }
 
 /** The card's site button for the chat's site; "direct" when that ad is not tracked. */
@@ -162,6 +195,8 @@ export function shortcutReply(input: {
   card: ReplyKitCard | null;
   site: string | null | undefined;
   question: string | null | undefined;
+  /** S830a: the topic the screenshot reader named; it wins over the word rules. */
+  topic?: string | null;
   phone: string | null;
   renterName: string | null;
 }): { text: string | null; why: "ok" | "no_rental" | "no_answer" } {
@@ -170,7 +205,9 @@ export function shortcutReply(input: {
   const want = replySiteKey(input.site);
   const site = card.sites.find((x) => x.key === want) ?? card.sites.find((x) => x.key === "direct") ?? card.sites[0];
   if (!site) return { text: null, why: "no_rental" };
-  const key = card.available ? answerKeyForQuestion(input.question) : null;
+  const fromTopic = card.available ? answerKeyForTopic(input.topic) : "first";
+  if (fromTopic === "none") return { text: null, why: "no_answer" };
+  const key = !card.available || fromTopic === "first" ? null : fromTopic ?? answerKeyForQuestion(input.question);
   if (key && !card.answers.some((a) => a.key === key)) return { text: null, why: "no_answer" };
   return {
     text: replyKitText({ card, site, phone: input.phone, renterName: input.renterName, answerKey: key }),

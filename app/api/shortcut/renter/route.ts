@@ -84,6 +84,7 @@ async function handle(request: Request, v2: boolean): Promise<NextResponse> {
           card: cards.find((c) => c.propertyId === r.rentalId) ?? null,
           site: r.site,
           question: r.question,
+          topic: r.topic ?? null,
           phone: (orgRow as { public_contact_phone: string | null } | null)?.public_contact_phone ?? null,
           renterName: r.name ?? null,
         });

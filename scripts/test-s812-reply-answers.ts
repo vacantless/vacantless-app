@@ -102,7 +102,7 @@ const cards = buildReplyKitCards({
 });
 const c3 = cards.find((c) => c.propertyId === "p3")!;
 const c303 = cards.find((c) => c.propertyId === "p303")!;
-eq(c3.answers.map((a) => a.key), ["utilities"], "the card carries the answers on file");
+eq(c3.answers.map((a) => a.key), ["viewing", "applied", "utilities", "rent"], "the card carries the answers on file, with the S830a stock replies around them");
 eq(c303.answers, [], "a rented rental offers no answers");
 eq(
   replyKitText({ card: c3, site: c3.sites[0], phone: "519-555-0100", renterName: "Sam", answerKey: "utilities" }),

@@ -62,6 +62,8 @@ export async function sendOrgIds(admin: SupabaseClient, owner: SendKeyOwner): Pr
 export type SendSaved = {
   line: string;
   leadId: string | null;
+  /** S830a: what the screenshot reader says the renter asked about. */
+  topic?: string | null;
   /** S829h: the account the renter was saved in (the rental's own). */
   orgId?: string;
   rentalId?: string | null;
@@ -96,7 +98,7 @@ export async function saveRenterFromShortcut(
   if (!read) return { line: sendResultLine({ outcome: "unreadable" }), leadId: null };
   // Which fields came back (never the values), so a miss can be traced.
   console.log(
-    `[shortcut/renter] read org=${owner.orgId} name=${Boolean(read.name)} email=${Boolean(read.email)} phone=${Boolean(read.phone)} rental=${Boolean(read.rentalId)} site=${read.site ?? "none"}`,
+    `[shortcut/renter] read org=${owner.orgId} name=${Boolean(read.name)} email=${Boolean(read.email)} phone=${Boolean(read.phone)} rental=${Boolean(read.rentalId)} site=${read.site ?? "none"} topic=${read.topic ?? "none"} not_renter=${Boolean(read.notRenter)}`,
   );
 
   const name = cleanRenterName(read.name);
@@ -111,8 +113,10 @@ export async function saveRenterFromShortcut(
     .filter(Boolean)
     .join("\n");
 
-  const ctx = { orgId, rentalId: rental?.id ?? null, question: question || null, site: read.site ?? null, name };
-  const plan = planSend({ name, email, phone, rentalId: rental?.id ?? null });
+  const ctx = { orgId, rentalId: rental?.id ?? null, question: question || null, topic: read.topic ?? null, site: read.site ?? null, name };
+  const plan = planSend({ name, email, phone, rentalId: rental?.id ?? null, notRenter: read.notRenter });
+  // S830b: nothing saved and nothing copied for an agent, seller or spam.
+  if (plan.kind === "not_renter") return { line: sendResultLine({ outcome: "not_renter" }), leadId: null };
   if (plan.kind === "no_renter") return { line: sendResultLine({ outcome: "no_renter" }), leadId: null, ...ctx };
 
   if (plan.kind === "chat_name") {

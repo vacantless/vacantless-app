@@ -13,7 +13,7 @@ import { buildTrackedLink, portalLabel } from "./listing-distribution";
 import { formatRent } from "./listing-copy";
 import type { DaySlots } from "./booking";
 import type { UnitFeatures } from "./property-features";
-import { answerReplyText, buildReplyAnswers, type ReplyAnswer } from "./reply-answers";
+import { answerReplyText, buildReplyAnswers, stockReplyAnswers, type ReplyAnswer } from "./reply-answers";
 
 export type ReplyKitProperty = {
   id: string;
@@ -152,7 +152,8 @@ export function buildReplyKitCards(input: {
       facebookTitle: facebookChatTitle(prop),
       photos: (input.photosByProperty?.get(prop.id) ?? []).slice(0, 3),
       priceShared: false,
-      answers: available ? buildReplyAnswers(input.featuresByProperty?.get(prop.id) ?? null, input.now) : [],
+      // S830a: viewing and "sent the form" first, rent last; the record's answers between.
+      answers: available ? withStockAnswers(buildReplyAnswers(input.featuresByProperty?.get(prop.id) ?? null, input.now)) : [],
     });
   }
   // S750: the chat header shows the price, so it is the fastest way to find the
@@ -164,6 +165,13 @@ export function buildReplyKitCards(input: {
   return cards.sort(
     (a, b) => Number(b.available) - Number(a.available) || (rentNum(a.rentLabel) - rentNum(b.rentLabel)),
   );
+}
+
+/** S830a: the stock replies around the record's answers. */
+function withStockAnswers(fromRecord: ReplyAnswer[]): ReplyAnswer[] {
+  const stock = stockReplyAnswers();
+  const pick = (k: string) => stock.filter((a) => a.key === k);
+  return [...pick("viewing"), ...pick("applied"), ...fromRecord, ...pick("rent")];
 }
 
 function rentNum(label: string | null): number {

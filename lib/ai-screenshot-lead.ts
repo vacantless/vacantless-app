@@ -39,11 +39,19 @@ export function buildScreenshotPrompt(rentals: EnquiryRental[]): string {
     "Return JSON with these keys:",
     '{"is_enquiry": true|false, "confidence": 0 to 1, "name": string|null, "email": string|null,',
     ' "phone": string|null, "question": string|null, "rental_id": one id from the list or null,',
-    ' "site": the app or website the chat is on (for example Facebook Marketplace, Kijiji, WhatsApp, Text message), or null}',
+    ' "site": the app or website the chat is on (for example Facebook Marketplace, Kijiji, WhatsApp, Text message), or null,',
+    ' "topic": one word for what the renter asked last, from the list below,',
+    ' "not_renter": true only when the other person is not looking to rent}',
     "name is the renter's name as shown in the chat, copied exactly in whatever script it is written (Punjabi, Arabic, Chinese and so on are fine).",
     "On Facebook Marketplace and Messenger the chat title reads \"Name · ad title\" and a line says \"Name started this chat\": that Name is the renter.",
     "question is what the renter asked, in one short sentence.",
+    "topic is one of: available (only asks if it is available, or no question, or just thanks), viewing (asks to see it, a time to visit, a tour),",
+    "applied (says they already filled out the form, sent the request or booked), rent (offers a lower rent or asks if the price can change),",
+    "lease (lease length or term), pets, utilities (what is included), parking, laundry, move_in (when they can move in), appliances, ac (air conditioning),",
+    "other (any other question). A renter who says they have no pets is not asking about pets.",
+    "not_renter is true for an agent offering to find tenants for a fee, a promoter or marketer, or spam. An agent asking for a client who wants to rent is a renter.",
     "Pick rental_id when the chat points to one rental by address, unit, price, beds or ad title. A Marketplace listing line such as \"CA$1,250 · 1 Bed 1 Bath\" matches the rental with that monthly price.",
+    "When two rentals in the list have the same price and nothing else in the chat tells them apart, use null for rental_id.",
   ].join("\n");
 }
 

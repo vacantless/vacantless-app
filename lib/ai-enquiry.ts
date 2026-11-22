@@ -36,6 +36,10 @@ export type EnquiryRead = {
   question: string | null;
   rentalId: string | null;
   site: string | null;
+  /** S830a: what the renter asked about, from the screenshot reader only. */
+  topic?: string | null;
+  /** S830b: the screenshot reader says the sender is not a renter. */
+  notRenter?: boolean;
 };
 
 /** Words that mark a forwarded email as a rental enquiry worth reading. */
@@ -139,6 +143,8 @@ export function normalizeEnquiryRead(
     question: cleanStr(raw.question, 400),
     rentalId,
     site: cleanStr(raw.site, 60),
+    topic: cleanStr(raw.topic, 20)?.toLowerCase() ?? null,
+    notRenter: raw.not_renter === true,
   };
 }
 

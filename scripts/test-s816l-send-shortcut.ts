@@ -102,7 +102,7 @@ ok(answerKeyForQuestion("is there parking") === "parking", "parking");
 ok(answerKeyForQuestion("Laundry in building?") === "laundry", "laundry");
 ok(answerKeyForQuestion("does it have A/C") === "ac", "ac");
 ok(answerKeyForQuestion("When can I move in?") === "move_in", "move in");
-ok(answerKeyForQuestion("May I see it this week?") === null, "May the word is not a month");
+ok(answerKeyForQuestion("May I see it this week?") === "viewing", "May the word is not a month; S830a: seeing it is a viewing");
 ok(replySiteKey("Facebook Marketplace") === "facebook" && replySiteKey("Messenger") === "facebook", "facebook site");
 ok(replySiteKey("Kijiji") === "kijiji" && replySiteKey("texts") === "direct", "other sites");
 {

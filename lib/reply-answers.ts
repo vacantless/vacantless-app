@@ -21,7 +21,14 @@ import {
 import { appliancesLabel, parkingFeeLabel } from "./listing-details";
 
 export const REPLY_ANSWER_KEYS = ["pets", "utilities", "parking", "laundry", "move_in", "appliances", "ac"] as const;
-export type ReplyAnswerKey = (typeof REPLY_ANSWER_KEYS)[number];
+/**
+ * S830a: replies that need no fact from the record, so every available rental
+ * has them: a viewing time asked for, the form already sent, a rent offer.
+ * Noam's own words from his Marketplace replies (REVIEW-S830).
+ */
+export const STOCK_ANSWER_KEYS = ["viewing", "applied", "rent"] as const;
+export type StockAnswerKey = (typeof STOCK_ANSWER_KEYS)[number];
+export type ReplyAnswerKey = (typeof REPLY_ANSWER_KEYS)[number] | StockAnswerKey;
 
 export type ReplyAnswer = {
   key: ReplyAnswerKey;
@@ -39,7 +46,21 @@ const LABELS: Record<ReplyAnswerKey, string> = {
   move_in: "Move-in date",
   appliances: "Appliances",
   ac: "Air conditioning",
+  viewing: "Viewing time",
+  applied: "Sent the form",
+  rent: "Rent offer",
 };
+
+const STOCK_TEXT: Record<StockAnswerKey, string> = {
+  viewing: "Fill out the form and the showing agent will get back to you to set a time.",
+  applied: "Please allow some time for the showing agent to get back to you.",
+  rent: "For any questions about the rent, please speak with the showing agent.",
+};
+
+/** S830a: the stock replies, in the order the chips show them. */
+export function stockReplyAnswers(): ReplyAnswer[] {
+  return STOCK_ANSWER_KEYS.map((key) => ({ key, label: LABELS[key], text: STOCK_TEXT[key] }));
+}
 
 function joinAnd(items: string[]): string {
   if (items.length <= 1) return items.join("");
@@ -149,7 +170,7 @@ function acAnswer(f: UnitFeatures): string | null {
 /** The answers this rental's record can give, in the order renters ask. */
 export function buildReplyAnswers(features: UnitFeatures | null | undefined, now: Date = new Date()): ReplyAnswer[] {
   const f = features ?? {};
-  const made: Record<ReplyAnswerKey, string | null> = {
+  const made: Record<(typeof REPLY_ANSWER_KEYS)[number], string | null> = {
     pets: petsAnswer(f),
     utilities: utilitiesAnswer(f),
     parking: parkingAnswer(f),
@@ -177,8 +198,26 @@ export function answerReplyText(input: {
   hasViewingTimes: boolean;
   renterName?: string | null;
 }): string {
+  const hi = `Hi ${HELPER_REPLY_NAME},`;
+  const name = input.renterName ?? null;
+  // S830a: the stock replies carry their own shape.
+  if (input.answer.key === "applied") return fillHelperReply(`${hi} thanks, we got it. ${input.answer.text}`, name);
+  if (input.answer.key === "viewing") {
+    return fillHelperReply(
+      input.hasViewingTimes
+        ? `${hi} thanks for asking. You can pick a viewing time that works for you here: ${input.bookingUrl}`
+        : `${hi} thanks for asking. Open the link and tap "Request a viewing". ${input.answer.text} Link: ${input.bookingUrl}`,
+      name,
+    );
+  }
+  if (input.answer.key === "rent") {
+    const how = input.hasViewingTimes
+      ? `You can pick a viewing time here: ${input.bookingUrl}`
+      : `Open the link and tap "Request a viewing", and they will get back to you: ${input.bookingUrl}`;
+    return fillHelperReply(`${hi} thanks for asking. ${input.answer.text} ${how}`, name);
+  }
   const tail = input.hasViewingTimes
     ? `If that works for you, you can pick a viewing time here: ${input.bookingUrl}`
     : `If that works for you, open the link and tap "Request a viewing": ${input.bookingUrl}`;
-  return fillHelperReply(`Hi ${HELPER_REPLY_NAME}, thanks for asking. ${input.answer.text} ${tail}`, input.renterName ?? null);
+  return fillHelperReply(`${hi} thanks for asking. ${input.answer.text} ${tail}`, name);
 }
