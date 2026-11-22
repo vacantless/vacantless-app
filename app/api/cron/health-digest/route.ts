@@ -15,6 +15,7 @@ import {
   torontoDateHour,
   type EmailProblem,
   type HealthInput,
+  type ProxyStatus,
 } from "@/lib/health-digest";
 
 // S720: the daily health email to Noam (lib/health-digest.ts says why).
@@ -35,6 +36,33 @@ function authorized(req: NextRequest): boolean {
   if (!secret) return false;
   if (req.headers.get("authorization") === `Bearer ${secret}`) return true;
   return false; // S751: header only (a secret in the URL lands in request logs)
+}
+
+/**
+ * S830c: Decodo's residential subscription (GET /v2/subscriptions). The key
+ * lives only in Vercel (DECODO_API_KEY). The API has no Wallet balance, so
+ * this reads the GB block in use; lib/health-digest proxyLines says when.
+ */
+async function decodoProxy(): Promise<ProxyStatus> {
+  const key = process.env.DECODO_API_KEY;
+  if (!key) return { checked: false, note: "no Decodo key in Vercel" };
+  try {
+    const res = await fetch("https://api.decodo.com/v2/subscriptions", {
+      headers: { Authorization: key, accept: "application/json" },
+      signal: AbortSignal.timeout(8_000),
+      cache: "no-store",
+    });
+    if (!res.ok) return { checked: false, note: `Decodo answered ${res.status}` };
+    const body = (await res.json()) as unknown;
+    const rows = (Array.isArray(body) ? body : [body]) as Record<string, unknown>[];
+    const row = rows.find((r) => String(r?.service_type ?? "").includes("residential")) ?? rows[0];
+    const used = Number(row?.traffic_per_period);
+    const limit = Number(row?.traffic_limit);
+    if (!Number.isFinite(used) || !Number.isFinite(limit)) return { checked: false, note: "Decodo sent no traffic figures" };
+    return { checked: true, usedGb: used, limitGb: limit };
+  } catch {
+    return { checked: false, note: "Decodo did not answer" };
+  }
 }
 
 async function brevoProblems(): Promise<HealthInput["emails"]> {
@@ -116,7 +144,7 @@ export async function GET(req: NextRequest) {
   }
   const orgName = (id: string | null) => (id && orgs.get(id)?.name) || "Unknown account";
 
-  const [sweepsRes, lastSweepRes, portalRes, notesRes, robotRes, sessionRes, emails, appErrRes] =
+  const [sweepsRes, lastSweepRes, portalRes, notesRes, robotRes, sessionRes, emails, appErrRes, proxy] =
     await Promise.all([
       admin.from("sweep_runs").select("ran_at, ok, ran, failed, details").gte("ran_at", since),
       admin.from("sweep_runs").select("ran_at").order("ran_at", { ascending: false }).limit(1).maybeSingle(),
@@ -139,6 +167,7 @@ export async function GET(req: NextRequest) {
       // S748: page crashes (app_errors, migration 0269). A read error leaves it "not checked".
       // S825c: a dropped connection the page retried by itself (kind network) is not a crash.
       admin.from("app_errors").select("path").gte("at", since).neq("kind", "network").limit(500),
+      decodoProxy(),
     ]);
   // S748: keep the crash log to 30 days.
   await admin
@@ -165,6 +194,7 @@ export async function GET(req: NextRequest) {
     lastSweepAt: (lastSweepRes.data as { ran_at: string } | null)?.ran_at ?? null,
     appErrors: appErrRes.error ? null : ((appErrRes.data ?? []) as { path: string | null }[]),
     emails,
+    proxy,
     portal: [...portalCounts.values()],
     parserNotes: ((notesRes.data ?? []) as { organization_id: string; name: string | null; notes: string }[]).map(
       (l) => ({ org: orgName(l.organization_id), name: l.name, notes: l.notes }),

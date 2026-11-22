@@ -44,7 +44,40 @@ export type HealthInput = {
   appErrors?: { path: string | null }[] | null;
   /** S754: available rentals missing from a site the account can post to, per account (lib/posting-coverage coverageHealthLines). */
   coverageGaps?: { org: string; lines: string[] }[] | null;
+  /** S830c: the robot's Decodo proxy (Pay As You Go). Null or unchecked = no key. */
+  proxy?: ProxyStatus | null;
 };
+
+/**
+ * S830c: what Decodo's API says about the residential proxy. It has no Wallet
+ * figure, only the GB block Pay As You Go bought last (traffic_limit) and how
+ * much of it is used. At 90% Decodo takes the next GB ($4) from the Wallet;
+ * a short Wallet pauses Pay As You Go and the robot's proxy fails (KI1756).
+ */
+export type ProxyStatus = { checked: boolean; usedGb?: number | null; limitGb?: number | null; note?: string | null };
+
+/** The connection errors the robot records when its proxy is down (worker submit-logic). */
+export function proxyFailed(error: string | null | undefined): boolean {
+  return /ERR_TUNNEL_CONNECTION_FAILED|ERR_PROXY_CONNECTION_FAILED|ERR_PROXY_AUTH|407 Proxy/i.test(error ?? "");
+}
+
+/** S830c: the proxy lines, counted as problems. Empty when all is well. */
+export function proxyLines(input: Pick<HealthInput, "robot" | "proxy">): string[] {
+  const lines: string[] = [];
+  const failed = input.robot.filter((r) => proxyFailed(r.error)).length;
+  if (failed > 0) {
+    lines.push(
+      `The robot's proxy did not connect on ${failed} ${failed === 1 ? "post" : "posts"}. The Decodo Wallet may be short. Top it up, then press Turn ON on the Residential card.`,
+    );
+  }
+  const p = input.proxy;
+  if (p?.checked && typeof p.usedGb === "number" && typeof p.limitGb === "number" && p.limitGb > 0 && p.usedGb / p.limitGb >= 0.8) {
+    lines.push(
+      `The proxy has used ${p.usedGb.toFixed(2)} of ${p.limitGb.toFixed(2)} GB. At 90% Decodo takes the next $4 from the Wallet. Check the Wallet has at least $4.`,
+    );
+  }
+  return lines;
+}
 
 // S758: run items closed on purpose, not failures. closed_stale is the
 // run-item closer (S728) tidying a dead job; closed_test is a dark test run
@@ -162,6 +195,10 @@ export function healthSections(input: HealthInput): HealthSection[] {
   }
   if (robotLines.length) out.push({ title: "Posting to sites", lines: robotLines });
 
+  // S830c: the robot's proxy Wallet (Decodo).
+  const proxy = proxyLines(input);
+  if (proxy.length) out.push({ title: "Robot's proxy (Decodo)", lines: proxy });
+
   return out;
 }
 
@@ -201,7 +238,7 @@ export function buildHealthDigest(input: HealthInput): { subject: string; body: 
   const gaps = coverageSection(input);
   if (gaps) parts.push(gaps);
   parts.push(
-    `Checked: ${okRuns} of ${runs} sweeps, email delivery${input.emails.checked ? "" : " (not checked)"}, site inquiries, robot posts, sign-ins${input.appErrors ? ", page crashes" : ""}. Not checked: ${input.appErrors ? "errors no page showed" : "app errors in Vercel's logs"}.`,
+    `Checked: ${okRuns} of ${runs} sweeps, email delivery${input.emails.checked ? "" : " (not checked)"}, site inquiries, robot posts, sign-ins${input.appErrors ? ", page crashes" : ""}${input.proxy?.checked ? ", the proxy's GB use" : ""}. Not checked: ${input.appErrors ? "errors no page showed" : "app errors in Vercel's logs"}${input.proxy?.checked ? "" : `, the proxy's GB use${input.proxy?.note ? ` (${input.proxy.note})` : ""}`}. The Decodo Wallet itself can only be read on its dashboard.`,
   );
   // S736: the Node2Shell watch (lib/image-url-import nodeHasBrotliFix). S769:
   // the fix landed and the Stripe key was rotated 2026-11-06, so the email
