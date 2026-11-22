@@ -195,7 +195,7 @@ if (existsSync("../vacantless-extension/app-bridge.js")) {
   const server = readFileSync("lib/chat-leads-server.ts", "utf8");
   assert.ok(server.includes("if (input.question) await addAskedAgainNote(admin, input.orgId, existing.id, input.question);"));
   const share = readFileSync("lib/send-shortcut-server.ts", "utf8");
-  assert.ok(share.includes("addAskedAgainNote(admin, owner.orgId, hit.id, question)"), "the contact match keeps the question");
+  assert.ok(share.includes("addAskedAgainNote(admin, orgId, hit.id, question)"), "the contact match keeps the question");
   assert.ok(share.includes("question: question || null,"), "the chat-name path passes the question");
 }
 

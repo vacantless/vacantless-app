@@ -75,7 +75,7 @@ async function handle(request: Request, v2: boolean): Promise<NextResponse> {
     let replyLine: string | null = null;
     if (r.rentalId || r.name) {
       try {
-        const orgId = owner.owner.orgId;
+        const orgId = r.orgId ?? owner.owner.orgId;
         const [cards, { data: orgRow }] = await Promise.all([
           r.rentalId ? loadReplyKitCards(admin, admin, orgId, APP_URL, { propertyIds: [r.rentalId] }) : Promise.resolve([]),
           admin.from("organizations").select("public_contact_phone").eq("id", orgId).maybeSingle(),

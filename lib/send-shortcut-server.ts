@@ -49,10 +49,21 @@ export async function checkSendKey(
   return { ok: true, owner: { keyId: row.id, orgId: row.organization_id, userId: row.user_id } };
 }
 
+/** S829h: the key's own account first, then the others this person can add renters in. */
+export async function sendOrgIds(admin: SupabaseClient, owner: SendKeyOwner): Promise<string[]> {
+  const { data } = await admin.from("memberships").select("organization_id, role").eq("user_id", owner.userId);
+  const others = ((data ?? []) as { organization_id: string | null; role: string | null }[])
+    .filter((m) => m.organization_id && m.organization_id !== owner.orgId && roleCan(m.role, "manage_leads"))
+    .map((m) => m.organization_id as string);
+  return [owner.orgId, ...Array.from(new Set(others))];
+}
+
 /** S817b: what was saved, plus what the reply needs (rental, question, site, name). */
 export type SendSaved = {
   line: string;
   leadId: string | null;
+  /** S829h: the account the renter was saved in (the rental's own). */
+  orgId?: string;
   rentalId?: string | null;
   question?: string | null;
   site?: string | null;
@@ -66,7 +77,21 @@ export async function saveRenterFromShortcut(
   image: { mediaType: string; base64: string },
   opts: { via?: string } = {},
 ): Promise<SendSaved> {
-  const rentals = await openRentalsForOrg(admin, owner.orgId);
+  // S829h: one person's Facebook posts for every account they manage (Noam:
+  // Agile and Davis). The key was made in one account, so the chat's rental
+  // was never found when it belonged to the other. Look in all of them and
+  // save the renter in the account that owns the rental.
+  const orgIds = await sendOrgIds(admin, owner);
+  const rentalOrg = new Map<string, string>();
+  const rentals = (
+    await Promise.all(
+      orgIds.map(async (id) => {
+        const list = await openRentalsForOrg(admin, id);
+        for (const r of list) rentalOrg.set(r.id, id);
+        return list;
+      }),
+    )
+  ).flat();
   const read = await readScreenshotWithAi(image, rentals);
   if (!read) return { line: sendResultLine({ outcome: "unreadable" }), leadId: null };
   // Which fields came back (never the values), so a miss can be traced.
@@ -79,19 +104,20 @@ export async function saveRenterFromShortcut(
   const phone = (read.phone ?? "").trim().slice(0, 40) || null;
   const rental = read.rentalId ? rentals.find((r) => r.id === read.rentalId) ?? null : null;
   const rentalLabel = rental?.address ?? null;
+  const orgId = (rental && rentalOrg.get(rental.id)) || owner.orgId;
   const question = (read.question ?? "").trim().slice(0, 400);
   const source = sendSource(read.site);
   const note = [question ? `Asked: ${question}` : null, opts.via ?? "Sent from the iPhone share menu (chat screenshot)."]
     .filter(Boolean)
     .join("\n");
 
-  const ctx = { rentalId: rental?.id ?? null, question: question || null, site: read.site ?? null, name };
+  const ctx = { orgId, rentalId: rental?.id ?? null, question: question || null, site: read.site ?? null, name };
   const plan = planSend({ name, email, phone, rentalId: rental?.id ?? null });
   if (plan.kind === "no_renter") return { line: sendResultLine({ outcome: "no_renter" }), leadId: null, ...ctx };
 
   if (plan.kind === "chat_name") {
     const r = await saveChatRenter(admin, {
-      orgId: owner.orgId,
+      orgId,
       propertyId: plan.propertyId,
       name: name!,
       source,
@@ -115,14 +141,14 @@ export async function saveRenterFromShortcut(
       const { data: dupes } = await admin
         .from("leads")
         .select("id")
-        .eq("organization_id", owner.orgId)
+        .eq("organization_id", orgId)
         .gte("created_at", since)
         .or(ors)
         .limit(1);
       const hit = (dupes as { id: string }[] | null)?.[0];
       if (hit) {
         // S824a: the renter is already saved; keep the new question on their page.
-        const added = question ? await addAskedAgainNote(admin, owner.orgId, hit.id, question) : false;
+        const added = question ? await addAskedAgainNote(admin, orgId, hit.id, question) : false;
         return {
           line: sendResultLine({ outcome: "exists", name, rental: rentalLabel, questionAdded: added }),
           leadId: hit.id,
@@ -135,18 +161,22 @@ export async function saveRenterFromShortcut(
   const { data, error } = await admin
     .from("leads")
     .insert({
-      organization_id: owner.orgId,
+      organization_id: orgId,
       property_id: rental?.id ?? null,
       name,
       email,
       phone,
-      phone_e164: normalizePhoneE164(phone),
+      // S829h: phone_e164 is a generated column; writing it failed every save
+      // that reached this insert (Noam's Koby screenshot, 2026-11-22).
       source,
       status: email || phone ? "new" : "replied",
       notes: note,
     })
     .select("id")
     .maybeSingle();
-  if (error || !data?.id) return { line: sendResultLine({ outcome: "failed" }), leadId: null };
+  if (error || !data?.id) {
+    console.error(`[shortcut/renter] save failed: ${error?.code ?? "no_row"} ${error?.message ?? ""}`);
+    return { line: sendResultLine({ outcome: "failed" }), leadId: null };
+  }
   return { line: sendResultLine({ outcome: "saved", name, rental: rentalLabel }), leadId: (data as { id: string }).id, ...ctx };
 }

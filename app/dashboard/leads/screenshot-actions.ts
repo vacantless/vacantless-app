@@ -7,7 +7,6 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
-import { normalizePhoneE164 } from "@/lib/sms";
 import { normalizeEmail } from "@/lib/persons";
 import { aiConfigured } from "@/lib/ai-call";
 import { openRentalsForOrg, readScreenshotWithAi } from "@/lib/ai-enquiry-server";
@@ -101,7 +100,7 @@ export async function addRenterFromScreenshot(formData: FormData): Promise<void>
       name,
       email,
       phone,
-      phone_e164: normalizePhoneE164(phone),
+      // S829h: phone_e164 is a generated column on leads; writing it fails the insert.
       source: screenshotSource(site),
       status: "new",
       notes,

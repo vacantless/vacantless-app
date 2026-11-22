@@ -113,7 +113,7 @@ export async function fileAiEnquiry(
         name: r.name,
         email: r.email,
         phone: r.phone,
-        phone_e164: normalizePhoneE164(r.phone),
+        // S829h: phone_e164 is a generated column on leads; writing it fails the insert.
         source,
         status: "new",
         notes: r.rentalId
