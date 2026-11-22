@@ -4,6 +4,8 @@
 // its state three or four ways. This module decides, per rental: its site
 // lights, its old ads, its place in the list, and the counts at the top.
 
+import { siteCheckoutUrl } from "./distribution-publish";
+import { paidPressedAt } from "./paid-capture-note";
 import { facebookRenewLine, oldAdsCount } from "./facebook-renew";
 import { COVERAGE_LABELS, coverageLabel, type CoverageRow } from "./posting-coverage";
 import { listingPostLiveCheckTarget } from "./listing-post-live-check";
@@ -81,6 +83,9 @@ export type InFlightRunItem = {
   publishStatus: string | null;
   approved: boolean;
   updatedAt: string | null;
+  /** S829e: the checkout link the robot saved, and the item's notes. */
+  operatorActionUrl?: string | null;
+  notes?: string | null;
 };
 
 /** How long an approved item that is waiting on the robot still reads as posting. */
@@ -112,6 +117,35 @@ export function postingNowByProperty(
     out.set(it.propertyId, set);
   }
   return out;
+}
+
+/**
+ * S829e: sites where the robot built a paid ad that now waits for the
+ * landlord's payment (or the landlord pressed "I paid" and the link is being
+ * saved). 50 Glenrose B, 2026-11-22: the row still offered "Post to Kijiji"
+ * while the ad sat at Kijiji's checkout; pressing it would have built a
+ * second paid ad.
+ */
+export function payDueByProperty(items: InFlightRunItem[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const it of items) {
+    if (!it.propertyId || it.mode !== "concierge" || it.publishStatus !== "needs_payment") continue;
+    const built = siteCheckoutUrl(it.publishStatus, it.operatorActionUrl ?? null) != null;
+    const paidPressed = paidPressedAt(it.notes ?? null) != null;
+    if (!built && !paidPressed) continue;
+    const set = out.get(it.propertyId) ?? new Set<string>();
+    set.add(it.channel);
+    out.set(it.propertyId, set);
+  }
+  return out;
+}
+
+/** "Pay for Kijiji ad", "Pay for 2 ads". */
+export function payDueLabel(channels: string[]): string {
+  const names = channels.map(coverageLabel);
+  if (names.length === 0) return "";
+  if (names.length === 1) return `Pay for ${names[0]} ad`;
+  return `Pay for ${names.length} ads`;
 }
 
 /** "Posting to Kijiji", "Posting to Kijiji and Zumper", "Posting to 3 sites". */

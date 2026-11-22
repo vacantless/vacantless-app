@@ -56,7 +56,7 @@ ok("d: not a robot item does not", !m.has("p4"));
 ok("d: label one site", postingNowLabel(["kijiji"]) === "Posting to Kijiji");
 ok("d: label two sites", postingNowLabel(["kijiji", "zumper"]) === "Posting to Kijiji and Zumper");
 const list = readFileSync("app/dashboard/properties/page.tsx", "utf8");
-ok("d: row drops posting sites from Post to", list.includes("missingAll.filter((k) => !posting.has(k))"));
+ok("d: row drops posting sites from Post to", list.includes("missingAll.filter((k) => !posting.has(k) && !paying.has(k))"));
 ok("d: row shows the Posting chip", list.includes("{postingNowLabel(v.postingNowSites)}"));
 
 // (f) Kijiji sign-up off the secure window

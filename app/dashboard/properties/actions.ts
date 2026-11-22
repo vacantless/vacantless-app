@@ -146,6 +146,7 @@ import {
   type GeocodeResult,
   type GeocodeSuggestion,
 } from "@/lib/geocode";
+import { payDueByProperty } from "@/lib/rental-list-view";
 import { addressWithoutUnit, postalFromText } from "@/lib/postal-fill";
 import { draftAutoListingDescriptionWithAi } from "@/lib/auto-listing-copy-ai";
 import type { DraftFacts } from "@/lib/listing-description";
@@ -6128,10 +6129,46 @@ export async function postToMissingSites(formData: FormData) {
 
   const coverage = await loadPostingCoverage(supabase, org.id, access.allowed);
   const row = coverage.rows.find((r) => r.propertyId === propertyId);
+  // S829e: never queue a second post for a site whose paid ad is already
+  // built and waiting for payment (or just paid, link being saved).
+  const { data: activeRun } = await supabase
+    .from("distribution_runs")
+    .select("id")
+    .eq("property_id", propertyId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  const payDueHere = new Set<string>();
+  if (activeRun?.id) {
+    const { data: dueRows } = await supabase
+      .from("distribution_run_items")
+      .select("channel, mode, publish_status, operator_action_url, notes")
+      .eq("run_id", activeRun.id as string)
+      .eq("publish_status", "needs_payment");
+    const due = payDueByProperty(
+      ((dueRows ?? []) as { channel: string; mode: string | null; publish_status: string | null; operator_action_url: string | null; notes: string | null }[]).map(
+        (r) => ({
+          propertyId,
+          channel: r.channel,
+          mode: r.mode,
+          publishStatus: r.publish_status,
+          approved: false,
+          updatedAt: null,
+          operatorActionUrl: r.operator_action_url,
+          notes: r.notes,
+        }),
+      ),
+    );
+    for (const c of due.get(propertyId) ?? []) payDueHere.add(c);
+  }
   const channels = (row?.missingRobot ?? []).filter(
-    (c): c is PublishChannelKey => isPublishChannelKey(c) && !isHiddenForOrg(c, org.id),
+    (c): c is PublishChannelKey =>
+      isPublishChannelKey(c) && !isHiddenForOrg(c, org.id) && !payDueHere.has(c),
   );
-  if (channels.length === 0) redirect("/dashboard/properties?posted=0#site-coverage");
+  if (channels.length === 0) {
+    if (payDueHere.size > 0) redirect(`/dashboard/properties/${propertyId}?tab=distribute#distribute-header`);
+    redirect("/dashboard/properties?posted=0#site-coverage");
+  }
 
   try {
     await stageDistributionRunForProperty({ supabase, org, propertyId, channels });

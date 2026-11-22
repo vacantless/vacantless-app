@@ -46,6 +46,8 @@ import { UnitJourneyLine } from "@/components/unit-journey-line";
 import {
   siteLights,
   postMissingLabel,
+  payDueByProperty,
+  payDueLabel,
   postingNowByProperty,
   postingNowLabel,
   type InFlightRunItem,
@@ -318,7 +320,7 @@ export default async function PropertiesPage({
     // instead of offering a second "Post to Kijiji".
     supabase
       .from("distribution_run_items")
-      .select("run_id, channel, mode, publish_status, operator_submit_approved_at, updated_at")
+      .select("run_id, channel, mode, publish_status, operator_submit_approved_at, updated_at, operator_action_url, notes")
       .eq("organization_id", org.id)
       .in("publish_status", ["queued", "submitting", "submitted", "needs_operator", "needs_payment"]),
   ]);
@@ -329,6 +331,8 @@ export default async function PropertiesPage({
     publish_status: string | null;
     operator_submit_approved_at: string | null;
     updated_at: string | null;
+    operator_action_url: string | null;
+    notes: string | null;
   }[];
   const inFlightRunIds = Array.from(new Set(inFlightRows.map((r) => r.run_id).filter((id): id is string => Boolean(id))));
   const runProperty = new Map<string, string | null>();
@@ -349,19 +353,21 @@ export default async function PropertiesPage({
     .maybeSingle();
   const viewingsByRequest =
     (byRequestRow as { viewings_by_request?: boolean } | null)?.viewings_by_request === true;
-  const postingNow = postingNowByProperty(
-    inFlightRows.map((r): InFlightRunItem => {
-      return {
-        propertyId: r.run_id ? runProperty.get(r.run_id) ?? null : null,
-        channel: r.channel,
-        mode: r.mode,
-        publishStatus: r.publish_status,
-        approved: r.operator_submit_approved_at != null,
-        updatedAt: r.updated_at,
-      };
-    }),
-    Date.now(),
-  );
+  const inFlightItems = inFlightRows.map((r): InFlightRunItem => {
+    return {
+      propertyId: r.run_id ? runProperty.get(r.run_id) ?? null : null,
+      channel: r.channel,
+      mode: r.mode,
+      publishStatus: r.publish_status,
+      approved: r.operator_submit_approved_at != null,
+      updatedAt: r.updated_at,
+      operatorActionUrl: r.operator_action_url,
+      notes: r.notes,
+    };
+  });
+  const postingNow = postingNowByProperty(inFlightItems, Date.now());
+  // S829e: a paid ad built and waiting at checkout is "Pay", never "Post" again.
+  const payDue = payDueByProperty(inFlightItems);
 
   const allRows = (properties ?? []) as PropertyRow[];
   const activeRows = allRows.filter((row) => !row.archived_at);
@@ -534,8 +540,10 @@ export default async function PropertiesPage({
       const lights = !archivedView && cov ? siteLights(cov, adUrls.get(p.id) ?? new Map()) : [];
       const posting = postingNow.get(p.id) ?? new Set<string>();
       const missingAll = bookable ? cov?.missingRobot ?? [] : [];
-      const missingRobot = missingAll.filter((k) => !posting.has(k));
-      const postingNowSites = missingAll.filter((k) => posting.has(k));
+      const paying = payDue.get(p.id) ?? new Set<string>();
+      const missingRobot = missingAll.filter((k) => !posting.has(k) && !paying.has(k));
+      const payDueSites = missingAll.filter((k) => paying.has(k));
+      const postingNowSites = missingAll.filter((k) => posting.has(k) && !paying.has(k));
       const statusLabel = archivedView
         ? "Archived"
         : p.status === "leased"
@@ -557,6 +565,7 @@ export default async function PropertiesPage({
         renew,
         lights,
         missingRobot,
+        payDueSites,
         postingNowSites,
         madeRoomFor: !archivedView ? cov?.madeRoomFor ?? null : null,
         statusLabel,
@@ -611,7 +620,9 @@ export default async function PropertiesPage({
           return {
             r,
             missing: r.missing.filter((k) => !posting.has(k)),
-            robotMissing: r.missingRobot.filter((k) => !posting.has(k)),
+            robotMissing: r.missingRobot.filter(
+              (k) => !posting.has(k) && !(payDue.get(r.propertyId)?.has(k) ?? false),
+            ),
           };
         })
         .filter((x) => x.missing.length > 0)
@@ -1066,6 +1077,15 @@ export default async function PropertiesPage({
                           >
                             <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" />
                             {postingNowLabel(v.postingNowSites)}
+                          </Link>
+                        )}
+                        {v.payDueSites.length > 0 && (
+                          <Link
+                            href={`/dashboard/properties/${p.id}?tab=distribute#distribute-header`}
+                            className={PRIMARY_ROW_BUTTON}
+                            title="Your ad is built and waiting at checkout. You are charged only when you press Pay."
+                          >
+                            {payDueLabel(v.payDueSites)}
                           </Link>
                         )}
                         {primaryIsPostMissing ? (
