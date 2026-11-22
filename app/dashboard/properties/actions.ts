@@ -146,6 +146,7 @@ import {
   type GeocodeResult,
   type GeocodeSuggestion,
 } from "@/lib/geocode";
+import { addressWithoutUnit, postalFromText } from "@/lib/postal-fill";
 import { draftAutoListingDescriptionWithAi } from "@/lib/auto-listing-copy-ai";
 import type { DraftFacts } from "@/lib/listing-description";
 import {
@@ -892,6 +893,26 @@ export async function draftAddPropertyV2Description(
   };
 }
 
+// S829d: a rental saved with no postal code gets one from its address text,
+// else from the geocoder (asked without the unit). Never blocks a save.
+async function fillMissingPostalCode(
+  supabase: ReturnType<typeof createClient>,
+  propertyId: string,
+  address: string,
+): Promise<void> {
+  try {
+    let postal = postalFromText(address);
+    if (!postal) {
+      const hit = await getGeocodeProvider().geocode(addressWithoutUnit(address) || address);
+      postal = postalFromText(hit?.formattedAddress);
+    }
+    if (!postal) return;
+    await supabase.from("properties").update({ postal_code: postal }).eq("id", propertyId).is("postal_code", null);
+  } catch {
+    // best effort
+  }
+}
+
 export async function createPropertyV2(formData: FormData) {
   if (!envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED)) {
     redirect("/dashboard/properties");
@@ -992,6 +1013,7 @@ export async function createPropertyV2(formData: FormData) {
 
   const newId = (inserted as { id: string } | null)?.id ?? null;
   if (!newId) redirect("/dashboard/properties?import=failed");
+  await fillMissingPostalCode(supabase, newId, address);
 
   // S827b: a Dropbox or Google Drive link on Add rental. The photos come in
   // from the link at full size, so nothing big rides this save.
@@ -1207,6 +1229,8 @@ export async function updateProperty(formData: FormData) {
       })
     : { sqft: parseIntOrNull(String(formData.get("sqft") ?? "")), sqft_estimated: false };
 
+  // S829d: an older rental with no postal code gets one on its next save.
+  await fillMissingPostalCode(supabase, id, address);
   // RLS scopes the update to the caller's org; .eq("id") targets one row.
   await supabase
     .from("properties")
