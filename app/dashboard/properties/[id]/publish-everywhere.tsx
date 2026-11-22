@@ -1570,8 +1570,8 @@ function ApprovalModal({
           </button>
         </form>
         <p className="mt-3 text-center text-[11px] text-gray-400">
-          We save the link to your ad before it shows as On. Paid sites wait
-          for you at checkout.
+          We save the link to your ad before it shows as On. A paid site is
+          ready to pay about 5 minutes after you approve. We email you then.
         </p>
       </div>
     </div>

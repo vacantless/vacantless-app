@@ -13,6 +13,9 @@ const ok = (fn: () => void) => {
 
 ok(() => assert.equal(isBareSitePostForm("https://www.kijiji.ca/p-post-ad.html"), true));
 ok(() => assert.equal(isBareSitePostForm("https://www.kijiji.ca/p-post-ad.html?categoryId=37"), true));
+// S829c: Kijiji's built checkout (S709) is NOT a bare form; approving must not re-post it.
+ok(() => assert.equal(isBareSitePostForm("https://www.kijiji.ca/p-post-ad.html?addToCart=true"), false));
+ok(() => assert.equal(shouldReleaseToRobot({ publish_status: "needs_payment", operator_action_url: "https://www.kijiji.ca/p-post-ad.html?addToCart=true" }), false));
 ok(() => assert.equal(isBareSitePostForm("https://www.kijiji.ca/p-checkout.html?adId=1"), false));
 ok(() => assert.equal(isBareSitePostForm(null), false));
 

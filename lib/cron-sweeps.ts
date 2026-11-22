@@ -50,6 +50,8 @@ export const SWEEP_PATHS = [
   "/api/cron/texting-numbers",
   // S737: one "your ads are live" email per rental turn (lib/posted-results-email).
   "/api/cron/posted-results-email",
+  // S829c: a paid ad waiting at a site's checkout emails the landlord (lib/checkout-ready).
+  "/api/cron/checkout-ready",
   // S761: posts an edited rental's new ad once the robot took the old one down.
   "/api/cron/ad-update-repost",
   // S771: a "New" renter we already answered, quiet for 3 days, becomes "Contacted".

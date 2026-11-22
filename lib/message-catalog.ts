@@ -420,6 +420,16 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
     code: { notify: ["app/api/cron/posted-results-email/route.ts"] },
   },
   {
+    id: "you-checkout-ready",
+    group: "you",
+    goesTo: "Account owners and admins.",
+    title: "A paid ad is ready to pay",
+    when: "When a paid ad waits at a site's checkout. Once more after 4 hours if unpaid.",
+    channels: ["email"],
+    control: { type: "always" },
+    code: { notify: ["app/api/cron/checkout-ready/route.ts"] },
+  },
+  {
     id: "you-signin-lost",
     group: "you",
     goesTo: "Account owners and admins.",

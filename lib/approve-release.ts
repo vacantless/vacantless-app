@@ -6,12 +6,14 @@
 // stopped on the plan wall), was never built: it goes back to the robot.
 // Glenrose 2026-11-22: the approval sat at needs_payment because the saved
 // link was the post form.
-
-const POST_FORM_URL_RE = /kijiji\.ca\/p-post-ad\.html/i;
+// S829c: "built" is exactly what siteCheckoutUrl calls a checkout. A Kijiji
+// checkout is p-post-ad.html?addToCart=true (S709, KI1263); S829a's first
+// version treated that as a bare form and would have re-posted a built ad.
+import { siteCheckoutUrl } from "./distribution-publish";
 
 export function isBareSitePostForm(url: string | null | undefined): boolean {
   if (!url) return false;
-  return POST_FORM_URL_RE.test(url);
+  return siteCheckoutUrl("needs_payment", url) == null;
 }
 
 export function shouldReleaseToRobot(item: {
@@ -19,6 +21,5 @@ export function shouldReleaseToRobot(item: {
   operator_action_url?: string | null;
 }): boolean {
   if (item.publish_status !== "needs_payment") return false;
-  if (!item.operator_action_url) return true;
-  return isBareSitePostForm(item.operator_action_url);
+  return siteCheckoutUrl("needs_payment", item.operator_action_url ?? null) == null;
 }

@@ -1,0 +1,51 @@
+// S829c: the email a landlord gets when the robot leaves a paid ad waiting at
+// a site's checkout, and one reminder if it is still unpaid. Noam, 2026-11-22:
+// "people will walk away and leave before checking out". Pure, tested in
+// scripts/test-s829c-checkout-ready.ts; the 15-minute sweep is
+// app/api/cron/checkout-ready.
+
+/** Remind once, this long after the first email, if still unpaid. */
+export const CHECKOUT_REMIND_AFTER_MS = 4 * 60 * 60 * 1000;
+
+export type CheckoutReadyRow = {
+  /** siteCheckoutUrl(publish_status, operator_action_url): null = not at checkout. */
+  checkoutUrl: string | null;
+  notifiedAt: string | null;
+  remindedAt: string | null;
+};
+
+/** "notify", then one "remind", "clear" once the ad left checkout, else "none". */
+export function checkoutReadyAction(row: CheckoutReadyRow, now: number): "notify" | "remind" | "clear" | "none" {
+  if (!row.checkoutUrl) return row.notifiedAt || row.remindedAt ? "clear" : "none";
+  if (!row.notifiedAt) return "notify";
+  if (row.remindedAt) return "none";
+  const sent = Date.parse(row.notifiedAt);
+  if (!Number.isFinite(sent)) return "none";
+  return now - sent >= CHECKOUT_REMIND_AFTER_MS ? "remind" : "none";
+}
+
+function dollars(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+export function checkoutReadyEmail(input: {
+  siteLabel: string;
+  where: string;
+  priceCents: number | null;
+  reminder: boolean;
+}): { subject: string; body: string; actionLabel: string } {
+  const pay = input.priceCents ? `Pay ${dollars(input.priceCents)}` : "Pay the fee";
+  const subject = input.reminder
+    ? `Still waiting: your ${input.siteLabel} ad for ${input.where}`
+    : `Your ${input.siteLabel} ad for ${input.where} is ready to pay`;
+  const body = [
+    input.reminder
+      ? `Your ${input.siteLabel} ad for ${input.where} is still waiting at checkout.`
+      : `Your ${input.siteLabel} ad for ${input.where} is built and waiting at checkout.`,
+    `${pay} and it goes up.`,
+    "Nothing is charged until you press Pay.",
+    "",
+    "Press the button below. The rental page shows how to pay.",
+  ].join("\n");
+  return { subject, body, actionLabel: `Pay for the ${input.siteLabel} ad` };
+}
