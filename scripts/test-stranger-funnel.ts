@@ -105,5 +105,61 @@ ok("visits table holds no names or emails", !/email|name/i.test(mig.split("\n").
 ok("server key may write and read visits", /grant select, insert on public\.funnel_visits to service_role/.test(mig));
 ok("visits table is closed to the public", /enable row level security/.test(mig) && /revoke all/.test(mig));
 
+
+// S835i: how far down the homepage people get.
+{
+  const { HOME_SECTIONS, cleanSections, sectionReach, halfwayLine, SECTION_COUNT_STARTED } = require("../lib/stranger-funnel");
+  const ids: string[] = HOME_SECTIONS.map((x: { id: string }) => x.id);
+  ok("sections start at the top", ids[0] === "top" && ids.length === 13);
+  const pageNoComments = home.replace(/\/\*[\s\S]*?\*\//g, "");
+  const band = readFileSync("components/savings-band.tsx", "utf8");
+  ok("every section id is on the homepage", ids.slice(1).every((id) => (pageNoComments + band).includes(`id="${id}"`)));
+  // The page renders its sections in the order of <main>; each id belongs to one component.
+  const comp: Record<string, string> = { "stop-doing": "<StopDoing />", "what-it-replaces": "<SavingsBand />", video: "<SeeItWork />", leasing: "<LeasingProof />", automations: "<Automations />", "less-typing": "<LessTyping />", how: "<HowItWorks />", "little-things": "<LittleThings />", pricing: "<Pricing />", about: "<FounderBand />", questions: "<Questions />", closing: "<ClosingCta />" };
+  const mainHtml = home.slice(home.indexOf("<main>"), home.indexOf("</main>"));
+  const pos = ids.slice(1).map((id) => mainHtml.indexOf(comp[id]));
+  ok("section order matches the page", pos.every((p, i) => p > 0 && (i === 0 || pos[i - 1] < p)));
+  ok("homepage hands the beacon its sections", /<VisitBeacon page="home" sections=\{HOME_SECTIONS/.test(home));
+  ok("cleanSections keeps known ids once", JSON.stringify(cleanSections("top,video,video,evil,<x>, pricing")) === JSON.stringify(["top", "video", "pricing"]));
+  ok("cleanSections on nothing", cleanSections(null).length === 0 && cleanSections("").length === 0);
+  const rows = [
+    { visitor: "a", section: "top" },
+    { visitor: "b", section: "top" },
+    { visitor: "b", section: "video" },
+    { visitor: "c", section: "pricing" }, // jumped by a link: still got past the sections above
+    { visitor: "d", section: "top" },
+    { visitor: "d", section: "closing" },
+    { visitor: "d", section: "nope" },
+  ];
+  const reach = sectionReach(rows);
+  const at = (id: string) => reach.find((r: { id: string }) => r.id === id);
+  ok("everyone counts at the top", at("top").count === 4 && at("top").pct === 100);
+  ok("furthest section counts the ones above it", at("video").count === 3 && at("pricing").count === 2 && at("closing").count === 1);
+  ok("reach never rises down the page", reach.every((r: { count: number }, i: number) => i === 0 || r.count <= reach[i - 1].count));
+  ok("percent of those who loaded", at("pricing").pct === 50 && at("closing").pct === 25);
+  ok("no visitors, no percent", sectionReach([]).every((r: { count: number; pct: number | null }) => r.count === 0 && r.pct === null));
+  ok("too few visitors, no headline", halfwayLine(reach) === null);
+  const many = Array.from({ length: 30 }, (_, i) => ({ visitor: `v${i}`, section: i < 10 ? "pricing" : "video" }));
+  ok("names where half are gone", halfwayLine(sectionReach(many)) === 'Half of visitors are gone before "It already runs on our own rentals".');
+  const deep = Array.from({ length: 30 }, (_, i) => ({ visitor: `v${i}`, section: "closing" }));
+  ok("says when most reach the bottom", halfwayLine(sectionReach(deep)) === "More than half of visitors reach the bottom of the page.");
+  ok("start date is a date", /^\d{4}-\d{2}-\d{2}$/.test(SECTION_COUNT_STARTED));
+  const seenRoute = readFileSync("app/api/funnel/seen/route.ts", "utf8");
+  ok("seen route skips bots first", seenRoute.indexOf("isBot(") < seenRoute.indexOf("createClient()"));
+  ok("seen route needs the browser id the visit route set", /cleanVisitor\(req\.cookies\.get\("vl_vid"\)/.test(seenRoute) && !/cookies\.set/.test(seenRoute));
+  ok("seen route skips signed-in visitors", /if \(user\) return res/.test(seenRoute));
+  ok("seen route always answers 204", /status: 204/.test(seenRoute) && !/status: [45]\d\d/.test(seenRoute));
+  const beacon = readFileSync("components/visit-beacon.tsx", "utf8");
+  ok("sections wait for the visit call", beacon.indexOf("/api/funnel/visit") < beacon.indexOf("watchSections(sections)") && /\.then\(\(\) => \{/.test(beacon));
+  ok("beacon sends what is left when the page is left", /pagehide/.test(beacon) && /visibilitychange/.test(beacon));
+  const mig2 = readFileSync("supabase/migrations/0328_funnel_sections.sql", "utf8");
+  const sql = mig2.split("\n").filter((l) => !l.startsWith("--")).join("\n");
+  ok("sections table holds no names or emails", !/email|name/i.test(sql));
+  ok("sections table is closed to the public", /enable row level security/.test(sql) && /revoke all/.test(sql) && /grant select, insert on public\.funnel_sections to service_role/.test(sql));
+  ok("sections migration drops nothing", !/\bdrop\b/i.test(sql));
+  const adminSec = readFileSync("app/dashboard/admin/stranger-funnel-section.tsx", "utf8");
+  ok("admin console shows the reach table", /sectionReach\(/.test(adminSec) && /How far down the homepage/.test(adminSec));
+}
+
 console.log(`\ntest-stranger-funnel: ${passed} passed, ${failed} failed (${passed + failed} total)`);
 process.exit(failed ? 1 : 0);

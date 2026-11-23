@@ -1,3 +1,4 @@
+import { HOME_SECTIONS } from "@/lib/stranger-funnel";
 import Link from "next/link";
 import { RentCostTable } from "@/components/rent-cost-table";
 import { VendorCostTable } from "@/components/vendor-cost-table";
@@ -51,7 +52,7 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-white text-[#15211d]">
       <MarketingHeader active="home" />
-      <VisitBeacon page="home" />
+      <VisitBeacon page="home" sections={HOME_SECTIONS.filter((x) => x.id !== "top").map((x) => x.id)} />
       <main>
         <Hero />
         <StopDoing />
@@ -1333,7 +1334,7 @@ function Questions() {
 
 function ClosingCta() {
   return (
-    <section className="bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white">
+    <section id="closing" className="bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white">
       <div className="mx-auto grid w-[min(1120px,calc(100%-32px))] items-center gap-5 py-14 md:grid-cols-[1fr_auto]">
         <div>
           <h2 className="max-w-[18ch] text-[clamp(1.8rem,3.4vw,2.7rem)] font-extrabold leading-[1.06]">
