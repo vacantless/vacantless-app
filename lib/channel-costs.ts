@@ -82,20 +82,77 @@ export function dollars(cents: number): string {
 
 export type CostAdvice = { tone: "good" | "fix"; text: string };
 
-/** Plain lines: a paid site with no viewings, and the cheapest viewing. */
-export function buildCostAdvice(rows: readonly SiteCostRow[]): CostAdvice[] {
+/** The first day each site was paid in these costs, by site name. Pure. */
+export function firstPaidBySite(costs: readonly CostLite[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const c of costs) {
+    if (!(c.amount_cents > 0)) continue;
+    const site = costSite(c);
+    if (!out[site] || c.spent_on < out[site]) out[site] = c.spent_on;
+  }
+  return out;
+}
+
+/** A paid site younger than this is not judged yet. */
+export const TOO_EARLY_DAYS = 14;
+
+export type CostAdviceOptions = {
+  /** S836b: the landlord books each viewing (no booked viewings in the app), so judge by renters. */
+  viewingsByRequest?: boolean;
+  /** S836b: with today, a site first paid under TOO_EARLY_DAYS ago is "too early to judge". */
+  firstPaid?: Record<string, string>;
+  today?: string;
+};
+
+function daysSince(day: string, today: string): number {
+  return Math.max(0, Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`)) / 86400000));
+}
+const renterWord = (n: number) => (n === 1 ? "1 renter" : `${n} renters`);
+
+/**
+ * Plain lines: a paid site with no viewings, and the cheapest viewing. When the
+ * landlord books viewings themselves the same lines use renters instead, and a
+ * site paid in the last two weeks is called too early to judge.
+ */
+export function buildCostAdvice(rows: readonly SiteCostRow[], opts: CostAdviceOptions = {}): CostAdvice[] {
   const out: CostAdvice[] = [];
+  const byRenter = opts.viewingsByRequest === true;
+  const early = new Set<string>();
   for (const r of rows) {
-    if (r.spentCents > 0 && r.booked === 0) {
+    if (!(r.spentCents > 0)) continue;
+    const first = opts.firstPaid?.[r.site];
+    if (first && opts.today) {
+      const d = daysSince(first, opts.today);
+      if (d < TOO_EARLY_DAYS) {
+        early.add(r.site);
+        out.push({
+          tone: "good",
+          text: `You paid ${dollars(r.spentCents)} to ${r.site} ${d === 0 ? "today" : d === 1 ? "1 day ago" : `${d} days ago`}. Too early to judge; ${renterWord(r.renters)} so far.`,
+        });
+        continue;
+      }
+    }
+    if (byRenter ? r.renters === 0 : r.booked === 0) {
       out.push({
         tone: "fix",
-        text: `You paid ${dollars(r.spentCents)} to ${r.site} and got ${r.renters === 1 ? "1 renter" : `${r.renters} renters`} and no booked viewings. Try it free, or stop paying for it, before the next rental.`,
+        text: byRenter
+          ? `You paid ${dollars(r.spentCents)} to ${r.site} and got no renters. Try it free, or stop paying for it, before the next rental.`
+          : `You paid ${dollars(r.spentCents)} to ${r.site} and got ${renterWord(r.renters)} and no booked viewings. Try it free, or stop paying for it, before the next rental.`,
       });
     }
   }
+  if (byRenter) {
+    const free = rows.filter((r) => r.spentCents === 0 && r.renters > 0).sort((a, b) => b.renters - a.renters)[0];
+    const paid = rows
+      .filter((r) => r.perRenterCents != null && !early.has(r.site))
+      .sort((a, b) => (a.perRenterCents ?? 0) - (b.perRenterCents ?? 0))[0];
+    if (free) out.push({ tone: "good", text: `${free.site} cost you nothing and brought ${renterWord(free.renters)}.` });
+    if (paid) out.push({ tone: "good", text: `Your cheapest paid renter: ${paid.site}, ${dollars(paid.perRenterCents ?? 0)} per renter.` });
+    return out;
+  }
   const booked = rows.filter((r) => r.booked > 0);
   const free = booked.filter((r) => r.spentCents === 0).sort((a, b) => b.booked - a.booked)[0];
-  const paid = booked.filter((r) => r.perBookedCents != null).sort((a, b) => (a.perBookedCents ?? 0) - (b.perBookedCents ?? 0))[0];
+  const paid = booked.filter((r) => r.perBookedCents != null && !early.has(r.site)).sort((a, b) => (a.perBookedCents ?? 0) - (b.perBookedCents ?? 0))[0];
   if (free) {
     out.push({ tone: "good", text: `${free.site} cost you nothing and brought ${free.booked === 1 ? "1 booked viewing" : `${free.booked} booked viewings`}.` });
   }

@@ -33,6 +33,7 @@ type OrgRow = {
   closed_at: string | null;
   rental_report_enabled: boolean | null;
   account_report_sent_month: string | null;
+  viewings_by_request: boolean | null;
 };
 
 export async function GET(req: NextRequest) {
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await admin
     .from("organizations")
-    .select("id, name, plan, logo_url, closed_at, rental_report_enabled, account_report_sent_month");
+    .select("id, name, plan, logo_url, closed_at, rental_report_enabled, account_report_sent_month, viewings_by_request");
   if (error) return NextResponse.json({ ok: false, reason: `read:${error.code ?? "failed"}` }, { status: 500 });
 
   let sent = 0;
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
     }
     if (org.closed_at || org.rental_report_enabled === false) continue;
     if (org.account_report_sent_month === range.key) continue;
-    const r = await loadAccountReport(admin, { id: org.id, name: org.name, plan: org.plan }, range, today);
+    const r = await loadAccountReport(admin, { id: org.id, name: org.name, plan: org.plan, viewings_by_request: org.viewings_by_request }, range, today);
     if (r.empty) continue;
     const { units, sites, ...headline } = r.facts;
     report.push({ org: org.name ?? org.id, action: dry ? "would_send" : "send", facts: { ...headline, units: units.length, sites: sites.length } });

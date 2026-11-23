@@ -7,7 +7,7 @@
 // scripts/test-s836b-account-report.ts. Every number comes from our own
 // records; where we have none, it says so instead of showing $0.
 import { buildChannelReport, type LeadLite } from "@/lib/reports";
-import { buildCostAdvice, buildSiteCosts, dollars, type CostLite, type SiteCostRow } from "@/lib/channel-costs";
+import { buildCostAdvice, buildSiteCosts, dollars, firstPaidBySite, type CostLite, type SiteCostRow } from "@/lib/channel-costs";
 import { monthName, shortAddr } from "@/lib/rental-report";
 
 export type AccountProperty = {
@@ -75,6 +75,8 @@ export type AccountReportInput = {
   /** From the income statement. null when the account's plan has no books. */
   books: { month: MoneyTotals; ytd: MoneyTotals } | null;
   reportsUrl: string;
+  /** The landlord books each viewing (S828c): judge sites by renters. */
+  viewingsByRequest?: boolean;
 };
 
 export type UnitLine = {
@@ -269,7 +271,7 @@ export function buildAccountReport(input: AccountReportInput & { adExpenses?: re
   // Sites, this year: renters and viewings from the leads, money from the costs.
   const leadsYtd = input.leads.filter((l) => inRange(day(l.created_at), yearStart, me));
   const sites = buildSiteCosts(buildChannelReport(leadsYtd), costsYtd).filter((r) => r.renters > 0 || r.spentCents > 0);
-  const advice = buildCostAdvice(sites).map((a) => a.text);
+  const advice = buildCostAdvice(sites, { viewingsByRequest: input.viewingsByRequest, firstPaid: firstPaidBySite(input.costs), today }).map((a) => a.text);
   if (adsYtdCents === 0) {
     advice.push("No site costs are entered for this year, so there is nothing to compare yet. Add what you paid each site on Reports and next month's summary will show the cost of each renter.");
   }

@@ -35,7 +35,7 @@ function lastDayBefore(isoExclusive: string): string {
 
 export async function loadAccountReport(
   db: SupabaseClient,
-  org: { id: string; name: string | null; plan: string | null },
+  org: { id: string; name: string | null; plan: string | null; viewings_by_request?: boolean | null },
   range: { monthStart: string; monthEnd: string },
   today: string,
 ): Promise<AccountReport> {
@@ -127,5 +127,6 @@ export async function loadAccountReport(
     books: bookTotals,
     adExpenses,
     reportsUrl: `${APP_URL}/dashboard/reports`,
+    viewingsByRequest: org.viewings_by_request === true,
   });
 }

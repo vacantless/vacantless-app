@@ -26,7 +26,8 @@ import {
 } from "@/lib/reports";
 import { buildPostingAdvice } from "@/lib/posting-advice";
 import { buildRentalAdvice, type RentalLite } from "@/lib/rental-advice";
-import { buildSiteCosts, buildCostAdvice, costSite, dollars, COST_SITE_OPTIONS, type CostLite } from "@/lib/channel-costs";
+import { buildSiteCosts, buildCostAdvice, costSite, dollars, firstPaidBySite, COST_SITE_OPTIONS, type CostLite } from "@/lib/channel-costs";
+import { torontoDateHour } from "@/lib/health-digest";
 import { addMarketingCost, removeMarketingCost } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -118,7 +119,14 @@ export default async function ReportsPage({
   const allCosts = (costsData ?? []) as CostRow[];
   const costs = startMs == null ? allCosts : allCosts.filter((c) => Date.parse(`${c.spent_on}T12:00:00Z`) >= startMs);
   const siteCosts = buildSiteCosts(channels, costs);
-  const costAdvice = buildCostAdvice(siteCosts);
+  // S836b: an account that books each viewing itself is judged by renters, and
+  // a site paid in the last two weeks is too early to judge.
+  const { data: orgFlags } = await supabase.from("organizations").select("viewings_by_request").eq("id", org.id).maybeSingle();
+  const costAdvice = buildCostAdvice(siteCosts, {
+    viewingsByRequest: (orgFlags as { viewings_by_request: boolean | null } | null)?.viewings_by_request === true,
+    firstPaid: firstPaidBySite(allCosts),
+    today: torontoDateHour(new Date(nowMs)).date,
+  });
   const spentTotal = costs.reduce((n, c) => n + c.amount_cents, 0);
   const COST_FLASH: Record<string, string> = {
     saved: "Saved.",

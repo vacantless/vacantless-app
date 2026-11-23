@@ -17,7 +17,14 @@ export default async function ReportSummaryPage({ searchParams }: { searchParams
   const { date: today } = torontoDateHour(new Date());
   const which = searchParams.m === "this" ? "this" : "last";
   const range = which === "this" ? currentMonthFor(today) : reportMonthFor(today);
-  const report = await loadAccountReport(createClient(), { id: org.id, name: org.name, plan: org.plan }, range, today);
+  const supabase = createClient();
+  const { data: flags } = await supabase.from("organizations").select("viewings_by_request").eq("id", org.id).maybeSingle();
+  const report = await loadAccountReport(
+    supabase,
+    { id: org.id, name: org.name, plan: org.plan, viewings_by_request: (flags as { viewings_by_request: boolean | null } | null)?.viewings_by_request ?? null },
+    range,
+    today,
+  );
 
   const tab = (key: "last" | "this", label: string) => (
     <Link

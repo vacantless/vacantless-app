@@ -2,6 +2,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { buildAccountReport, adsNotInBooks, signedDollars, expenseLines, marginPct, type AccountReportInput } from "../lib/account-report";
 import { SWEEP_PATHS } from "../lib/cron-sweeps";
+import { buildCostAdvice, buildSiteCosts, firstPaidBySite } from "../lib/channel-costs";
 import { CATALOG_MESSAGES } from "../lib/message-catalog";
 import type { LeadLite } from "../lib/reports";
 
@@ -148,6 +149,27 @@ ok("margin", marginPct(50, 100) === "50.0%" && marginPct(-10, 0) === null);
 ok("html shows margin", r.html.includes(">Margin<"));
 const loss = buildAccountReport({ ...base, books: { month: { ...base.books!.month, expenseCents: 900000 }, ytd: base.books!.ytd } });
 ok("a loss shows red", loss.html.includes("#b42318") && !r.html.includes("color:#b42318"));
+
+// Advice: books its own viewings -> judged by renters; paid in the last 2 weeks -> too early.
+const kRows = buildSiteCosts(
+  [
+    { source: "Kijiji", leads: 2, booked: 0, showed: 0, leased: 0, leaseRate: 0 },
+    { source: "Facebook Marketplace", leads: 3, booked: 0, showed: 0, leased: 0, leaseRate: 0 },
+  ],
+  [{ portal: "kijiji", amount_cents: 6768, spent_on: "2026-11-22" }],
+);
+const early = buildCostAdvice(kRows, { viewingsByRequest: true, firstPaid: firstPaidBySite([{ portal: "kijiji", amount_cents: 6768, spent_on: "2026-11-22" }]), today: "2026-11-23" });
+ok("too early to judge", early.some((a) => a.text === "You paid $67.68 to Kijiji 1 day ago. Too early to judge; 2 renters so far."), early);
+ok("no booked-viewings line when booking yourself", early.every((a) => !a.text.includes("booked viewing")), early);
+ok("free by renters", early.some((a) => a.text === "Facebook Marketplace cost you nothing and brought 3 renters."));
+const later = buildCostAdvice(kRows, { viewingsByRequest: true, firstPaid: { Kijiji: "2026-11-01" }, today: "2026-12-01" });
+ok("judged by renters after two weeks", later.some((a) => a.text === "Your cheapest paid renter: Kijiji, $33.84 per renter.") && !later.some((a) => a.tone === "fix"), later);
+const none = buildCostAdvice(buildSiteCosts([], [{ portal: "kijiji", amount_cents: 3384, spent_on: "2026-10-01" }]), { viewingsByRequest: true, firstPaid: { Kijiji: "2026-10-01" }, today: "2026-12-01" });
+ok("paid with no renters is a fix", none.some((a) => a.tone === "fix" && a.text.includes("got no renters")));
+ok("old behaviour without options", buildCostAdvice(kRows).some((a) => a.text.includes("no booked viewings")));
+ok("summary passes the options", readFileSync("lib/account-report.ts", "utf8").includes("viewingsByRequest: input.viewingsByRequest, firstPaid: firstPaidBySite(input.costs), today"));
+ok("Reports passes the options", /buildCostAdvice\(siteCosts, \{[\s\S]*?viewingsByRequest[\s\S]*?firstPaid: firstPaidBySite\(allCosts\)/.test(readFileSync("app/dashboard/reports/page.tsx", "utf8")));
+ok("sweep reads the flag", readFileSync("app/api/cron/account-report/route.ts", "utf8").includes("viewings_by_request: org.viewings_by_request"));
 
 ok("signed dollars", signedDollars(-125000) === "-$1,250" && signedDollars(125000) === "$1,250");
 
