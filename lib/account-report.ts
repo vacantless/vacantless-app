@@ -80,6 +80,8 @@ export type AccountReportInput = {
   viewingsByRequest?: boolean;
   /** S836d: units marked for rent with every ad down (lib/ads-down). */
   adsDown?: readonly AdsDownUnit[];
+  /** S836e: the expense report, linked under Income and expenses. */
+  expenseReportUrl?: string;
   /** Link to a rental, for the "for rent, no ads up" list. */
   rentalUrl?: (propertyId: string) => string;
 };
@@ -377,7 +379,7 @@ export function buildAccountReport(input: AccountReportInput & { adExpenses?: re
     h.push(`<tr style="background:${SOFT}">${td("Net", false, true)}${td(cash(m.netCents), true, true)}${td(cash(y.netCents), true, true)}</tr>`);
     h.push(`<tr>${td("Margin")}${td(marginPct(m.netCents, m.rentCents) ?? "-", true)}${td(marginPct(y.netCents, y.rentCents) ?? "-", true)}</tr>`);
     h.push(`</table>`);
-    h.push(`<p style="font-size:12px;color:#5b6b62;margin:6px 0 0">Net here is before mortgage interest. Your income statement shows the full picture.</p>`);
+    h.push(`<p style="font-size:12px;color:#5b6b62;margin:6px 0 0">Net here is before mortgage interest. Your income statement shows the full picture.${input.expenseReportUrl ? ` <a href="${esc(input.expenseReportUrl)}" style="color:${GREEN}">See every expense</a>.` : ""}</p>`);
   }
 
   // Spend by site.

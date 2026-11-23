@@ -51,6 +51,12 @@ const SECTIONS: Section[] = [
     icon: "chart",
   },
   {
+    href: "/dashboard/money/expense-report",
+    title: "Expense report",
+    desc: "Every expense and repair cost by category, with a total for each, a unit filter and a CSV.",
+    icon: "list",
+  },
+  {
     href: "/dashboard/money/spend",
     title: "Spend",
     desc: "Category share, monthly trend, and recurring charges from the expense ledger you already keep.",
@@ -90,6 +96,7 @@ const ACCOUNTING_HREFS = new Set([
   "/dashboard/money/import-history",
   "/dashboard/money/income-statement",
   "/dashboard/money/spend",
+  "/dashboard/money/expense-report",
   "/dashboard/money/tax-package",
   "/dashboard/money/accountant-package",
 ]);

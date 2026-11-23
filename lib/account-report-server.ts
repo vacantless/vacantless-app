@@ -133,5 +133,6 @@ export async function loadAccountReport(
     viewingsByRequest: org.viewings_by_request === true,
     adsDown,
     rentalUrl: (id) => `${APP_URL}/dashboard/properties/${id}`,
+    expenseReportUrl: `${APP_URL}/dashboard/money/expense-report?preset=custom&from=${range.monthStart.slice(0, 4)}-01-01&to=${lastDayBefore(range.monthEnd)}`,
   });
 }
