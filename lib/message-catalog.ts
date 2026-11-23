@@ -28,6 +28,7 @@ export const MESSAGE_ORG_SWITCHES = [
   "viewing_reminder_enabled",
   "compliance_calendar_enabled",
   "viewing_times_opened_enabled",
+  "rental_report_enabled",
 ] as const;
 export type MessageOrgSwitch = (typeof MESSAGE_ORG_SWITCHES)[number];
 
@@ -420,6 +421,17 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
     code: { notify: ["app/api/cron/posted-results-email/route.ts"] },
   },
   {
+    id: "you-rental-report",
+    group: "you",
+    goesTo: "Account owners and admins, plus anyone under Also send to.",
+    title: "Monthly report for each rental",
+    when: "The 1st of each month, for each rental that is advertised. Send now on a rental sends it to you only.",
+    includes: "Latest work and your next steps. Renters by site and viewings. Each site, its link and cost.",
+    channels: ["email"],
+    control: { type: "switch", column: "rental_report_enabled" },
+    code: { send: ["sendRentalReportEmail"] },
+  },
+  {
     id: "you-checkout-ready",
     group: "you",
     goesTo: "Account owners and admins.",
@@ -664,6 +676,7 @@ export const EXTRA_RECIPIENT_MESSAGE_IDS = [
   "you-signin-lost",
   "you-site-mail",
   "you-incident-report",
+  "you-rental-report",
 ] as const;
 export type ExtraRecipientMessageId = (typeof EXTRA_RECIPIENT_MESSAGE_IDS)[number];
 

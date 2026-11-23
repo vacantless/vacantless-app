@@ -3491,3 +3491,46 @@ export async function sendViewingOffer(p: ViewingOfferPayload): Promise<SendResu
     return { sent: false, reason: `fetch_error:${(e as Error).message}` };
   }
 }
+
+// ---------------------------------------------------------------------------
+// S831: the per-rental monthly report (lib/rental-report.ts builds the HTML).
+// Plain styling like Noam's owner updates; the org's logo sits on top.
+export type RentalReportEmailPayload = {
+  to_email: string;
+  subject: string;
+  html: string;
+  org_name: string | null;
+  logo_url: string | null;
+};
+
+export async function sendRentalReportEmail(p: RentalReportEmailPayload): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.to_email) return { sent: false, reason: "no_recipient" };
+  const org = escapeHtml(p.org_name || "Vacantless");
+  const logo = p.logo_url ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />` : "";
+  const htmlContent = `<!doctype html><html><body style="margin:0;padding:24px;background:#ffffff;">${logo}${scrubEmDashes(p.html)}<p style="font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#888;margin-top:24px;">${sentByLine(org)}</p></body></html>`;
+  const body = {
+    sender: { name: p.org_name || "Vacantless", email: DEFAULT_SENDER_EMAIL },
+    to: [{ email: p.to_email }],
+    replyTo: replyToOf(null, p.org_name),
+    subject: scrubEmDashes(p.subject),
+    htmlContent,
+    tags: ["kind:rental_report"],
+  };
+  try {
+    const res = await brevoFetch({
+      method: "POST",
+      headers: { "api-key": apiKey, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject: p.subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}

@@ -400,6 +400,20 @@ export default async function ReportsPage({
               <span className="mb-1 block text-xs font-medium text-gray-600">Note, or the site name for Other</span>
               <input name="label" placeholder="Pillette Unit 3 ad" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
             </label>
+            <label className="block sm:col-span-3">
+              <span className="mb-1 block text-xs font-medium text-gray-600">For which rental</span>
+              <select name="property_id" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" defaultValue="">
+                <option value="">Whole account (not one rental)</option>
+                {properties
+                  .filter((pr) => pr.status === "available")
+                  .concat(properties.filter((pr) => pr.status !== "available"))
+                  .map((pr) => (
+                    <option key={pr.id} value={pr.id}>
+                      {pr.address ?? "Rental"}
+                    </option>
+                  ))}
+              </select>
+            </label>
             <div className="sm:col-span-6">
               <button type="submit" className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white">
                 Add what you paid

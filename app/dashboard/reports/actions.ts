@@ -35,7 +35,15 @@ export async function addMarketingCost(formData: FormData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // S831: the cost can belong to one rental (the monthly report shows it there).
+  const rawProperty = String(formData.get("property_id") ?? "").trim();
+  let propertyId: string | null = null;
+  if (/^[0-9a-f-]{36}$/i.test(rawProperty)) {
+    const { data: own } = await supabase.from("properties").select("id").eq("id", rawProperty).eq("organization_id", org.id).maybeSingle();
+    propertyId = (own as { id?: string } | null)?.id ?? null;
+  }
   const { error } = await supabase.from("marketing_costs").insert({
+    property_id: propertyId,
     organization_id: org.id,
     portal,
     label,

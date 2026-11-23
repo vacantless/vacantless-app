@@ -82,7 +82,7 @@ export default async function EveryMessagePage({
   const { data: orgRow } = await supabase
     .from("organizations")
     .select(
-      "nurture_enabled, feedback_enabled, feedback_delay_hours, reschedule_nudge_enabled, availability_tripwire_enabled, viewing_reminder_enabled, compliance_calendar_enabled, viewing_times_opened_enabled, sms_enabled, auto_release_unconfirmed_enabled, auto_release_unconfirmed_hours",
+      "nurture_enabled, feedback_enabled, feedback_delay_hours, reschedule_nudge_enabled, availability_tripwire_enabled, viewing_reminder_enabled, compliance_calendar_enabled, viewing_times_opened_enabled, rental_report_enabled, sms_enabled, auto_release_unconfirmed_enabled, auto_release_unconfirmed_hours",
     )
     .eq("id", org.id)
     .maybeSingle();

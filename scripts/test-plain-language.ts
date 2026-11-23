@@ -104,6 +104,9 @@ const SURFACES: Surface[] = [
   { file: "lib/posted-results.ts", mode: "ui" },
   // S734 wave 2: where renters come from, on the rental.
   { file: "app/dashboard/properties/[id]/renter-sources-card.tsx", mode: "ui" },
+  // S831: the monthly report card and its actions.
+  { file: "app/dashboard/properties/[id]/monthly-report-card.tsx", mode: "ui" },
+  { file: "app/dashboard/properties/[id]/report-actions.ts", mode: "ui" },
   { file: "lib/renter-sources.ts", mode: "ui" },
   // S735: Realtor.ca through a partner agent (a request, never a tile).
   { file: "app/dashboard/properties/[id]/brokerage-request-card.tsx", mode: "ui" },

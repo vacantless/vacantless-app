@@ -77,6 +77,7 @@ import { keepFreshRows } from "@/lib/keep-fresh";
 import { MarketingKitCard } from "./marketing-kit-card";
 import { PostedResultsCard } from "./posted-results-card";
 import { RenterSourcesCard } from "./renter-sources-card";
+import { MonthlyReportCard } from "./monthly-report-card";
 import { renterSourcesForRental } from "@/lib/renter-sources";
 import { postedResultsNextSteps, postedResultsSites } from "@/lib/posted-results";
 import { VideoAdCard } from "./video-ad-card";
@@ -1028,6 +1029,7 @@ export default async function PropertyDetailPage({
     post?: string;
     pn?: string; // post-submit nonce that remounts the add-post form (form reset)
     mkt?: string; // S712: result of "Email them these steps" (Marketplace kit)
+    report?: string; // S831: monthly report note / send result
     brk?: string; // S735: result of the Realtor.ca request form
     posterr?: string;
     photos?: string;
@@ -3712,6 +3714,9 @@ export default async function PropertyDetailPage({
       {/* S734 (review item 3): which site each renter came from, here on the
           rental, not only on Reports. */}
       <RenterSourcesCard sources={renterSources} />
+
+      {/* S831: the monthly report (next steps note, send to me now). */}
+      <MonthlyReportCard propertyId={p.id} result={searchParams.report} />
 
       <PhotoUploadModal
         propertyId={p.id}

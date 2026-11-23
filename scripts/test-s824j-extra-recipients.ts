@@ -26,7 +26,9 @@ const catalogIds = new Set(CATALOG_MESSAGES.map((m) => m.id));
 for (const id of EXTRA_RECIPIENT_MESSAGE_IDS) ok(`catalog has ${id}`, catalogIds.has(id));
 for (const id of Object.keys(PHONE_LINKS)) ok(`catalog has phone row ${id}`, catalogIds.has(id));
 const sql = read("supabase/migrations/0317_message_extra_recipients.sql");
-for (const id of EXTRA_RECIPIENT_MESSAGE_IDS) ok(`0317 allows ${id}`, sql.includes(`'${id}'`));
+// S831: 0321 widened the check for the monthly report.
+const allowSql = sql + "\n" + read("supabase/migrations/0321_rental_report.sql");
+for (const id of EXTRA_RECIPIENT_MESSAGE_IDS) ok(`0317 allows ${id}`, allowSql.includes(`'${id}'`));
 ok("0317 grants service_role (rule 431)", /grant[^;]+to service_role/.test(sql));
 ok("0317 has row security", sql.includes("enable row level security"));
 ok("0317 caps at 20", sql.includes("<= 20"));
