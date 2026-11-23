@@ -63,7 +63,7 @@ export default function TenancyNsfCharges({
       )}
       <p className="mb-4 text-sm text-gray-600">
         When a rent payment fails, the bank charges you a fee. Keep what {tenantName || "your tenant"} owes you for it
-        here. A failed Stripe payment is added for you. You can change the amounts.
+        here. A failed Stripe or Rotessa payment is added for you. You can change the amounts.
       </p>
 
       {rows.length > 0 && (

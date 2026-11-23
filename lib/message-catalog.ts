@@ -446,7 +446,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
     group: "you",
     goesTo: "Account owners and admins.",
     title: "A rent payment did not go through",
-    when: "When a tenant's monthly bank debit on Stripe fails.",
+    when: "When a tenant's monthly bank debit fails. Stripe tells us right away. Rotessa is checked three times a day.",
     channels: ["email"],
     control: { type: "always" },
     code: { notify: ["lib/rent-failed-notify.ts"] },

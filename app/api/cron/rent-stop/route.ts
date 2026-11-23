@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runScheduledRentStops } from "@/lib/stripe-rent-stop";
+import { runRotessaNsfSweep } from "@/lib/rotessa-nsf-server";
+import { rotessaNsfDue } from "@/lib/rotessa-nsf";
+import { torontoDateHour } from "@/lib/health-digest";
 
 // S796b: carries out "stop rent after the last payment". A tenancy with
 // rent_stop_after set keeps collecting until the payment on that date clears,
@@ -26,5 +29,12 @@ export async function GET(req: NextRequest) {
   }
   const summary = await runScheduledRentStops({ admin });
   console.log("[rent-stop]", JSON.stringify(summary));
-  return NextResponse.json(summary, { status: 200 });
+  // S835d: Rotessa sends nothing when a debit fails, so read its report three
+  // times a day (?nsf=1 reads now). One charge per failed transaction.
+  const { date: today, hour } = torontoDateHour(new Date());
+  const forceNsf = req.nextUrl.searchParams.get("nsf") === "1";
+  if (!forceNsf && !rotessaNsfDue(hour)) return NextResponse.json(summary, { status: 200 });
+  const nsf = await runRotessaNsfSweep({ admin, todayIso: today });
+  console.log("[rotessa-nsf]", JSON.stringify(nsf));
+  return NextResponse.json({ ...summary, ok: summary.ok && nsf.ok, nsf }, { status: 200 });
 }

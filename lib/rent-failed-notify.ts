@@ -8,7 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendNotificationEmail } from "@/lib/email";
 import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { formatRentCents } from "@/lib/tenancy";
-import { rentFailedEmail } from "@/lib/rent-failed";
+import { rentFailedEmail, type RentRail } from "@/lib/rent-failed";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/+$/, "");
 
@@ -16,6 +16,7 @@ export async function notifyRentPaymentFailed(
   admin: SupabaseClient,
   tenancyId: string,
   amountDueCents: number | null,
+  rail: RentRail = "stripe",
 ): Promise<{ sent: number }> {
   // The $0 invoice Stripe cuts before the first charge date is not a payment.
   if (amountDueCents != null && amountDueCents <= 0) return { sent: 0 };
@@ -43,6 +44,7 @@ export async function notifyRentPaymentFailed(
       tenantName: primary?.name ?? null,
       address: t.property?.address ?? null,
       amountLabel: amountDueCents != null ? formatRentCents(amountDueCents) : null,
+      rail,
     });
     const { data: members } = await admin
       .from("memberships")
@@ -61,7 +63,7 @@ export async function notifyRentPaymentFailed(
         subject: mail.subject,
         body: mail.body,
         action_label: mail.actionLabel,
-        action_url: `${APP_URL}/dashboard/tenancies/${t.id}#rent-collection`,
+        action_url: `${APP_URL}/dashboard/tenancies/${t.id}#${rail === "rotessa" ? "nsf-charges" : "rent-collection"}`,
         org_name: org?.name ?? "Vacantless",
         brand_color: org?.brand_color ?? null,
         logo_url: org?.logo_url ?? null,
