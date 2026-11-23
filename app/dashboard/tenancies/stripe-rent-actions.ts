@@ -22,6 +22,7 @@ import {
   canCreateRentSubscription,
   rentSubscriptionIdempotencyKey,
   findLiveRentSubscription,
+  reusableSetupLink,
 } from "@/lib/stripe-connect";
 import { stopTenancyStripeRent, scheduleTenancyRentStopAfterNext } from "@/lib/stripe-rent-stop";
 import type { N1Snapshot } from "@/lib/n1-render";
@@ -113,6 +114,26 @@ export async function startStripeRentMandate(formData: FormData) {
       customerId = customer.id;
     }
 
+    // S835b (REVIEW-S835 finding 4): keep the link already made while it still
+    // works. A new link each press left the tenant finishing on an old one
+    // that nothing was watching. The link is shown on the tenancy with a Copy
+    // button, so the landlord sends it and never fills it in by mistake.
+    if (tenancy.stripe_setup_session_id) {
+      try {
+        const prior = await stripe!.checkout.sessions.retrieve(tenancy.stripe_setup_session_id, {}, { stripeAccount });
+        if (reusableSetupLink(prior, Math.floor(Date.now() / 1000))) {
+          await supabase
+            .from("tenancies")
+            .update({ stripe_mandate_status: "pending", updated_at: new Date().toISOString() })
+            .eq("id", tenancyId);
+          redirect(`${tenancyPath(tenancyId)}?striperent=linkready#rent-collection`);
+        }
+      } catch (err) {
+        if (err && typeof err === "object" && "digest" in err) throw err;
+        // Could not read the old link: make a new one below.
+      }
+    }
+
     const session = await stripe!.checkout.sessions.create(
       buildSetupSessionParams({
         country: connect.country,
@@ -135,7 +156,7 @@ export async function startStripeRentMandate(formData: FormData) {
       .eq("id", tenancyId);
 
     if (!session.url) redirect(`${tenancyPath(tenancyId)}?striperent=linkfail`);
-    redirect(session.url);
+    redirect(`${tenancyPath(tenancyId)}?striperent=linkready#rent-collection`);
   } catch (err) {
     // redirect() throws a special digest error — re-throw so Next navigates.
     if (err && typeof err === "object" && "digest" in err) throw err;

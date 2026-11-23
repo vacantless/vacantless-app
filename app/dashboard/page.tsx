@@ -513,7 +513,14 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     .eq("organization_id", org.id)
     .eq("archived", false);
   const hasShowingAgents = (agentCount ?? 0) > 0;
+  // S835b (REVIEW-S835 finding 5): rent debits that failed and are still unpaid.
+  const { count: rentFailedCount } = await supabase
+    .from("tenancies")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", org.id)
+    .in("stripe_subscription_status", ["past_due", "unpaid"]);
   const todayItems = buildTodayLane({
+    rentPaymentsFailed: rentFailedCount ?? 0,
     noViewingTimes: openViewingTimes === 0 && !viewingsByRequest ? { waiting: notBookedRecent } : null,
     // S708: only leads from the last 14 days; older `new` leads stay in Renters.
     inquiriesNeedingReply: allLeads.filter((l) =>

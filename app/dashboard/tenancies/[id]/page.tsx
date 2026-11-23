@@ -48,7 +48,7 @@ import TenancyStripeRentSection, {
   type TenancyStripeRentView,
 } from "@/components/tenancy-stripe-rent-section";
 import { getStripe } from "@/lib/stripe";
-import { shouldPromptRentRailSync, subscriptionIsLive, upcomingChargeDates } from "@/lib/stripe-connect";
+import { shouldPromptRentRailSync, subscriptionIsLive, upcomingChargeDates, reusableSetupLink, billedDiffersFromRent } from "@/lib/stripe-connect";
 import { fetchRentPaymentSummary } from "@/lib/stripe-rent-stop";
 import { recordPayment, deletePayment } from "../payment-actions";
 import { reportTenancyIssue, generateTenantReportLink } from "../maintenance-actions";
@@ -231,6 +231,7 @@ type Tenancy = {
   stripe_customer_id: string | null;
   stripe_payment_method_id: string | null;
   stripe_mandate_status: string | null;
+  stripe_setup_session_id: string | null;
   stripe_rent_synced_at: string | null;
   stripe_rent_amount_synced_cents: number | null;
   stripe_subscription_id: string | null;
@@ -405,6 +406,7 @@ const ROTESSA_ERROR: Record<string, string> = {
 // Stripe Connect rent outcomes (?striperent=...). `synced` is success-toned.
 const STRIPE_RENT_SUCCESS: Record<string, string> = {
   synced: "Stripe rent status refreshed.",
+  linkready: "The bank link is ready below. Copy it and send it to your tenant.",
   subscribed: "Monthly rent scheduled. Stripe will bill the saved bank account automatically.",
   subsynced: "Subscription status refreshed.",
   subadopted: "Monthly rent was already set up at Stripe for this tenant. It is showing here now. No second debit was made.",
@@ -433,6 +435,7 @@ const STRIPE_RENT_ERROR: Record<string, string> = {
   norent: "Set a monthly rent amount on this tenancy before scheduling rent.",
   baddate: "Pick a first charge date at least 2 business days from today.",
   subfail: "Stripe couldn't create the rent subscription. Try again.",
+  useend: "Nothing was saved. Monthly rent is still collecting, so this can't be set to Ended here. Use End tenancy below. It stops the rent too.",
   subsavefail: "Stripe set up the monthly rent, but we couldn't save it here. Press Set up monthly rent again. It will find the one Stripe has, and no second debit is made.",
   nosub: "Set up the monthly rent subscription before refreshing.",
   stopfail: "Stripe couldn't stop the monthly rent just now. Nothing changed. Try again.",
@@ -500,7 +503,7 @@ export default async function TenancyDetailPage({
   const { data } = await supabase
     .from("tenancies")
     .select(
-      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_rent_synced_at, stripe_rent_amount_synced_cents, stripe_subscription_id, stripe_subscription_status, rent_stop_after, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, move_out_date, move_out_source, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, beds, rent_control_exempt, first_occupancy_date, status, available_date, viewing_earliest_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
+      "id, status, rent_cents, deposit_cents, start_date, end_date, term_months, last_rent_increase_date, payment_notes, move_in_notes, notes, lead_id, rotessa_customer_id, rotessa_customer_synced_at, rotessa_schedule_id, rotessa_schedule_synced_at, stripe_customer_id, stripe_payment_method_id, stripe_mandate_status, stripe_setup_session_id, stripe_rent_synced_at, stripe_rent_amount_synced_cents, stripe_subscription_id, stripe_subscription_status, rent_stop_after, renewal_autopilot, renewal_intent, renewal_intent_at, renewal_intent_requested_at, renewal_intent_token, move_out_date, move_out_source, n1_served_at, n1_served_method, n1_effective_date, n1_filed_document_id, electronic_service_consent, n1_snapshot, report_token, property:properties(id, address, beds, rent_control_exempt, first_occupancy_date, status, available_date, viewing_earliest_date), tenants(id, name, email, phone, is_primary, sms_opt_out)",
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -553,7 +556,48 @@ export default async function TenancyDetailPage({
     t.stripe_subscription_id,
   );
   const rentLive = subscriptionIsLive(t.stripe_subscription_status) && !!t.stripe_subscription_id;
+  // S835b (finding 4): the bank link waiting on the tenant, shown with a Copy
+  // button. Read from Stripe only while the authorization is pending.
+  let bankLink: { url: string; expiresLabel: string | null } | null = null;
+  let bankLinkGone = false;
+  if (t.stripe_mandate_status === "pending" && t.stripe_setup_session_id && stripeConnectRow?.connected_account_id) {
+    const stripeForLink = getStripe();
+    if (stripeForLink) {
+      try {
+        const sess = await stripeForLink.checkout.sessions.retrieve(
+          t.stripe_setup_session_id,
+          {},
+          { stripeAccount: stripeConnectRow.connected_account_id },
+        );
+        const link = reusableSetupLink(sess, Math.floor(Date.now() / 1000));
+        if (link) {
+          bankLink = {
+            url: link.url,
+            expiresLabel: link.expiresAtUnix
+              ? new Date(link.expiresAtUnix * 1000).toLocaleString("en-CA", {
+                  timeZone: DEFAULT_TIME_ZONE,
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })
+              : null,
+          };
+        } else if (sess.status !== "complete") {
+          bankLinkGone = true;
+        }
+      } catch {
+        // Stripe could not be read: the card falls back to its buttons.
+      }
+    }
+  }
   const stripeRentView: TenancyStripeRentView = {
+    bankLinkUrl: bankLink?.url ?? null,
+    bankLinkExpiresLabel: bankLink?.expiresLabel ?? null,
+    bankLinkGone,
+    billedLabel: rentSummary?.billedCents != null ? formatRentCents(rentSummary.billedCents) : null,
+    billedDiffers: rentLive && billedDiffersFromRent(rentSummary?.billedCents, t.rent_cents),
     tenancyId: t.id,
     primaryName: primary?.name ?? null,
     primaryHasEmail: !!primary?.email,

@@ -442,6 +442,16 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
     code: { notify: ["app/api/cron/checkout-ready/route.ts"] },
   },
   {
+    id: "you-rent-failed",
+    group: "you",
+    goesTo: "Account owners and admins.",
+    title: "A rent payment did not go through",
+    when: "When a tenant's monthly bank debit on Stripe fails.",
+    channels: ["email"],
+    control: { type: "always" },
+    code: { notify: ["lib/rent-failed-notify.ts"] },
+  },
+  {
     id: "you-signin-lost",
     group: "you",
     goesTo: "Account owners and admins.",

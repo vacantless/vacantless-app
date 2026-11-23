@@ -11,6 +11,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { grantReferralCredit } from "@/lib/referral-credit-server";
 import { claimStripeEvent, releaseStripeEvent } from "@/lib/stripe-event-claim";
+import { notifyRentPaymentFailed } from "@/lib/rent-failed-notify";
 import {
   planForPriceId,
   planForSubscriptionEvent,
@@ -426,6 +427,15 @@ async function reconcileRent(
       stripe_subscription_synced_at: new Date().toISOString(),
     })
     .eq("id", tenancy.id);
+  // S835b (REVIEW-S835 finding 5): tell the owners a rent payment failed.
+  // Each Stripe event is taken once (claimStripeEvent), so this sends once.
+  // Never throws: a failed email must not make Stripe resend the event.
+  if (event.type === "invoice.payment_failed") {
+    const amountDue = (event.data.object as Stripe.Invoice).amount_due;
+    await notifyRentPaymentFailed(admin, tenancy.id, typeof amountDue === "number" ? amountDue : null).catch((e) =>
+      console.error("[stripe-webhook] rent failed notice", e instanceof Error ? e.message : e),
+    );
+  }
   return { matched: true as const, tenancyId: tenancy.id, status: nextStatus };
 }
 
@@ -449,7 +459,24 @@ async function reconcileMandate(
     .select("id")
     .eq("stripe_setup_session_id", session.id)
     .limit(1);
-  const tenancyId = (rows?.[0] as { id?: string } | undefined)?.id;
+  let tenancyId = (rows?.[0] as { id?: string } | undefined)?.id;
+  // S835b (REVIEW-S835 finding 4): the tenant finished on an earlier link than
+  // the one saved. Match by the Stripe customer, which is one per tenancy.
+  let viaCustomer = false;
+  if (!tenancyId) {
+    const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
+    if (customerId) {
+      const { data: byCustomer } = await admin
+        .from("tenancies")
+        .select("id")
+        .eq("stripe_customer_id", customerId)
+        .limit(2);
+      if ((byCustomer ?? []).length === 1) {
+        tenancyId = (byCustomer![0] as { id: string }).id;
+        viaCustomer = true;
+      }
+    }
+  }
   if (!tenancyId) return { matched: false as const, reason: "no_tenancy" };
 
   const full = await stripe.checkout.sessions.retrieve(
@@ -460,11 +487,16 @@ async function reconcileMandate(
   const parsed = parseSetupSession(full as Parameters<typeof parseSetupSession>[0]);
   if (!parsed.ok) return { matched: false as const, reason: "unparsed" };
 
+  // An earlier link only counts when the tenant really finished on it.
+  if (viaCustomer && parsed.mandateStatus !== "active") {
+    return { matched: false as const, reason: "older_link_not_finished" };
+  }
   await admin
     .from("tenancies")
     .update({
       stripe_payment_method_id: parsed.paymentMethodId,
       stripe_mandate_status: parsed.mandateStatus,
+      ...(viaCustomer ? { stripe_setup_session_id: session.id } : {}),
       stripe_rent_synced_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })

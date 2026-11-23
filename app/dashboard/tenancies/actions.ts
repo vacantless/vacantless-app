@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
 import { stopTenancyStripeRent, scheduleTenancyRentStopAfterNext } from "@/lib/stripe-rent-stop";
 import { stopTenancyRotessaRent, scheduleTenancyRotessaStop } from "@/lib/rotessa-rent";
-import { canCreateRentSubscription } from "@/lib/stripe-connect";
+import { canCreateRentSubscription, editMayEndTenancy } from "@/lib/stripe-connect";
 import { requireCapability } from "@/lib/membership";
 import {
   isTenancyStatus,
@@ -761,6 +761,35 @@ export async function updateTenancy(formData: FormData) {
   const status = isTenancyStatus(statusRaw) ? statusRaw : "active";
 
   const supabase = createClient();
+  // S835b (REVIEW-S835 finding 3): the Status box must not end a tenancy while
+  // rent is collecting. Only End tenancy stops the debit. A failed read
+  // refuses too, so the debit can never be left running by this form.
+  if (status === "ended") {
+    const { data: cur, error: curErr } = await supabase
+      .from("tenancies")
+      .select("status, stripe_subscription_id, stripe_subscription_status, rotessa_schedule_id")
+      .eq("id", id)
+      .maybeSingle();
+    const c = cur as {
+      status: string | null;
+      stripe_subscription_id: string | null;
+      stripe_subscription_status: string | null;
+      rotessa_schedule_id: string | null;
+    } | null;
+    if (
+      curErr ||
+      !c ||
+      !editMayEndTenancy({
+        currentStatus: c.status,
+        nextStatus: status,
+        subscriptionId: c.stripe_subscription_id,
+        subscriptionStatus: c.stripe_subscription_status,
+        rotessaScheduleId: c.rotessa_schedule_id,
+      })
+    ) {
+      redirect(`/dashboard/tenancies/${id}?striperent=useend`);
+    }
+  }
   // RLS scopes the update to the caller's org; .eq("id") targets one row.
   await supabase
     .from("tenancies")

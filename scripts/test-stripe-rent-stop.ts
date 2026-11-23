@@ -14,7 +14,13 @@ import {
   findLiveRentSubscription,
   countLiveStripeRent,
   buildSubscriptionParams,
+  reusableSetupLink,
+  billedDiffersFromRent,
+  editMayEndTenancy,
 } from "../lib/stripe-connect";
+import { rentFailedEmail } from "../lib/rent-failed";
+import { buildTodayLane } from "../lib/dashboard-today";
+import { CATALOG_MESSAGES } from "../lib/message-catalog";
 
 let passed = 0;
 let failed = 0;
@@ -219,6 +225,61 @@ const DEC18 = Date.UTC(2026, 11, 18, 12) / 1000;
   ok("Rotessa disconnect checks for a live schedule before deleting", ro.indexOf('not("rotessa_schedule_id", "is", null)') > 0 && ro.indexOf('not("rotessa_schedule_id", "is", null)') < ro.indexOf('from("rotessa_accounts").delete()'));
   const page = readFileSync("app/dashboard/settings/page.tsx", "utf8");
   ok("Settings says why a disconnect was refused", /stripeconnect === "liverent"/.test(page) && /rotessa === "liverent"/.test(page));
+}
+
+// S835b (REVIEW-S835 findings 3 to 6).
+{
+  const NOW = 1_800_000_000;
+  const open = { status: "open", url: "https://checkout.stripe.com/c/pay/cs_live_x", expires_at: NOW + 3600 };
+  ok("an open link is reused", reusableSetupLink(open, NOW)?.url === open.url);
+  ok("a finished link is not reused", reusableSetupLink({ ...open, status: "complete" }, NOW) === null);
+  ok("an expired link is not reused", reusableSetupLink({ ...open, status: "expired" }, NOW) === null);
+  ok("a link with minutes left is not reused", reusableSetupLink({ ...open, expires_at: NOW + 120 }, NOW) === null);
+  ok("a link with no address is not reused", reusableSetupLink({ status: "open", url: null }, NOW) === null);
+  ok("no session -> nothing to reuse", reusableSetupLink(null, NOW) === null);
+
+  ok("same amount does not differ", !billedDiffersFromRent(150000, 150000));
+  ok("another amount differs", billedDiffersFromRent(150000, 155000));
+  ok("unknown billed amount never warns", !billedDiffersFromRent(null, 155000) && !billedDiffersFromRent(150000, null));
+  const sum = summarizeRentPayments({ status: "active", items: { data: [{ current_period_end: NOW, price: { unit_amount: 150000 } }] } }, []);
+  ok("the summary carries what Stripe bills", sum.billedCents === 150000);
+  ok("no price -> billed unknown", summarizeRentPayments({ status: "active" }, []).billedCents === null);
+
+  const live = { subscriptionId: "sub_1", subscriptionStatus: "active", rotessaScheduleId: null };
+  ok("the edit form cannot end a tenancy with live Stripe rent", !editMayEndTenancy({ currentStatus: "active", nextStatus: "ended", ...live }));
+  ok("nor one with a Rotessa schedule", !editMayEndTenancy({ currentStatus: "active", nextStatus: "ended", subscriptionId: null, subscriptionStatus: null, rotessaScheduleId: "123" }));
+  ok("stopped rent can be ended", editMayEndTenancy({ currentStatus: "active", nextStatus: "ended", subscriptionId: "sub_1", subscriptionStatus: "canceled", rotessaScheduleId: null }));
+  ok("an already ended tenancy can be saved", editMayEndTenancy({ currentStatus: "ended", nextStatus: "ended", ...live }));
+  ok("other status changes are untouched", editMayEndTenancy({ currentStatus: "upcoming", nextStatus: "active", ...live }));
+
+  const mail = rentFailedEmail({ tenantName: "Sam Lee", address: "12 Main St, Unit 3", amountLabel: "$1,500" });
+  ok("the failed-rent email names the rental", mail.subject === "Rent payment did not go through: 12 Main St, Unit 3");
+  ok("and the tenant and the amount", mail.body.includes("Sam Lee's rent payment of $1,500 for 12 Main St, Unit 3 did not go through."));
+  ok("no em dash in the email", !/\u2014/.test(mail.subject + mail.body));
+  const bare = rentFailedEmail({ tenantName: null, address: null, amountLabel: null });
+  ok("it reads with nothing known", bare.subject === "A rent payment did not go through" && bare.body.startsWith("Your tenant's rent payment did not go through."));
+
+  const base = { inquiriesNeedingReply: 0, viewingsToday: 0, messagesAwaitingApproval: 0, rentIncreasesOverdue: 0, urgentWorkOrders: 0 };
+  ok("Today is quiet with no failed rent", buildTodayLane(base).length === 0);
+  const lane = buildTodayLane({ ...base, rentPaymentsFailed: 2 });
+  ok("Today shows failed rent", lane.length === 1 && lane[0].key === "rent-failed" && lane[0].label === "2 rent payments did not go through" && lane[0].tone === "urgent");
+  ok("one reads in the singular", buildTodayLane({ ...base, rentPaymentsFailed: 1 })[0].label === "1 rent payment did not go through");
+
+  ok("the failed-rent email is on Every message we send", CATALOG_MESSAGES.some((m) => m.id === "you-rent-failed" && (m.code.notify ?? []).includes("lib/rent-failed-notify.ts")));
+
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  const acts = readFileSync("app/dashboard/tenancies/actions.ts", "utf8");
+  ok("updateTenancy checks before saving Ended", /editMayEndTenancy\([\s\S]{0,500}striperent=useend/.test(acts));
+  const rent = readFileSync("app/dashboard/tenancies/stripe-rent-actions.ts", "utf8");
+  ok("the bank link is reused before a new one is made", rent.indexOf("reusableSetupLink(prior") > 0 && rent.indexOf("reusableSetupLink(prior") < rent.indexOf("stripe!.checkout.sessions.create("));
+  ok("the landlord is no longer sent into the tenant's Stripe page", !/redirect\(session\.url\)/.test(rent));
+  const hook = readFileSync("app/api/stripe/webhook/route.ts", "utf8");
+  ok("the webhook falls back to the Stripe customer", /eq\("stripe_customer_id", customerId\)/.test(hook));
+  ok("an older link counts only when finished", /viaCustomer && parsed\.mandateStatus !== "active"/.test(hook));
+  ok("a failed payment notifies the owners", /invoice\.payment_failed"\) \{[\s\S]{0,300}notifyRentPaymentFailed\(/.test(hook));
+  const card = readFileSync("components/tenancy-stripe-rent-section.tsx", "utf8");
+  ok("the card shows the bank link with a Copy button", /CopyLinkButton path=\{view\.bankLinkUrl\}/.test(card));
+  ok("the card shows what Stripe bills", /view\.billedLabel \?\? view\.rentLabel/.test(card) && /view\.billedDiffers &&/.test(card));
 }
 
 console.log(`\nstripe-rent-stop: ${passed} passed, ${failed} failed`);

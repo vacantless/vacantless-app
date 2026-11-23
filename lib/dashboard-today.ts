@@ -45,6 +45,8 @@ export type TodayInput = {
   rentIncreasesOverdue: number;
   /** Open work orders flagged urgent. */
   urgentWorkOrders: number;
+  /** S835b: tenants whose monthly rent debit on Stripe failed and is still unpaid. */
+  rentPaymentsFailed?: number;
   /**
    * S740 (review item 1): set when the account has a live rental and no
    * viewing times open (no weekly window, no dated hours from today on).
@@ -117,6 +119,17 @@ export function buildTodayLane(input: TodayInput): TodayItem[] {
       detail: "Drafted for your tenants. Nothing sends until you approve it.",
       href: "/dashboard/messages",
       tone: "action",
+    });
+  }
+
+  if ((input.rentPaymentsFailed ?? 0) > 0) {
+    const n = input.rentPaymentsFailed ?? 0;
+    items.push({
+      key: "rent-failed",
+      label: `${plural(n, "rent payment", "rent payments")} did not go through`,
+      detail: "The bank debit failed. Open the tenant to see the payment, then talk to them.",
+      href: "/dashboard/tenancies",
+      tone: "urgent",
     });
   }
 

@@ -19,8 +19,8 @@ export default function RentAuthorizedPage({
           <>
             <h1 className="text-lg font-semibold text-gray-900">Authorization not completed</h1>
             <p className="mt-2 text-sm text-gray-600">
-              You closed the bank authorization before it finished. No worries —
-              you can use the same link again to set it up whenever you&apos;re ready.
+              You closed the bank authorization before it finished. No worries.
+              You can use the same link again to set it up whenever you&apos;re ready.
             </p>
           </>
         ) : (

@@ -18,6 +18,7 @@ import {
 } from "@/lib/stripe-connect";
 import { StatusChip, PRIMARY_ACTION_CLASS, type ChipTone } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
+import { CopyLinkButton } from "@/components/copy-link-button";
 
 // The Stripe Connect rent-collection panel on a tenancy (platform pivot step 2,
 // ALT provider, increment 2; S215). Sibling of the Rotessa block. Collects a
@@ -26,6 +27,15 @@ import { SubmitButton } from "@/components/submit-button";
 // subscription off the saved payment method.
 
 export type TenancyStripeRentView = {
+  // S835b: the bank link waiting on the tenant (null when none can be used).
+  bankLinkUrl: string | null;
+  bankLinkExpiresLabel: string | null;
+  /** The saved link ran out before the tenant finished. */
+  bankLinkGone: boolean;
+  /** What Stripe bills each month right now; null when unknown. */
+  billedLabel: string | null;
+  /** Stripe bills a different amount than the rent saved on this page. */
+  billedDiffers: boolean;
   tenancyId: string;
   primaryName: string | null;
   primaryHasEmail: boolean;
@@ -180,7 +190,7 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
                 <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
                   <div>
                     <dt className="text-gray-500">Amount</dt>
-                    <dd className="font-medium text-gray-900">{view.rentLabel}/mo</dd>
+                    <dd className="font-medium text-gray-900">{view.billedLabel ?? view.rentLabel}/mo</dd>
                   </div>
                   <div>
                     <dt className="text-gray-500">Last payment</dt>
@@ -191,6 +201,13 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
                     <dd className="font-medium text-gray-900">{view.nextChargeLabel ?? "-"}</dd>
                   </div>
                 </dl>
+                {view.billedDiffers && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    Stripe takes {view.billedLabel} a month. The rent saved below is {view.rentLabel}. Changing the
+                    rent below does not change the bank debit. To take a new amount, stop monthly rent and set it up
+                    again.
+                  </p>
+                )}
                 <p className="text-xs text-gray-400">
                   Bank debits take a few business days to confirm. Subscription{" "}
                   <span className="font-mono">{view.subscriptionId}</span>.
@@ -336,19 +353,34 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
         </div>
       ) : status === "pending" ? (
         <div className="space-y-3">
+          {view.bankLinkUrl ? (
+            <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <p className="text-sm text-gray-700">
+                Send <span className="font-medium text-gray-900">{view.primaryName}</span> this bank link. They set up
+                the monthly debit on Stripe&apos;s page ({method.label}). Do not fill it in yourself.
+                {view.bankLinkExpiresLabel ? ` The link works until ${view.bankLinkExpiresLabel}.` : " The link works for 24 hours."}
+              </p>
+              <p className="break-all font-mono text-xs text-gray-500">{view.bankLinkUrl}</p>
+              <CopyLinkButton path={view.bankLinkUrl} label="Copy bank link" />
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600">
+              {view.bankLinkGone
+                ? `The bank link for ${view.primaryName} ran out before they finished. Make a new one and send it.`
+                : `A bank link was made for ${view.primaryName}. Press the button to show it here, then send it to them.`}
+            </p>
+          )}
           <p className="text-sm text-gray-600">
-            Authorization started for <span className="font-medium text-gray-900">{view.primaryName}</span> ({connectCountryLabel(view.country)} · {method.label}).
-            Send them the authorization link (open it again below to copy from the
-            address bar), then <strong>Refresh status</strong> once they finish.
+            This page updates by itself when they finish. <strong>Refresh status</strong> checks right away.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <form action={startStripeRentMandate}>
               <input type="hidden" name="tenancy_id" value={view.tenancyId} />
               <SubmitButton
-                pendingLabel="Opening…"
+                pendingLabel="Working…"
                 className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Open authorization link
+                {view.bankLinkUrl ? "Show the link again" : view.bankLinkGone ? "Make a new bank link" : "Show the bank link"}
               </SubmitButton>
             </form>
             <form action={refreshStripeRentMandate}>
@@ -368,7 +400,7 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
           <p className="text-sm text-gray-600">
             Authorize <span className="font-medium text-gray-900">{view.primaryName}</span>&apos;s
             bank account for rent by {method.label} ({connectCountryLabel(view.country)}).
-            They complete a secure Stripe page; we never see their bank numbers.
+            You get a link to send them. They complete a secure Stripe page; we never see their bank numbers.
             {status === "failed" && " The previous attempt didn't complete. You can start a new one."}
           </p>
           <form action={startStripeRentMandate}>
@@ -378,7 +410,7 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
               className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               style={{ background: "var(--brand-gradient, var(--brand-color))" }}
             >
-              Start bank authorization
+              Make the bank link
             </SubmitButton>
           </form>
         </div>

@@ -254,6 +254,11 @@ function loadRoute(event: FakeEvent, admin: unknown, subscriptions: Record<strin
           releaseStripeEvent: async () => undefined,
         };
       }
+      if (id === "@/lib/rent-failed-notify") {
+        // S835b: the owners' failed-rent email has its own checks
+        // (test-stripe-rent-stop); here it sends nothing.
+        return { notifyRentPaymentFailed: async () => ({ sent: 0 }) };
+      }
       if (id === "@/lib/stripe-connect") {
         return {
           isRentReconcileEvent,

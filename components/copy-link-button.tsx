@@ -15,8 +15,9 @@ export function CopyLinkButton({
   const [copied, setCopied] = useState(false);
 
   async function copy() {
+    // S835b: a full https link (the Stripe bank link) is copied as it is.
     const url =
-      typeof window !== "undefined" ? window.location.origin + path : path;
+      /^https:\/\//.test(path) || typeof window === "undefined" ? path : window.location.origin + path;
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);

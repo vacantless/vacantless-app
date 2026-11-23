@@ -305,6 +305,49 @@ export function buildSetupSessionParams(args: {
   return base;
 }
 
+/**
+ * S835b (REVIEW-S835 finding 4): the bank link already made for this tenant,
+ * if it can still be used. Making a new link each time left the tenant
+ * finishing on an old one that nothing was watching. Pure.
+ */
+export function reusableSetupLink(
+  session: { status?: string | null; url?: string | null; expires_at?: number | null } | null | undefined,
+  nowUnix: number,
+): { url: string; expiresAtUnix: number | null } | null {
+  if (!session || session.status !== "open") return null;
+  const url = typeof session.url === "string" ? session.url.trim() : "";
+  if (!/^https:\/\//.test(url)) return null;
+  const exp = typeof session.expires_at === "number" && session.expires_at > 0 ? session.expires_at : null;
+  // Under ten minutes left is not worth sending to a tenant.
+  if (exp != null && exp - nowUnix < 600) return null;
+  return { url, expiresAtUnix: exp };
+}
+
+/** S835b (finding 6): does Stripe bill a different amount than the rent on file? Pure. */
+export function billedDiffersFromRent(billedCents: number | null | undefined, rentCents: number | null | undefined): boolean {
+  if (typeof billedCents !== "number" || billedCents <= 0) return false;
+  if (typeof rentCents !== "number" || rentCents <= 0) return false;
+  return Math.round(billedCents) !== Math.round(rentCents);
+}
+
+/**
+ * S835b (finding 3): may the edit form set this tenancy to Ended? Not while
+ * rent is still collecting: only End tenancy stops the debit. Pure.
+ */
+export function editMayEndTenancy(input: {
+  currentStatus: unknown;
+  nextStatus: unknown;
+  subscriptionId: unknown;
+  subscriptionStatus: unknown;
+  rotessaScheduleId: unknown;
+}): boolean {
+  if (input.nextStatus !== "ended" || input.currentStatus === "ended") return true;
+  const stripeLive =
+    typeof input.subscriptionId === "string" && input.subscriptionId.trim() !== "" && subscriptionIsLive(input.subscriptionStatus);
+  const rotessaLive = typeof input.rotessaScheduleId === "string" && input.rotessaScheduleId.trim() !== "";
+  return !stripeLive && !rotessaLive;
+}
+
 export type SetupSessionParse =
   | { ok: true; paymentMethodId: string | null; mandateStatus: MandateStatus }
   | { ok: false; message: string };
@@ -546,6 +589,8 @@ export type RentPaymentSummary = {
   lastPaymentState: RentPaymentState | null;
   /** Day of the month the subscription bills on (1 to 31), when known. */
   anchorDay: number | null;
+  /** S835b: what Stripe bills each month right now, in cents, when known. */
+  billedCents: number | null;
 };
 
 type SummarySub = {
@@ -553,7 +598,7 @@ type SummarySub = {
   billing_cycle_anchor?: number | null;
   current_period_end?: number | null;
   cancel_at_period_end?: boolean | null;
-  items?: { data?: Array<{ current_period_end?: number | null }> | null } | null;
+  items?: { data?: Array<{ current_period_end?: number | null; quantity?: number | null; price?: { unit_amount?: number | null } | null }> | null } | null;
 };
 type SummaryInvoice = {
   status?: string | null;
@@ -584,8 +629,14 @@ export function summarizeRentPayments(
     lastPaymentCents: null,
     lastPaymentState: null,
     anchorDay: null,
+    billedCents: null,
   };
   const status = typeof sub?.status === "string" ? sub.status : null;
+  const unit = sub?.items?.data?.[0]?.price?.unit_amount;
+  if (typeof unit === "number" && unit > 0) {
+    const qty = sub?.items?.data?.[0]?.quantity;
+    out.billedCents = unit * (typeof qty === "number" && qty > 0 ? qty : 1);
+  }
   if (typeof sub?.billing_cycle_anchor === "number" && sub.billing_cycle_anchor > 0) {
     out.anchorDay = new Date(sub.billing_cycle_anchor * 1000).getUTCDate();
   }
