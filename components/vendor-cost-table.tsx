@@ -45,6 +45,8 @@ function Row({ v }: { v: VendorCost }) {
 export function VendorCostTable({ className = "" }: { className?: string }) {
   const monthly = VENDOR_COSTS.filter((v) => v.kind === "monthly");
   const perJob = VENDOR_COSTS.filter((v) => v.kind === "per_job");
+  // S834b: a manager's cut of the rent; not a monthly app, never summed.
+  const shareOfRent = VENDOR_COSTS.filter((v) => v.kind === "share_of_rent");
   const sub = monthlySubtotalCad();
   const starter = TIERS.starter;
   const starterPrice = `CA$${Math.round(starter.priceCents / 100)}`;
@@ -74,6 +76,16 @@ export function VendorCostTable({ className = "" }: { className?: string }) {
           <Row key={v.job} v={v} />
         ))}
       </ul>
+      {shareOfRent.length > 0 && (
+        <>
+          <p className="mt-4 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">Or someone you would pay from the rent</p>
+          <ul className="list-none p-0">
+            {shareOfRent.map((v) => (
+              <Row key={v.job} v={v} />
+            ))}
+          </ul>
+        </>
+      )}
       <p className="mt-3 text-[0.78rem] leading-snug text-[#59655f]">
         {VENDOR_COSTS_NOTE} US prices converted at the{" "}
         <a href={USD_CAD.sourceUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-[#15211d]">

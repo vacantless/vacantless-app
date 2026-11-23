@@ -20,12 +20,13 @@ export type VendorCost = {
   sourceUrl: string;
   /** YYYY-MM-DD the price was read on the source. */
   checkedOn: string;
-  /** monthly app, or a fee each time the job is done. */
-  kind: "monthly" | "per_job";
-  /** S832c: the price as numbers, in the vendor's own currency. */
+  /** monthly app, a fee each time the job is done, or (S834b) a share of the rent. */
+  kind: "monthly" | "per_job" | "share_of_rent";
+  /** S832c: the price as numbers, in the vendor's own currency. S834b: for
+   *  share_of_rent, low is the percent of the monthly rent. */
   amount: { currency: "USD" | "CAD"; low: number; high?: number };
   /** S832d: what the price is per, shown after the Canadian-dollar price. */
-  per: "a month" | "an hour" | "a notice" | "a photo";
+  per: "a month" | "an hour" | "a notice" | "a photo" | "of the monthly rent";
   /** S832c: one worked example, unit price times a count the reader sees. */
   example?: { count: number; label: string };
 };
@@ -39,6 +40,9 @@ export const USD_CAD = {
   date: "2026-11-20",
   sourceUrl: "https://www.bankofcanada.ca/rates/daily-digest/",
 } as const;
+
+/** S834b: the rent used for the worked example on a share-of-rent line. */
+export const SHARE_EXAMPLE_RENT = 1500;
 
 export const VENDOR_COSTS: readonly VendorCost[] = [
   {
@@ -134,6 +138,21 @@ export const VENDOR_COSTS: readonly VendorCost[] = [
     checkedOn: "2026-11-23",
     kind: "per_job",
   },
+  {
+    // S834b (Noam 2026-11-23: "hiring a property manager to collect rent is
+    // definitely part of the job"). The tier that matches Vacantless: finding
+    // the tenant and collecting the rent, not full management.
+    job: "A property manager to find tenants and collect rent",
+    inVacantless: "Renters answered and booked, ads posted, rent collected by bank debit into your own account. Showings and visits in person stay with you",
+    typicalPrice: "7% of monthly rent",
+    amount: { currency: "CAD", low: 7 },
+    per: "of the monthly rent",
+    example: { count: SHARE_EXAMPLE_RENT, label: "a $1,500 rent" },
+    vendor: "Bark Canada, tenant-find and rent collection",
+    sourceUrl: "https://www.bark.com/en/ca/property-management/property-management-costs",
+    checkedOn: "2026-11-23",
+    kind: "share_of_rent",
+  },
 ];
 
 export const VENDOR_COSTS_HEAD = "What these jobs typically cost elsewhere";
@@ -151,6 +170,7 @@ function cadText(n: number): string {
 
 /** The line's price in Canadian dollars, e.g. "about CA$21 to CA$27". */
 export function cadPriceText(v: VendorCost): string {
+  if (v.kind === "share_of_rent") return `about ${v.amount.low}% ${v.per}`;
   const lo = toCad(v.amount.low, v.amount.currency);
   const hi = v.amount.high != null ? toCad(v.amount.high, v.amount.currency) : null;
   const range = hi != null && Math.round(hi) !== Math.round(lo) ? `${cadText(lo)} to ${cadText(hi)}` : cadText(lo);
@@ -160,6 +180,9 @@ export function cadPriceText(v: VendorCost): string {
 /** The worked example, e.g. "a 20-photo listing: about CA$57". */
 export function exampleText(v: VendorCost): string | null {
   if (!v.example) return null;
+  if (v.kind === "share_of_rent") {
+    return `${v.example.label}: about ${cadText((v.amount.low / 100) * v.example.count)} a month`;
+  }
   const total = toCad(v.amount.low * v.example.count, v.amount.currency);
   return `${v.example.label}: ${v.amount.currency === "USD" ? "about " : ""}${cadText(total)}`;
 }

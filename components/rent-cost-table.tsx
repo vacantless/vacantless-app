@@ -2,6 +2,7 @@
 // Numbers live in lib/rent-rail-costs.ts (read from each provider's own page).
 import {
   RAIL_COSTS_CHECKED,
+  RAIL_COST_SOURCES,
   RAIL_TABLE_RENT_CENTS,
   RAIL_TABLE_ROWS,
   ROTESSA,
@@ -42,7 +43,15 @@ export function RentCostTable({ compact = false }: { compact?: boolean }) {
         Rotessa charges {dollars(ROTESSA.monthlyCents)} a month + {dollars(ROTESSA.perPaymentCents)} a payment
         {from ? `, so it costs less from ${from} rentals` : ""}. A bounced payment costs {dollars(STRIPE_PAD.failedCents)} on Stripe, {dollars(ROTESSA.nsfCents)} on Rotessa.
         Each tenant&apos;s online bank check when they sign up costs {dollars(STRIPE_PAD.bankCheckCents)} once on Stripe, {dollars(ROTESSA.bankCheckCents)} on Rotessa.
-        You pay them directly; Vacantless adds nothing. Prices from their sites, {RAIL_COSTS_CHECKED}.
+        You pay them directly; Vacantless adds nothing. Prices from{" "}
+        <a href={RAIL_COST_SOURCES.stripe} target="_blank" rel="noopener noreferrer" className="underline">
+          Stripe&apos;s
+        </a>{" "}
+        and{" "}
+        <a href={RAIL_COST_SOURCES.rotessa} target="_blank" rel="noopener noreferrer" className="underline">
+          Rotessa&apos;s
+        </a>{" "}
+        pricing pages, {RAIL_COSTS_CHECKED}.
       </p>
     </div>
   );

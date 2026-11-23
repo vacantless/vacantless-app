@@ -18,6 +18,12 @@
 
 export const RAIL_COSTS_CHECKED = "November 2026";
 
+/** S834b: the pages the figures come from, linked under every cost table. */
+export const RAIL_COST_SOURCES = {
+  stripe: "https://stripe.com/en-ca/pricing/local-payment-methods",
+  rotessa: "https://rotessa.com/pricing/",
+} as const;
+
 export const STRIPE_PAD = {
   pct: 0.01,
   fixedCents: 40,

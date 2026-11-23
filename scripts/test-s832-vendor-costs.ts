@@ -16,10 +16,13 @@ const read = (p: string) => readFileSync(p, "utf8");
 
 // 1. Every vendor line has a job, a feature, a price with a named currency, a
 // vendor, an https source and a real date (Noam's rule, 2026-11-22).
-ok("eight vendor lines", VENDOR_COSTS.length === 8);
+ok("nine vendor lines", VENDOR_COSTS.length === 9);
 for (const v of VENDOR_COSTS) {
   ok(`${v.job}: has a Vacantless feature`, v.inVacantless.trim().length > 10);
-  ok(`${v.job}: price names its currency`, /\b(US|CA)\$\d/.test(v.typicalPrice));
+  ok(
+    `${v.job}: price names its currency`,
+    v.kind === "share_of_rent" ? /^\d+% of monthly rent$/.test(v.typicalPrice) : /\b(US|CA)\$\d/.test(v.typicalPrice),
+  );
   ok(`${v.job}: https source`, /^https:\/\/[^\s]+$/.test(v.sourceUrl));
   ok(`${v.job}: vendor named`, v.vendor.trim().length > 3);
   ok(`${v.job}: checkedOn is a date`, /^\d{4}-\d{2}-\d{2}$/.test(v.checkedOn) && !Number.isNaN(Date.parse(v.checkedOn)));
@@ -63,8 +66,14 @@ ok("homepage touch-up names uploads and folders", /upload or pull from your Driv
 // 5. S832c: one Canadian-dollar price, a monthly subtotal, one worked example.
 for (const v of VENDOR_COSTS) {
   const shown = v.typicalPrice.replace(/,/g, "");
-  ok(`${v.job}: numbers match the shown price`, shown.includes(`$${v.amount.low}`) && (v.amount.high == null || shown.includes(`$${v.amount.high}`)));
-  ok(`${v.job}: CAD text names its unit`, /^(about )?CA\$\d+( to CA\$\d+)? (a month|an hour|a notice|a photo)$/.test(cadPriceText(v)));
+  const unit = v.kind === "share_of_rent" ? (n: number) => `${n}%` : (n: number) => `$${n}`;
+  ok(`${v.job}: numbers match the shown price`, shown.includes(unit(v.amount.low)) && (v.amount.high == null || shown.includes(unit(v.amount.high))));
+  ok(
+    `${v.job}: CAD text names its unit`,
+    v.kind === "share_of_rent"
+      ? /^about \d+% of the monthly rent$/.test(cadPriceText(v))
+      : /^(about )?CA\$\d+( to CA\$\d+)? (a month|an hour|a notice|a photo)$/.test(cadPriceText(v)),
+  );
 }
 ok("rate dated", /^\d{4}-\d{2}-\d{2}$/.test(USD_CAD.date) && USD_CAD.rate > 1 && USD_CAD.rate < 2);
 ok("toCad USD", Math.abs(toCad(10, "USD") - 14.325) < 1e-9);
@@ -73,8 +82,20 @@ const sub = monthlySubtotalCad();
 ok("subtotal low = 14.33 + 21.49 + 13 + 30 + 17.19 = 96", sub.low === 96);
 ok("subtotal high = 14.33 + 27.22 + 13 + 30 + 17.19 = 102", sub.high === 102);
 ok("posting help reads per hour", cadPriceText(VENDOR_COSTS.find((v) => v.kind === "per_job")!) === "about CA$14 to CA$29 an hour");
-ok("only the photo line has an example", VENDOR_COSTS.filter((v) => v.example).length === 1 && Boolean(VENDOR_COSTS.find((v) => v.example)?.job.includes("photo")));
-ok("photo example text", exampleText(VENDOR_COSTS.find((v) => v.example)!) === "a 20-photo listing: about CA$57");
+ok("photo and manager lines have examples", VENDOR_COSTS.filter((v) => v.example).length === 2);
+ok("photo example text", exampleText(VENDOR_COSTS.find((v) => v.job.includes("photo"))!) === "a 20-photo listing: about CA$57");
+// S834b: the manager line is a share of the rent, worked on $1,500, never summed.
+const pm = VENDOR_COSTS.find((v) => v.kind === "share_of_rent");
+ok("manager line present", Boolean(pm) && pm!.amount.low === 7);
+ok("manager price text", pm ? cadPriceText(pm) === "about 7% of the monthly rent" : false);
+ok("manager example", pm ? exampleText(pm) === "a $1,500 rent: about CA$105 a month" : false);
+ok("manager says what stays with you", Boolean(pm && /in person stay with you/.test(pm.inVacantless)));
+ok("subtotal ignores the manager line", monthlySubtotalCad().low === 96);
+// S834b (Noam: "the sources are good proof"): the rent cost table links its sources.
+const railTable = read("components/rent-cost-table.tsx");
+ok("rent cost table links Stripe and Rotessa pricing", railTable.includes("RAIL_COST_SOURCES.stripe") && railTable.includes("RAIL_COST_SOURCES.rotessa"));
+const comp834 = read("components/vendor-cost-table.tsx");
+ok("every vendor row links its source", comp834.includes("href={v.sourceUrl}"));
 const comp = read("components/vendor-cost-table.tsx");
 ok("per-job lines never summed", !/perJob\.reduce|monthlySubtotalCad\(perJob/.test(comp));
 ok("subtotal shown beside Starter", comp.includes("These apps together") && comp.includes("starterPrice"));
