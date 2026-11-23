@@ -32,6 +32,10 @@ export function installState(input: { android: boolean; standalone: boolean; pro
 export const INSTALL_BUTTON_LABEL = "Install Vacantless on this phone";
 export const INSTALLED_LINE = "Vacantless is installed on this phone. It is in your Share menu.";
 
+/** S833f: the share screen ends with a Done button that closes it. */
+export const SHARE_DONE_LABEL = "Done";
+export const SHARE_COPIED_LINE = "Copied. Tap Done, then paste it in the chat.";
+
 /** True when the line says the renter is in Renters now (saved, or already there). */
 export function shareSaved(line: string): boolean {
   return /^Saved /.test(line) || / is already in Renters/.test(line);
@@ -70,7 +74,7 @@ a.btn,button{display:block;width:100%;box-sizing:border-box;text-align:center;bo
 <body>
 <main>
 <div class="card">
-<h1>${input.ok ? "Done" : "Not saved"}</h1>
+<h1>${input.ok ? "Saved" : "Not saved"}</h1>
 ${lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n")}
 </div>
 ${
@@ -79,24 +83,31 @@ ${
 <h1>Your reply</h1>
 <pre id="reply">${escapeHtml(reply)}</pre>
 <button class="primary" id="copy" type="button">Copy reply</button>
-<p id="copied" style="display:none;margin-top:8px">Copied. Go back to the chat and paste it.</p>
+<p id="copied" style="display:none;margin-top:8px">${SHARE_COPIED_LINE}</p>
 </div>`
     : ""
 }
 ${input.link ? `<a class="btn plain" href="${escapeHtml(input.link)}">Open this renter</a>` : ""}
 <a class="btn plain" href="/dashboard/replies">Open Quick replies</a>
+<button class="primary" id="done" type="button">${SHARE_DONE_LABEL}</button>
 </main>
+<script>
 ${
   reply
-    ? `<script>
-document.getElementById("copy").addEventListener("click", function () {
+    ? `document.getElementById("copy").addEventListener("click", function () {
   var t = document.getElementById("reply").textContent || "";
   function done() { document.getElementById("copied").style.display = "block"; }
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, function () {});
-});
-</script>`
+});`
     : ""
 }
+// S833f: Done closes this screen and goes back to the chat. If the phone keeps
+// it open, it goes to the app's home so the next share starts clean.
+document.getElementById("done").addEventListener("click", function () {
+  try { window.close(); } catch (e) {}
+  setTimeout(function () { location.replace("/dashboard"); }, 300);
+});
+</script>
 </body>
 </html>`;
 }

@@ -3,7 +3,7 @@
 // Run: npx tsx scripts/test-s821b-start-here-android-share.ts
 import { readFileSync } from "node:fs";
 import { computeOnboardingState } from "../lib/onboarding-wizard";
-import { ANDROID_SHARE_NOTE, ANDROID_SHARE_STEPS, INSTALL_BUTTON_LABEL, INSTALLED_LINE, installState, SHARE_TARGET_FIELD, SHARE_TARGET_PATH, escapeHtml, renderSharePage, shareSaved } from "../lib/share-target";
+import { ANDROID_SHARE_NOTE, ANDROID_SHARE_STEPS, SHARE_DONE_LABEL, SHARE_COPIED_LINE, INSTALL_BUTTON_LABEL, INSTALLED_LINE, installState, SHARE_TARGET_FIELD, SHARE_TARGET_PATH, escapeHtml, renderSharePage, shareSaved } from "../lib/share-target";
 import { PHONE_REPLY_NOTE_MARKS } from "../lib/reply-kit-server";
 import { sendResultLine } from "../lib/send-shortcut";
 import manifest from "../app/manifest";
@@ -81,9 +81,10 @@ ok("a miss does not", !shareSaved(sendResultLine({ outcome: "no_renter" })) && !
 ok("escapeHtml", escapeHtml(`<b a="1">&'`) === "&lt;b a=&quot;1&quot;&gt;&amp;&#39;");
 const html = renderSharePage({ line: "Saved <Maya> in Renters.", reply: "Hi Maya,\n</pre><script>x</script>", link: "/dashboard/leads/abc", ok: true });
 ok("the page escapes the renter's words", html.includes("Saved &lt;Maya&gt; in Renters.") && !html.includes("<script>x</script>") && html.includes("&lt;/pre&gt;"));
-ok("the page has Copy reply and the renter link", html.includes('id="copy"') && html.includes('href="/dashboard/leads/abc"') && html.includes("<h1>Done</h1>"));
+ok("the page has Copy reply and the renter link", html.includes('id="copy"') && html.includes('href="/dashboard/leads/abc"') && html.includes("<h1>Saved</h1>"));
 const miss = renderSharePage({ line: "We could not read that picture.", reply: null, link: null, ok: false });
-ok("a miss has no reply box and no script", miss.includes("<h1>Not saved</h1>") && !miss.includes('id="copy"') && !miss.includes("<script>"));
+// S833f: a miss now has the Done button's script, but still no reply box or copy handler.
+ok("a miss has no reply box and no copy script", miss.includes("<h1>Not saved</h1>") && !miss.includes('id="copy"') && !miss.includes('getElementById("copy")'));
 // S833b: one-tap install button on Android.
 ok("installed app says installed", installState({ android: true, standalone: true, promptReady: true }) === "installed");
 ok("Chrome offers install: button shows", installState({ android: true, standalone: false, promptReady: true }) === "ready");
@@ -114,6 +115,16 @@ ok("iPhone home-screen app is never told it is in the Share menu", installState(
   ok("reply cards come from the renter's account", route.includes("const replyOrgId = r.orgId ?? org.id;") && route.includes("loadReplyKitCards(admin, admin, replyOrgId,"));
   ok("phone comes from the renter's account", route.includes('.select("public_contact_phone").eq("id", replyOrgId)'));
   ok("reply uses the topic", route.includes("topic: r.topic ?? null"));
+}
+// S833f: a Done button closes the share screen (Noam: "Done" should reset it).
+{
+  const withReply = renderSharePage({ line: "Saved Kym in Renters.", reply: "Hi Kym", link: "/dashboard/leads/x", ok: true });
+  const noReply = renderSharePage({ line: "Saved Kym in Renters.", reply: null, link: null, ok: true });
+  ok("heading says Saved, not Done", withReply.includes("<h1>Saved</h1>") && !withReply.includes("<h1>Done</h1>"));
+  ok("Done button on every share screen", [withReply, noReply].every((h) => h.includes(`id="done"`) && h.includes(`>${SHARE_DONE_LABEL}</button>`)));
+  ok("Done closes, then falls back to the app home", withReply.includes("window.close()") && withReply.includes('location.replace("/dashboard")'));
+  ok("copied line says to tap Done", withReply.includes(SHARE_COPIED_LINE) && SHARE_COPIED_LINE.includes("Done"));
+  ok("copy still works with Done added", withReply.includes('getElementById("copy")'));
 }
 ok("no em dash in the new copy", ![html, miss, ...ANDROID_SHARE_STEPS, connect.description, phone.description].some((t) => t.includes("—")));
 
