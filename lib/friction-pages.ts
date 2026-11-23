@@ -101,7 +101,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
       "Or the tenant texts your number, and it becomes a repair request.",
       "A real emergency reaches your phone at once, any hour.",
       "Your trade accepts, quotes and books from a link.",
-      "See trades other landlords near you rated.",
+      "Rate each trade after the job, so you know who to call next time.",
       "A unit that keeps reporting the same thing is flagged.",
     ],
     plan: "Any paid plan, from CA$29 a month.",
@@ -187,7 +187,7 @@ export const FRICTION_PAGES: FrictionPage[] = [
       "Then the T776 is a copy job.",
     ],
     how: [
-      "Costs come in from your bank, a bank file, repairs, or typed in.",
+      "Costs come in from a bank file, from repairs, or typed in.",
       "One owner statement per building.",
       "Your T776 summary and one zip for your accountant.",
     ],

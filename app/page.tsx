@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { RentCostTable } from "@/components/rent-cost-table";
+import { VendorCostTable } from "@/components/vendor-cost-table";
 import { MarketingHeader } from "@/components/marketing-chrome";
 import { OPERATOR_LINE } from "@/lib/operator-line";
 import { LEASING_PROOF_STATS, POSTING_PROOF } from "@/lib/proof-stats";
@@ -56,6 +57,7 @@ export default async function Home() {
         <SeeItWork />
         <LeasingProof />
         <Automations />
+        <LessTyping />
         <AfterTheLease />
         <HowItWorks />
         <LittleThings />
@@ -511,7 +513,7 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img?: stri
       "They tap where a unit is: notice given, reno, cleaning, photos in, rented, moved in, with a ready-by date",
       "Photos are in? New photos come in from your Google Drive or Dropbox folder, brightened, with the originals kept",
       "Tenant gave notice? The unit is on your relist list with the move-out date",
-      "Rented takes your ads down. Moved in starts the tenancy",
+      "Rented takes your ads down when we post them for you. Moved in starts the tenancy",
       "Each unit's stage shows on your rentals, and you hear when one stalls",
     ],
     alt: "A crew member's turnover page: each unit with its stage, date and the next buttons to tap",
@@ -537,7 +539,7 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img?: stri
       "They pick when they can be home. Your trade accepts, quotes and books from a link",
       "Vacantless finds the time that works for both, tells the tenant and reminds them the day before",
       "Mark it done and the cost goes on your books",
-      "Need a trade? See the ones other landlords near you used, with their rating out of 5",
+      "Rate each trade after the job, so you know who to call next time",
     ],
     img: "/marketing/auto-repairs.png",
     alt: "A repair job with the tenant's free times, the technician's window and the time that works for both",
@@ -547,7 +549,7 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img?: stri
     title: "Rent in on the first. Tax time without the shoebox.",
     points: [
       "Rent by pre-authorized debit through your own Stripe or Rotessa account, or log e-transfers; you see who paid and who owes",
-      "Costs come in from your bank, a bank file, repairs, or typed in",
+      "Costs come in from a bank file, from repairs, or typed in",
       "One owner statement per building, and your T776 rental tax summary line by line",
       "One zip for your accountant: ledger, T776, statements, rent roll and QuickBooks or Xero files",
     ],
@@ -598,6 +600,75 @@ function Automations() {
               </figure>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* S832 (PLAN-S829 item 4): the reading and photo features, named on the
+   page. Data sheet import is Free (S732); lease reading is on paid plans
+   (S631); touch-up runs on photos pulled from a Drive or Dropbox folder only
+   (lib/photo-touchup.ts, S789e). The pair is a real Pillette Rd photo from
+   the "Copy of 833 Pillette Unit 3" test rental, before and after touch-up. */
+const LESS_TYPING: { title: string; body: string; plan?: string }[] = [
+  {
+    title: "Got a realtor's data sheet or an old ad?",
+    body: "Drop the PDF or paste the text. The rental's details fill in for you. Check them and save.",
+  },
+  {
+    title: "Have the signed lease?",
+    body: "Drop it in and the tenancy fills itself: rent, dates and tenants. ID numbers are never saved.",
+    plan: "Paid plans",
+  },
+];
+
+function LessTyping() {
+  return (
+    <section id="less-typing" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
+        <SectionHead title="Less typing. Brighter photos.">
+          Vacantless reads what you already have, and brightens the photos your crew takes on a phone.
+        </SectionHead>
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+          <div className="grid gap-4">
+            {LESS_TYPING.map((c) => (
+              <div key={c.title} className="rounded-lg border border-[#d9e1dc] bg-white p-5">
+                <h3 className="mb-1.5 text-[1.02rem] font-bold">
+                  {c.title}
+                  {c.plan ? <span className="ml-2 text-xs font-semibold text-[#5a6b64]">{c.plan}</span> : null}
+                </h3>
+                <p className="text-[0.92rem] leading-relaxed text-[#59655f]">{c.body}</p>
+              </div>
+            ))}
+          </div>
+          <figure className="m-0 rounded-lg border border-[#d9e1dc] bg-white p-4">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <img
+                  src="/marketing/touchup-before.jpg"
+                  alt="An empty room photo straight from a phone, a little dark"
+                  loading="lazy"
+                  decoding="async"
+                  className="aspect-[3/4] w-full rounded-md object-cover"
+                />
+                <p className="mt-1.5 text-center text-[0.82rem] font-semibold text-[#59655f]">From the phone</p>
+              </div>
+              <div>
+                <img
+                  src="/marketing/touchup-after.jpg"
+                  alt="The same room photo after Vacantless touch-up, brighter"
+                  loading="lazy"
+                  decoding="async"
+                  className="aspect-[3/4] w-full rounded-md object-cover"
+                />
+                <p className="mt-1.5 text-center text-[0.82rem] font-semibold text-[#15211d]">After touch-up</p>
+              </div>
+            </div>
+            <figcaption className="mt-3 text-[0.88rem] leading-snug text-[#273832]">
+              Photos your crew drops in your Google Drive or Dropbox folder come in brighter: shadows opened up, colour lifted, a light sharpen. Your original is kept, and one click switches back.
+            </figcaption>
+          </figure>
         </div>
       </div>
     </section>
@@ -784,7 +855,7 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
     head: "Turnovers and upkeep",
     items: [
       { text: "Tenant gave notice? Your crew taps it with the date, and one click relists the unit." },
-      { text: "Phone photos come in brighter. One click switches back to the originals." },
+      { text: "Phone photos pulled from your Drive or Dropbox folder come in brighter. One click switches back to the originals." },
       { text: "Booked a photographer? They get a one-time link for that unit, and their photos come straight in." },
       { text: "Water heater or furnace near the end of its life? You get a reminder." },
       { text: "Move-in, move-out and routine inspections on your calendar, with a reminder." },
@@ -919,7 +990,7 @@ function Pricing() {
             2026-11-10 17:10: Lease it, Run it, Year-end). lib/billing.ts. */}
         <div id="paid-plans" className="mt-4 rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
           <h3 className="mb-4 text-[1.08rem] font-semibold">Every paid plan includes</h3>
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {PAID_FEATURE_GROUPS.map((g) => (
               <div key={g.head}>
                 <p className="mb-2 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">
@@ -940,6 +1011,7 @@ function Pricing() {
             {PAID_SUPPORT_LINE}. More than 75 rentals? Portfolio adds CA${Math.round(EXTRA_RENTAL.priceCents / 100)} a rental a month.
           </p>
         </div>
+        <VendorCostTable className="mt-4" />
         <PostingAddonCard />
         <RentOnlyCard />
         <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-[#6ca58d] bg-[#f4f7f5] p-[18px] sm:flex-row sm:items-center">

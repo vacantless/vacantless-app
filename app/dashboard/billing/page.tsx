@@ -18,6 +18,8 @@ import {
   EXTRA_RENTAL,
   isBandPlan,
   bandForRentals,
+  PAID_FEATURE_GROUPS,
+  PAID_SUPPORT_LINE,
 } from "@/lib/billing";
 import {
   getStripe,
@@ -43,6 +45,7 @@ import {
   startPostingOnlyCheckout,
 } from "./actions";
 import { PageHeader } from "@/components/ui";
+import { VendorCostTable } from "@/components/vendor-cost-table";
 import {
   FOUNDING20_OFFER,
   foundingChannel,
@@ -710,7 +713,9 @@ export default async function BillingPage({
               ) : null}
               <p className="mt-1 text-sm text-gray-500">{tier.blurb}</p>
               <ul className="mt-4 flex-1 space-y-2 text-sm text-gray-700">
-                {tier.features.map((f) => (
+                {/* S832: a band card shows its limits; the full list, grouped
+                    by job, sits once below the cards (PAID_FEATURE_GROUPS). */}
+                {(isBandPlan(key) ? [...tier.features.slice(0, 2), "Everything in the list below"] : tier.features).map((f) => (
                   <li key={f} className="flex items-start gap-2">
                     <span className="mt-0.5 text-brand">✓</span>
                     <span>{f}</span>
@@ -782,6 +787,29 @@ export default async function BillingPage({
           );
         })}
       </div>
+
+      {/* S832 (PLAN-S829 item 4 and 4b): what every paid plan does, grouped
+          by job, then what those jobs typically cost elsewhere. */}
+      <div id="paid-plans" className="mt-6 rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
+        <h3 className="mb-4 text-base font-semibold text-gray-900">Every paid plan includes</h3>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {PAID_FEATURE_GROUPS.map((g) => (
+            <div key={g.head}>
+              <p className="mb-2 text-xs font-extrabold uppercase tracking-[0.08em] text-brand">{g.head}</p>
+              <ul className="space-y-2 text-sm text-gray-700">
+                {g.items.map((f) => (
+                  <li key={f} className="flex items-start gap-2">
+                    <span className="mt-0.5 text-brand">✓</span>
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-sm text-gray-500">{PAID_SUPPORT_LINE}.</p>
+      </div>
+      <VendorCostTable className="mt-4" />
 
       {/* S713: the Posting add-on (CA$49 a month on top of Growth). */}
       {addonOffer === "unavailable" ? (

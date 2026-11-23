@@ -557,6 +557,8 @@ export const TIERS: Record<TierKey, TierInfo> = {
       "Self-booked viewings and email reminders",
       "Group viewings: set how many renters can book each time",
       "Every renter in one list",
+      // S832: data sheet import is a Free feature (S732), named on the card.
+      "Paste an old ad or drop a realtor's data sheet, and the rental fills itself",
       "Posts to your Facebook Page, free",
       "We post it to Kijiji, Rentals.ca and Zumper for you. Kijiji charges its own ad fee",
       // S790b: unit progress links are on every plan (S788/S789).
@@ -640,33 +642,52 @@ export const TIERS: Record<TierKey, TierInfo> = {
 };
 
 // S779: one feature list for every paid plan, grouped for the homepage card
-// (Lease it, Run it, Year-end). app/page.tsx and the billing page read these,
-// so edit them here only. Each line is a shipped feature (S728 wording).
+// and the billing page. app/page.tsx and the billing page read these, so edit
+// them here only. S832 (PLAN-S832, Noam 2026-11-23): grouped by the job it does
+// for the landlord, and every line checked against the live code (audit in
+// PLAN-S832-MARKETING-PASS-AND-VENDOR-TABLE.md). No parentheses, no em dashes
+// (scripts/test-books-growth.ts).
 export const PAID_FEATURE_GROUPS: { head: string; items: string[] }[] = [
   {
-    head: "Lease it",
+    head: "Find renters",
     items: [
       "Booking pages, instant replies and reminders for every rental",
-      "Text renters their confirmations and reminders from your own local number; they reply YES to confirm",
-      "Renter applications, questions before booking and a waiting list",
+      "Paste an old ad or drop a realtor's data sheet, and the rental fills itself",
+      "Renter wrote in a chat? Send the screenshot and they land in your list, with a reply ready",
+      "Quick replies: ready answers on pets, parking and utilities, written for you",
     ],
   },
   {
-    head: "Run it",
+    head: "Viewings",
     items: [
-      "Rent by pre-authorized debit through your own Stripe or Rotessa account",
-      "Repairs: tenants report from a link or a text and pick times; emergencies alert you at once; find trades other landlords rated; your trade accepts, quotes and books from a link",
+      "Text renters their confirmations and reminders from your own local number; they reply YES to confirm",
+      "Group viewings, and viewings at one building booked close together",
+      "Your showing agent gets a phone page with the times and the lockbox note",
+    ],
+  },
+  {
+    head: "Applications and paperwork",
+    items: [
+      "Renter applications, questions before booking and a waiting list",
+      "Applications and offers signed online; one credit check link for the applicant you pick",
+      "Drop in a signed lease and the tenancy fills itself: rent, dates and tenants",
       "Ontario LTB notices filled for you: N4, N5, N8, N12, L1 and more",
       "Rent increase reminders with the N1 filled in",
-      "Drop in a signed lease and the tenancy fills itself: rent, dates and tenants",
-      // S790b: unit progress (S788/S789), on every plan; named here too.
-      "Turnover links for your crew: each unit's stage, Drive photos pulled in, ads down when rented",
     ],
   },
   {
-    head: "Year-end",
+    head: "Rent and repairs",
     items: [
-      "Expenses from your bank or typed in, and an owner statement per building",
+      "Rent by pre-authorized debit through your own Stripe or Rotessa account",
+      "Repairs: tenants report from a link or a text and pick times; emergencies alert you at once; your trade accepts, quotes and books from a link; rate each trade after the job",
+      "Turnover links for your crew: each unit's stage, and photos from your Drive or Dropbox folder brightened, originals kept",
+    ],
+  },
+  {
+    head: "Reports and year-end",
+    items: [
+      "A monthly report for each rental: days on the market, what each site cost, renters and viewings",
+      "Expenses from a bank file or typed in, and an owner statement per building",
       "Books & Tax: your T776 summary, bank matching, an income statement and one zip for your accountant",
     ],
   },
