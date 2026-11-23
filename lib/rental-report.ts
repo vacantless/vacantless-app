@@ -283,3 +283,18 @@ export function currentMonthFor(torontoToday: string): { monthStart: string; mon
   const nextM = m === 12 ? 1 : m + 1;
   return { monthStart: `${y}-${pad(m)}-01`, monthEnd: `${nextY}-${pad(nextM)}-01`, key: `${y}-${pad(m)}` };
 }
+
+/**
+ * S836a (REVIEW-S835 finding 11): what one rental's monthly send came to.
+ * "failed": nobody got it, so the sweep hands the month back and the next
+ * 15-minute run on the 1st tries again. "partial": someone got it, so the
+ * month stays claimed (no one gets it twice) but the run still says so.
+ * "no_recipient": nobody to send to, nothing to retry. Pure.
+ */
+export type ReportSendOutcome = "sent" | "partial" | "failed" | "no_recipient";
+export function reportSendOutcome(recipients: number, sent: number): ReportSendOutcome {
+  if (recipients <= 0) return "no_recipient";
+  if (sent <= 0) return "failed";
+  if (sent < recipients) return "partial";
+  return "sent";
+}

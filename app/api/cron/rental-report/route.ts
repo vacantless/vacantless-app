@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendRentalReportEmail } from "@/lib/email";
 import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { torontoDateHour } from "@/lib/health-digest";
-import { reportMonthFor } from "@/lib/rental-report";
+import { reportMonthFor, reportSendOutcome } from "@/lib/rental-report";
 import { loadRentalReport, type ReportProperty } from "@/lib/rental-report-server";
 import { loadExtraRecipients, withExtras } from "@/lib/message-recipients-server";
 
@@ -11,6 +11,10 @@ import { loadExtraRecipients, withExtras } from "@/lib/message-recipients-server
 // from 9 am Toronto time, covering the month before. Runs in the 15-minute
 // sweep; the month stamp on the rental makes it once per month.
 // ?dry=1 reports without sending or stamping; ?force=1 ignores the date (dry only).
+// S836a: the month is claimed before sending so a second runner skips. If
+// nobody got the email, the claim is handed back so the next sweep on the 1st
+// retries, and the sweep answers ok:false so the health email and the
+// two-in-a-row alert show it. A partial send keeps the claim (no repeats).
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -49,6 +53,7 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ ok: false, reason: `read:${error.code ?? "failed"}` }, { status: 500 });
 
   let sent = 0;
+  const failed: string[] = [];
   const report: { property: string; action: string; facts?: unknown }[] = [];
   const started = Date.now();
   for (const p of (data ?? []) as unknown as Row[]) {
@@ -88,12 +93,37 @@ export async function GET(req: NextRequest) {
       if (e) owners.push(e);
     }
     const to = withExtras(owners, await loadExtraRecipients(admin, p.organization_id, "you-rental-report"));
+    let delivered = 0;
+    let why: string | undefined;
     for (const email of to) {
-      const res = await sendRentalReportEmail({ to_email: email, subject: r.subject, html: r.html, org_name: org.name, logo_url: org.logo_url }).catch(
-        () => ({ sent: false }),
-      );
-      if (res.sent) sent++;
+      const res: { sent: boolean; reason?: string } = await sendRentalReportEmail({
+        to_email: email,
+        subject: r.subject,
+        html: r.html,
+        org_name: org.name,
+        logo_url: org.logo_url,
+      }).catch((e: unknown) => ({ sent: false, reason: `threw:${(e as Error)?.message ?? "error"}` }));
+      if (res.sent) {
+        sent++;
+        delivered++;
+      } else if (!why) why = res.reason;
     }
+    const outcome = reportSendOutcome(to.length, delivered);
+    if (outcome === "failed") {
+      // Hand the month back, only if it is still ours, so the next sweep retries.
+      await admin
+        .from("properties")
+        .update({ rental_report_sent_month: p.rental_report_sent_month })
+        .eq("id", p.id)
+        .eq("rental_report_sent_month", range.key);
+    }
+    if (outcome !== "sent") {
+      failed.push(`${p.address ?? p.id}:${outcome}${why ? `:${why.slice(0, 80)}` : ""}`);
+      report.push({ property: p.address ?? p.id, action: outcome === "failed" ? "send_failed_will_retry" : outcome, facts: why });
+    }
+  }
+  if (failed.length) {
+    return NextResponse.json({ ok: false, reason: `report_send_${failed.length}_not_sent`, sent, dry, month: range.key, failed, report });
   }
   return NextResponse.json({ ok: true, sent, dry, month: range.key, report });
 }
