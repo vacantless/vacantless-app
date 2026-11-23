@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { grantReferralCredit } from "@/lib/referral-credit-server";
 import { claimStripeEvent, releaseStripeEvent } from "@/lib/stripe-event-claim";
 import { notifyRentPaymentFailed } from "@/lib/rent-failed-notify";
+import { recordStripeNsf } from "@/lib/nsf-charge-server";
 import {
   planForPriceId,
   planForSubscriptionEvent,
@@ -432,6 +433,15 @@ async function reconcileRent(
   // Never throws: a failed email must not make Stripe resend the event.
   if (event.type === "invoice.payment_failed") {
     const amountDue = (event.data.object as Stripe.Invoice).amount_due;
+    // S835c: the fee as an expense, and an NSF charge on the tenancy. One
+    // per failed invoice; never throws.
+    const failedInvoice = event.data.object as Stripe.Invoice;
+    await recordStripeNsf(admin, {
+      tenancyId: tenancy.id,
+      invoiceId: typeof failedInvoice.id === "string" ? failedInvoice.id : null,
+      amountDueCents: typeof amountDue === "number" ? amountDue : null,
+      incurredOn: new Date((typeof event.created === "number" ? event.created : Date.now() / 1000) * 1000).toISOString().slice(0, 10),
+    });
     await notifyRentPaymentFailed(admin, tenancy.id, typeof amountDue === "number" ? amountDue : null).catch((e) =>
       console.error("[stripe-webhook] rent failed notice", e instanceof Error ? e.message : e),
     );

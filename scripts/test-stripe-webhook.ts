@@ -254,6 +254,10 @@ function loadRoute(event: FakeEvent, admin: unknown, subscriptions: Record<strin
           releaseStripeEvent: async () => undefined,
         };
       }
+      if (id === "@/lib/nsf-charge-server") {
+        // S835c: recording the fee has its own checks (test-s835c-nsf-charges).
+        return { recordStripeNsf: async () => ({ recorded: false }) };
+      }
       if (id === "@/lib/rent-failed-notify") {
         // S835b: the owners' failed-rent email has its own checks
         // (test-stripe-rent-stop); here it sends nothing.

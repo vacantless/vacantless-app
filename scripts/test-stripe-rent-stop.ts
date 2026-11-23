@@ -276,7 +276,7 @@ const DEC18 = Date.UTC(2026, 11, 18, 12) / 1000;
   const hook = readFileSync("app/api/stripe/webhook/route.ts", "utf8");
   ok("the webhook falls back to the Stripe customer", /eq\("stripe_customer_id", customerId\)/.test(hook));
   ok("an older link counts only when finished", /viaCustomer && parsed\.mandateStatus !== "active"/.test(hook));
-  ok("a failed payment notifies the owners", /invoice\.payment_failed"\) \{[\s\S]{0,300}notifyRentPaymentFailed\(/.test(hook));
+  ok("a failed payment notifies the owners", /invoice\.payment_failed"\) \{[\s\S]{0,1500}notifyRentPaymentFailed\(/.test(hook));
   const card = readFileSync("components/tenancy-stripe-rent-section.tsx", "utf8");
   ok("the card shows the bank link with a Copy button", /CopyLinkButton path=\{view\.bankLinkUrl\}/.test(card));
   ok("the card shows what Stripe bills", /view\.billedLabel \?\? view\.rentLabel/.test(card) && /view\.billedDiffers &&/.test(card));

@@ -50,6 +50,8 @@ import TenancyStripeRentSection, {
 import { getStripe } from "@/lib/stripe";
 import { shouldPromptRentRailSync, subscriptionIsLive, upcomingChargeDates, reusableSetupLink, billedDiffersFromRent } from "@/lib/stripe-connect";
 import { fetchRentPaymentSummary } from "@/lib/stripe-rent-stop";
+import TenancyNsfCharges from "@/components/tenancy-nsf-charges";
+import type { NsfChargeRow } from "@/lib/nsf-charge";
 import { recordPayment, deletePayment } from "../payment-actions";
 import { reportTenancyIssue, generateTenantReportLink } from "../maintenance-actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
@@ -464,6 +466,7 @@ export default async function TenancyDetailPage({
     err?: string;
     rotessa?: string;
     striperent?: string;
+    nsf?: string;
     rentstopped?: string;
     rentstopafter?: string;
     serve?: string;
@@ -556,6 +559,14 @@ export default async function TenancyDetailPage({
     t.stripe_subscription_id,
   );
   const rentLive = subscriptionIsLive(t.stripe_subscription_status) && !!t.stripe_subscription_id;
+  // S835c: NSF charges on this tenancy, newest first.
+  const { data: nsfData } = await supabase
+    .from("tenancy_nsf_charges")
+    .select("id, incurred_on, bank_charge_cents, admin_charge_cents, note, source, paid_at")
+    .eq("tenancy_id", t.id)
+    .order("incurred_on", { ascending: false })
+    .limit(50);
+  const nsfRows = (nsfData ?? []) as NsfChargeRow[];
   // S835b (finding 4): the bank link waiting on the tenant, shown with a Copy
   // button. Read from Stripe only while the authorization is pending.
   let bankLink: { url: string; expiresLabel: string | null } | null = null;
@@ -2679,6 +2690,15 @@ export default async function TenancyDetailPage({
           multi-tenant Platform API is closed to new clients, so Stripe is the
           productized path). Rotessa stays below as the secondary rail. */}
       <TenancyStripeRentSection view={stripeRentView} />
+
+      {/* S835c: what the tenant owes for failed rent payments (a record only). */}
+      <TenancyNsfCharges
+        tenancyId={t.id}
+        tenantName={primary?.name ?? null}
+        rows={nsfRows}
+        todayIso={todayIso}
+        message={searchParams.nsf ?? null}
+      />
 
       {/* Rotessa (pre-authorized debit — secondary rail) ------------------ */}
       <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
