@@ -385,6 +385,8 @@ export function buildSubscriptionParams(args: {
   country: unknown;
   amountCents: number;
   anchorUnix?: number | null;
+  /** S835a: stamped on the subscription so it can be traced back at Stripe. */
+  tenancyId?: string | null;
 }): Record<string, unknown> {
   const { method, currency } = rentMethodForCountry(args.country);
   const paymentSettings: Record<string, unknown> = {
@@ -415,12 +417,52 @@ export function buildSubscriptionParams(args: {
       },
     ],
     payment_settings: paymentSettings,
-    metadata: { source: "vacantless_rent" },
+    metadata: { source: RENT_SUBSCRIPTION_SOURCE, ...(args.tenancyId ? { tenancy_id: args.tenancyId } : {}) },
   };
   if (args.anchorUnix && args.anchorUnix > 0) {
     params.billing_cycle_anchor = args.anchorUnix;
   }
   return params;
+}
+
+// S835a (REVIEW-S835 finding 2): one tenancy must never get two rent
+// subscriptions. Two guards, both pure here:
+//   * the idempotency key makes Stripe answer a repeated create (a retry, a
+//     second tab, a save that failed after Stripe said yes) with the SAME
+//     subscription instead of making another. The previous subscription id is
+//     part of the key, so a real restart after a stop gets a fresh key.
+//   * before creating, the action lists the customer's subscriptions and
+//     adopts a live Vacantless one instead of creating a second.
+export const RENT_SUBSCRIPTION_SOURCE = "vacantless_rent";
+
+export function rentSubscriptionIdempotencyKey(input: {
+  tenancyId: string;
+  amountCents: number;
+  firstChargeIso: string;
+  previousSubscriptionId?: string | null;
+}): string {
+  const prev = (input.previousSubscriptionId ?? "").trim() || "first";
+  return `vl-rent-${input.tenancyId}-${Math.round(input.amountCents)}-${input.firstChargeIso.trim()}-${prev}`;
+}
+
+/** The customer's live rent subscription made by Vacantless, if any. Pure. */
+export function findLiveRentSubscription(
+  subs: Array<{ id?: string | null; status?: string | null; metadata?: Record<string, string> | null }> | null | undefined,
+): { id: string; status: string } | null {
+  for (const s of subs ?? []) {
+    if (!s || typeof s.id !== "string" || !s.id) continue;
+    if (!subscriptionIsLive(s.status)) continue;
+    if (s.metadata?.source !== RENT_SUBSCRIPTION_SOURCE) continue;
+    return { id: s.id, status: String(s.status) };
+  }
+  return null;
+}
+
+/** S835a (finding 1): tenancies whose rent is still running on Stripe. Pure. */
+export function countLiveStripeRent(
+  rows: Array<{ stripe_subscription_id?: string | null; stripe_subscription_status?: string | null }> | null | undefined,
+): number {
+  return (rows ?? []).filter((r) => !!r?.stripe_subscription_id && subscriptionIsLive(r.stripe_subscription_status)).length;
 }
 
 export type ParsedSubscription =

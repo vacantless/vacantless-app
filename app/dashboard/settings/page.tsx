@@ -125,6 +125,12 @@ export const dynamic = "force-dynamic";
 // right tab; for the few flash params that don't (legacy rotessa/stripe
 // redirects), we infer the tab from which flash is present so the user always
 // lands back where they were.
+/** S835a: "1 tenant" or "3 tenants" for the refused-disconnect banner. */
+function liveRentCount(n: string | undefined): string {
+  const count = Math.max(1, Math.floor(Number(n) || 1));
+  return count === 1 ? "1 tenant" : `${count} tenants`;
+}
+
 function resolveTab(sp: Record<string, string | undefined>): SettingsTab {
   const t = sp.tab;
   if (
@@ -346,6 +352,8 @@ export default async function SettingsPage({
     logoerr?: string;
     rotessa?: string;
     stripeconnect?: string;
+    /** S835a: how many tenancies still collect rent, on a refused disconnect. */
+    n?: string;
     back?: string; // S834a: tenancy to return to after Stripe setup
     reason?: string;
     sender?: string; // Communications → Email sender flash
@@ -2805,6 +2813,18 @@ export default async function SettingsPage({
               Rotessa connection verified.
             </div>
           )}
+          {searchParams.rotessa === "liverent" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Rotessa was not disconnected. Monthly rent is still collecting from{" "}
+              {liveRentCount(searchParams.n)}. Open Tenants, stop the monthly rent for each one, then
+              disconnect. Disconnecting first would leave the debits running with no way to stop them here.
+            </div>
+          )}
+          {searchParams.rotessa === "disconnectcheck" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Rotessa was not disconnected. We couldn&apos;t check for rent that is still collecting. Try again.
+            </div>
+          )}
           {searchParams.rotessa === "disconnected" && (
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
               Rotessa disconnected. Your stored key was removed. Schedules already in
@@ -2869,6 +2889,18 @@ export default async function SettingsPage({
                   </Link>
                 </div>
               )}
+            </div>
+          )}
+          {searchParams.stripeconnect === "liverent" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Stripe was not disconnected. Monthly rent is still collecting from{" "}
+              {liveRentCount(searchParams.n)}. Open Tenants, stop the monthly rent for each one, then
+              disconnect. Disconnecting first would leave the debits running with no way to stop them here.
+            </div>
+          )}
+          {searchParams.stripeconnect === "disconnectcheck" && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              Stripe was not disconnected. We couldn&apos;t check for rent that is still collecting. Try again.
             </div>
           )}
           {searchParams.stripeconnect === "disconnected" && (

@@ -109,6 +109,17 @@ export async function disconnectRotessa() {
   await requireCapability("manage_rotessa", `${SETTINGS}?forbidden=1`);
 
   const supabase = createClient();
+  // S835a (REVIEW-S835 finding 1): same as Stripe. A tenancy with a Rotessa
+  // schedule is still being debited; stop its rent before disconnecting.
+  const { data: liveRows, error: liveErr } = await supabase
+    .from("tenancies")
+    .select("id")
+    .eq("organization_id", org.id)
+    .not("rotessa_schedule_id", "is", null);
+  if (liveErr) redirect(`${SETTINGS}?rotessa=disconnectcheck#rotessa`);
+  const live = (liveRows ?? []).length;
+  if (live > 0) redirect(`${SETTINGS}?rotessa=liverent&n=${live}#rotessa`);
+
   await supabase.from("rotessa_accounts").delete().eq("organization_id", org.id);
 
   redirect(`${SETTINGS}?rotessa=disconnected#rotessa`);

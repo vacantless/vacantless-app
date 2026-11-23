@@ -20,6 +20,8 @@ import {
   validateStripeRentUpdate,
   selectActiveSchedulePhase,
   canCreateRentSubscription,
+  rentSubscriptionIdempotencyKey,
+  findLiveRentSubscription,
 } from "@/lib/stripe-connect";
 import { stopTenancyStripeRent, scheduleTenancyRentStopAfterNext } from "@/lib/stripe-rent-stop";
 import type { N1Snapshot } from "@/lib/n1-render";
@@ -306,6 +308,31 @@ export async function createStripeRentSubscription(formData: FormData) {
   const anchorUnix = isoToUnixSeconds(firstChargeIso);
 
   try {
+    // S835a: never a second subscription for one tenancy. If Stripe already
+    // has a live Vacantless rent subscription for this tenant (a save that
+    // failed after Stripe said yes, or a second tab), show that one here
+    // instead of creating another debit.
+    const existing = await stripe!.subscriptions.list(
+      { customer: tenancy.stripe_customer_id!, status: "all", limit: 20 },
+      { stripeAccount: connect.connected_account_id },
+    );
+    const liveAtStripe = findLiveRentSubscription(
+      (existing.data ?? []) as unknown as Parameters<typeof findLiveRentSubscription>[0],
+    );
+    if (liveAtStripe) {
+      const { error: adoptErr } = await supabase
+        .from("tenancies")
+        .update({
+          stripe_subscription_id: liveAtStripe.id,
+          stripe_subscription_status: liveAtStripe.status,
+          stripe_subscription_synced_at: new Date().toISOString(),
+          rent_stop_after: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", tenancyId);
+      redirect(`${tenancyPath(tenancyId)}?striperent=${adoptErr ? "subsavefail" : "subadopted"}`);
+    }
+
     // Subscription items' price_data needs an existing Product id (inline
     // product_data is rejected by the Subscriptions API), so create a rent
     // Product on the connected account first.
@@ -321,13 +348,23 @@ export async function createStripeRentSubscription(formData: FormData) {
         country: connect.country,
         amountCents: ok.amountCents,
         anchorUnix,
+        tenancyId,
       }) as unknown as Stripe.SubscriptionCreateParams,
-      { stripeAccount: connect.connected_account_id },
+      {
+        stripeAccount: connect.connected_account_id,
+        // S835a: a repeated create gets the same subscription back.
+        idempotencyKey: rentSubscriptionIdempotencyKey({
+          tenancyId,
+          amountCents: ok.amountCents,
+          firstChargeIso,
+          previousSubscriptionId: tenancy.stripe_subscription_id,
+        }),
+      },
     );
     const parsed = parseSubscription(sub as Parameters<typeof parseSubscription>[0]);
     if (!parsed.ok) redirect(`${tenancyPath(tenancyId)}?striperent=subfail`);
 
-    await supabase
+    const { error: saveErr } = await supabase
       .from("tenancies")
       .update({
         stripe_subscription_id: parsed.subscriptionId,
@@ -337,6 +374,13 @@ export async function createStripeRentSubscription(formData: FormData) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", tenancyId);
+    if (saveErr) {
+      // S835a: Stripe has the subscription but this page could not record it.
+      // Nothing is cancelled: pressing the button again finds it at Stripe
+      // (the list above) and shows it here, with no second debit.
+      console.error("[stripe-rent] subscription made but not saved:", parsed.subscriptionId, saveErr.message);
+      redirect(`${tenancyPath(tenancyId)}?striperent=subsavefail`);
+    }
   } catch (err) {
     if (err && typeof err === "object" && "digest" in err) throw err;
     // Surface the real Stripe error instead of swallowing it (S216 pattern):

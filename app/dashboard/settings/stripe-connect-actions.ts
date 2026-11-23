@@ -11,6 +11,7 @@ import {
   normalizeConnectCountry,
   summarizeStripeAccount,
   connectAccountController,
+  countLiveStripeRent,
 } from "@/lib/stripe-connect";
 
 // Stripe Connect rent-collection actions (platform pivot step 2, ALT provider; S215).
@@ -205,6 +206,18 @@ export async function disconnectStripeConnect() {
   await requireCapability("manage_rent", `${SETTINGS}?forbidden=1`);
 
   const supabase = createClient();
+  // S835a (REVIEW-S835 finding 1): disconnecting while rent is collecting
+  // would leave tenants being debited with no way to stop it from here. Refuse
+  // until every tenancy's monthly rent is stopped. A failed read refuses too.
+  const { data: liveRows, error: liveErr } = await supabase
+    .from("tenancies")
+    .select("stripe_subscription_id, stripe_subscription_status")
+    .eq("organization_id", org.id)
+    .not("stripe_subscription_id", "is", null);
+  if (liveErr) redirect(`${SETTINGS}?stripeconnect=disconnectcheck#stripe-rent`);
+  const live = countLiveStripeRent(liveRows as Parameters<typeof countLiveStripeRent>[0]);
+  if (live > 0) redirect(`${SETTINGS}?stripeconnect=liverent&n=${live}#stripe-rent`);
+
   await supabase.from("stripe_connect_accounts").delete().eq("organization_id", org.id);
 
   redirect(`${SETTINGS}?stripeconnect=disconnected#stripe-rent`);

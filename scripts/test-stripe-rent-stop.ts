@@ -10,6 +10,10 @@ import {
   upcomingChargeDates,
   connectAccountController,
   connectAccountBillsPlatform,
+  rentSubscriptionIdempotencyKey,
+  findLiveRentSubscription,
+  countLiveStripeRent,
+  buildSubscriptionParams,
 } from "../lib/stripe-connect";
 
 let passed = 0;
@@ -166,6 +170,55 @@ const DEC18 = Date.UTC(2026, 11, 18, 12) / 1000;
   const src = readFileSync("app/dashboard/settings/stripe-connect-actions.ts", "utf8");
   ok("account creation uses the controller settings", /controller: connectAccountController\(\)/.test(src));
   ok("account creation no longer passes type express", !/type: "express"/.test(src));
+}
+
+// S835a (REVIEW-S835 findings 1 and 2).
+{
+  const T = "11111111-2222-3333-4444-555555555555";
+  const a = rentSubscriptionIdempotencyKey({ tenancyId: T, amountCents: 150000, firstChargeIso: "2026-12-01" });
+  const again = rentSubscriptionIdempotencyKey({ tenancyId: T, amountCents: 150000, firstChargeIso: "2026-12-01", previousSubscriptionId: null });
+  ok("a repeated create has the same key", a === again);
+  ok("the key is under Stripe's 255 characters", a.length < 255);
+  ok("another amount is another key", a !== rentSubscriptionIdempotencyKey({ tenancyId: T, amountCents: 155000, firstChargeIso: "2026-12-01" }));
+  ok("another date is another key", a !== rentSubscriptionIdempotencyKey({ tenancyId: T, amountCents: 150000, firstChargeIso: "2026-12-02" }));
+  ok(
+    "a restart after a stop gets a fresh key",
+    a !== rentSubscriptionIdempotencyKey({ tenancyId: T, amountCents: 150000, firstChargeIso: "2026-12-01", previousSubscriptionId: "sub_old" }),
+  );
+
+  const V = { source: "vacantless_rent" };
+  ok("no subscriptions -> nothing to adopt", findLiveRentSubscription([]) === null && findLiveRentSubscription(null) === null);
+  ok("a stopped one is not adopted", findLiveRentSubscription([{ id: "sub_1", status: "canceled", metadata: V }]) === null);
+  ok("a live Vacantless one is adopted", findLiveRentSubscription([{ id: "sub_1", status: "canceled", metadata: V }, { id: "sub_2", status: "active", metadata: V }])?.id === "sub_2");
+  ok("past_due still counts as live", findLiveRentSubscription([{ id: "sub_3", status: "past_due", metadata: V }])?.status === "past_due");
+  ok("a subscription the landlord made by hand is left alone", findLiveRentSubscription([{ id: "sub_4", status: "active", metadata: {} }]) === null);
+
+  ok("no rows -> no live rent", countLiveStripeRent(null) === 0 && countLiveStripeRent([]) === 0);
+  ok(
+    "only live subscriptions count",
+    countLiveStripeRent([
+      { stripe_subscription_id: "sub_1", stripe_subscription_status: "active" },
+      { stripe_subscription_id: "sub_2", stripe_subscription_status: "canceled" },
+      { stripe_subscription_id: "sub_3", stripe_subscription_status: "past_due" },
+      { stripe_subscription_id: null, stripe_subscription_status: "active" },
+    ]) === 2,
+  );
+
+  const params = buildSubscriptionParams({ customerId: "cus_1", paymentMethodId: "pm_1", productId: "prod_1", country: "CA", amountCents: 150000, tenancyId: T });
+  const meta = params.metadata as Record<string, string>;
+  ok("the subscription carries its tenancy id", meta.tenancy_id === T && meta.source === "vacantless_rent");
+
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  const rent = readFileSync("app/dashboard/tenancies/stripe-rent-actions.ts", "utf8");
+  ok("create passes an idempotency key", /idempotencyKey: rentSubscriptionIdempotencyKey\(/.test(rent));
+  ok("create looks for a live subscription first", rent.indexOf("findLiveRentSubscription(") > 0 && rent.indexOf("findLiveRentSubscription(") < rent.indexOf("stripe!.subscriptions.create("));
+  ok("a failed save is reported, not swallowed", /saveErr[\s\S]{0,400}subsavefail/.test(rent));
+  const sc = readFileSync("app/dashboard/settings/stripe-connect-actions.ts", "utf8");
+  ok("Stripe disconnect checks for live rent before deleting", sc.indexOf("countLiveStripeRent(") > 0 && sc.indexOf("countLiveStripeRent(") < sc.indexOf('from("stripe_connect_accounts").delete()'));
+  const ro = readFileSync("app/dashboard/settings/rotessa-actions.ts", "utf8");
+  ok("Rotessa disconnect checks for a live schedule before deleting", ro.indexOf('not("rotessa_schedule_id", "is", null)') > 0 && ro.indexOf('not("rotessa_schedule_id", "is", null)') < ro.indexOf('from("rotessa_accounts").delete()'));
+  const page = readFileSync("app/dashboard/settings/page.tsx", "utf8");
+  ok("Settings says why a disconnect was refused", /stripeconnect === "liverent"/.test(page) && /rotessa === "liverent"/.test(page));
 }
 
 console.log(`\nstripe-rent-stop: ${passed} passed, ${failed} failed`);
