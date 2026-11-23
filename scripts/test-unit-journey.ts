@@ -49,5 +49,10 @@ ok("no times: next does not say booking", !!nbClosed.next && nbClosed.next.start
 ok("times open: next says booking", unitJourney({ ...base, status: "available", photoCount: 8, hasBasics: true, liveAdCount: 3, renters: 5, viewings: 2, openTimes: 4 }).next === booking.next);
 ok("times unknown: unchanged", booking.next === "Viewings are booking. Mark it rented when a lease is signed.");
 ok("no times, no viewings yet", unitJourney({ ...base, status: "available", photoCount: 8, hasBasics: true, liveAdCount: 3, renters: 5, openTimes: 0 }).next === "No viewing times are open, so renters cannot book. Add viewing times.");
+// S831: an account that books each viewing itself is never told to add viewing times.
+const byReq = { ...base, status: "available", photoCount: 8, hasBasics: true, liveAdCount: 3, renters: 2, openTimes: 0, viewingsByRequest: true };
+ok("by request, no viewings: no add-times nudge", unitJourney(byReq).next === "Renters but no viewings yet. Reply to them to set up a viewing.");
+ok("by request, viewings: mark rented", unitJourney({ ...byReq, viewings: 1 }).next === "Mark it rented when a lease is signed.");
+ok("by request never says add viewing times", !/Add viewing times/.test(unitJourney(byReq).next ?? "") && !/Add viewing times/.test(unitJourney({ ...byReq, viewings: 1 }).next ?? ""));
 console.log(`test-unit-journey: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

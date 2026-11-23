@@ -1940,7 +1940,8 @@ export default async function PropertyDetailPage({
       renters14: r14.count ?? 0,
       renters7: r7.count ?? 0,
       booked14: b14.count ?? 0,
-      openTimes: availabilityOrg ? availabilityCount ?? 0 : null,
+      // S831: an account that books each viewing itself has no open times on purpose.
+      openTimes: viewingsByRequest ? null : availabilityOrg ? availabilityCount ?? 0 : null,
     });
   }
 
@@ -3074,6 +3075,7 @@ export default async function PropertyDetailPage({
         tenancy: tenancyStatus === "active" || tenancyStatus === "upcoming" ? tenancyStatus : null,
         tracksTenancies,
         openTimes: availabilityOrg ? availabilityCount ?? 0 : null,
+        viewingsByRequest,
       });
 
   const lifecycle = deriveRentalLifecycle(p.id, {

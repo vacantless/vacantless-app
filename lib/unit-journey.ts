@@ -51,6 +51,8 @@ export type JourneyInput = {
   tracksTenancies: boolean;
   /** S823b: viewing times open on the account. null/undefined = not known. */
   openTimes?: number | null;
+  /** S831: the landlord books each viewing themselves (S828c); never ask for open times. */
+  viewingsByRequest?: boolean;
 };
 
 export type Journey = {
@@ -123,10 +125,12 @@ function nextLine(step: JourneyStep | null, i: JourneyInput): string | null {
     case "renters":
       return "No renters yet. Check the ads are showing.";
     case "viewings":
+      if (i.viewingsByRequest) return "Renters but no viewings yet. Reply to them to set up a viewing.";
       if (i.openTimes === 0) return "No viewing times are open, so renters cannot book. Add viewing times.";
       return "Renters but no viewings yet. Check viewing times are open.";
     case "rented":
       // S823b: never say viewings are booking on a day nothing is open.
+      if (i.viewingsByRequest) return "Mark it rented when a lease is signed.";
       if (i.openTimes === 0 && i.status === "available")
         return "No viewing times are open, so renters cannot book. Add viewing times. Mark it rented when a lease is signed.";
       return "Viewings are booking. Mark it rented when a lease is signed.";

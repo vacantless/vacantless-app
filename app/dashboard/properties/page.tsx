@@ -589,6 +589,7 @@ export default async function PropertiesPage({
                 tenancy: journeyTenancy.get(p.id) ?? null,
                 tracksTenancies,
                 openTimes: availabilityCount ?? 0,
+                viewingsByRequest,
               });
             })(),
         canHardDelete: hardDeletable(p.status, leadCount, tenancyCount, postCount),
