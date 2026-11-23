@@ -468,7 +468,7 @@ const HOW_STEPS: { title: string; body: string }[] = [
   },
   {
     title: "Press Set Live",
-    body: "Your rental goes up on your Facebook Page and Marketplace. On Free, we post your one rental to Rentals.ca and Zumper too. Kijiji charges its own ad fee. With Posting, we post every rental. Every renter lands in the same place.",
+    body: "Your rental goes up on your Facebook Page and Marketplace. On every plan, we post one rental to Rentals.ca and Zumper too. Kijiji charges its own ad fee. With Posting, we post every rental. Every renter lands in the same place.",
   },
   {
     title: "Show up",
@@ -608,8 +608,8 @@ function Automations() {
 
 /* S832 (PLAN-S829 item 4): the reading and photo features, named on the
    page. Data sheet import is Free (S732); lease reading is on paid plans
-   (S631); touch-up runs on photos pulled from a Drive or Dropbox folder only
-   (lib/photo-touchup.ts, S789e). The pair is a real Pillette Rd photo from
+   (S631); touch-up runs on folder pulls (S789e) and, with Brighten on, on
+   uploads (S832c); dark or blurry photos are flagged (lib/photo-quality.ts). The pair is a real Pillette Rd photo from
    the "Copy of 833 Pillette Unit 3" test rental, before and after touch-up. */
 const LESS_TYPING: { title: string; body: string; plan?: string }[] = [
   {
@@ -666,7 +666,7 @@ function LessTyping() {
               </div>
             </div>
             <figcaption className="mt-3 text-[0.88rem] leading-snug text-[#273832]">
-              Photos your crew drops in your Google Drive or Dropbox folder come in brighter: shadows opened up, colour lifted, a light sharpen. Your original is kept, and one click switches back.
+              Phone photos you upload, or your crew drops in your Google Drive or Dropbox folder, come in brighter: shadows opened up, colour lifted, a light sharpen. Your original is kept, one click switches back, and a photo that still looks dark or blurry is flagged so you can retake it.
             </figcaption>
           </figure>
         </div>
@@ -855,7 +855,7 @@ const LITTLE_THING_GROUPS: { head: string; items: LittleThing[] }[] = [
     head: "Turnovers and upkeep",
     items: [
       { text: "Tenant gave notice? Your crew taps it with the date, and one click relists the unit." },
-      { text: "Phone photos pulled from your Drive or Dropbox folder come in brighter. One click switches back to the originals." },
+      { text: "Phone photos you upload or pull from your Drive or Dropbox folder come in brighter. One click switches back to the originals." },
       { text: "Booked a photographer? They get a one-time link for that unit, and their photos come straight in." },
       { text: "Water heater or furnace near the end of its life? You get a reminder." },
       { text: "Move-in, move-out and routine inspections on your calendar, with a reminder." },
@@ -1171,7 +1171,7 @@ const PLANS: {
         `Up to ${(t.textCap ?? 0).toLocaleString("en-CA")} texts a month from your own number`,
         "Every feature listed below",
       ],
-      addon: `Add Posting for CA$${Math.round(POSTING_ADDON.priceCents / 100)} a month. See below.`,
+      addon: `We post one rental for you free. Add Posting, CA$${Math.round(POSTING_ADDON.priceCents / 100)} a month, for the rest. See below.`,
       cta: `Choose ${t.name}`,
       href: `/signup?plan=${k}`,
       featured: k === "growth",

@@ -653,6 +653,7 @@ export const PAID_FEATURE_GROUPS: { head: string; items: string[] }[] = [
     items: [
       "Booking pages, instant replies and reminders for every rental",
       "Paste an old ad or drop a realtor's data sheet, and the rental fills itself",
+      "We post one rental to Kijiji, Rentals.ca and Zumper for you; the Posting add-on covers the rest",
       "Renter wrote in a chat? Send the screenshot and they land in your list, with a reply ready",
       "Quick replies: ready answers on pets, parking and utilities, written for you",
     ],
@@ -680,7 +681,8 @@ export const PAID_FEATURE_GROUPS: { head: string; items: string[] }[] = [
     items: [
       "Rent by pre-authorized debit through your own Stripe or Rotessa account",
       "Repairs: tenants report from a link or a text and pick times; emergencies alert you at once; your trade accepts, quotes and books from a link; rate each trade after the job",
-      "Turnover links for your crew: each unit's stage, and photos from your Drive or Dropbox folder brightened, originals kept",
+      "Turnover links for your crew: each unit's stage, and photos from your Drive or Dropbox folder pulled in",
+      "Phone photos brightened, originals kept, and dark or blurry ones flagged",
     ],
   },
   {
@@ -822,42 +824,49 @@ export function canUseRobotPosting(org: RobotPostingOrg | null | undefined): boo
 
 // S767 (PLAN-S766 item F, Noam 2026-11-08): a Free account's one live rental
 // is posted by the robot at no charge (Rentals.ca and Zumper free; Kijiji at
-// the site's own fee, paid at checkout as today). The Posting add-on buys
-// robot posting from the second rental on. Two questions, one place:
+// the site's own fee, paid at checkout as today).
+// S832b (Noam 2026-11-23): EVERY account gets that one free robot rental, so
+// upgrading from Free to a paid plan never takes posting away. The free one is
+// whichever rental already has live ads on Kijiji, Rentals.ca or Zumper; with
+// none, the rental being posted becomes it. The Posting add-on buys robot
+// posting for every other rental. Two questions, one place:
 //  - may this account sign in to the robot sites at all?  canSetUpRobotSites
 //  - may the robot post THIS rental?                      robotPostingAllowedFor
-// The SQL twin is public.item_can_use_robot_posting (migration 0277), read by
+// The SQL twin is public.item_can_use_robot_posting (migration 0322), read by
 // the worker claim.
 export function isFreePlan(plan: string | null | undefined): boolean {
   return !plan || plan === "free";
 }
 
+/** S832b: every account may sign in to the robot sites (its one free rental). */
 export function canSetUpRobotSites(org: RobotPostingOrg | null | undefined): boolean {
-  if (!org) return false;
-  return canUseRobotPosting(org) || isFreePlan(org.plan);
+  return Boolean(org);
 }
 
+/** The portals the robot posts to; live ads there mark an account's free robot rental. */
+export const ROBOT_PORTALS = ["kijiji", "rentals_ca", "zumper"] as const;
+
 /**
- * The robot may post this rental: the account has Posting, or it is on Free
- * and no OTHER rental in it is live (this one is, or is about to be, its one
- * live rental). `otherLiveRentals` counts available, unarchived rentals in the
- * account other than this one.
+ * The robot may post this rental: the account has Posting, or no OTHER rental
+ * in it has live ads on the robot sites (this one is, or becomes, its free
+ * robot rental). `otherRobotRentals` counts the account's other rentals with a
+ * live Kijiji, Rentals.ca or Zumper ad.
  */
 export function robotPostingAllowedFor(
   org: RobotPostingOrg | null | undefined,
-  rental: { otherLiveRentals: number } | null,
+  rental: { otherRobotRentals: number } | null,
 ): boolean {
   if (!org) return false;
   if (canUseRobotPosting(org)) return true;
-  if (!isFreePlan(org.plan) || !rental) return false;
-  return rental.otherLiveRentals === 0;
+  if (!rental) return false;
+  return rental.otherRobotRentals === 0;
 }
 
 // One wording for the free first rental, read by the sites setup, the
 // billing page and the homepage.
 export const FREE_RENTAL_POSTING_LINE =
-  "On Free, we post your one live rental to Rentals.ca and Zumper at no charge. Kijiji charges its own ad fee. Posting, $49 a month, covers every other rental.";
-export const FREE_RENTAL_POSTING_SHORT = "Free for your one live rental";
+  "On every plan, we post one rental to Rentals.ca and Zumper at no charge. Kijiji charges its own ad fee. Posting, $49 a month, covers every other rental.";
+export const FREE_RENTAL_POSTING_SHORT = "Free for one rental";
 
 // The landlord line shown on a robot site instead of its post / sign-in button.
 export const POSTING_ADDON_NOTE = "Part of the Posting add-on. $49 a month.";

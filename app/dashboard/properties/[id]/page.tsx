@@ -1202,7 +1202,7 @@ export default async function PropertyDetailPage({
 
   const { data: photos } = await supabase
     .from("property_photos")
-    .select("id, url, sort_order, is_cover, building_photo, copied_from")
+    .select("id, url, sort_order, is_cover, building_photo, copied_from, quality_flag")
     .eq("property_id", p.id);
   const photoRows = sortPhotos((photos ?? []) as PhotoRow[]);
 
@@ -3788,7 +3788,7 @@ export default async function PropertyDetailPage({
               {(pullsFrom(source) || !folderUrl) && (
                 <label className="flex w-full items-center gap-2 text-xs text-gray-700">
                   <input type="checkbox" name="touch_up" defaultChecked />
-                  Touch up the photos this folder brings in: brighter and clearer. The originals are kept. Photos you upload yourself are left as they are.
+                  Touch up the photos this folder brings in: brighter and clearer. The originals are kept. Photos you upload have their own Brighten switch.
                 </label>
               )}
             </form>

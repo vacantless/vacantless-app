@@ -34,7 +34,7 @@ ok("b: rows get the needs", pe.includes("blockedNeeds={postingBlocker?.needs ?? 
 
 // (c) touch-up box scope
 const detail = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
-ok("c: touch-up names folder photos only", detail.includes("Touch up the photos this folder brings in") && detail.includes("Photos you upload yourself are left as they are."));
+ok("c: touch-up box names folder photos; uploads have their own switch (S832c)", detail.includes("Touch up the photos this folder brings in") && detail.includes("Photos you upload have their own Brighten switch."));
 
 // (d) posting now
 const now = Date.parse("2026-11-22T00:00:00Z");

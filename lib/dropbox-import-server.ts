@@ -8,6 +8,7 @@ import { MAX_PHOTO_BYTES, extForType, nextSortOrder, photoStoragePath, type Phot
 import { sniffImageType } from "@/lib/image-url-import";
 import { photoCapForPlan } from "@/lib/billing";
 import { touchUpPhoto } from "@/lib/photo-touchup";
+import { assessPhotoQuality } from "@/lib/photo-quality-server";
 import { groupImagesByParentPath, parseDropboxFolderUrl, pickFolderForAddress, sortGalleryEntries, type DropboxEntry } from "@/lib/dropbox-import";
 import type { DrivePullResult } from "@/lib/drive-import";
 import { mergeSeenRefs } from "@/lib/drive-import";
@@ -407,6 +408,8 @@ export async function pullDropboxPhotos(args: {
       is_cover: firstEver,
       source_ref: refOf(entry),
       touched_up: !!edited,
+      // S832c: the shown photo checked for dark or blurry.
+      quality_flag: await assessPhotoQuality(edited ?? img.bytes),
       original_storage_path: originalPath,
       original_url: originalUrl,
     });

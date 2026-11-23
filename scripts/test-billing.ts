@@ -855,26 +855,33 @@ ok("photoCapForPlan managed -> premium cap", photoCapForPlan("managed") === PREM
   ok("onboarding reads the same line", readFileSync("lib/onboarding.ts", "utf8").includes("freeCapLine()"));
 }
 
-// S767 (item F): a Free account's one live rental is robot-posted free.
+// S767 (item F), S832b: every account's one free robot rental.
 {
   const free = { plan: "free", posting_addon_active: false };
   const freeNull = { plan: null, posting_addon_active: false };
   const growth = { plan: "growth", posting_addon_active: false };
   const addon = { plan: "free", posting_addon_active: true };
-  ok("free, no other live rental -> robot posts", robotPostingAllowedFor(free, { otherLiveRentals: 0 }));
-  ok("free (null plan) counts as Free", robotPostingAllowedFor(freeNull, { otherLiveRentals: 0 }));
-  ok("free, another rental live -> Posting needed", !robotPostingAllowedFor(free, { otherLiveRentals: 1 }));
+  ok("free, no other robot rental -> robot posts", robotPostingAllowedFor(free, { otherRobotRentals: 0 }));
+  ok("free (null plan) counts as Free", robotPostingAllowedFor(freeNull, { otherRobotRentals: 0 }));
+  ok("free, another robot rental -> Posting needed", !robotPostingAllowedFor(free, { otherRobotRentals: 1 }));
   ok("free, no rental named -> not allowed", !robotPostingAllowedFor(free, null));
-  ok("growth without Posting -> not free", !robotPostingAllowedFor(growth, { otherLiveRentals: 0 }));
-  ok("add-on -> every rental", robotPostingAllowedFor(addon, { otherLiveRentals: 5 }));
-  ok("no org -> closed", !robotPostingAllowedFor(null, { otherLiveRentals: 0 }));
+  ok("S832b: growth without Posting gets its one free robot rental", robotPostingAllowedFor(growth, { otherRobotRentals: 0 }));
+  ok("S832b: growth without Posting, another robot rental -> Posting needed", !robotPostingAllowedFor(growth, { otherRobotRentals: 1 }));
+  ok("add-on -> every rental", robotPostingAllowedFor(addon, { otherRobotRentals: 5 }));
+  ok("no org -> closed", !robotPostingAllowedFor(null, { otherRobotRentals: 0 }));
   ok("setup: free yes", canSetUpRobotSites(free) && canSetUpRobotSites(freeNull));
-  ok("setup: growth without Posting no", !canSetUpRobotSites(growth));
+  ok("S832b setup: growth without Posting yes", canSetUpRobotSites(growth));
   ok("setup: add-on yes", canSetUpRobotSites(addon) && canSetUpRobotSites({ plan: "growth", posting_addon_active: true }));
+  ok("setup: no org no", !canSetUpRobotSites(null));
   ok("free line: no parentheses or em dash", !/[()\u2014]/.test(FREE_RENTAL_POSTING_LINE));
-  const mig = readFileSync("supabase/migrations/0277_free_rental_robot_posting.sql", "utf8");
-  ok("SQL twin swaps the claim gate per item", mig.includes("not public.item_can_use_robot_posting(p_item_id, p_organization_id)"));
-  ok("SQL twin: Free and no other live rental", mig.includes("coalesce(o.plan, 'free') = 'free'") && mig.includes("p.id <> r.property_id"));
+  ok("free line says every plan", FREE_RENTAL_POSTING_LINE.startsWith("On every plan"));
+  const mig = readFileSync("supabase/migrations/0322_every_account_one_robot_rental.sql", "utf8");
+  ok("SQL twin: no plan check, other rentals' live robot ads", !mig.includes("o.plan") && mig.includes("lp.property_id <> r.property_id") && mig.includes("'kijiji', 'rentals_ca', 'zumper'"));
+  const acc = readFileSync("lib/robot-posting-access.ts", "utf8");
+  ok("access reads live robot-site ads, not live rentals", acc.includes('.from("listing_posts")') && acc.includes("ROBOT_PORTALS"));
+  ok("gap: access counts robot posts under way for other rentals", acc.includes('.from("distribution_run_items")') && acc.includes('.eq("status", "in_progress")'));
+  const mig2 = readFileSync("supabase/migrations/0324_robot_rental_in_progress.sql", "utf8");
+  ok("gap: SQL twin counts in-progress robot items for other rentals", mig2.includes("oi.status = 'in_progress'") && mig2.includes("orun.property_id <> r.property_id") && mig2.includes("oi.id <> p_item_id"));
 }
 
 console.log(`\nbilling: ${passed} passed, ${failed} failed`);

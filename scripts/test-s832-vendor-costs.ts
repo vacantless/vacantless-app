@@ -1,7 +1,7 @@
 // S832: the "pays for itself" table and the grouped paid-plan list.
 // Run: npx tsx scripts/test-s832-vendor-costs.ts
 import { readFileSync } from "node:fs";
-import { VENDOR_COSTS, VENDOR_COSTS_HEAD, formatCheckedOn } from "../lib/vendor-costs";
+import { VENDOR_COSTS, VENDOR_COSTS_HEAD, USD_CAD, cadPriceText, exampleText, formatCheckedOn, monthlySubtotalCad, toCad } from "../lib/vendor-costs";
 import { PAID_FEATURE_GROUPS, TIERS } from "../lib/billing";
 
 let failed = 0;
@@ -54,7 +54,26 @@ ok("lease reading named", /signed lease/.test(paid));
 ok("monthly report named", /monthly report/i.test(paid));
 const home = read("app/page.tsx");
 ok("homepage before/after photos", home.includes("/marketing/touchup-before.jpg") && home.includes("/marketing/touchup-after.jpg"));
-ok("homepage touch-up says Drive or Dropbox", /Drive or Dropbox folder come in brighter/.test(home));
+ok("homepage touch-up names uploads and folders", /upload or pull from your Drive or Dropbox folder come in brighter/.test(home));
+
+// 5. S832c: one Canadian-dollar price, a monthly subtotal, one worked example.
+for (const v of VENDOR_COSTS) {
+  const shown = v.typicalPrice.replace(/,/g, "");
+  ok(`${v.job}: numbers match the shown price`, shown.includes(`$${v.amount.low}`) && (v.amount.high == null || shown.includes(`$${v.amount.high}`)));
+  ok(`${v.job}: CAD text`, /^(about )?CA\$\d+( to CA\$\d+)?$/.test(cadPriceText(v)));
+}
+ok("rate dated", /^\d{4}-\d{2}-\d{2}$/.test(USD_CAD.date) && USD_CAD.rate > 1 && USD_CAD.rate < 2);
+ok("toCad USD", Math.abs(toCad(10, "USD") - 14.325) < 1e-9);
+ok("toCad CAD unchanged", toCad(13, "CAD") === 13);
+const sub = monthlySubtotalCad();
+ok("subtotal low = 14.33 + 21.49 + 13 + 30 = 79", sub.low === 79);
+ok("subtotal high = 14.33 + 27.22 + 13 + 30 = 85", sub.high === 85);
+ok("only the photo line has an example", VENDOR_COSTS.filter((v) => v.example).length === 1 && Boolean(VENDOR_COSTS.find((v) => v.example)?.job.includes("photo")));
+ok("photo example text", exampleText(VENDOR_COSTS.find((v) => v.example)!) === "a 20-photo listing: about CA$57");
+const comp = read("components/vendor-cost-table.tsx");
+ok("per-job lines never summed", !/perJob\.reduce|monthlySubtotalCad\(perJob/.test(comp));
+ok("subtotal shown beside Starter", comp.includes("These apps together") && comp.includes("starterPrice"));
+ok("no average word on the page", !/average/i.test(noComments(comp)));
 
 if (failed) {
   console.log(`\n${failed} failed`);

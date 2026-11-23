@@ -8,6 +8,7 @@ import { MAX_PHOTO_BYTES, extForType, nextSortOrder, photoStoragePath, type Phot
 import { sniffImageType } from "@/lib/image-url-import";
 import { photoCapForPlan } from "@/lib/billing";
 import { touchUpPhoto } from "@/lib/photo-touchup";
+import { assessPhotoQuality } from "@/lib/photo-quality-server";
 import {
   driveImages,
   driveSourceRef,
@@ -221,6 +222,8 @@ export async function pullDrivePhotos(args: {
       is_cover: firstEver,
       source_ref: driveSourceRef(entry.id),
       touched_up: !!edited,
+      // S832c: the shown photo checked for dark or blurry.
+      quality_flag: await assessPhotoQuality(edited ?? img.bytes),
       original_storage_path: originalPath,
       original_url: originalUrl,
     });

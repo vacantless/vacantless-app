@@ -11,18 +11,18 @@
 // there would break every dashboard page, not just posting.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { canSetUpRobotSites, canUseRobotPosting, robotPostingAllowedFor } from "@/lib/billing";
+import { ROBOT_PORTALS, canSetUpRobotSites, canUseRobotPosting, robotPostingAllowedFor } from "@/lib/billing";
 
 export type RobotPostingAccess = {
   /**
    * The robot may post. With a rental (opts.rental) this is per rental: the
-   * add-on, or Free and no other live rental (S767, item F). Without one it
-   * is the add-on alone.
+   * add-on, or no other rental with live robot-site ads (S767, S832b). Without
+   * one it is the add-on alone.
    */
   allowed: boolean;
-  /** S767: allowed only because this is the Free account's one live rental. */
+  /** S767, S832b: allowed only because this is the account's one free robot rental. */
   freeRental: boolean;
-  /** S767: the account may sign in to the robot sites (the add-on, or Free). */
+  /** S767, S832b: the account may sign in to the robot sites (every account). */
   setup: boolean;
   plan: string | null;
   addonActive: boolean;
@@ -76,21 +76,41 @@ export async function readRobotPostingAccess(
       autopilot = false;
     }
     const addon = canUseRobotPosting(row);
-    // S767: a Free account's one live rental. Count the OTHER live rentals in
-    // this account; any read error leaves it closed.
+    // S767, S832b: the account's one free robot rental. Count the OTHER
+    // rentals with live ads on the robot sites; any read error leaves it closed.
     let allowed = addon;
     let freeRental = false;
     if (!addon && opts?.rental && canSetUpRobotSites(row)) {
       let q = client
-        .from("properties")
-        .select("id", { count: "exact", head: true })
+        .from("listing_posts")
+        .select("property_id")
         .eq("organization_id", orgId)
-        .eq("status", "available")
-        .is("archived_at", null);
-      if (opts.rental !== "new") q = q.neq("id", opts.rental);
-      const { count, error: countErr } = await q;
-      if (!countErr && count != null) {
-        allowed = robotPostingAllowedFor(row, { otherLiveRentals: count });
+        .eq("status", "live")
+        .in("portal", [...ROBOT_PORTALS])
+        .not("property_id", "is", null);
+      if (opts.rental !== "new") q = q.neq("property_id", opts.rental);
+      const { data: posts, error: postsErr } = await q;
+      // S832b gap: a robot post already under way for another rental holds the
+      // free slot too, so two rentals approved together cannot both post free.
+      const { data: busy, error: busyErr } = await client
+        .from("distribution_run_items")
+        .select("run_id")
+        .eq("organization_id", orgId)
+        .eq("status", "in_progress")
+        .in("channel", [...ROBOT_PORTALS]);
+      let busyRentals: string[] = [];
+      if (!busyErr && busy && busy.length > 0) {
+        const { data: runs } = await client
+          .from("distribution_runs")
+          .select("property_id")
+          .in("id", [...new Set((busy as { run_id: string }[]).map((b) => b.run_id))]);
+        busyRentals = ((runs ?? []) as { property_id: string | null }[])
+          .map((r) => r.property_id)
+          .filter((id): id is string => Boolean(id) && id !== opts.rental);
+      }
+      if (!postsErr && posts && !busyErr) {
+        const others = new Set([...(posts as { property_id: string }[]).map((p) => p.property_id), ...busyRentals]).size;
+        allowed = robotPostingAllowedFor(row, { otherRobotRentals: others });
         freeRental = allowed;
       }
     }

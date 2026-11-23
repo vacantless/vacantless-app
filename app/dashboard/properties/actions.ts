@@ -3,6 +3,8 @@
 import { cleanArrivalNote, looksLikeAccessCode } from "@/lib/arrival-note";
 import { cleanPhotoFolderUrl, photoSourceOf, pullResultParam, pullsFrom, splitShootLinks } from "@/lib/drive-import";
 import { pullFolderPhotos } from "@/lib/photo-folder-pull-server";
+import { processUploadedPhoto } from "@/lib/photo-touchup-upload-server";
+import type { PhotoQualityFlag } from "@/lib/photo-quality";
 import { dropboxListSharedTree, fetchDropboxSharedFile, getDropboxAccessToken } from "@/lib/dropbox-import-server";
 import { parseGroupSize } from "@/lib/group-viewing";
 import { countViewingTimes } from "@/lib/viewing-times-count";
@@ -4099,6 +4101,8 @@ type PhotoRow = PhotoLike & { storage_path: string };
 
 export type PropertyPhotoView = PhotoLike & {
   url: string;
+  /** S832c: looks dark or blurry (lib/photo-quality.ts); null = fine or not checked. */
+  quality_flag?: PhotoQualityFlag | null;
   /** S712: marked as a building photo (shared with units that have none). */
   building_photo?: boolean | null;
   /** S712: a copy of another unit's building photo. */
@@ -4164,7 +4168,7 @@ async function loadPropertyPhotoViews(
 ): Promise<PropertyPhotoView[]> {
   const { data } = await supabase
     .from("property_photos")
-    .select("id, url, sort_order, is_cover")
+    .select("id, url, sort_order, is_cover, building_photo, copied_from, quality_flag")
     .eq("property_id", propertyId);
   return sortPhotos((data ?? []) as PropertyPhotoView[]);
 }
@@ -4315,6 +4319,8 @@ export async function createPhotoUploadTargets(
 export async function confirmPropertyPhotos(
   propertyId: string,
   uploaded: ConfirmedPhotoUploadInput[],
+  // S832c: "Brighten these photos" on the upload box (on by default).
+  opts?: { touchUp?: boolean },
 ): Promise<ConfirmPropertyPhotosResult> {
   const auth = await requirePropertyPhotoAccess(propertyId);
   if (!auth) return { ok: false, reason: "forbidden" };
@@ -4375,16 +4381,37 @@ export async function confirmPropertyPhotos(
       data: { publicUrl },
     } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(upload.storagePath);
 
+    // S832c: the brightened copy is shown, the upload is kept as the
+    // original, and the shown photo is checked for dark or blurry.
+    const { touched, qualityFlag } = await processUploadedPhoto(supabase, {
+      orgId: org.id,
+      propertyId,
+      photoId: upload.photoId,
+      storagePath: upload.storagePath,
+      touchUp: opts?.touchUp === true,
+    });
+
     const { error: insErr } = await supabase.from("property_photos").insert({
       id: upload.photoId,
       organization_id: org.id,
       property_id: propertyId,
-      storage_path: upload.storagePath,
-      url: publicUrl,
+      storage_path: touched?.storagePath ?? upload.storagePath,
+      url: touched?.url ?? publicUrl,
       sort_order: order,
       is_cover: firstEver,
+      quality_flag: qualityFlag,
+      ...(touched
+        ? {
+            touched_up: true,
+            original_storage_path: touched.originalStoragePath,
+            original_url: touched.originalUrl,
+          }
+        : {}),
     });
-    if (insErr) continue;
+    if (insErr) {
+      if (touched) await supabase.storage.from(PHOTO_BUCKET).remove([touched.storagePath]);
+      continue;
+    }
 
     order += 1;
     firstEver = false;

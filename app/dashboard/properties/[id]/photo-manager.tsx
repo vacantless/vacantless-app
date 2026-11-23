@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icons } from "@/components/icons";
+import { photoQualityLabel, photoQualityLine } from "@/lib/photo-quality";
 import {
   EmptyState,
   IconTile,
@@ -146,6 +147,8 @@ export function PhotoUploadWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  // S832c: brighten uploaded phone photos, original kept (on by default).
+  const [brighten, setBrighten] = useState(true);
   const [photoAction, setPhotoAction] = useState<string | null>(null);
 
   useEffect(() => {
@@ -285,7 +288,7 @@ export function PhotoUploadWorkspace({
       return;
     }
 
-    const confirmed = await confirmPropertyPhotos(propertyId, uploaded);
+    const confirmed = await confirmPropertyPhotos(propertyId, uploaded, { touchUp: brighten });
     setUploading(false);
     if (!confirmed.ok) {
       setError(uploadActionMessage(confirmed.reason, photoCap));
@@ -470,6 +473,17 @@ export function PhotoUploadWorkspace({
           />
         </div>
       ) : (
+        <>
+        {(() => {
+          // S832c: one line when any photo looks dark or blurry.
+          const line = photoQualityLine(
+            photos.map((p) => p.quality_flag ?? null),
+            photos.some((p) => p.is_cover && p.quality_flag),
+          );
+          return line ? (
+            <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{line}</p>
+          ) : null;
+        })()}
         <ul className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {photos.map((photo, i) => (
             <li
@@ -489,6 +503,11 @@ export function PhotoUploadWorkspace({
                     Cover
                   </span>
                 )}
+                {photoQualityLabel(photo.quality_flag) ? (
+                  <span className="absolute bottom-1.5 left-1.5 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    {photoQualityLabel(photo.quality_flag)}
+                  </span>
+                ) : null}
                 {photo.building_photo || photo.copied_from ? (
                   <span className="absolute right-1.5 top-1.5 rounded-full bg-gray-900/70 px-2 py-0.5 text-[10px] font-semibold text-white">
                     {photo.copied_from ? "From the building" : "Building photo"}
@@ -553,6 +572,7 @@ export function PhotoUploadWorkspace({
             </li>
           ))}
         </ul>
+        </>
       )}
 
       {showStorageUpsell && currentUpsell.showUpsell && (
@@ -585,6 +605,17 @@ export function PhotoUploadWorkspace({
               onChange={onPickFiles}
               className="block text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 disabled:opacity-60"
             />
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={brighten}
+                disabled={uploading}
+                onChange={(e) => setBrighten(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              Brighten these photos
+              <span className="text-xs text-gray-500">Your originals are kept. Turn off for a photographer&apos;s photos.</span>
+            </label>
             {picked.some((i) => i.status === "error") && (
             <button
               type="button"

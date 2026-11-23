@@ -220,8 +220,9 @@ ok(
 ok(
   "actions: confirm writes property_photos rows",
   actions.includes('.from("property_photos").insert({') &&
-    actions.includes("storage_path: upload.storagePath") &&
-    actions.includes("url: publicUrl") &&
+    // S832c: the brightened copy, when made, is shown; else the upload itself.
+    actions.includes("storage_path: touched?.storagePath ?? upload.storagePath") &&
+    actions.includes("url: touched?.url ?? publicUrl") &&
     actions.includes("is_cover: firstEver"),
 );
 ok(

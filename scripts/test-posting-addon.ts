@@ -229,7 +229,7 @@ ok("no buy button when price unset (admin-only note)", billingPage.includes('add
 
 // --- 8. Homepage -------------------------------------------------------------
 const home = read("app/page.tsx");
-ok("homepage names the add-on under each paid plan (S779)", home.includes("addon: `Add Posting for CA$${Math.round(POSTING_ADDON.priceCents / 100)} a month. See below.`")); // S722b: the add-on has its own card
+ok("homepage names the add-on under each paid plan (S779, S832b: one rental free first)", home.includes("addon: `We post one rental for you free. Add Posting, CA$${Math.round(POSTING_ADDON.priceCents / 100)} a month, for the rest. See below.`")); // S722b: the add-on has its own card
 // S720: the homepage says Kijiji charges its own fee, as Billing does.
 // S767: the Posting card reads the one free-rental line, which names the Kijiji fee.
 ok("homepage says Kijiji charges its own fee", home.includes("{FREE_RENTAL_POSTING_LINE}") && read("lib/billing.ts").includes("Kijiji charges its own ad fee"));
