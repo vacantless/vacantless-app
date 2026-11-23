@@ -109,3 +109,22 @@ export function isPrefetch(headers: { get(name: string): string | null }): boole
     purpose.includes("prefetch")
   );
 }
+
+/**
+ * S833: what "See a live account" does for each visitor. The homepage at
+ * vacantless.com cannot see an app sign-in, so a signed-in landlord pressing
+ * the button used to land in their OWN account with no word why. Now they
+ * choose: their account, or sign out and see the demo.
+ */
+export type DemoStart = "sign_in" | "dashboard" | "choose" | "switch";
+
+export function demoStart(input: {
+  signedInEmail: string | null | undefined;
+  configured: string | null | undefined;
+  wantsSwitch: boolean;
+}): DemoStart {
+  const email = (input.signedInEmail ?? "").trim();
+  if (!email) return "sign_in";
+  if (isDemoEmail(email, input.configured)) return "dashboard";
+  return input.wantsSwitch ? "switch" : "choose";
+}

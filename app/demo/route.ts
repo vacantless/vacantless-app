@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DEMO_ORG_ID, demoEmail, isPrefetch } from "@/lib/demo-account";
+import { DEMO_ORG_ID, demoEmail, demoStart, isPrefetch } from "@/lib/demo-account";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +21,19 @@ export async function GET(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  // Already signed in: a real landlord keeps their own account; the demo login just continues.
-  if (user) {
-    return NextResponse.redirect(new URL("/dashboard", origin));
+  // S833: a real landlord who is signed in chooses (their account, or sign out
+  // and see the demo); the demo login just continues. ?switch=1 is only ever
+  // reached by pressing "Sign out and see the demo" on /demo/choose.
+  const start = demoStart({
+    signedInEmail: user?.email,
+    configured,
+    wantsSwitch: request.nextUrl.searchParams.get("switch") === "1",
+  });
+  if (start === "dashboard") return NextResponse.redirect(new URL("/dashboard", origin));
+  if (start === "choose") return NextResponse.redirect(new URL("/demo/choose", origin));
+  if (start === "switch") {
+    // Local only: signs out this browser, never the landlord's other devices.
+    await supabase.auth.signOut({ scope: "local" });
   }
 
   const admin = createAdminClient();

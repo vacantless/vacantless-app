@@ -9,6 +9,7 @@ import {
   maskPhone,
   scrubContactText,
   isPrefetch,
+  demoStart,
 } from "../lib/demo-account";
 
 let passed = 0;
@@ -140,6 +141,23 @@ ok("a plain click is not a prefetch", !isPrefetch(h({})));
   const mail = (require("node:fs") as typeof import("node:fs")).readFileSync("lib/email.ts", "utf8");
   const send = mail.slice(mail.indexOf("async function brevoFetch"), mail.indexOf("return fetch(BREVO_ENDPOINT"));
   ok("every send skips the demo login before it reaches Brevo", send.includes("isDemoEmail(") && send.includes("demoEmail(process.env)"));
+}
+
+// S833: a signed-in landlord pressing "See a live account" chooses; only the
+// switch link signs them out, and only this browser.
+{
+  const cfg = "demo@vacantless.com";
+  ok("no sign-in starts the demo", demoStart({ signedInEmail: null, configured: cfg, wantsSwitch: false }) === "sign_in");
+  ok("demo login goes to its dashboard", demoStart({ signedInEmail: "Demo@Vacantless.com", configured: cfg, wantsSwitch: true }) === "dashboard");
+  ok("a landlord is asked, not taken to their own account", demoStart({ signedInEmail: "thadmusco@gmail.com", configured: cfg, wantsSwitch: false }) === "choose");
+  ok("a landlord who pressed the switch link switches", demoStart({ signedInEmail: "thadmusco@gmail.com", configured: cfg, wantsSwitch: true }) === "switch");
+  const fs = require("node:fs") as typeof import("node:fs");
+  const enter = fs.readFileSync("app/demo/route.ts", "utf8");
+  ok("demo route no longer sends a signed-in landlord straight to /dashboard", !enter.includes("if (user) {"));
+  ok("switch signs out this browser only", enter.includes('signOut({ scope: "local" })'));
+  ok("prefetch check comes before the switch sign-out", enter.indexOf("isPrefetch(") > -1 && enter.indexOf("isPrefetch(") < enter.indexOf("signOut("));
+  const choose = fs.readFileSync("app/demo/choose/page.tsx", "utf8");
+  ok("choose page links are plain links", choose.includes('<a href="/dashboard"') && choose.includes('href="/demo?switch=1"') && !choose.includes("<Link"));
 }
 
 console.log(`\ntest-demo-account: ${passed} passed, ${failed} failed (${passed + failed} total)`);
