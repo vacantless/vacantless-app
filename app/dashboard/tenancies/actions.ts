@@ -206,13 +206,21 @@ export async function createTenancy(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org) redirect("/onboarding");
 
-  const propertyId = s(formData, "property_id") || null;
+  let propertyId = s(formData, "property_id") || null;
+  // S834a: a landlord with no rental yet (rent-only sign-up) types the address
+  // on this form instead of detouring through the full Add rental page.
+  const newAddress = propertyId ? "" : s(formData, "new_property_address").replace(/\s+/g, " ").trim();
   const startDate = parseDateOrNull(s(formData, "start_date"));
   const endDate = parseDateOrNull(s(formData, "end_date"));
   const tenants = buildTenantList(tenantArraysFrom(formData));
   const fromLead = s(formData, "lead_id") || null;
 
-  const check = validateTenancyInput({ propertyId, startDate, endDate, tenants });
+  const check = validateTenancyInput({
+    propertyId: propertyId ?? (newAddress.length >= 5 ? "new" : null),
+    startDate,
+    endDate,
+    tenants,
+  });
   if (!check.ok) {
     const q = fromLead ? `from=${fromLead}&` : "";
     redirect(`/dashboard/tenancies/new?${q}err=${check.code}`);
@@ -238,6 +246,24 @@ export async function createTenancy(formData: FormData) {
     const q = fromLead ? `from=${fromLead}&` : "";
     redirect(`/dashboard/tenancies/new?${q}err=${code}`);
   };
+
+  // S834a: create the private unit only after every check above passed, so a
+  // failed form never leaves an orphan rental. off_market keeps it off the
+  // public page (no ad needed); the tenancy below then holds it.
+  if (!propertyId && newAddress) {
+    const { data: newProp } = await supabase
+      .from("properties")
+      .insert({
+        organization_id: org.id,
+        address: newAddress,
+        rent_cents: parseMoneyToCents(s(formData, "rent")),
+        status: "off_market",
+      })
+      .select("id")
+      .maybeSingle();
+    propertyId = (newProp as { id: string } | null)?.id ?? null;
+    if (!propertyId) guardFail("property_not_found");
+  }
 
   // 1. The property must belong to the caller's org (RLS scopes this SELECT, so
   //    a foreign property_id simply won't resolve).
@@ -408,7 +434,7 @@ export async function createTenancy(formData: FormData) {
   revalidatePath("/dashboard/tenancies");
   revalidatePath("/dashboard");
   redirect(
-    `/dashboard/tenancies/${tenancyId}?created=1${tookUnitOffMarket ? "&offmarket=1" : ""}`,
+    `/dashboard/tenancies/${tenancyId}?created=1${tookUnitOffMarket ? "&offmarket=1" : ""}${newAddress ? "&rent=1#rent-collection" : ""}`,
   );
 }
 

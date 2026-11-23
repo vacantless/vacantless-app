@@ -7,6 +7,7 @@ import { safeNextPath } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/client";
 import {
   AuthShell,
+  authTrustFor,
   AUTH_BUTTON_CLASS,
   AUTH_INPUT_CLASS,
 } from "@/components/auth-shell";
@@ -24,6 +25,8 @@ export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // S834a: one password box with a Show button instead of a second box.
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // When email confirmation is enabled there's no session yet; we switch to a
   // "check your inbox" panel with real next actions instead of a bare notice.
@@ -186,6 +189,7 @@ export default function SignupPage() {
         eyebrow={signupEyebrow(plan)}
         title="You're already signed in"
         subtitle={`This browser is signed in as ${signedInAs}.`}
+        trust={authTrustFor(plan)}
       >
         <div className="space-y-3">
           <Link href="/dashboard" className={AUTH_BUTTON_CLASS + " block text-center"}>
@@ -210,6 +214,7 @@ export default function SignupPage() {
       eyebrow={signupEyebrow(plan)}
       title="Create your login"
       subtitle={signupSubtitle(plan)}
+      trust={authTrustFor(plan)}
       footer={
         <>
           Already have an account?{" "}
@@ -245,16 +250,28 @@ export default function SignupPage() {
           >
             Password
           </label>
-          <input
-            id="signup-password"
-            type="password"
-            required
-            minLength={8}
-            placeholder="At least 8 characters"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={AUTH_INPUT_CLASS}
-          />
+          <div className="relative">
+            <input
+              id="signup-password"
+              type={showPassword ? "text" : "password"}
+              required
+              minLength={8}
+              autoComplete="new-password"
+              placeholder="At least 8 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={AUTH_INPUT_CLASS + " pr-16"}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-pressed={showPassword}
+              aria-controls="signup-password"
+              className="absolute inset-y-0 right-0 px-3 text-sm font-medium text-gray-600 hover:text-gray-900"
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
         </div>
         {error && (
           <p className="text-sm text-red-600">

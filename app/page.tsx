@@ -1060,7 +1060,7 @@ function RentOnlyCard() {
       </div>
       <div>
         <p className="mb-3 text-[0.9rem] leading-snug text-[#273832]">
-          Your tenants pay by pre-authorized debit into your own Stripe or Rotessa account. Add a tenant, send them the link, and rent comes in on the day you pick. You see who paid and who owes. No Vacantless plan needed, for any number of rentals.
+          Your tenants pay by pre-authorized debit into your own Stripe or Rotessa account. Add a tenant, send them the link, and rent comes in on the day you pick. You see who paid and who owes. No cheques to pick up or deposit, and nothing to remember each month. No Vacantless plan needed, for any number of rentals.
         </p>
         <RentCostTable compact />
       </div>

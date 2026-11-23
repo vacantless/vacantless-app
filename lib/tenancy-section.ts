@@ -32,6 +32,9 @@ export type RentCollectionStatusLabel =
 export type TenancyOpenInput = {
   /** Tenants on the lease. Zero = nothing else can be set up yet. */
   tenantCount: number;
+  /** S834a: the landlord came for rent collection (added the tenant from a
+   *  typed address, or is back from Stripe). Rent is opened before the lease. */
+  rentFirst?: boolean;
   leaseDocStatus: LeaseDocStatusLabel;
   rentCollectionStatus: RentCollectionStatusLabel;
   /**
@@ -58,6 +61,7 @@ export function pickDefaultOpenSection(
   input: TenancyOpenInput,
 ): TenancyOpenSectionId {
   if (input.tenantCount <= 0) return "tenants";
+  if (input.rentFirst && input.rentCollectionStatus === "Not set up") return "rent-collection";
 
   const increaseActionable =
     input.rentIncreaseStatus === "serve_window" ||

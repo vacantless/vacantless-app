@@ -63,7 +63,12 @@ export function decideOnboardingEmail(args: {
   stepSent: number;
   /** ADD_PROPERTY_V2_ENABLED, read by the caller. Off = the inline add form. */
   addPropertyV2Enabled?: boolean;
+  /** S834a: signed up on "Just collecting rent?" (organizations.signup_source.intent). */
+  rentOnly?: boolean;
+  /** S834a: tenancies in the account; the rent nudge stops once there is one. */
+  tenancies?: number;
 }): OnboardingEmail | null {
+  if (args.rentOnly) return decideRentOnboardingEmail(args.stepSent, args.daysSinceSignup, args.tenancies ?? 0);
   const base = NEXT_ACTION[args.stage];
   const next =
     base && args.stage === "signed_up"
@@ -124,5 +129,55 @@ export function decideOnboardingEmail(args: {
     };
   }
 
+  return null;
+}
+
+// S834a: the rent-only path ("Just collecting rent?", /signup?plan=rent). The
+// leasing welcome told these landlords to add photos and connect rental sites.
+export const RENT_FIRST_STEP_PATH = "/dashboard/tenancies/new";
+
+export function decideRentOnboardingEmail(
+  stepSent: number,
+  daysSinceSignup: number,
+  tenancies: number,
+): OnboardingEmail | null {
+  if (stepSent < 1) {
+    const steps = [
+      "1. Add your tenant: the rental's address, the rent and your tenant's name and email.",
+      "2. Connect your own Stripe account, which has no monthly fee. Or Rotessa, if you have 6 rentals or more.",
+      "3. Send your tenant the bank link. They set up the pre-authorized debit once, and rent comes in on the day you pick.",
+    ].join("\n");
+    return {
+      step: 1,
+      subject: "Welcome to Vacantless: rent collection in 3 steps",
+      body: [
+        "Thanks for signing up. Here is how to have rent come in on its own, in three steps.",
+        steps,
+        "Rent goes straight into your own account, and Vacantless adds no fee. You see who paid and who owes. No cheques to pick up or deposit, and nothing to remember each month.",
+        tenancies > 0
+          ? "Your next step: open your tenant and connect Stripe."
+          : "Your next step: add your tenant. The address, the rent and their email are enough.",
+        TRANSLATE_HINT_EMAIL,
+        "Reply to this email if you get stuck. I read every one.",
+        "Noam, founder of Vacantless",
+      ].join("\n\n"),
+      actionLabel: tenancies > 0 ? "Open your tenants" : "Add your tenant",
+      actionPath: tenancies > 0 ? "/dashboard/tenancies" : RENT_FIRST_STEP_PATH,
+    };
+  }
+  if (stepSent < 2 && daysSinceSignup >= 1 && tenancies === 0) {
+    return {
+      step: 2,
+      subject: "One step to collecting rent",
+      body: [
+        "You are close. Add your tenant and rent can start coming in on its own.",
+        "The rental's address, the rent and your tenant's name and email are enough.",
+        "It takes a few minutes. Reply to this email if anything is unclear and I will help.",
+        "Noam, founder of Vacantless",
+      ].join("\n\n"),
+      actionLabel: "Add your tenant",
+      actionPath: RENT_FIRST_STEP_PATH,
+    };
+  }
   return null;
 }

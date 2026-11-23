@@ -16,7 +16,7 @@ const read = (p: string) => readFileSync(p, "utf8");
 
 // 1. Every vendor line has a job, a feature, a price with a named currency, a
 // vendor, an https source and a real date (Noam's rule, 2026-11-22).
-ok("seven vendor lines", VENDOR_COSTS.length === 7);
+ok("eight vendor lines", VENDOR_COSTS.length === 8);
 for (const v of VENDOR_COSTS) {
   ok(`${v.job}: has a Vacantless feature`, v.inVacantless.trim().length > 10);
   ok(`${v.job}: price names its currency`, /\b(US|CA)\$\d/.test(v.typicalPrice));
@@ -36,7 +36,11 @@ const table = noComments(read("components/vendor-cost-table.tsx") + "\n" + read(
 ok("never says you will save", !/you will save|you'll save|save you \$/i.test(all + table));
 ok("says typical", /typical/i.test(table));
 ok("no em dash", !all.includes("\u2014") && !table.includes("\u2014"));
-ok("rent collection is not a saving line", !VENDOR_COSTS.some((v) => /rent by|pre-authorized/i.test(v.inVacantless)));
+// S834a: a rent line is allowed only when it says the payment fee still applies.
+ok(
+  "rent line names the payment fee",
+  VENDOR_COSTS.filter((v) => /rent by/i.test(v.inVacantless)).every((v) => /payment fee still applies/i.test(v.inVacantless)),
+);
 
 // 3. Shown on both pages.
 ok("homepage shows the table", read("app/page.tsx").includes("<VendorCostTable"));
@@ -66,8 +70,8 @@ ok("rate dated", /^\d{4}-\d{2}-\d{2}$/.test(USD_CAD.date) && USD_CAD.rate > 1 &&
 ok("toCad USD", Math.abs(toCad(10, "USD") - 14.325) < 1e-9);
 ok("toCad CAD unchanged", toCad(13, "CAD") === 13);
 const sub = monthlySubtotalCad();
-ok("subtotal low = 14.33 + 21.49 + 13 + 30 = 79", sub.low === 79);
-ok("subtotal high = 14.33 + 27.22 + 13 + 30 = 85", sub.high === 85);
+ok("subtotal low = 14.33 + 21.49 + 13 + 30 + 17.19 = 96", sub.low === 96);
+ok("subtotal high = 14.33 + 27.22 + 13 + 30 + 17.19 = 102", sub.high === 102);
 ok("posting help reads per hour", cadPriceText(VENDOR_COSTS.find((v) => v.kind === "per_job")!) === "about CA$14 to CA$29 an hour");
 ok("only the photo line has an example", VENDOR_COSTS.filter((v) => v.example).length === 1 && Boolean(VENDOR_COSTS.find((v) => v.example)?.job.includes("photo")));
 ok("photo example text", exampleText(VENDOR_COSTS.find((v) => v.example)!) === "a 20-photo listing: about CA$57");

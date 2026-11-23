@@ -452,6 +452,8 @@ export default async function TenancyDetailPage({
     created?: string;
     // Set when creating this tenancy took its rental off the public page (B2).
     offmarket?: string;
+    // S834a: the tenancy was added for rent collection (typed address).
+    rent?: string;
     ended?: string;
     tenant?: string;
     err?: string;
@@ -1501,6 +1503,9 @@ export default async function TenancyDetailPage({
     increaseFlash ||
     (searchParams.saved && FLASH.saved) ||
     (searchParams.created &&
+      searchParams.rent === "1" &&
+      "Tenant added. Next: set up their monthly rent below.") ||
+    (searchParams.created &&
       (searchParams.offmarket
         ? "Tenancy created. This rental is now marked Leased and off its public listing page - it won't take new inquiries or viewing bookings."
         : FLASH.created)) ||
@@ -1793,6 +1798,8 @@ export default async function TenancyDetailPage({
     ? "rent-increase"
     : pickDefaultOpenSection({
         tenantCount: tenants.length,
+        // S834a: added from a typed address (rent-only path) or opened from a link to #rent-collection.
+        rentFirst: searchParams.rent === "1",
         leaseDocStatus,
         rentCollectionStatus,
         rentIncreaseStatus: rentIncrease?.status ?? null,

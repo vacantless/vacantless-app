@@ -52,6 +52,9 @@ export function OnboardingForm({
         />
       </div>
 
+      {/* S834a: the phone is for rental-site ads; someone only collecting rent
+          has no ad, so it waits in Settings. */}
+      {planIntent !== "rent" && (
       <div>
         <label
           htmlFor="public-contact-phone"
@@ -72,6 +75,7 @@ export function OnboardingForm({
           add it later in Settings.
         </p>
       </div>
+      )}
 
       {/* S770 (REVIEW-S770 section 3 item 5): the brand colour picker and its
           preview left this screen. Two fields before the first rental; colours

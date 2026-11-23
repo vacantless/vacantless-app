@@ -1,4 +1,5 @@
 import { CREDIT_CHECK_ONE_LINE, CREDIT_CHECK_ONTARIO_LINE, LTB_CHECK_LINE } from "@/lib/credit-check";
+import { safeTenancyBack } from "@/lib/rent-return";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { adminEmails } from "@/lib/provisioning-server";
 import { channelShownFor } from "@/lib/posting-lanes";
@@ -345,6 +346,7 @@ export default async function SettingsPage({
     logoerr?: string;
     rotessa?: string;
     stripeconnect?: string;
+    back?: string; // S834a: tenancy to return to after Stripe setup
     reason?: string;
     sender?: string; // Communications → Email sender flash
     renter?: string; // Communications → Renter messages flash
@@ -2857,6 +2859,16 @@ export default async function SettingsPage({
             <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
               Stripe rent collection updated. Use <strong>Refresh status</strong> below to
               pull the latest from Stripe.
+              {safeTenancyBack(searchParams.back) && (
+                <div className="mt-2">
+                  <Link
+                    href={`${safeTenancyBack(searchParams.back)}?rent=1#rent-collection`}
+                    className="font-semibold text-green-900 underline"
+                  >
+                    Back to your tenant to send the bank link
+                  </Link>
+                </div>
+              )}
             </div>
           )}
           {searchParams.stripeconnect === "disconnected" && (
@@ -2884,13 +2896,16 @@ export default async function SettingsPage({
             </div>
           )}
 
-          <RotessaSettingsCard
-            account={rotessaAccount}
-            encConfigured={rotessaEncConfigured}
-          />
+          {/* S834a: Stripe first. No monthly fee and no approval wait makes it
+              the quick start under 6 rentals; Rotessa is cheaper from 6. */}
           <StripeConnectSettingsCard
             account={stripeConnectAccount}
             stripeConfigured={stripeConfigured}
+            back={safeTenancyBack(searchParams.back)}
+          />
+          <RotessaSettingsCard
+            account={rotessaAccount}
+            encConfigured={rotessaEncConfigured}
           />
         </div>
       )}

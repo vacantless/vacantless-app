@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createOrganization } from "./actions";
 import { OnboardingForm } from "./onboarding-form";
-import { AuthShell } from "@/components/auth-shell";
+import { AuthShell, authTrustFor } from "@/components/auth-shell";
 import { onboardingNextStep } from "@/lib/signup-copy";
 import { openInvitesForEmail } from "@/lib/team-server";
 import { teamRoleLabel } from "@/lib/team";
@@ -67,8 +67,13 @@ export default async function OnboardingPage({
     <AuthShell
       eyebrow="Step 1 of 2"
       title="Set up your business profile"
-      subtitle="Name your business and add the phone renters can call. Your first rental is next."
+      subtitle={
+        searchParams.plan === "rent"
+          ? "Name your business. Your first tenant is next."
+          : "Name your business and add the phone renters can call. Your first rental is next."
+      }
       footer={onboardingNextStep(searchParams.plan)}
+      trust={authTrustFor(searchParams.plan)}
     >
       {/* gradient step indicator */}
       <div className="mb-6 flex items-center gap-2" aria-hidden>

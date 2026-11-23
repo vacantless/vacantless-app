@@ -50,14 +50,19 @@ export async function createOrganization(formData: FormData) {
   const brandColorSecondary =
     rawSecondary && rawSecondary !== brandColor ? rawSecondary : fallbackSecondary;
 
+  // S834a: an error keeps the plan the landlord came in on (the rent path
+  // otherwise fell back to the leasing copy and the leasing next step).
+  const keepPlan = /^[a-z]{2,20}$/.test(String(formData.get("plan") ?? ""))
+    ? `plan=${String(formData.get("plan"))}&`
+    : "";
   if (!name) {
-    redirect("/onboarding?error=Name+is+required");
+    redirect(`/onboarding?${keepPlan}error=Name+is+required`);
   }
   // S700g (stranger test 2): a business name that is an email address shows up
   // as the header, the email sender name and the renter page title. Ask again.
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(name)) {
     redirect(
-      "/onboarding?error=" +
+      `/onboarding?${keepPlan}error=` +
         encodeURIComponent("Enter your business name, not an email address. Your own name works too."),
     );
   }
@@ -67,7 +72,7 @@ export async function createOrganization(formData: FormData) {
   const phone = validatePublicContactPhone(String(formData.get("public_contact_phone") ?? ""));
   if (!phone.ok) {
     redirect(
-      "/onboarding?error=" +
+      `/onboarding?${keepPlan}error=` +
         encodeURIComponent("That phone number does not look right. Check it, or leave it blank for now."),
     );
   }
@@ -102,10 +107,17 @@ export async function createOrganization(formData: FormData) {
 
   // S723: where this account came from (first-touch cookie set by middleware,
   // lib/signup-source.ts). Best-effort; a missing column or cookie never blocks.
+  // S834a: the rent path is kept beside it ({ intent: "rent" }), so the welcome
+  // and next-day emails talk about tenants and rent, not renters and ads
+  // (lib/onboarding-emails). Readers of the source ignore the extra key.
   try {
     const src = parseSourceCookie(cookies().get(SOURCE_COOKIE)?.value);
-    if (src) {
-      await supabase.from("organizations").update({ signup_source: src }).eq("id", orgId);
+    const rentIntent = String(formData.get("plan") ?? "").trim() === "rent";
+    if (src || rentIntent) {
+      await supabase
+        .from("organizations")
+        .update({ signup_source: { ...(src ?? {}), ...(rentIntent ? { intent: "rent" } : {}) } })
+        .eq("id", orgId);
     }
   } catch {
     // attribution is optional

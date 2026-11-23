@@ -16,7 +16,7 @@ import {
   subscriptionStatusLabel,
   subscriptionIsLive,
 } from "@/lib/stripe-connect";
-import { StatusChip, type ChipTone } from "@/components/ui";
+import { StatusChip, PRIMARY_ACTION_CLASS, type ChipTone } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 
 // The Stripe Connect rent-collection panel on a tenancy (platform pivot step 2,
@@ -90,17 +90,26 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
       {!view.stripeConfigured ? (
         <p className="text-sm text-gray-600">Payments aren&apos;t configured on this deployment yet.</p>
       ) : !view.connectExists ? (
-        <p className="text-sm text-gray-600">
-          Set up Stripe rent collection in{" "}
-          <Link href="/dashboard/settings?tab=banking#stripe-rent" className="font-medium text-brand hover:underline">
-            Settings
-          </Link>{" "}
-          to collect rent by bank debit (Canada PAD or US ACH) for this tenancy.
-        </p>
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            Connect your own Stripe account once (no monthly fee). Then come back here and send{" "}
+            {view.primaryName || "your tenant"} a link to set up the monthly bank debit.
+          </p>
+          <Link
+            href={`/dashboard/settings?tab=banking&back=${encodeURIComponent(`/dashboard/tenancies/${view.tenancyId}`)}#stripe-rent`}
+            className={PRIMARY_ACTION_CLASS}
+            style={{ background: "var(--brand-gradient, var(--brand-color))" }}
+          >
+            Connect Stripe
+          </Link>
+        </div>
       ) : !view.connectReady ? (
         <p className="text-sm text-gray-600">
           Finish your Stripe onboarding in{" "}
-          <Link href="/dashboard/settings?tab=banking#stripe-rent" className="font-medium text-brand hover:underline">
+          <Link
+            href={`/dashboard/settings?tab=banking&back=${encodeURIComponent(`/dashboard/tenancies/${view.tenancyId}`)}#stripe-rent`}
+            className="font-medium text-brand hover:underline"
+          >
             Settings
           </Link>{" "}
           (it isn&apos;t able to collect payments yet), then come back to authorize the tenant.
@@ -114,7 +123,7 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
         <div className="space-y-4">
           <div className="space-y-3">
             <p className="text-sm text-gray-600">
-              {view.primaryName} authorized {method.label.toLowerCase()}. The saved
+              {view.primaryName} authorized {method.label}. The saved
               bank account is ready for monthly rent.
             </p>
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
@@ -358,7 +367,7 @@ export default function TenancyStripeRentSection({ view }: { view: TenancyStripe
         <div className="space-y-3">
           <p className="text-sm text-gray-600">
             Authorize <span className="font-medium text-gray-900">{view.primaryName}</span>&apos;s
-            bank account for rent by {method.label.toLowerCase()} ({connectCountryLabel(view.country)}).
+            bank account for rent by {method.label} ({connectCountryLabel(view.country)}).
             They complete a secure Stripe page; we never see their bank numbers.
             {status === "failed" && " The previous attempt didn't complete. You can start a new one."}
           </p>

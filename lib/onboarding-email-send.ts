@@ -19,7 +19,7 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantles
 /** Only accounts created after this ship time get the emails. */
 export const ONBOARDING_EMAILS_START = "2026-10-09T21:00:00Z";
 export const ONBOARDING_ORG_COLUMNS =
-  "id, name, created_at, plan, subscription_status, closed_at, onboarding_email_step";
+  "id, name, created_at, plan, subscription_status, closed_at, onboarding_email_step, signup_source";
 
 export type OnboardingOrgRow = {
   id: string;
@@ -29,7 +29,18 @@ export type OnboardingOrgRow = {
   subscription_status: string | null;
   closed_at: string | null;
   onboarding_email_step: number | null;
+  /** S834a: { intent: "rent" } marks a "Just collecting rent?" sign-up. */
+  signup_source?: unknown;
 };
+
+/** S834a: the account signed up on the rent-only path. */
+export function isRentIntent(signupSource: unknown): boolean {
+  return (
+    !!signupSource &&
+    typeof signupSource === "object" &&
+    (signupSource as Record<string, unknown>).intent === "rent"
+  );
+}
 
 /** One account: decide, claim, send. detail is null when there was nothing to do. */
 export async function processOnboardingOrg(
@@ -46,13 +57,14 @@ export async function processOnboardingOrg(
     const { count: c } = await q;
     return c ?? 0;
   };
-  const [rentals, liveRentals, rules, overrides, enquiries, bookings] = await Promise.all([
+  const [rentals, liveRentals, rules, overrides, enquiries, bookings, tenancies] = await Promise.all([
     count("properties"),
     count("properties", true),
     count("availability_rules"),
     count("availability_overrides"),
     count("leads"),
     count("showings"),
+    count("tenancies"),
   ]);
   const counts: AccountCounts = {
     id: o.id,
@@ -72,6 +84,8 @@ export async function processOnboardingOrg(
     daysSinceSignup: daysSince(o.created_at, now),
     stepSent: o.onboarding_email_step ?? 0,
     addPropertyV2Enabled: envFlagEnabled(process.env.ADD_PROPERTY_V2_ENABLED),
+    rentOnly: isRentIntent(o.signup_source),
+    tenancies,
   });
   if (!email) return { sent: false, detail: null };
 

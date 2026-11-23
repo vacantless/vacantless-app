@@ -170,6 +170,11 @@ export function LeaseUploadPrefill({
     // Property match (best-effort; leave the select alone if unsure).
     const match = matchProperty(d.unit_address, properties);
     if (match) setVal("tenancy-property-id", match.id);
+    // S834a: no rental yet, so the form asks for the address; fill it from the lease.
+    if (d.unit_address) {
+      const addrEl = document.getElementById("tenancy-new-address") as HTMLInputElement | null;
+      if (addrEl && !addrEl.value.trim()) addrEl.value = d.unit_address;
+    }
 
     // Clause digest -> Other-notes, but only if the operator hasn't typed there.
     const notesEl = document.getElementById("tenancy-notes") as HTMLTextAreaElement | null;

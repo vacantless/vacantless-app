@@ -16,6 +16,15 @@ import { VacantlessMark } from "./vacantless-mark";
  * component (onboarding) and the client components (login/signup).
  */
 
+export const LEASING_TRUST = ["Reply in seconds", "One link to share", "Every renter tracked"] as const;
+/** S834a: the "Just collecting rent?" sign-up path (/signup?plan=rent). */
+export const RENT_TRUST = ["Free on every rental", "Rent goes to your own account", "See who paid"] as const;
+
+/** The proof lines for a sign-up or onboarding screen, by plan intent. */
+export function authTrustFor(plan: string | null | undefined): readonly string[] {
+  return plan === "rent" ? RENT_TRUST : LEASING_TRUST;
+}
+
 /** Vacantless house-mark wordmark, identical to the landing header. */
 export function Wordmark({ href = "/" }: { href?: string }) {
   return (
@@ -45,6 +54,7 @@ export function AuthShell({
   children,
   footer,
   maxWidth = "max-w-md",
+  trust = LEASING_TRUST,
 }: {
   eyebrow?: ReactNode;
   title: string;
@@ -52,6 +62,8 @@ export function AuthShell({
   children: ReactNode;
   footer?: ReactNode;
   maxWidth?: string;
+  /** S834a: the three proof lines under the card; the rent path has its own. */
+  trust?: readonly string[];
 }) {
   return (
     <div className="relative min-h-screen overflow-hidden bg-white">
@@ -93,9 +105,9 @@ export function AuthShell({
 
         {/* trust strip, echoing the landing proof strip */}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium text-gray-400">
-          <TrustItem>Reply in seconds</TrustItem>
-          <TrustItem>One link to share</TrustItem>
-          <TrustItem>Every renter tracked</TrustItem>
+          {trust.map((t) => (
+            <TrustItem key={t}>{t}</TrustItem>
+          ))}
         </div>
       </div>
     </div>

@@ -143,7 +143,15 @@ export default async function NewTenancyPage({
   // already has a live tenancy → we filtered it out; tell the operator why.
   const defaultUnitSpokenFor =
     defaultPropertyId !== "" && spokenFor.has(defaultPropertyId);
-  const emptyState = newTenancyEmptyState(allProperties.length, properties.length);
+  const rawEmptyState = newTenancyEmptyState(allProperties.length, properties.length);
+  // S834a: no rental at all is no longer a dead end. The form takes the
+  // address itself (createTenancy makes a private unit), so a rent-only
+  // landlord adds the tenant in one step.
+  const typeAddress = rawEmptyState === "no_rentals";
+  const emptyState = typeAddress ? null : rawEmptyState;
+  // One rental to pick from: pick it.
+  const pickedPropertyId =
+    defaultPropertyId || (properties.length === 1 ? properties[0].id : "");
 
   const leadProperty = properties.find((p) => p.id === defaultPropertyId);
   const defaultRent = offer
@@ -202,23 +210,15 @@ export default async function NewTenancyPage({
 
       {emptyState ? (
         <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-10 text-center text-sm text-gray-500">
-          {emptyState === "no_rentals" ? (
-            <>
-              Add the unit first. A tenancy has to attach to a unit. Just the address is enough; it stays private.{" "}
-              <Link href="/dashboard/properties/new" className="font-medium text-brand hover:underline">
-                Add a unit
-              </Link>
-            </>
-          ) : (
-            <>
-              No rental is ready for a new tenancy. Every active rental already has
-              an active or upcoming tenancy, or the remaining rentals are not yet
-              public.{" "}
-              <Link href="/dashboard/tenancies" className="font-medium text-brand hover:underline">
-                View tenancies
-              </Link>
-            </>
-          )}
+          {/* S834a: "no_rentals" never reaches here; the form takes the address. */}
+          <>
+            No rental is ready for a new tenancy. Every active rental already has
+            an active or upcoming tenancy, or the remaining rentals are not yet
+            public.{" "}
+            <Link href="/dashboard/tenancies" className="font-medium text-brand hover:underline">
+              View tenancies
+            </Link>
+          </>
         </div>
       ) : (
         <>
@@ -243,6 +243,27 @@ export default async function NewTenancyPage({
           {/* Unit + dates ------------------------------------------------- */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
+              {typeAddress ? (
+                <>
+                  <label htmlFor="tenancy-new-address" className={labelCls}>
+                    Rental address
+                  </label>
+                  <input
+                    id="tenancy-new-address"
+                    type="text"
+                    name="new_property_address"
+                    required
+                    minLength={5}
+                    autoComplete="street-address"
+                    placeholder="123 Main St, Unit 2, Toronto ON"
+                    className={inputCls}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Private: no ad and no public page. You can add photos and post it later if it ever comes up for rent.
+                  </p>
+                </>
+              ) : (
+              <>
               <label htmlFor="tenancy-property-id" className={labelCls}>
                 Rental (unit)
               </label>
@@ -250,7 +271,7 @@ export default async function NewTenancyPage({
                 id="tenancy-property-id"
                 name="property_id"
                 required
-                defaultValue={defaultPropertyId}
+                defaultValue={pickedPropertyId}
                 className={inputCls}
               >
                 <option value="">Select a rental…</option>
@@ -260,6 +281,8 @@ export default async function NewTenancyPage({
                   </option>
                 ))}
               </select>
+              </>
+              )}
             </div>
             <div>
               <label htmlFor="tenancy-start-date" className={labelCls}>

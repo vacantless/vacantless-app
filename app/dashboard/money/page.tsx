@@ -160,13 +160,14 @@ export default async function MoneyHubPage() {
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-gray-700">
             <li>
               <Link href="/dashboard/tenancies/new" className="font-semibold text-brand hover:underline">Add your first tenant</Link>
-              . Have the signed lease? Drop it in and the form fills itself.
+              : the rental&apos;s address, the rent and your tenant&apos;s name and email. On Starter and up, drop in the signed lease and the form fills itself.
             </li>
             <li>
               Connect your own{" "}
-              <Link href="/dashboard/settings?tab=banking#stripe-rent" className="font-semibold text-brand hover:underline">Stripe</Link> or{" "}
-              <Link href="/dashboard/settings?tab=banking#rotessa" className="font-semibold text-brand hover:underline">Rotessa</Link>{" "}
-              account. Your tenant gets a link to set up pre-authorized debit, and rent comes in on the day you pick.
+              <Link href="/dashboard/settings?tab=banking#stripe-rent" className="font-semibold text-brand hover:underline">Stripe</Link>{" "}
+              account, the quick start with no monthly fee, or{" "}
+              <Link href="/dashboard/settings?tab=banking#rotessa" className="font-semibold text-brand hover:underline">Rotessa</Link>,
+              which costs less from 6 rentals. Your tenant gets a link to set up pre-authorized debit, and rent comes in on the day you pick. No cheques to pick up or deposit, and nothing to remember each month.
             </li>
           </ol>
           <p className="mt-2 text-sm text-gray-600">Free on every plan, for every rental. What each one costs you:</p>

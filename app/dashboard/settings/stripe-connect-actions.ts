@@ -1,5 +1,6 @@
 "use server";
 
+import { backQuery } from "@/lib/rent-return";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentOrg } from "@/lib/org";
@@ -151,8 +152,8 @@ export async function startStripeConnect(formData: FormData) {
   try {
     const link = await stripe!.accountLinks.create({
       account: accountId!,
-      refresh_url: `${APP_BASE_URL}${SETTINGS}?stripeconnect=refresh#stripe-rent`,
-      return_url: `${APP_BASE_URL}${SETTINGS}?stripeconnect=returned#stripe-rent`,
+      refresh_url: `${APP_BASE_URL}${SETTINGS}?stripeconnect=refresh${backQuery(formData.get("back"))}#stripe-rent`,
+      return_url: `${APP_BASE_URL}${SETTINGS}?stripeconnect=returned${backQuery(formData.get("back"))}#stripe-rent`,
       type: "account_onboarding",
       collection_options: { fields: "eventually_due" },
     });

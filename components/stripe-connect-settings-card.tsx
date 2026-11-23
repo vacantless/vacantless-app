@@ -59,10 +59,14 @@ function capabilityTone(status: ConnectCapabilityStatus | string): ChipTone {
 export default function StripeConnectSettingsCard({
   account,
   stripeConfigured,
+  back = null,
 }: {
   account: StripeConnectAccountView | null;
   stripeConfigured: boolean;
+  /** S834a: the tenancy to return to after Stripe's form (lib/rent-return). */
+  back?: string | null;
 }) {
+  const backInput = back ? <input type="hidden" name="back" value={back} /> : null;
   const connected = account?.connected ?? false;
   const state = (account?.onboarding_state ?? "not_started") as OnboardingState;
 
@@ -86,6 +90,12 @@ export default function StripeConnectSettingsCard({
         funds settle directly to you. Vacantless schedules and tracks payments
         and never holds your money or stores bank account numbers.
       </p>
+      {!connected && (
+        <p className="mt-2 text-sm font-medium text-gray-800">
+          The quick start for most landlords: no monthly fee. Stripe asks for your
+          details and bank account once, then you send your tenant a link.
+        </p>
+      )}
       <p className="mt-2 text-xs text-gray-500">
         Stripe charges its standard per-payment processing fee (bank debit is its
         lowest-cost method); the fee is set by Stripe and deducted by Stripe.
@@ -146,6 +156,7 @@ export default function StripeConnectSettingsCard({
           <div className="flex flex-wrap items-center gap-3">
             {state !== "ready" && (
               <form action={startStripeConnect}>
+                {backInput}
                 <SubmitButton
                   pendingLabel="Opening…"
                   disabled={!stripeConfigured}
@@ -177,6 +188,7 @@ export default function StripeConnectSettingsCard({
         </div>
       ) : (
         <form action={startStripeConnect} className="mt-4 space-y-4">
+          {backInput}
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">Country</span>
             <select

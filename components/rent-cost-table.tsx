@@ -41,6 +41,7 @@ export function RentCostTable({ compact = false }: { compact?: boolean }) {
         One rent payment per rental a month. Stripe charges 1% + {dollars(STRIPE_PAD.fixedCents)} a payment, never more than {dollars(STRIPE_PAD.capCents)}.
         Rotessa charges {dollars(ROTESSA.monthlyCents)} a month + {dollars(ROTESSA.perPaymentCents)} a payment
         {from ? `, so it costs less from ${from} rentals` : ""}. A bounced payment costs {dollars(STRIPE_PAD.failedCents)} on Stripe, {dollars(ROTESSA.nsfCents)} on Rotessa.
+        Each tenant&apos;s online bank check when they sign up costs {dollars(STRIPE_PAD.bankCheckCents)} once on Stripe, {dollars(ROTESSA.bankCheckCents)} on Rotessa.
         You pay them directly; Vacantless adds nothing. Prices from their sites, {RAIL_COSTS_CHECKED}.
       </p>
     </div>

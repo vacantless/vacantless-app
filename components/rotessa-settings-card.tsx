@@ -17,6 +17,7 @@ import {
 } from "@/components/ui";
 import { Icons } from "@/components/icons";
 import { DEFAULT_TIME_ZONE } from "@/lib/dates";
+import { ROTESSA, RAIL_TABLE_RENT_CENTS, dollars, rotessaCheaperFrom } from "@/lib/rent-rail-costs";
 
 // The Rotessa rent-collection connection panel on Settings (platform pivot step
 // 2, S210). Lets a landlord connect their OWN Rotessa account by pasting an API
@@ -149,6 +150,10 @@ export default function RotessaSettingsCard({
               rotessa.com
             </a>
             . Rotessa reviews each application, so approval can take some days. Then paste your API key here.
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            Rotessa costs {dollars(ROTESSA.monthlyCents)} a month + {dollars(ROTESSA.perPaymentCents)} a payment, so it
+            costs less than Stripe from {rotessaCheaperFrom(RAIL_TABLE_RENT_CENTS) ?? 6} rentals.
           </p>
           <ConnectForm encConfigured={encConfigured} defaultEnv="live" submitLabel="Connect Rotessa" />
         </div>
