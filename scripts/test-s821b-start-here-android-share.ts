@@ -108,6 +108,13 @@ ok("iPhone home-screen app is never told it is in the Share menu", installState(
   ok("worker registered on Android only", reg.includes("/Android/i.test") && reg.includes('register("/share-sw.js")'));
   ok("root layout registers it", read("app/layout.tsx").includes("<ShareSwRegister />"));
 }
+// S833e: Android builds the reply in the renter's own account, like the iPhone path.
+{
+  const route = read("app/dashboard/replies/shared/route.ts");
+  ok("reply cards come from the renter's account", route.includes("const replyOrgId = r.orgId ?? org.id;") && route.includes("loadReplyKitCards(admin, admin, replyOrgId,"));
+  ok("phone comes from the renter's account", route.includes('.select("public_contact_phone").eq("id", replyOrgId)'));
+  ok("reply uses the topic", route.includes("topic: r.topic ?? null"));
+}
 ok("no em dash in the new copy", ![html, miss, ...ANDROID_SHARE_STEPS, connect.description, phone.description].some((t) => t.includes("—")));
 
 // --- S821d: first visits are one question -------------------------------------

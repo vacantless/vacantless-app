@@ -71,12 +71,20 @@ export async function POST(request: Request) {
     let replyLine: string | null = null;
     if (r.rentalId || r.name) {
       try {
-        const cards = r.rentalId ? await loadReplyKitCards(admin, admin, org.id, APP_URL, { propertyIds: [r.rentalId] }) : [];
+        // S833e: the reply comes from the renter's own account (a Davis rental
+        // shared while signed in to Agile found no card), the same as the
+        // iPhone path, and uses the topic the reader saw.
+        const replyOrgId = r.orgId ?? org.id;
+        const [cards, { data: orgRow }] = await Promise.all([
+          r.rentalId ? loadReplyKitCards(admin, admin, replyOrgId, APP_URL, { propertyIds: [r.rentalId] }) : Promise.resolve([]),
+          admin.from("organizations").select("public_contact_phone").eq("id", replyOrgId).maybeSingle(),
+        ]);
         const picked = shortcutReply({
           card: cards.find((c) => c.propertyId === r.rentalId) ?? null,
           site: r.site,
           question: r.question,
-          phone: org.public_contact_phone ?? null,
+          topic: r.topic ?? null,
+          phone: (orgRow as { public_contact_phone: string | null } | null)?.public_contact_phone ?? null,
           renterName: r.name ?? null,
         });
         reply = picked.text;
