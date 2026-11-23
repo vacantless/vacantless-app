@@ -246,6 +246,20 @@ export async function createTenancy(formData: FormData) {
     const q = fromLead ? `from=${fromLead}&` : "";
     redirect(`/dashboard/tenancies/new?${q}err=${code}`);
   };
+  // S837: a rental made on this form is removed again if anything after it
+  // fails, so a failed save never leaves an orphan rental and a retry never
+  // makes a second one (REVIEW-S835 finding 11).
+  let createdPropertyId: string | null = null;
+  const failAndClean = async (code: string): Promise<never> => {
+    if (createdPropertyId) {
+      await supabase
+        .from("properties")
+        .delete()
+        .eq("id", createdPropertyId)
+        .eq("organization_id", org.id);
+    }
+    return guardFail(code);
+  };
 
   // S834a: create the private unit only after every check above passed, so a
   // failed form never leaves an orphan rental. off_market keeps it off the
@@ -263,6 +277,7 @@ export async function createTenancy(formData: FormData) {
       .maybeSingle();
     propertyId = (newProp as { id: string } | null)?.id ?? null;
     if (!propertyId) guardFail("property_not_found");
+    createdPropertyId = propertyId;
   }
 
   // 1. The property must belong to the caller's org (RLS scopes this SELECT, so
@@ -272,7 +287,7 @@ export async function createTenancy(formData: FormData) {
     .select("id")
     .eq("id", propertyId)
     .maybeSingle();
-  if (!propRow) guardFail("property_not_found");
+  if (!propRow) await failAndClean("property_not_found");
 
   // 2. A convert-flow lead must belong to the org and, if it names a unit, to
   //    the SAME unit this tenancy is for.
@@ -282,9 +297,9 @@ export async function createTenancy(formData: FormData) {
       .select("id, property_id")
       .eq("id", fromLead)
       .maybeSingle();
-    if (!leadRow) guardFail("lead_not_found");
+    if (!leadRow) await failAndClean("lead_not_found");
     const leadProp = (leadRow as { property_id: string | null }).property_id;
-    if (leadProp && leadProp !== propertyId) guardFail("lead_mismatch");
+    if (leadProp && leadProp !== propertyId) await failAndClean("lead_mismatch");
   }
 
   // 3. No double-booking: a unit can hold at most one active/upcoming tenancy.
@@ -295,7 +310,7 @@ export async function createTenancy(formData: FormData) {
     .select("id")
     .eq("property_id", propertyId)
     .in("status", ["active", "upcoming"]);
-  if ((liveTenancies ?? []).length > 0) guardFail("dup_tenancy");
+  if ((liveTenancies ?? []).length > 0) await failAndClean("dup_tenancy");
 
   const { data: inserted } = await supabase
     .from("tenancies")
@@ -318,7 +333,8 @@ export async function createTenancy(formData: FormData) {
     .maybeSingle();
 
   const tenancyId = (inserted as { id: string } | null)?.id;
-  if (!tenancyId) redirect("/dashboard/tenancies");
+  // S837: say so on the form instead of dropping the landlord on the list.
+  if (!tenancyId) return failAndClean("tenancy_save");
   if (confirmedRent) {
     await seedConfirmedRentLedger({
       supabase,
@@ -415,8 +431,15 @@ export async function createTenancy(formData: FormData) {
       person_id: personId,
     });
   }
+  // S837: the tenancy is saved by now; a failed tenant save is shown on the
+  // tenancy page so the landlord adds the tenant there.
+  let tenantsFailed = false;
   if (tenantRows.length > 0) {
-    await supabase.from("tenants").insert(tenantRows);
+    const { error: tenantsError } = await supabase.from("tenants").insert(tenantRows);
+    if (tenantsError) {
+      tenantsFailed = true;
+      console.error("[createTenancy] tenants insert failed", tenantsError.message);
+    }
   }
 
   // S816: a tenancy started from a signed offer is linked back to it, so the
@@ -434,7 +457,7 @@ export async function createTenancy(formData: FormData) {
   revalidatePath("/dashboard/tenancies");
   revalidatePath("/dashboard");
   redirect(
-    `/dashboard/tenancies/${tenancyId}?created=1${tookUnitOffMarket ? "&offmarket=1" : ""}${newAddress ? "&rent=1#rent-collection" : ""}`,
+    `/dashboard/tenancies/${tenancyId}?created=1${tookUnitOffMarket ? "&offmarket=1" : ""}${tenantsFailed ? "&err=tenants_save" : ""}${newAddress ? "&rent=1#rent-collection" : ""}`,
   );
 }
 

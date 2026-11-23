@@ -197,6 +197,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   current_rent_history_date:
     "Earlier rent changes must be after the lease start and before the current rent date.",
   rent: "Enter the original monthly rent from the lease.",
+  // S837 (REVIEW-S835 finding 11).
+  tenancy_save: "The tenancy didn't save, and nothing was kept. Please try again.",
+  tenants_save: "The tenancy saved, but the tenant didn't. Add the tenant on this page.",
 };
 
 export function tenancyErrorMessage(code: string | undefined): string | null {

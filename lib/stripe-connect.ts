@@ -1074,6 +1074,15 @@ export function selectActiveSchedulePhase(sched: ScheduleLike): ActiveSchedulePh
 
 
 /**
+ * S837 (REVIEW-S835 finding 11): a saved schedule can still be updated only
+ * while it runs. Stripe releases it after the open-ended phase's one cycle
+ * (status "released"), and "completed" or "canceled" are final too. Pure.
+ */
+export function scheduleStillRunning(status: string | null | undefined): boolean {
+  return status === "active" || status === "not_started";
+}
+
+/**
  * S816h: a Canadian bank (ACSS) mandate can pay a rent subscription only when
  * it was authorized "for" subscriptions (default_for). US bank debit and any
  * non-ACSS mandate pass. No mandate object: true (nothing to check). Pure.

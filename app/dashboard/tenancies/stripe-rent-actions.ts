@@ -19,6 +19,7 @@ import {
   isoToUnixSeconds,
   validateStripeRentUpdate,
   selectActiveSchedulePhase,
+  scheduleStillRunning,
   canCreateRentSubscription,
   rentSubscriptionIdempotencyKey,
   findLiveRentSubscription,
@@ -661,8 +662,20 @@ export async function updateStripeRentAmount(formData: FormData) {
     let scheduleId = tenancy.stripe_subscription_schedule_id;
     let currentPhaseStart: number;
     let currentPriceId: string;
+    // S837 (REVIEW-S835 finding 11): the open-ended second phase lasts one
+    // cycle, then Stripe RELEASES the schedule and the subscription runs on its
+    // own. A saved schedule that is no longer running cannot be updated, so the
+    // next year's increase starts a fresh schedule from the subscription.
+    let storedSched: Stripe.SubscriptionSchedule | null = null;
     if (scheduleId) {
-      const sched = await stripe!.subscriptionSchedules.retrieve(scheduleId, acct);
+      storedSched = await stripe!.subscriptionSchedules.retrieve(scheduleId, acct);
+      if (!scheduleStillRunning(storedSched.status)) {
+        storedSched = null;
+        scheduleId = null;
+      }
+    }
+    if (scheduleId && storedSched) {
+      const sched = storedSched;
       // S462 fix (KI733): pick the CURRENTLY ACTIVE phase, never phases[0].
       // schedule.phases keeps elapsed phases, so after an annual transition the
       // first entry is a stale completed phase and Stripe rejects it as phases[0]
