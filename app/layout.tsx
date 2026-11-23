@@ -5,6 +5,7 @@ import "./globals.css";
 import { adTagConfig, adTagsOn } from "@/lib/ad-conversions";
 import { MarketingTags } from "@/components/ad-tags";
 import { SiteAnalytics } from "@/components/site-analytics";
+import { ShareSwRegister } from "@/components/share-sw-register";
 
 export const metadata: Metadata = {
   title: "Vacantless",
@@ -33,6 +34,7 @@ export default async function RootLayout({
         </NextIntlClientProvider>
         {adTagsOn(adCfg) && <MarketingTags cfg={adCfg} />}
         <SiteAnalytics />
+        <ShareSwRegister />
       </body>
     </html>
   );

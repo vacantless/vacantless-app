@@ -96,6 +96,18 @@ ok("iPhone home-screen app is never told it is in the Share menu", installState(
   ok("step 2 names the button", ANDROID_SHARE_STEPS[1].includes(INSTALL_BUTTON_LABEL));
   ok("install copy has no em dash", ![INSTALL_BUTTON_LABEL, INSTALLED_LINE].some((t) => t.includes("\u2014")));
 }
+// S833d: a big shared picture is shrunk on the phone (Vercel 413 at ~4.5 MB).
+{
+  const sw = read("public/share-sw.js");
+  ok("worker catches only the share POST", sw.includes('const SHARE_PATH = "/dashboard/replies/shared"') && sw.includes('req.method !== "POST"') && sw.includes("url.pathname !== SHARE_PATH"));
+  ok("worker keeps the field name", sw.includes(`const FIELD = "${SHARE_TARGET_FIELD}"`));
+  ok("worker shrinks to well under the limit", /MAX_SIDE = 2000/.test(sw) && sw.includes("convertToBlob"));
+  ok("worker falls back to the original on any error", sw.includes("return file;") && sw.includes("return fetch(req);"));
+  ok("worker passes the sign-in redirect through", sw.includes('redirect: "manual"'));
+  const reg = read("components/share-sw-register.tsx");
+  ok("worker registered on Android only", reg.includes("/Android/i.test") && reg.includes('register("/share-sw.js")'));
+  ok("root layout registers it", read("app/layout.tsx").includes("<ShareSwRegister />"));
+}
 ok("no em dash in the new copy", ![html, miss, ...ANDROID_SHARE_STEPS, connect.description, phone.description].some((t) => t.includes("—")));
 
 // --- S821d: first visits are one question -------------------------------------
