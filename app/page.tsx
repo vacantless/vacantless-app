@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { RentCostTable } from "@/components/rent-cost-table";
 import { VendorCostTable } from "@/components/vendor-cost-table";
+import { SavingsBand } from "@/components/savings-band";
 import { MarketingHeader } from "@/components/marketing-chrome";
 import { OPERATOR_LINE } from "@/lib/operator-line";
 import { LEASING_PROOF_STATS, POSTING_PROOF } from "@/lib/proof-stats";
@@ -54,6 +55,7 @@ export default async function Home() {
       <main>
         <Hero />
         <StopDoing />
+        <SavingsBand />
         <SeeItWork />
         <LeasingProof />
         <Automations />
@@ -1011,7 +1013,7 @@ function Pricing() {
             {PAID_SUPPORT_LINE}. More than 75 rentals? Portfolio adds CA${Math.round(EXTRA_RENTAL.priceCents / 100)} a rental a month.
           </p>
         </div>
-        <VendorCostTable className="mt-4" />
+        <VendorCostTable className="mt-4" rowsFolded />
         <PostingAddonCard />
         <RentOnlyCard />
         <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-[#6ca58d] bg-[#f4f7f5] p-[18px] sm:flex-row sm:items-center">

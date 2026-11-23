@@ -101,6 +101,18 @@ ok("per-job lines never summed", !/perJob\.reduce|monthlySubtotalCad\(perJob/.te
 ok("subtotal shown beside Starter", comp.includes("These apps together") && comp.includes("starterPrice"));
 ok("no average word on the page", !/average/i.test(noComments(comp)));
 
+// S835g: the comparison near the top of the homepage, and the restyled table.
+const band = noComments(read("components/savings-band.tsx"));
+ok("the homepage shows the comparison right after What you stop doing", /<StopDoing \/>\s*<SavingsBand \/>/.test(home));
+ok("the band adds up the monthly apps only", band.includes("monthlySubtotalCad()") && !/reduce\(|perJob|per_job/.test(band));
+ok("the band keeps the manager line outside the total", /share_of_rent/.test(band) && !/sub\.(low|high)\s*\+/.test(band));
+ok("the band never promises a saving", !/you will save|you'll save|save you \$|average/i.test(band));
+ok("the band says typical and links to the full list", /Typical list prices/.test(band) && band.includes('href="#pays-for-itself"'));
+ok("the band takes Starter's price from billing", band.includes("TIERS.starter") && !/CA\$29/.test(band));
+ok("no em dash in the band", !band.includes("\u2014"));
+ok("the sources sit in one list that opens", /<details[\s\S]*Where these prices come from[\s\S]*VENDOR_COSTS\.map/.test(comp));
+ok("the table still says why per-job prices are not added", comp.includes("Per-job prices are not added up"));
+
 if (failed) {
   console.log(`\n${failed} failed`);
   process.exit(1);
