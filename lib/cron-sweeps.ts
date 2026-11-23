@@ -52,6 +52,8 @@ export const SWEEP_PATHS = [
   "/api/cron/posted-results-email",
   // S831: the monthly report for each advertised rental (lib/rental-report).
   "/api/cron/rental-report",
+  // S836b: the monthly account summary (lib/account-report).
+  "/api/cron/account-report",
   // S829c: a paid ad waiting at a site's checkout emails the landlord (lib/checkout-ready).
   "/api/cron/checkout-ready",
   // S761: posts an edited rental's new ad once the robot took the old one down.

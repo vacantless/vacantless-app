@@ -169,6 +169,20 @@ export default async function ReportsPage({
         }
       />
 
+      {/* S836b: the monthly account summary, the same one emailed on the 1st. */}
+      <Link
+        href="/dashboard/reports/summary"
+        className="mb-6 flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm hover:bg-gray-50"
+      >
+        <span>
+          <span className="font-semibold text-gray-900">Monthly summary</span>
+          <span className="text-gray-600"> Vacancy rate, each unit, income and expenses, and where to spend.</span>
+        </span>
+        <span className="font-medium" style={{ color: "var(--brand-color)" }}>
+          Open
+        </span>
+      </Link>
+
       {/* Headline KPIs */}
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
