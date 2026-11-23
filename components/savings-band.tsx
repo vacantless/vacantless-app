@@ -18,7 +18,7 @@ export function SavingsBand() {
   const managerExample = manager ? exampleText(manager) : null;
   return (
     <section id="what-it-replaces" className="border-b border-[#d9e1dc] bg-[#f4f7f5] py-12 sm:py-14">
-      <div className="mx-auto w-[min(1160px,calc(100%-32px))]">
+      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
         <h2 className="mb-2 text-[clamp(1.5rem,2.8vw,2.1rem)] font-extrabold leading-tight">What it replaces</h2>
         <p className="mb-6 max-w-[40rem] text-base leading-relaxed text-[#59655f]">
           Typical list prices for the apps a landlord pays for one by one, beside one Vacantless plan.
@@ -27,9 +27,10 @@ export function SavingsBand() {
           <div className="rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
             <p className="text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[#59655f]">{count} separate apps</p>
             <p className="mt-1 text-[clamp(1.7rem,3.2vw,2.3rem)] font-extrabold leading-tight text-[#15211d]">
+              <span className="text-[0.55em] font-bold text-[#59655f]">about </span>
               CA${sub.low} to CA${sub.high}
             </p>
-            <p className="text-[0.95rem] text-[#59655f]">a month, about</p>
+            <p className="text-[0.95rem] text-[#59655f]">a month</p>
             <ul className="mt-3 list-none space-y-1 p-0 text-[0.92rem] text-[#273832]">
               {monthly.map((v) => (
                 <li key={v.job} className="flex items-baseline justify-between gap-3">

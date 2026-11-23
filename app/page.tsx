@@ -60,7 +60,6 @@ export default async function Home() {
         <LeasingProof />
         <Automations />
         <LessTyping />
-        <AfterTheLease />
         <HowItWorks />
         <LittleThings />
         <Pricing />
@@ -513,10 +512,10 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img?: stri
     points: [
       "Your manager, contractor and cleaner each get their own link. No sign-in, no app",
       "They tap where a unit is: notice given, reno, cleaning, photos in, rented, moved in, with a ready-by date",
+      "Each unit's stage shows on your rentals, and you hear when one stalls",
       "Photos are in? New photos come in from your Google Drive or Dropbox folder, brightened, with the originals kept",
       "Tenant gave notice? The unit is on your relist list with the move-out date",
       "Rented takes your ads down when we post them for you. Moved in starts the tenancy",
-      "Each unit's stage shows on your rentals, and you hear when one stalls",
     ],
     alt: "A crew member's turnover page: each unit with its stage, date and the next buttons to tap",
     preview: "turnovers",
@@ -560,6 +559,43 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img?: stri
   },
 ];
 
+// S835h: each card shows its first three points; the rest fold under
+// "Show N more" (a plain <details>, as in Little things). A card with only
+// one extra line stays whole, since a fold that hides one line saves nothing.
+const AUTOMATION_POINTS_SHOWN = 3;
+
+function AutomationPointList({ points }: { points: string[] }) {
+  return (
+    <ul className="grid list-none gap-2.5 p-0">
+      {points.map((p) => (
+        <li key={p} className="flex items-start gap-2 text-[0.98rem] leading-snug text-[#273832]">
+          <CheckMark />
+          {p}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function AutomationPoints({ points }: { points: string[] }) {
+  const extra = points.length - AUTOMATION_POINTS_SHOWN;
+  if (extra < 2) return <AutomationPointList points={points} />;
+  return (
+    <>
+      <AutomationPointList points={points.slice(0, AUTOMATION_POINTS_SHOWN)} />
+      <details className="group mt-2.5">
+        <summary className="cursor-pointer list-none text-[0.92rem] font-bold text-[var(--color-accent)] hover:underline [&::-webkit-details-marker]:hidden">
+          <span className="group-open:hidden">Show {extra} more</span>
+          <span className="hidden group-open:inline">Show fewer</span>
+        </summary>
+        <div className="mt-2.5">
+          <AutomationPointList points={points.slice(AUTOMATION_POINTS_SHOWN)} />
+        </div>
+      </details>
+    </>
+  );
+}
+
 function Automations() {
   return (
     <section id="automations" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
@@ -578,14 +614,7 @@ function Automations() {
                 <h3 className="mb-4 max-w-[22ch] text-[clamp(1.5rem,2.6vw,2.05rem)] font-extrabold leading-[1.1]">
                   {a.title}
                 </h3>
-                <ul className="grid list-none gap-2.5 p-0">
-                  {a.points.map((p) => (
-                    <li key={p} className="flex items-start gap-2 text-[0.98rem] leading-snug text-[#273832]">
-                      <CheckMark />
-                      {p}
-                    </li>
-                  ))}
-                </ul>
+                <AutomationPoints points={a.points} />
               </div>
               <figure className={`m-0 ${a.phone || a.preview ? "flex justify-center" : ""}`}>
                 {a.preview === "turnovers" ? (
@@ -766,28 +795,32 @@ const AFTER_LEASE: { title: string; body: string; href?: string; link?: string }
   },
 ];
 
-function AfterTheLease() {
+/* S835h: "The paperwork, filled in" was its own section; it is now the first
+   card in Little things (same three items, same links, same #paperwork
+   anchor), to shorten the page without dropping a line. */
+function PaperworkCard() {
   return (
-    <section id="paperwork" className="border-b border-[#d9e1dc] py-16 sm:py-[76px]">
-      <div className="mx-auto w-[min(1120px,calc(100%-32px))]">
-        <SectionHead title="The paperwork, filled in.">
-          For Ontario rentals. The forms come straight from the tenancy you already have.
-        </SectionHead>
-        <div className="grid gap-4 md:grid-cols-3">
-          {AFTER_LEASE.map((c) => (
-            <article key={c.title} className="rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
-              <h3 className="mb-2 text-[1.08rem] font-bold">{c.title}</h3>
-              <p className="text-[0.9rem] leading-snug text-[#273832]">{c.body}</p>
-              {c.href && c.link ? (
-                <a href={c.href} className="mt-3 inline-block text-[0.9rem] font-semibold text-[var(--color-primary)] hover:underline">
-                  {c.link}
-                </a>
-              ) : null}
-            </article>
-          ))}
-        </div>
+    <div id="paperwork" className="rounded-lg border border-[#d9e1dc] bg-white p-5 md:col-span-2">
+      <h3 className="mb-1 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">
+        The paperwork, filled in
+      </h3>
+      <p className="mb-3 text-[0.9rem] leading-snug text-[#59655f]">
+        For Ontario rentals. The forms come straight from the tenancy you already have.
+      </p>
+      <div className="grid gap-4 md:grid-cols-3">
+        {AFTER_LEASE.map((c) => (
+          <div key={c.title}>
+            <p className="mb-1 text-[0.95rem] font-bold text-[#15211d]">{c.title}</p>
+            <p className="text-[0.9rem] leading-snug text-[#273832]">{c.body}</p>
+            {c.href && c.link ? (
+              <a href={c.href} className="mt-1.5 inline-block text-[0.9rem] font-semibold text-[var(--color-primary)] hover:underline">
+                {c.link}
+              </a>
+            ) : null}
+          </div>
+        ))}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -906,6 +939,7 @@ function LittleThings() {
           Small touches that save you a call, a trip, an hour or a bill.
         </SectionHead>
         <div className="grid gap-4 md:grid-cols-2">
+          <PaperworkCard />
           {LITTLE_THING_GROUPS.map((g) => (
             <div key={g.head} className="rounded-lg border border-[#d9e1dc] bg-white p-5">
               <h3 className="mb-3 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">{g.head}</h3>
@@ -990,32 +1024,49 @@ function Pricing() {
         </div>
         {/* S779: one feature list for every paid plan, grouped (Noam approved
             2026-11-10 17:10: Lease it, Run it, Year-end). lib/billing.ts. */}
+        {/* S835h: the full list folds behind one line (the page ran 15 screens;
+            Noam 2026-11-23). A plain <details>, so every line stays in the page
+            for search engines and needs no script. Plan prices stay open. */}
         <div id="paid-plans" className="mt-4 rounded-lg border border-[#d9e1dc] bg-white p-[22px]">
-          <h3 className="mb-4 text-[1.08rem] font-semibold">Every paid plan includes</h3>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {PAID_FEATURE_GROUPS.map((g) => (
-              <div key={g.head}>
-                <p className="mb-2 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">
-                  {g.head}
-                </p>
-                <ul className="grid list-none gap-2 p-0">
-                  {g.items.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-[0.86rem] leading-snug text-[#273832]">
-                      <CheckMark />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <h3 className="mb-2 text-[1.08rem] font-semibold">Every paid plan includes</h3>
+          <p className="text-[0.92rem] leading-snug text-[#273832]">
+            {PAID_FEATURE_GROUPS.map((g) => g.head).join(", ")}.
+          </p>
+          <details className="group mt-3">
+            <summary className="cursor-pointer list-none text-[0.9rem] font-bold text-[var(--color-accent)] hover:underline [&::-webkit-details-marker]:hidden">
+              <span className="group-open:hidden">
+                See all {PAID_FEATURE_GROUPS.reduce((n, g) => n + g.items.length, 0)} features
+              </span>
+              <span className="hidden group-open:inline">Hide the list</span>
+            </summary>
+            <div className="mt-4 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {PAID_FEATURE_GROUPS.map((g) => (
+                <div key={g.head}>
+                  <p className="mb-2 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">
+                    {g.head}
+                  </p>
+                  <ul className="grid list-none gap-2 p-0">
+                    {g.items.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-[0.86rem] leading-snug text-[#273832]">
+                        <CheckMark />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </details>
           <p className="mt-4 text-[0.84rem] text-[#59655f]">
             {PAID_SUPPORT_LINE}. More than 75 rentals? Portfolio adds CA${Math.round(EXTRA_RENTAL.priceCents / 100)} a rental a month.
           </p>
         </div>
         <VendorCostTable className="mt-4" rowsFolded />
-        <PostingAddonCard />
-        <RentOnlyCard />
+        {/* S835h: the two extras sit side by side on a wide screen. */}
+        <div className="mt-4 grid gap-4 lg:grid-cols-2 lg:items-start">
+          <PostingAddonCard />
+          <RentOnlyCard />
+        </div>
         <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-lg border border-[#6ca58d] bg-[#f4f7f5] p-[18px] sm:flex-row sm:items-center">
           <div>
             <strong className="block text-[1rem]">Want a hand setting up?</strong>
@@ -1045,7 +1096,7 @@ function RentOnlyCard() {
   return (
     <article
       id="rent-only"
-      className="mt-4 grid gap-4 rounded-lg border border-[#d9e1dc] bg-white p-[22px] md:grid-cols-[minmax(0,240px)_1fr] md:items-start"
+      className="grid gap-4 rounded-lg border border-[#d9e1dc] bg-white p-[22px] md:grid-cols-[minmax(0,240px)_1fr] md:items-start lg:grid-cols-1"
     >
       <div>
         <p className="mb-1 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">
@@ -1087,7 +1138,7 @@ function PostingAddonCard() {
   return (
     <article
       id="posting-addon"
-      className="mt-4 grid gap-4 rounded-lg border border-[#d9e1dc] bg-white p-[22px] md:grid-cols-[minmax(0,240px)_1fr] md:items-start"
+      className="grid gap-4 rounded-lg border border-[#d9e1dc] bg-white p-[22px] md:grid-cols-[minmax(0,240px)_1fr] md:items-start lg:grid-cols-1"
     >
       <div>
         <p className="mb-1 text-[0.79rem] font-extrabold uppercase tracking-[0.08em] text-[var(--color-accent)]">

@@ -31,7 +31,7 @@ function Row({ v }: { v: VendorCost }) {
         <span className="block text-[0.9rem] leading-snug text-[#59655f]">In Vacantless: {v.inVacantless}</span>
       </span>
       <span className="sm:text-right">
-        <span className="font-semibold text-[#15211d]">{cadPriceText(v)}</span>
+        <span className="font-semibold text-[#15211d] sm:whitespace-nowrap">{cadPriceText(v)}</span>
         {example ? <span className="block text-[0.86rem] text-[#273832]">{example}</span> : null}
       </span>
     </li>
