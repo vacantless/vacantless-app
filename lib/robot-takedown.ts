@@ -15,6 +15,7 @@ import { TAKEDOWN_TRANSPORT } from "@/lib/distribution-worker";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { siteName } from "@/lib/ads-still-up";
+import { triggerTakedownNow } from "@/lib/post-now";
 
 export type RobotTakedownQueued = { portal: string; listingPostId: string; runItemId: string };
 
@@ -128,6 +129,8 @@ export async function queueRobotTakedowns(args: {
   } catch {
     // best-effort
   }
+  // S830i: Kijiji and Zumper takedowns run in takedown-sites.yml; wake it now.
+  if (out.some((o) => o.portal === "kijiji" || o.portal === "zumper")) await triggerTakedownNow();
   return out;
 }
 

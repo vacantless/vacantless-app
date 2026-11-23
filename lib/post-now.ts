@@ -44,6 +44,33 @@ export async function triggerPostNow(
   }
 }
 
+// S830i: Kijiji edits and Kijiji/Zumper takedowns run in takedown-sites.yml,
+// scheduled every 3 hours, but GitHub ran it only about 3 times a day (2026-11-22:
+// 6:56 am, 2:58 pm, then nothing until a hand start at 7:57 pm), so the
+// Manitoba text edit waited over an hour. Queuing one now asks it to run at once.
+export const TAKEDOWN_NOW_EVENT = "takedown-now";
+
+export async function triggerTakedownNow(
+  fetchImpl: typeof fetch = fetch,
+  token: string | undefined = process.env.POST_NOW_GITHUB_TOKEN,
+): Promise<boolean> {
+  if (!token) return false;
+  try {
+    const { url, init } = postNowRequest(token);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetchImpl(url, {
+      ...init,
+      body: JSON.stringify({ event_type: TAKEDOWN_NOW_EVENT }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    return res.status === 204;
+  } catch {
+    return false;
+  }
+}
+
 // S785: Rentals.ca takedowns run on the home runner (rentals-live-check-home.yml).
 // A slot switch asks it to run now instead of at its daily 14:17 UTC run.
 export const RENTALS_TAKEDOWN_EVENT = "rentals-takedown";

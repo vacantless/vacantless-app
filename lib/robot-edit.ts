@@ -9,6 +9,7 @@
 // ============================================================================
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { EDIT_TRANSPORT } from "@/lib/distribution-worker";
+import { triggerTakedownNow } from "@/lib/post-now";
 
 export async function queueRobotEdits(args: {
   supabase: SupabaseClient;
@@ -89,5 +90,7 @@ export async function queueRobotEdits(args: {
   } catch {
     // best-effort: the saved notice then names the site as one to edit by hand
   }
+  // S830i: wake the edit run now instead of waiting for GitHub's schedule.
+  if (queued.length > 0) await triggerTakedownNow();
   return queued;
 }
