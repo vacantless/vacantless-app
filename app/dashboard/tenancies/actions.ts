@@ -566,7 +566,16 @@ export async function watchLease(formData: FormData) {
     .select("id")
     .maybeSingle();
   const tenancyId = (inserted as { id: string } | null)?.id;
-  if (!tenancyId) redirect("/dashboard/tenancies");
+  // S837b: same rule as createTenancy (S837a). The unit made a moment ago is
+  // removed when the tenancy does not save, and the form says so.
+  if (!tenancyId) {
+    await supabase
+      .from("properties")
+      .delete()
+      .eq("id", propertyId)
+      .eq("organization_id", org.id);
+    redirect("/dashboard/tenancies/watch?err=tenancy_save");
+  }
   if (confirmedRent) {
     await seedConfirmedRentLedger({
       supabase,
@@ -586,7 +595,7 @@ export async function watchLease(formData: FormData) {
     phone,
     phone_e164,
   });
-  await supabase.from("tenants").insert({
+  const { error: tenantError } = await supabase.from("tenants").insert({
     organization_id: org.id,
     tenancy_id: tenancyId,
     name: primaryName,
@@ -596,10 +605,13 @@ export async function watchLease(formData: FormData) {
     is_primary: true,
     person_id: personId,
   });
+  if (tenantError) console.error("[watchLease] tenant insert failed", tenantError.message);
 
   revalidatePath("/dashboard/tenancies");
   revalidatePath("/dashboard");
-  redirect(`/dashboard/tenancies/${tenancyId}?created=1&watch=1`);
+  redirect(
+    `/dashboard/tenancies/${tenancyId}?created=1&watch=1${tenantError ? "&err=tenants_save" : ""}`,
+  );
 }
 
 // Confirm-an-existing-tenancy worker for watchLease (NOT a server action — it's

@@ -2,6 +2,7 @@
 // (REVIEW-S835 finding 11). Run: npx tsx scripts/test-s837a-tenancy-save.ts
 import { readFileSync } from "node:fs";
 import { tenancyErrorMessage } from "../lib/tenancy";
+import { watchLeaseErrorMessage } from "../lib/watch-lease";
 import { scheduleStillRunning } from "../lib/stripe-connect";
 
 let failed = 0;
@@ -41,6 +42,18 @@ ok("a stopped schedule falls through to a fresh one",
   /if \(!scheduleStillRunning\(storedSched\.status\)\) \{\s*storedSched = null;\s*scheduleId = null;/.test(upd)
   && upd.indexOf("scheduleStillRunning(") < upd.indexOf("subscriptionSchedules.create("));
 ok("the fresh schedule id is saved", upd.includes("stripe_subscription_schedule_id: scheduleId,"));
+
+// S837b: Watch a lease follows the same rule.
+const watch = actions.slice(
+  actions.indexOf("export async function watchLease"),
+  actions.indexOf("async function watchExistingTenancy"),
+);
+ok("watch: unit removed when the tenancy does not save",
+  /if \(!tenancyId\) \{\s*await supabase\s*\.from\("properties"\)\s*\.delete\(\)\s*\.eq\("id", propertyId\)\s*\.eq\("organization_id", org\.id\);\s*redirect\("\/dashboard\/tenancies\/watch\?err=tenancy_save"\);/.test(watch));
+ok("watch: no silent drop on the list", !watch.includes('if (!tenancyId) redirect("/dashboard/tenancies");'));
+ok("watch: tenant insert is checked", watch.includes("const { error: tenantError } = await supabase.from(\"tenants\").insert({"));
+ok("watch: tenant failure shown on the tenancy", watch.includes('tenantError ? "&err=tenants_save" : ""'));
+ok("watch: form message", (watchLeaseErrorMessage("tenancy_save") ?? "").includes("nothing was kept"));
 
 if (failed) {
   console.log(`\n${failed} failed`);

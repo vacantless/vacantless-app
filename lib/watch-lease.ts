@@ -80,6 +80,8 @@ const WATCH_LEASE_ERRORS: Record<string, string> = {
   rent: "Enter the original monthly rent from the lease.",
   notfound: "That tenancy could no longer be found.",
   forbidden: "You don't have permission to add a lease.",
+  // S837b.
+  tenancy_save: "The lease didn't save, and nothing was kept. Please try again.",
 };
 
 export function watchLeaseErrorMessage(code: string | undefined): string | null {
