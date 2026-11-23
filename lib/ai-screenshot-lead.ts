@@ -39,6 +39,7 @@ export function buildScreenshotPrompt(rentals: EnquiryRental[]): string {
     "Return JSON with these keys:",
     '{"is_enquiry": true|false, "confidence": 0 to 1, "name": string|null, "email": string|null,',
     ' "phone": string|null, "question": string|null, "rental_id": one id from the list or null,',
+    ' "price_shown": the monthly rent shown in the chat title or ad line as a number (for example 1225), or null,',
     ' "site": the app or website the chat is on (for example Facebook Marketplace, Kijiji, WhatsApp, Text message), or null,',
     ' "topic": one word for what the renter asked last, from the list below,',
     ' "not_renter": true only when the other person is not looking to rent}',

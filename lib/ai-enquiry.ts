@@ -116,6 +116,12 @@ function cleanStr(v: unknown, max = 200): string | null {
   return s ? s.slice(0, max) : null;
 }
 
+/** S833c: "CA$1,225", "1225", 1225 -> 1225; anything else -> null. */
+export function priceShown(v: unknown): number | null {
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(/[^0-9.]/g, "")) : NaN;
+  return Number.isFinite(n) && n >= 100 && n <= 100_000 ? Math.round(n) : null;
+}
+
 export function normalizeEnquiryRead(
   raw: Record<string, unknown> | null,
   rentals: EnquiryRental[],
@@ -129,7 +135,18 @@ export function normalizeEnquiryRead(
   if (phone && phone.replace(/\D/g, "").length < 10) phone = null;
   const ids = new Set(rentals.map((r) => r.id));
   const rentalIdRaw = cleanStr(raw.rental_id, 64);
-  const rentalId = rentalIdRaw && ids.has(rentalIdRaw) ? rentalIdRaw : null;
+  let rentalId = rentalIdRaw && ids.has(rentalIdRaw) ? rentalIdRaw : null;
+  // S833c: the AI's rental pick is checked against the price it saw. The same
+  // Marketplace chat was read as three different units in a row (Unit 33, none,
+  // Unit 3); the price on the ad line is the steady fact, so code decides.
+  const shown = priceShown(raw.price_shown);
+  if (shown != null) {
+    const same = rentals.filter((r) => r.rentDollars != null && Math.round(r.rentDollars) === shown);
+    const picked = rentalId ? rentals.find((r) => r.id === rentalId) ?? null : null;
+    const pickedRent = picked?.rentDollars != null ? Math.round(picked.rentDollars) : null;
+    if (picked && pickedRent != null && pickedRent !== shown) rentalId = same.length === 1 ? same[0].id : null;
+    else if (!picked && same.length === 1) rentalId = same[0].id;
+  }
   const confidence =
     typeof raw.confidence === "number" && Number.isFinite(raw.confidence)
       ? Math.max(0, Math.min(1, raw.confidence))
