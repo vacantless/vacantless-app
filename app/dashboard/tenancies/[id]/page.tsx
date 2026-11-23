@@ -437,6 +437,7 @@ const STRIPE_RENT_ERROR: Record<string, string> = {
   norent: "Set a monthly rent amount on this tenancy before scheduling rent.",
   baddate: "Pick a first charge date at least 2 business days from today.",
   subfail: "Stripe couldn't create the rent subscription. Try again.",
+  mandatecheck: "We couldn't check the bank authorization with Stripe just now, so rent was not scheduled. Try again in a minute.",
   useend: "Nothing was saved. Monthly rent is still collecting, so this can't be set to Ended here. Use End tenancy below. It stops the rent too.",
   subsavefail: "Stripe set up the monthly rent, but we couldn't save it here. Press Set up monthly rent again. It will find the one Stripe has, and no second debit is made.",
   nosub: "Set up the monthly rent subscription before refreshing.",

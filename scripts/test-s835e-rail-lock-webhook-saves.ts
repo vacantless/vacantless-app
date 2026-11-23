@@ -53,5 +53,14 @@ const sql = readFileSync("supabase/migrations/0327_rail_tables_service_writes.sq
 ok("0327 refuses user writes on both tables", (sql.match(/as restrictive for (insert|update|delete) to authenticated/g) ?? []).length === 6);
 ok("0327 leaves reads alone and drops nothing", !/for select|for all|\bdrop\b|\brevoke\b/i.test(sql));
 
+// S835f: rent is not scheduled on a bank authorization that could not be checked.
+{
+  const rent = readFileSync("app/dashboard/tenancies/stripe-rent-actions.ts", "utf8");
+  ok("an unchecked authorization stops the schedule", /mandate check failed[\s\S]{0,400}striperent=mandatecheck/.test(rent));
+  ok("the page explains it", /mandatecheck: "We couldn't check the bank authorization/.test(readFileSync("app/dashboard/tenancies/[id]/page.tsx", "utf8")));
+  const costs = readFileSync("lib/vendor-costs.ts", "utf8");
+  ok("the rent app line names Pro only", /typicalPrice: "US\$12 a month for 3 units"/.test(costs) && /vendor: "Landlord Studio Pro, US plan, billed yearly"/.test(costs) && !/Landlord Studio Go/.test(costs.replace(/\/\/.*$/gm, "")));
+}
+
 console.log(`\ns835e rail lock and webhook saves: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

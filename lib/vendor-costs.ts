@@ -73,10 +73,12 @@ export const VENDOR_COSTS: readonly VendorCost[] = [
     // paid either way, and the line says so (test-s832-vendor-costs).
     job: "A rent collection app",
     inVacantless: "Rent by bank debit into your own Stripe or Rotessa account, free on every plan. Their payment fee still applies",
-    typicalPrice: "US$12 a month, 3 units, billed yearly",
+    // S835f (REVIEW-S835 finding 8, Noam's wording 2026-11-23). The line names
+    // Pro only: Landlord Studio's free Go plan is a different plan.
+    typicalPrice: "US$12 a month for 3 units",
     amount: { currency: "USD", low: 12 },
     per: "a month",
-    vendor: "Landlord Studio Pro, US plan",
+    vendor: "Landlord Studio Pro, US plan, billed yearly",
     sourceUrl: "https://www.landlordstudio.com/pricing",
     checkedOn: "2026-11-23",
     kind: "monthly",

@@ -317,6 +317,9 @@ export async function createStripeRentSubscription(formData: FormData) {
     } catch (err) {
       if (err && typeof err === "object" && "digest" in err) throw err;
       console.error("[stripe-rent] mandate check failed:", err instanceof Error ? err.message : String(err));
+      // S835f (REVIEW-S835): do not schedule rent on an authorization we could
+      // not check. An unchecked one is how the first $5 test failed (S816h).
+      redirect(`${tenancyPath(tenancyId)}?striperent=mandatecheck`);
     }
   }
 
