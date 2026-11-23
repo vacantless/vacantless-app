@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { SEND_SHORTCUT_STEPS, SEND_URL_PATH } from "@/lib/send-shortcut-copy";
 import { ANDROID_SHARE_STEPS } from "@/lib/share-target";
+import { InstallAppButton } from "@/components/install-app-button";
 import { copyWhenReady } from "@/lib/copy-then-open";
 import { phoneKind, type PhoneKind } from "@/lib/phone-setup";
 import { makeSendToVacantlessKey, showPhoneSetupCode, turnOffSendToVacantlessKey } from "./actions";
@@ -151,6 +152,7 @@ export function SendShortcutCard({
             <li key={i}>{s}</li>
           ))}
         </ol>
+        <InstallAppButton />
         <p className="mt-2 text-xs text-gray-600">You do not need a key. We show your reply with a Copy button.</p>
       </div>
 

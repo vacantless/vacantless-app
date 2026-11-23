@@ -3,7 +3,7 @@
 // Run: npx tsx scripts/test-s821b-start-here-android-share.ts
 import { readFileSync } from "node:fs";
 import { computeOnboardingState } from "../lib/onboarding-wizard";
-import { ANDROID_SHARE_NOTE, ANDROID_SHARE_STEPS, SHARE_TARGET_FIELD, SHARE_TARGET_PATH, escapeHtml, renderSharePage, shareSaved } from "../lib/share-target";
+import { ANDROID_SHARE_NOTE, ANDROID_SHARE_STEPS, INSTALL_BUTTON_LABEL, INSTALLED_LINE, installState, SHARE_TARGET_FIELD, SHARE_TARGET_PATH, escapeHtml, renderSharePage, shareSaved } from "../lib/share-target";
 import { PHONE_REPLY_NOTE_MARKS } from "../lib/reply-kit-server";
 import { sendResultLine } from "../lib/send-shortcut";
 import manifest from "../app/manifest";
@@ -84,6 +84,18 @@ ok("the page escapes the renter's words", html.includes("Saved &lt;Maya&gt; in R
 ok("the page has Copy reply and the renter link", html.includes('id="copy"') && html.includes('href="/dashboard/leads/abc"') && html.includes("<h1>Done</h1>"));
 const miss = renderSharePage({ line: "We could not read that picture.", reply: null, link: null, ok: false });
 ok("a miss has no reply box and no script", miss.includes("<h1>Not saved</h1>") && !miss.includes('id="copy"') && !miss.includes("<script>"));
+// S833b: one-tap install button on Android.
+ok("installed app says installed", installState({ android: true, standalone: true, promptReady: true }) === "installed");
+ok("Chrome offers install: button shows", installState({ android: true, standalone: false, promptReady: true }) === "ready");
+ok("Android, no offer: nothing shows", installState({ android: true, standalone: false, promptReady: false }) === "none");
+ok("iPhone home-screen app is never told it is in the Share menu", installState({ android: false, standalone: true, promptReady: false }) === "none");
+{
+  const btn = read("components/install-app-button.tsx");
+  ok("button waits for beforeinstallprompt", btn.includes("beforeinstallprompt") && btn.includes("preventDefault()") && btn.includes(".prompt()"));
+  ok("Quick replies shows the install button under the Android steps", /ANDROID_SHARE_STEPS\.map[\s\S]*<InstallAppButton \/>/.test(read("app/dashboard/replies/send-shortcut-card.tsx")));
+  ok("step 2 names the button", ANDROID_SHARE_STEPS[1].includes(INSTALL_BUTTON_LABEL));
+  ok("install copy has no em dash", ![INSTALL_BUTTON_LABEL, INSTALLED_LINE].some((t) => t.includes("\u2014")));
+}
 ok("no em dash in the new copy", ![html, miss, ...ANDROID_SHARE_STEPS, connect.description, phone.description].some((t) => t.includes("—")));
 
 // --- S821d: first visits are one question -------------------------------------

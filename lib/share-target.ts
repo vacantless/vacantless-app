@@ -11,9 +11,26 @@ export const ANDROID_SHARE_NOTE = "Sent from the Android share menu (chat screen
 /** The three steps shown on Quick replies. Short sentences: many readers use a translator. */
 export const ANDROID_SHARE_STEPS = [
   "Open this page in Chrome on your Android phone.",
-  "Tap the three dots at the top. Tap \"Add to Home screen\", then \"Install\".",
+  "Tap the green button \"Install Vacantless on this phone\" below. No button? Tap the three dots at the top, then \"Add to Home screen\", then \"Install\".",
   "Take a screenshot of the chat. Tap Share, then tap Vacantless.",
 ] as const;
+
+/**
+ * S833b: the "Install Vacantless" button on Quick replies. Android Chrome fires
+ * beforeinstallprompt when the site can be installed; the button opens Chrome's
+ * own install screen, so nobody has to find the three-dots menu.
+ */
+export type InstallState = "installed" | "ready" | "none";
+
+export function installState(input: { android: boolean; standalone: boolean; promptReady: boolean }): InstallState {
+  // An iPhone home-screen app has no Share menu entry, so never tell it so.
+  if (!input.android) return "none";
+  if (input.standalone) return "installed";
+  return input.promptReady ? "ready" : "none";
+}
+
+export const INSTALL_BUTTON_LABEL = "Install Vacantless on this phone";
+export const INSTALLED_LINE = "Vacantless is installed on this phone. It is in your Share menu.";
 
 /** True when the line says the renter is in Renters now (saved, or already there). */
 export function shareSaved(line: string): boolean {
