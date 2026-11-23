@@ -31,6 +31,11 @@ ok("the Rotessa fee comes from the one price file", ROTESSA_NSF_FEE_CENTS === RO
 ok("declined counts as failed", isFailedRotessaTransaction({ status: "Declined" }));
 ok("a chargeback counts as failed", isFailedRotessaTransaction({ status: "Chargeback" }));
 ok("approved, pending and future do not", !isFailedRotessaTransaction({ status: "Approved" }) && !isFailedRotessaTransaction({ status: "Pending" }) && !isFailedRotessaTransaction({ status: "Future" }) && !isFailedRotessaTransaction({ status: null }));
+// S835e: Rotessa's screens show the reason ("NSF") as the status.
+ok("a status of NSF counts as failed", isFailedRotessaTransaction({ status: "NSF" }));
+ok("an unknown status with a failure reason counts", isFailedRotessaTransaction({ status: "Returned", statusReason: "Account Closed" }));
+ok("an unknown status with no reason does not", !isFailedRotessaTransaction({ status: "Returned", statusReason: "" }));
+ok("an approved payment with a stray reason does not", !isFailedRotessaTransaction({ status: "Approved", statusReason: "NSF" }));
 ok("the reference names the transaction", rotessaNsfRef(" 12345 ") === "rotessa:12345");
 ok("the note carries Rotessa's reason", rotessaNsfNote("NSF") === "Rotessa's fee for the failed bank debit (NSF)." && rotessaNsfNote(null) === "Rotessa's fee for the failed bank debit.");
 ok("the date is the process date", rotessaNsfDate("2026-12-01", "2026-12-04") === "2026-12-01" && rotessaNsfDate("2026-12-01T00:00:00.000-06:00", "2026-12-04") === "2026-12-01");

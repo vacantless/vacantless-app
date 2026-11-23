@@ -48,6 +48,15 @@ import {
 // customer.subscription.updated, customer.subscription.deleted, charge.refunded
 // (the last for the refundable pilot deposit).
 
+// S835e (REVIEW-S835 finding 9): Supabase hands back a failed write as a value,
+// it does not throw. Unchecked, the route answered 200 and Stripe never sent
+// the event again. Throwing here reaches the catch in POST, which releases the
+// event claim and answers 500, so Stripe's retry runs it again.
+function mustSave(res: unknown, what: string): void {
+  const error = (res as { error?: { message?: string } | null } | null | undefined)?.error;
+  if (error) throw new Error(`save_failed:${what}:${error.message ?? "unknown"}`);
+}
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs"; // Stripe signature verification needs Node crypto
 
@@ -130,18 +139,21 @@ async function applySubscription(
   if (!orgId) return { matched: false as const };
 
   if (ended) {
-    await admin
-      .from("organizations")
-      .update({
-        plan: "free",
-        subscription_status: "canceled",
-        stripe_subscription_id: null,
-        current_period_end: null,
-        subscription_cancel_at: null,
-        // S779: Free has its own one-live-rental rule.
-        rental_cap: null,
-      })
-      .eq("id", orgId);
+    mustSave(
+      await admin
+        .from("organizations")
+        .update({
+          plan: "free",
+          subscription_status: "canceled",
+          stripe_subscription_id: null,
+          current_period_end: null,
+          subscription_cancel_at: null,
+          // S779: Free has its own one-live-rental rule.
+          rental_cap: null,
+        })
+        .eq("id", orgId),
+      "plan_ended",
+    );
     await applyPostingAddon(admin, orgId, sub, { ended: true, statusApplies: true });
     return { matched: true as const, orgId, plan: "free" };
   }
@@ -231,7 +243,7 @@ async function applySubscription(
     update.subscription_status = sub.status;
   }
 
-  await admin.from("organizations").update(update).eq("id", orgId);
+  mustSave(await admin.from("organizations").update(update).eq("id", orgId), "plan");
   // S713: mirror the Posting add-on item onto the org (on iff the item is on a
   // sub whose status grants a plan). Separate write; never touches the plan.
   const addon = await applyPostingAddon(admin, orgId, sub, { ended: false, statusApplies });
@@ -421,13 +433,16 @@ async function reconcileRent(
     return { matched: true as const, tenancyId: tenancy.id, skipped: true };
   }
 
-  await admin
-    .from("tenancies")
-    .update({
-      stripe_subscription_status: nextStatus,
-      stripe_subscription_synced_at: new Date().toISOString(),
-    })
-    .eq("id", tenancy.id);
+  mustSave(
+    await admin
+      .from("tenancies")
+      .update({
+        stripe_subscription_status: nextStatus,
+        stripe_subscription_synced_at: new Date().toISOString(),
+      })
+      .eq("id", tenancy.id),
+    "rent_status",
+  );
   // S835b (REVIEW-S835 finding 5): tell the owners a rent payment failed.
   // Each Stripe event is taken once (claimStripeEvent), so this sends once.
   // Never throws: a failed email must not make Stripe resend the event.
@@ -501,16 +516,19 @@ async function reconcileMandate(
   if (viaCustomer && parsed.mandateStatus !== "active") {
     return { matched: false as const, reason: "older_link_not_finished" };
   }
-  await admin
-    .from("tenancies")
-    .update({
-      stripe_payment_method_id: parsed.paymentMethodId,
-      stripe_mandate_status: parsed.mandateStatus,
-      ...(viaCustomer ? { stripe_setup_session_id: session.id } : {}),
-      stripe_rent_synced_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", tenancyId);
+  mustSave(
+    await admin
+      .from("tenancies")
+      .update({
+        stripe_payment_method_id: parsed.paymentMethodId,
+        stripe_mandate_status: parsed.mandateStatus,
+        ...(viaCustomer ? { stripe_setup_session_id: session.id } : {}),
+        stripe_rent_synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", tenancyId),
+    "mandate",
+  );
   return { matched: true as const, tenancyId, mandate: parsed.mandateStatus };
 }
 

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { encryptSecret, decryptSecret, encryptionConfigured } from "@/lib/crypto";
@@ -23,6 +24,13 @@ import {
 
 const SETTINGS = "/dashboard/settings";
 
+// S835e (REVIEW-S835 finding 7): the Rotessa link is written with the service
+// role, and only here, after manage_rotessa passed for the signed-in account.
+// Migration 0327 refuses writes from a signed-in browser.
+function railWriter() {
+  return createAdminClient() ?? createClient();
+}
+
 // Connect (or re-connect / replace key): validate -> live test -> encrypt +
 // upsert the per-org row with the resulting status. One row per org (unique
 // organization_id), so this upserts on conflict.
@@ -40,8 +48,7 @@ export async function connectRotessa(formData: FormData) {
   // Live-verify the key before we save it as "connected".
   const test = await testConnection(keyResult.value, environment);
 
-  const supabase = createClient();
-  const { error } = await supabase
+  const { error } = await railWriter()
     .from("rotessa_accounts")
     .upsert(
       {
@@ -88,7 +95,7 @@ export async function testRotessaConnection() {
   const environment = normalizeEnvironment(row.environment);
   const test = await testConnection(apiKey, environment);
 
-  await supabase
+  await railWriter()
     .from("rotessa_accounts")
     .update({
       connection_status: test.status,
@@ -120,7 +127,7 @@ export async function disconnectRotessa() {
   const live = (liveRows ?? []).length;
   if (live > 0) redirect(`${SETTINGS}?rotessa=liverent&n=${live}#rotessa`);
 
-  await supabase.from("rotessa_accounts").delete().eq("organization_id", org.id);
+  await railWriter().from("rotessa_accounts").delete().eq("organization_id", org.id);
 
   redirect(`${SETTINGS}?rotessa=disconnected#rotessa`);
 }

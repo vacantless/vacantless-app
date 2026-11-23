@@ -18,10 +18,21 @@ export function rotessaNsfDue(torontoHour: number): boolean {
   return ROTESSA_NSF_HOURS.includes(torontoHour);
 }
 
-/** A transaction the bank sent back: declined, or charged back later. Pure. */
-export function isFailedRotessaTransaction(t: Pick<RotessaTransaction, "status">): boolean {
+const ROTESSA_FAILED = ["declined", "chargeback", "nsf"];
+const ROTESSA_NOT_FAILED = ["approved", "pending", "future"];
+
+/**
+ * A transaction the bank sent back. Rotessa's report says "Declined" or
+ * "Chargeback" with the reason beside it; its own screens show the reason
+ * ("NSF") as the status (Noam's account, 2026-11-23). S835e: both spellings
+ * count, and so does any transaction that carries a failure reason and is not
+ * approved, pending or future, so a word we have not seen is not missed. Pure.
+ */
+export function isFailedRotessaTransaction(t: Pick<RotessaTransaction, "status"> & { statusReason?: string | null }): boolean {
   const s = (t.status ?? "").trim().toLowerCase();
-  return s === "declined" || s === "chargeback";
+  if (ROTESSA_FAILED.includes(s)) return true;
+  if (ROTESSA_NOT_FAILED.includes(s)) return false;
+  return (t.statusReason ?? "").trim() !== "";
 }
 
 export function rotessaNsfRef(transactionId: string): string {

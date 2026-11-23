@@ -3,6 +3,7 @@
 import { backQuery } from "@/lib/rent-return";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg } from "@/lib/org";
 import { requireCapability } from "@/lib/membership";
 import { getStripe } from "@/lib/stripe";
@@ -27,6 +28,15 @@ import {
 // the S170 Vercel-edge revalidate-503 WATCH.
 
 const SETTINGS = "/dashboard/settings";
+
+// S835e (REVIEW-S835 finding 7): the Stripe link is written with the service
+// role, and only here, after manage_rent passed for the signed-in account
+// (org.id comes from the session, never from the form). Migration 0327 then
+// refuses writes from a signed-in browser, so nobody can point their account
+// at another landlord's Stripe account id through the database.
+function railWriter() {
+  return createAdminClient() ?? createClient();
+}
 
 // Pull a short, human-readable reason out of a Stripe (or other) error so the
 // onboarding failure can be surfaced on the Settings page instead of swallowed.
@@ -73,7 +83,7 @@ async function saveSnapshot(
   account: Parameters<typeof summarizeStripeAccount>[0],
 ) {
   const s = summarizeStripeAccount(account);
-  const supabase = createClient();
+  const supabase = railWriter();
   await supabase.from("stripe_connect_accounts").upsert(
     {
       organization_id: orgId,
@@ -186,7 +196,7 @@ export async function refreshStripeConnect() {
     const account = await stripe!.accounts.retrieve(row.connected_account_id);
     await saveSnapshot(org.id, row.connected_account_id, account);
   } catch {
-    const supabase = createClient();
+    const supabase = railWriter();
     await supabase
       .from("stripe_connect_accounts")
       .update({ last_error: "Couldn't reach Stripe to refresh status.", updated_at: new Date().toISOString() })
@@ -218,7 +228,7 @@ export async function disconnectStripeConnect() {
   const live = countLiveStripeRent(liveRows as Parameters<typeof countLiveStripeRent>[0]);
   if (live > 0) redirect(`${SETTINGS}?stripeconnect=liverent&n=${live}#stripe-rent`);
 
-  await supabase.from("stripe_connect_accounts").delete().eq("organization_id", org.id);
+  await railWriter().from("stripe_connect_accounts").delete().eq("organization_id", org.id);
 
   redirect(`${SETTINGS}?stripeconnect=disconnected#stripe-rent`);
 }
