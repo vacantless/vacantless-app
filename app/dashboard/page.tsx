@@ -62,6 +62,7 @@ import { latestStages } from "@/lib/unit-progress-latest";
 import { mismatchChip } from "@/lib/screening";
 import { stageChip, STAGE_TONE_CLASS } from "@/lib/unit-progress";
 import { shortAddress } from "@/lib/posting-coverage";
+import { expiredDatedLines } from "@/lib/dated-lines";
 
 export const dynamic = "force-dynamic";
 
@@ -661,6 +662,30 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       events: emailEvents,
     });
   }
+  // S830g: a dated line in a live rental's ad whose date has passed.
+  const datedLineCards: { key: string; title: string; line: string; action: { href: string; label: string } }[] = [];
+  {
+    const { data: liveText } = await supabase
+      .from("properties")
+      .select("id, address, description")
+      .eq("organization_id", org.id)
+      .eq("status", "available")
+      .is("archived_at", null)
+      .not("description", "is", null)
+      .limit(100);
+    const todayKey = new Date().toLocaleDateString("en-CA", { timeZone });
+    for (const r of (liveText ?? []) as { id: string; address: string | null; description: string | null }[]) {
+      const stale = expiredDatedLines(r.description, todayKey);
+      if (stale.length === 0) continue;
+      datedLineCards.push({
+        key: `dated-${r.id}`,
+        title: `${shortAddress(r.address ?? "A rental")}: a date in the ad has passed`,
+        line: `It still says "${stale[0].sentence}"`,
+        action: { href: `/dashboard/properties/${r.id}#dated-lines`, label: "Fix it" },
+      });
+      if (datedLineCards.length >= 3) break;
+    }
+  }
   // S817d: "Answer renters from your phone" is done on the first renter saved from the phone.
   const onboardingPhoneReplies = onboardingWizardEnabled ? await hasPhoneReplyRenter(supabase, org.id) : undefined;
   const onboardingWizardState = onboardingWizardEnabled
@@ -725,7 +750,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         </div>
       )}
 
-      <NeedsYouCards notices={[...needsYou, ...droppedAds, ...readyToPostCards, ...renterEmailCards]} />
+      <NeedsYouCards notices={[...needsYou, ...droppedAds, ...readyToPostCards, ...datedLineCards, ...renterEmailCards]} />
       <ComingVacantCards items={comingVacant} />
 
       {presetNotice && (

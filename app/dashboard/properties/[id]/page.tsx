@@ -56,7 +56,10 @@ import {
   blastPriceDrop,
   savePhotoFolderAndPull,
   switchPhotoTouchUp,
+  fixDatedLine,
 } from "../actions";
+import { expiredDatedLines } from "@/lib/dated-lines";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 import { drivePullLine, photoSourceOf, pullResultFromParam, pullsFrom } from "@/lib/drive-import";
 import {
   buildAllListingCopy,
@@ -1019,6 +1022,7 @@ export default async function PropertyDetailPage({
     fbdown?: string;
     /** S761: sites updating after an edit ("rentals_ca,zumper,hand:kijiji"). */
     adupdate?: string;
+    dated?: string; // S830g: dated-line fix result
     publish?: string;
     blasted?: string;
     post?: string;
@@ -3273,6 +3277,40 @@ export default async function PropertyDetailPage({
         <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           Rental saved.
         </p>
+      )}
+
+      {/* S830g: a dated line in the ad whose date has passed (lib/dated-lines). */}
+      {p.status === "available" &&
+        (() => {
+          const today = new Date().toLocaleDateString("en-CA", { timeZone: DEFAULT_TIME_ZONE });
+          const stale = expiredDatedLines(p.description, today).slice(0, 3);
+          if (stale.length === 0) return null;
+          return (
+            <div id="dated-lines" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">Your ad has a date that has passed</p>
+              <ul className="mt-2 space-y-2">
+                {stale.map((line) => (
+                  <li key={line.sentence} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span>&ldquo;{line.sentence}&rdquo;</span>
+                    <form action={fixDatedLine}>
+                      <input type="hidden" name="id" value={p.id} />
+                      <input type="hidden" name="sentence" value={line.sentence} />
+                      <button className="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90">
+                        {line.replacement ? `Change to "${line.replacement}"` : "Remove this line"}
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-amber-800">Your ads update the same way as when you save an edit.</p>
+            </div>
+          );
+        })()}
+      {searchParams.dated === "gone" && (
+        <p className="mb-4 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700">That line is no longer in the ad.</p>
+      )}
+      {searchParams.dated === "error" && (
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">The change was not saved. Try again.</p>
       )}
 
       {/* S734: after Set Live or Post everywhere, show every live ad with its

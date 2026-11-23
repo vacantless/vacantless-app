@@ -11,6 +11,8 @@ import { isHiddenForOrg, isRobotPostedChannel, usesDeskAllowance } from "@/lib/p
 import { readRobotPostingAccess, type RobotPostingAccess } from "@/lib/robot-posting-access";
 import { queueOnFirstClick } from "@/lib/posting-autopilot";
 import { robotSitesToPostAtSetLive, setLiveAudit } from "@/lib/set-live-posts";
+import { applyDatedLineFix, expiredDatedLines } from "@/lib/dated-lines";
+import { DEFAULT_TIME_ZONE } from "@/lib/dates";
 import { adDetailsChanged, adUpdatePlan, editableInPlace, editInPlaceAudit, updateRepostNote, updateTakedownAudit, type AdUpdatePlan, type LivePostRow } from "@/lib/ad-edits-follow";
 import { queueRobotEdits } from "@/lib/robot-edit";
 import { SITE_SIGNIN_LABEL, type SiteSigninChannel } from "@/lib/site-signin";
@@ -1458,6 +1460,56 @@ export async function updateProperty(formData: FormData) {
       tourRejected ? "&tourerr=host" : ""
     }${videoRejected ? "&videoerr=host" : ""}${facebookPostsTakenDown > 0 ? "&fbdown=1" : ""}${adUpdateParam}${returnTab ? `&tab=${returnTab}` : ""}`,
   );
+}
+
+/**
+ * S830g: one tap fixes a stale dated line in the description (lib/dated-lines):
+ * an "Available ..." line becomes "Available now.", any other line is cut.
+ * The change reaches the ads the same way a saved edit does.
+ */
+export async function fixDatedLine(formData: FormData) {
+  await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
+  const id = String(formData.get("id") ?? "");
+  const sentence = String(formData.get("sentence") ?? "");
+  if (!id || !sentence) return;
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const { data: row } = await supabase
+    .from("properties")
+    .select("id, description, status")
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .maybeSingle();
+  const prop = row as { id: string; description: string | null; status: string | null } | null;
+  if (!prop?.description) redirect(`/dashboard/properties/${id}`);
+  // Only a line whose date has passed, never any sentence a form sends.
+  const todayKey = new Date().toLocaleDateString("en-CA", { timeZone: org.booking_timezone ?? DEFAULT_TIME_ZONE });
+  if (!expiredDatedLines(prop!.description, todayKey).some((l) => l.sentence === sentence)) {
+    redirect(`/dashboard/properties/${id}?dated=gone`);
+  }
+  const next = applyDatedLineFix(prop!.description!, sentence);
+  if (next == null || next === prop!.description) redirect(`/dashboard/properties/${id}?dated=gone`);
+  const { error } = await supabase.from("properties").update({ description: next }).eq("id", id).eq("organization_id", org.id);
+  if (error) redirect(`/dashboard/properties/${id}?dated=error`);
+  let adUpdateParam = "";
+  if (prop!.status === "available") {
+    const changed = ["description"];
+    const plan = await queueAdUpdates({ supabase, org, propertyId: id, changed });
+    const pageEdit = pagePostTextChanged(changed)
+      ? await updateFacebookPagePosts({ supabase, organizationId: org.id, propertyId: id })
+      : { updated: 0, failed: 0 };
+    const tokens = [
+      ...(pageEdit.updated > 0 ? ["page"] : []),
+      ...plan.repost,
+      ...(plan.edit ?? []).map((p) => `edit:${p}`),
+      ...plan.byHand.map((b) => `hand:${b.portal}`),
+    ];
+    if (tokens.length) adUpdateParam = `&adupdate=${encodeURIComponent(tokens.join(","))}`;
+  }
+  revalidatePath(`/dashboard/properties/${id}`);
+  revalidatePath("/dashboard");
+  redirect(`/dashboard/properties/${id}?saved=1&dated=fixed${adUpdateParam}`);
 }
 
 /**
