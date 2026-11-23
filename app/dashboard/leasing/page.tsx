@@ -6,6 +6,7 @@ import { getCurrentOrg } from "@/lib/org";
 import { isAtRisk } from "@/lib/reminders";
 import { formatMoney } from "@/lib/price-drop";
 import { vacancyStripModel } from "@/lib/vacancy-cost";
+import { loadAdsDown } from "@/lib/ads-down-server";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,8 @@ export default async function LeasingHubPage() {
     nowMs,
   );
   const vacancyPortfolio = vacancyModel.portfolio;
+  // S836d: marked for rent, but every ad is down. Rented? Or ads expired?
+  const adsDown = await loadAdsDown(supabase, org.id);
   const totalLostLabel = formatMoney(vacancyPortfolio.totalLostCents);
 
   const newCount = newLeadCount ?? 0;
@@ -194,6 +197,30 @@ export default async function LeasingHubPage() {
         }
         icon={<Icons.key className="h-6 w-6" />}
       />
+
+      {adsDown.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-gray-900">For rent, no ads up</h2>
+          <p className="mt-0.5 text-xs text-gray-600">
+            Every ad for these units is down, but they are still marked for rent. Open one to mark it rented or post it again.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {adsDown.map((u) => (
+              <li
+                key={u.propertyId}
+                className={`rounded-xl border px-3 py-2.5 text-sm ${
+                  u.verdict === "probably_rented" ? "border-emerald-200 bg-emerald-50" : "border-gray-100 bg-gray-50"
+                }`}
+              >
+                <Link href={`/dashboard/properties/${u.propertyId}`} className="font-medium text-gray-900 underline-offset-2 hover:underline">
+                  {u.address}
+                </Link>
+                <p className="mt-0.5 text-gray-700">{u.line}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {!hasVacancyData && (
         <div className="mt-6 flex items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 shadow-sm">

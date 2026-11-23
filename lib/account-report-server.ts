@@ -13,6 +13,7 @@ import type { DateRange, PropertyRef, RentRow } from "@/lib/statements";
 import type { WorkOrderCostRow } from "@/lib/work-orders";
 import type { LeadLite } from "@/lib/reports";
 import type { CostLite } from "@/lib/channel-costs";
+import { loadAdsDown } from "@/lib/ads-down-server";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
 
@@ -108,6 +109,8 @@ export async function loadAccountReport(
     adExpenses = expenseRows.filter((e) => e.category === "advertising").map((e) => ({ amountCents: e.amount_cents, day: e.incurred_on }));
   }
 
+  const adsDown = await loadAdsDown(db, orgId);
+
   return buildAccountReport({
     orgName: org.name,
     monthStart: range.monthStart,
@@ -128,5 +131,7 @@ export async function loadAccountReport(
     adExpenses,
     reportsUrl: `${APP_URL}/dashboard/reports`,
     viewingsByRequest: org.viewings_by_request === true,
+    adsDown,
+    rentalUrl: (id) => `${APP_URL}/dashboard/properties/${id}`,
   });
 }

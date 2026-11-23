@@ -9,6 +9,7 @@
 import { buildChannelReport, type LeadLite } from "@/lib/reports";
 import { buildCostAdvice, buildSiteCosts, dollars, firstPaidBySite, type CostLite, type SiteCostRow } from "@/lib/channel-costs";
 import { monthName, shortAddr } from "@/lib/rental-report";
+import type { AdsDownUnit } from "@/lib/ads-down";
 
 export type AccountProperty = {
   id: string;
@@ -77,6 +78,10 @@ export type AccountReportInput = {
   reportsUrl: string;
   /** The landlord books each viewing (S828c): judge sites by renters. */
   viewingsByRequest?: boolean;
+  /** S836d: units marked for rent with every ad down (lib/ads-down). */
+  adsDown?: readonly AdsDownUnit[];
+  /** Link to a rental, for the "for rent, no ads up" list. */
+  rentalUrl?: (propertyId: string) => string;
 };
 
 export type UnitLine = {
@@ -117,6 +122,7 @@ export type AccountReport = {
     };
     sites: SiteCostRow[];
     advice: string[];
+    adsDown: number;
   };
 };
 
@@ -333,6 +339,19 @@ export function buildAccountReport(input: AccountReportInput & { adExpenses?: re
     h.push(`<p style="font-size:14px;margin:0">No unit was on the market or rented in ${esc(monthOnly)}.</p>`);
   }
 
+  // S836d: for rent, but no ads up.
+  const adsDown = input.adsDown ?? [];
+  if (adsDown.length) {
+    h.push(heading("For rent, no ads up", "Every ad for these units is down. Are they rented?"));
+    for (const u of adsDown) {
+      const name = input.rentalUrl
+        ? `<a href="${esc(input.rentalUrl(u.propertyId))}" style="color:${GREEN};font-weight:600">${esc(u.address)}</a>`
+        : `<strong>${esc(u.address)}</strong>`;
+      const tint = u.verdict === "probably_rented" ? "#e8f3ec" : SOFT;
+      h.push(`<div style="background:${tint};border:1px solid ${LINE};border-radius:8px;padding:10px 12px;margin:6px 0;font-size:14px">${name}<br><span style="color:#3d4a43">${esc(u.line)}</span></div>`);
+    }
+  }
+
   // Income and expenses.
   h.push(heading("Income and expenses", "From your income statement on the Money page."));
   if (!money) {
@@ -397,6 +416,7 @@ export function buildAccountReport(input: AccountReportInput & { adExpenses?: re
   for (const u of units) {
     t.push(`- ${u.address}: ${u.state === "rented" ? `rented${u.rentedOn ? ` ${niceDay(u.rentedOn)}` : ""}` : "on the market"}, ${u.days ?? "-"} days, ${u.inquiriesMonth} inquiries (${u.inquiriesToDate} to date), ${u.showingsBooked} showings booked, ${u.showingsHeld} held`);
   }
+  for (const u of adsDown) t.push(`For rent, no ads up: ${u.address}. ${u.line}`);
   if (money?.hasRecords) t.push(`Net in ${monthOnly}: ${signedDollars(money.month.netCents)}. This year: ${signedDollars(money.ytd.netCents)}.`);
   t.push(`Site costs: ${dollars(adsMonthCents)} in ${monthOnly}, ${dollars(adsYtdCents)} this year.`);
   for (const a of advice) t.push(a);
@@ -422,6 +442,7 @@ export function buildAccountReport(input: AccountReportInput & { adExpenses?: re
       money,
       sites,
       advice,
+      adsDown: adsDown.length,
     },
   };
 }
