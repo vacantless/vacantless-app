@@ -29,7 +29,7 @@ ok(step.helpCta === "Have someone set it up for me" && step.helpHref === "/dashb
 ok(!/[—–]/.test(step.description + step.label), "no dashes");
 
 const page = readFileSync("app/dashboard/(wizard)/getting-started/page.tsx", "utf8");
-ok(page.includes("step.helpHref && step.helpCta && !isComplete"), "Getting started shows the second button until done");
+ok(page.includes("step.helpHref && step.helpCta && canInvite && !isComplete") && page.includes(`currentUserCan("manage_team")`), "second button only for someone who may invite, until done");
 const settings = readFileSync("app/dashboard/settings/page.tsx", "utf8");
 ok(settings.includes('setup={searchParams.helpsetup === "1"}'), "settings passes helpsetup (setup is the message-setup flash)");
 const team = readFileSync("app/dashboard/settings/team-section.tsx", "utf8");

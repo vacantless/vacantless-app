@@ -1,3 +1,4 @@
+import { currentUserCan } from "@/lib/membership";
 import Link from "next/link";
 import { HelperInstallTip } from "@/components/helper-install-tip";
 import { hasPhoneReplyRenter } from "@/lib/reply-kit-server";
@@ -159,6 +160,9 @@ export default async function GettingStartedPage({
   const startSteps = state.steps.filter((step) => step.group === "start");
   const laterSteps = state.steps.filter((step) => step.group === "later");
   const canInviteHelper = teammateLimit(org.plan) > 0;
+  // S830d: "Have someone set it up for me" opens the team invite; only someone
+  // who may invite sees it (a Teammate would land on a page with no invite box).
+  const canInvite = canInviteHelper && (await currentUserCan("manage_team"));
 
   return (
     <div>
@@ -259,7 +263,7 @@ export default async function GettingStartedPage({
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Do these first</h2>
       <ol className="space-y-4">
         {startSteps.map((step, index) => (
-          <WizardStepCard key={step.key} step={step} index={index + 1} showInlineError={false} />
+          <WizardStepCard key={step.key} step={step} index={index + 1} showInlineError={false} canInvite={canInvite} />
         ))}
       </ol>
 
@@ -278,6 +282,7 @@ export default async function GettingStartedPage({
                 step={step}
                 index={startSteps.length + index + 1}
                 showInlineError={step.key === "rent_rail" && searchParams?.wizard === "save_error"}
+                canInvite={canInvite}
               />
             ))}
           </ol>
@@ -335,10 +340,12 @@ function WizardStepCard({
   step,
   index,
   showInlineError,
+  canInvite,
 }: {
   step: OnboardingWizardStep;
   index: number;
   showInlineError: boolean;
+  canInvite: boolean;
 }) {
   const isCurrent = step.status === "current";
   const isComplete = step.status === "complete";
@@ -399,7 +406,7 @@ function WizardStepCard({
                 {step.cta}
               </Link>
             )}
-            {step.helpHref && step.helpCta && !isComplete && (
+            {step.helpHref && step.helpCta && canInvite && !isComplete && (
               <Link
                 href={step.helpHref}
                 className={`inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 ${FOCUS_CLASS}`}
