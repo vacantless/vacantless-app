@@ -48,4 +48,11 @@ const vercel = JSON.parse(readFileSync("vercel.json", "utf8"));
 assert.deepEqual(vercel.regions, ["yul1"]);
 assert.equal(vercel.crons.length, 2, "crons kept");
 
+// S839b: a loading screen at the top only shows when the top section changes.
+// A link inside a section (Rentals list to one rental) needs one in that section.
+for (const dir of ["properties", "tenancies", "tenancies/[id]", "leads", "maintenance", "settings", "reports", "money", "rent"]) {
+  const inner = readFileSync(`app/dashboard/${dir}/loading.tsx`, "utf8");
+  assert.ok(inner.includes('from "@/app/dashboard/loading"'), dir);
+}
+
 console.log("test-s839-photo-size: ok");
