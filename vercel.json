@@ -1,4 +1,7 @@
 {
+  "regions": [
+    "yul1"
+  ],
   "crons": [
     {
       "path": "/api/cron/reminders",

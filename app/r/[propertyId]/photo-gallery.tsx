@@ -1,6 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type SyntheticEvent } from "react";
+import { PHOTO_WIDTH_COVER, PHOTO_WIDTH_FULL, PHOTO_WIDTH_THUMB, sizedPhotoUrl } from "@/lib/photo-size";
+
+// S839a: photos are asked for at the size shown (lib/photo-size.ts). If a
+// resized copy fails to load, the original is shown instead, once.
+function showOriginal(original: string) {
+  return (e: SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.dataset.original === "1") return;
+    img.dataset.original = "1";
+    img.src = original;
+  };
+}
 
 /**
  * Public listing photo gallery with a click-to-expand lightbox. Renders the
@@ -71,7 +83,8 @@ export function PhotoGallery({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={cover}
+          src={sizedPhotoUrl(cover, PHOTO_WIDTH_COVER)}
+          onError={showOriginal(cover)}
           alt={`${address} - photo 1`}
           className="max-h-[28rem] w-full object-cover transition hover:opacity-95"
         />
@@ -88,7 +101,10 @@ export function PhotoGallery({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={url}
+                src={sizedPhotoUrl(url, PHOTO_WIDTH_THUMB)}
+                onError={showOriginal(url)}
+                loading="lazy"
+                decoding="async"
                 alt={`${address} - photo ${i + 2}`}
                 className="h-full w-full object-cover transition hover:opacity-90"
               />
@@ -128,7 +144,9 @@ export function PhotoGallery({
           )}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={photos[open]}
+            key={photos[open]}
+            src={sizedPhotoUrl(photos[open], PHOTO_WIDTH_FULL)}
+            onError={showOriginal(photos[open])}
             alt={`${address} - photo ${open + 1}`}
             onClick={(e) => e.stopPropagation()}
             className="max-h-[90vh] max-w-full rounded-lg object-contain"
