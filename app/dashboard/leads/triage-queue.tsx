@@ -46,14 +46,25 @@ const REASON_CHIP: Record<string, string> = {
   "Follow-up due today": "bg-amber-100 text-amber-700",
 };
 
+// S840 (REVIEW-S839 step H): Agile's 331 renters made this page 1.09 MB. A
+// bucket other than "Needs you now" shows its first BUCKET_PREVIEW rows, most
+// actionable first, with a link to see the rest. Counts stay whole.
+export const BUCKET_PREVIEW = 20;
+
 export function TriageQueue({
   rows,
   today,
   timeZone,
+  showAll = false,
+  allHref = "/dashboard/leads?all=1",
 }: {
   rows: QueueLead[];
   today: string;
   timeZone: string;
+  /** S840: true shows every row in every bucket (?all=1). */
+  showAll?: boolean;
+  /** S840: the same filters with all=1 set. */
+  allHref?: string;
 }) {
   const nowMs = Date.now();
   const triaged = rows.map((l) => ({
@@ -84,8 +95,10 @@ export function TriageQueue({
             a.t.rank - b.t.rank || b.l.created_at.localeCompare(a.l.created_at),
         );
         if (items.length === 0) return null;
+        const capped = !showAll && bucket !== "needs_you" && items.length > BUCKET_PREVIEW;
+        const shown = capped ? items.slice(0, BUCKET_PREVIEW) : items;
         return (
-          <section key={bucket}>
+          <section key={bucket} id={bucket}>
             <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
               {TRIAGE_BUCKET_LABEL[bucket]}
               <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
@@ -93,7 +106,7 @@ export function TriageQueue({
               </span>
             </h3>
             <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-              {items.map(({ l, t }) => (
+              {shown.map(({ l, t }) => (
                 <QueueRow
                   key={l.id}
                   lead={l}
@@ -103,6 +116,14 @@ export function TriageQueue({
                 />
               ))}
             </ul>
+            {capped && (
+              <Link
+                href={`${allHref}#${bucket}`}
+                className="mt-2 inline-block text-sm font-medium text-brand hover:underline"
+              >
+                Show all {items.length}
+              </Link>
+            )}
           </section>
         );
       })}

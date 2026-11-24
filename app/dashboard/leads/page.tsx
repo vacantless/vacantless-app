@@ -52,6 +52,8 @@ export default async function LeadsPage({
     screen?: string;
     property?: string;
     screenshot?: string;
+    /** S840: "1" shows every renter in every group. */
+    all?: string;
   };
 }) {
   const supabase = createClient();
@@ -288,7 +290,13 @@ export default async function LeadsPage({
           />
         )
       ) : (
-        <TriageQueue rows={rows.map((l) => ({ ...l, answered: answered.has(l.id), chatOnly: isChatPlaceholder(l) }))} today={today} timeZone={timeZone} />
+        <TriageQueue
+          rows={rows.map((l) => ({ ...l, answered: answered.has(l.id), chatOnly: isChatPlaceholder(l) }))}
+          today={today}
+          timeZone={timeZone}
+          showAll={searchParams.all === "1"}
+          allHref={withAll(leadsHref(filter, segment, screen, propertyId))}
+        />
       )}
     </div>
   );
@@ -313,6 +321,11 @@ function leadsHref(
   if (property) params.set("property", property);
   const qs = params.toString();
   return qs ? `/dashboard/leads?${qs}` : "/dashboard/leads";
+}
+
+/** S840: the same list with every row shown. */
+function withAll(href: string): string {
+  return href.includes("?") ? `${href}&all=1` : `${href}?all=1`;
 }
 
 function FilterChip({

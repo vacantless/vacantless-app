@@ -1074,6 +1074,11 @@ export default async function PropertyDetailPage({
   };
 }) {
   const supabase = createClient();
+  // S840 (REVIEW-S839 H): where the rental page's time goes, logged only
+  // (Vercel runtime logs, "[s840-rental-timing]"). Removed once read.
+  const timingT0 = Date.now();
+  const timingMarks: [string, number][] = [];
+  const timingMark = (name: string) => timingMarks.push([name, Date.now() - timingT0]);
   const { data: property } = await supabase
     .from("properties")
     .select(
@@ -1213,6 +1218,7 @@ export default async function PropertyDetailPage({
     .select("channel")
     .eq("organization_id", p.organization_id)
     .eq("automation_authorized", true));
+  timingMark("property");
   const nowMs = Date.now();
   // S790a: the unit's latest unit progress stage, shown as a chip in the header.
   const unitArchived = Boolean((property as { archived_at?: string | null }).archived_at);
@@ -1437,6 +1443,7 @@ export default async function PropertyDetailPage({
   const accountLeadHours = (bookingCfg?.booking_lead_hours as number | null | undefined) ?? 0;
   const accountConfirms = bookingCfg?.booking_requires_confirmation === true;
   const accountOpenHouse = (bookingCfg as { allow_double_booking?: boolean } | null)?.allow_double_booking === true;
+  timingMark("leads_posts_photos_tenancy_org");
   // Detector inventory (S359): this unit's logged smoke/CO detectors + each one's
   // computed end-of-life date + status (against the org-local "today"). Shaped
   // here so the section component stays presentational. RLS scopes the read.
@@ -2181,6 +2188,7 @@ export default async function PropertyDetailPage({
     inquiryCount: postCounts.get(post.id) ?? 0,
   });
   const copyByKey = new Map(copyTabs.map((t) => [t.key, t]));
+  timingMark("assets_docs_marketing");
   // Org-level feed-partner accounts (Slice 3), keyed by channel.
   const { data: partnerRows } = await partnerRowsEarly;
   const partnerByChannel = new Map<string, PartnerAccountView>();
@@ -3250,6 +3258,8 @@ export default async function PropertyDetailPage({
   const vacancyUnit = vacancyModel.units[0] ?? null;
   const vacancyLostLabel = formatMoney(vacancyUnit?.lostCents ?? null);
 
+  timingMark("channels_and_rest");
+  console.log("[s840-rental-timing]", JSON.stringify({ org: p.organization_id.slice(0, 8), marks: timingMarks }));
   return (
     <div>
       <Link
