@@ -1218,11 +1218,64 @@ export default async function PropertyDetailPage({
     .select("channel")
     .eq("organization_id", p.organization_id)
     .eq("automation_authorized", true));
+  // S840 (REVIEW-S839 H): the next questions waited on each other for 650 to
+  // 1,180 ms on Agile (timing log). None needs another's answer, so they start
+  // here too; the two that do depend (slot wait -> slot choice, robot access
+  // -> coverage) run as one chain each, alongside the rest.
+  const earlyArchived = Boolean((property as { archived_at?: string | null }).archived_at);
+  const latestStagesEarly = early(
+    earlyArchived ? Promise.resolve(undefined) : latestStages(supabase, p.organization_id, [p.id]).then((m) => m.get(p.id)),
+  );
+  const slotChoiceEarly = early(
+    slotRunsEarly.then(async ({ data: runs }) => {
+      const runIds = ((runs ?? []) as { id: string }[]).map((r) => r.id);
+      const { data: waitItem } = await supabase
+        .from("distribution_run_items")
+        .select("id")
+        .eq("organization_id", p.organization_id)
+        .in("run_id", runIds.length > 0 ? runIds : ["00000000-0000-0000-0000-000000000000"])
+        .eq("channel", "rentals_ca")
+        .eq("publish_status", "needs_operator")
+        .eq("error_code", "free_limit_reached")
+        .limit(1)
+        .maybeSingle();
+      return waitItem ? loadRentalsSlotChoice(supabase, p.organization_id, p.id) : null;
+    }),
+  );
+  const madeRoomEarly = early(loadMadeRoom(supabase, p.organization_id));
+  const viewingCountEarly = early(
+    getCurrentOrg().then((o) => (o ? countViewingTimes(supabase, o.id, o.booking_timezone || undefined) : 0)),
+  );
+  const byRequestEarly = early(
+    getCurrentOrg().then(async (o) =>
+      o ? (await supabase.from("organizations").select("viewings_by_request").eq("id", o.id).maybeSingle()).data : null,
+    ),
+  );
+  const hasViewingTimesEarly = early(
+    isPublicBookable(normalizePropertyStatus(p.status)) ? rentalHasViewingTimes(supabase, p.id) : Promise.resolve(true),
+  );
+  const showPostLeaseEarly = early(getCurrentOrg().then((o) => (o ? orgShowsPostLease(supabase, o.id) : true)));
+  const robotAccessEarly = early(getCurrentOrg().then((o) => readRobotPostingAccess(supabase, o?.id, { rental: p.id })));
+  const earlySiteNotesOpen = p.status === "available" && !earlyArchived;
+  const coverageEarly = early(
+    robotAccessEarly.then((a) => (earlySiteNotesOpen ? loadPostingCoverage(supabase, p.organization_id, a.allowed) : null)),
+  );
+  const bookingCfgEarly = early(
+    getCurrentOrg().then(async (o) =>
+      o
+        ? (await supabase
+            .from("organizations")
+            .select("booking_lead_hours, booking_requires_confirmation, allow_double_booking")
+            .eq("id", o.id)
+            .maybeSingle()).data
+        : null,
+    ),
+  );
   timingMark("property");
   const nowMs = Date.now();
   // S790a: the unit's latest unit progress stage, shown as a chip in the header.
   const unitArchived = Boolean((property as { archived_at?: string | null }).archived_at);
-  const latestUnitStage = unitArchived ? undefined : (await latestStages(supabase, p.organization_id, [p.id])).get(p.id);
+  const latestUnitStage = await latestStagesEarly;
   // S789e: how many photos have a touched-up and an original copy, and which shows now.
   const { data: touchRows } = await touchRowsEarly;
   const touchedNow = ((touchRows ?? []) as Array<{ touched_up: boolean }>).filter((r) => r.touched_up).length;
@@ -1265,21 +1318,10 @@ export default async function PropertyDetailPage({
   // S785: when the Rentals.ca free ads are full, offer to switch the weakest off.
   const { data: slotRuns } = await slotRunsEarly;
   const slotRunIds = ((slotRuns ?? []) as { id: string }[]).map((r) => r.id);
-  const { data: slotWaitItem } = await supabase
-    .from("distribution_run_items")
-    .select("id")
-    .eq("organization_id", p.organization_id)
-    .in("run_id", slotRunIds.length > 0 ? slotRunIds : ["00000000-0000-0000-0000-000000000000"])
-    .eq("channel", "rentals_ca")
-    .eq("publish_status", "needs_operator")
-    .eq("error_code", "free_limit_reached")
-    .limit(1)
-    .maybeSingle();
-  const rentalsSlotChoice = slotWaitItem
-    ? await loadRentalsSlotChoice(supabase, p.organization_id, p.id)
-    : null;
+  const rentalsSlotChoice = await slotChoiceEarly;
   // S786: this rental gave its Rentals.ca slot to another; say so on the row.
-  const madeRoomFor = (await loadMadeRoom(supabase, p.organization_id)).get(p.id) ?? null;
+  const madeRoom = await madeRoomEarly;
+  const madeRoomFor = madeRoom.get(p.id) ?? null;
   const roomNotes: Record<string, string> = madeRoomFor ? { rentals_ca: madeRoomLine(madeRoomFor) } : {};
 
   const { data: photos } = await photosEarly;
@@ -1289,13 +1331,9 @@ export default async function PropertyDetailPage({
   // below ("can a renter actually self-book a viewing once they land?").
   // S710: weekly windows OR dated hours still to come (lib/viewing-times-count).
   const availabilityOrg = await availabilityOrgEarly;
-  const availabilityCount = availabilityOrg
-    ? await countViewingTimes(supabase, availabilityOrg.id, availabilityOrg.booking_timezone || undefined)
-    : 0;
+  const availabilityCount = await viewingCountEarly;
   // S828c: a landlord who books each viewing themselves has nothing to set.
-  const { data: byRequestRow } = availabilityOrg
-    ? await supabase.from("organizations").select("viewings_by_request").eq("id", availabilityOrg.id).maybeSingle()
-    : { data: null };
+  const byRequestRow = await byRequestEarly;
   const viewingsByRequest =
     (byRequestRow as { viewings_by_request?: boolean } | null)?.viewings_by_request === true;
 
@@ -1357,7 +1395,7 @@ export default async function PropertyDetailPage({
     publicPageIsVisible && !publicPageIsBookable;
   const linkIsLive = publicPageIsBookable;
   // S743: the renter reply says "pick a viewing time" only when there is one.
-  const hasViewingTimes = linkIsLive ? await rentalHasViewingTimes(supabase, p.id) : true;
+  const hasViewingTimes = await hasViewingTimesEarly;
   const promotionGuard = linkIsLive
     ? null
     : normalizedStatus === "leased"
@@ -1412,17 +1450,14 @@ export default async function PropertyDetailPage({
   // never embeds a dead or unavailable URL; closed statuses get a safe fallback
   // line that does not invite bookings.
   const org = await getCurrentOrg();
-  const showPostLease = org ? await orgShowsPostLease(supabase, org.id) : true;
+  const showPostLease = await showPostLeaseEarly;
   // S713: Kijiji, Rentals.ca and Zumper are the paid Posting add-on. Without
   // it their rows show the add-on note instead of a post or sign-in button.
-  const robotPostingAccess = await readRobotPostingAccess(supabase, org?.id, { rental: p.id });
+  const robotPostingAccess = await robotAccessEarly;
   // S805: per-site notes for the Get online rows: a paid or full site is the
   // landlord's choice, and a site that took the ad down says so.
   const siteNotesOpen = p.status === "available" && !(p as { archived_at?: string | null }).archived_at;
-  const siteNotesCoverage =
-    siteNotesOpen
-      ? await loadPostingCoverage(supabase, p.organization_id, robotPostingAccess.allowed)
-      : null;
+  const siteNotesCoverage = await coverageEarly;
   const kijijiPriceCents = CHANNEL_COST_CENTS.kijiji ?? null;
   const siteNotes = buildSiteRowNotes({
     posts: postRows,
@@ -1433,13 +1468,7 @@ export default async function PropertyDetailPage({
   });
   // S724 (V251-24): the account's viewing notice, for this rental's "blank =
   // account setting" hints.
-  const { data: bookingCfg } = org
-    ? await supabase
-        .from("organizations")
-        .select("booking_lead_hours, booking_requires_confirmation, allow_double_booking")
-        .eq("id", org.id)
-        .maybeSingle()
-    : { data: null };
+  const bookingCfg = await bookingCfgEarly;
   const accountLeadHours = (bookingCfg?.booking_lead_hours as number | null | undefined) ?? 0;
   const accountConfirms = bookingCfg?.booking_requires_confirmation === true;
   const accountOpenHouse = (bookingCfg as { allow_double_booking?: boolean } | null)?.allow_double_booking === true;

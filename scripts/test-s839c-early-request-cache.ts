@@ -49,7 +49,7 @@ async function main() {
   assert.ok(readFileSync("app/dashboard/layout.tsx", "utf8").includes("await getRequestUser()"));
   for (const [file, least] of [
     ["app/dashboard/page.tsx", 10],
-    ["app/dashboard/properties/[id]/page.tsx", 18],
+    ["app/dashboard/properties/[id]/page.tsx", 28], // S840: +10 (REVIEW-S839 H block 1)
     ["app/dashboard/tenancies/[id]/page.tsx", 21],
   ] as const) {
     const src = readFileSync(file, "utf8");
