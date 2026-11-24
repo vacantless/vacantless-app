@@ -24,7 +24,7 @@ export type AskPage = {
 };
 
 export const ASK_PATH = "/ask";
-export const ASK_CHECKED = "2026-11-17";
+export const ASK_CHECKED = "2026-11-24";
 
 const LTB_SERVE: AskSource = {
   label: "Landlord and Tenant Board: How to serve documents",
@@ -278,6 +278,80 @@ export const ASK_PAGES: AskPage[] = [
       },
     ],
     related: { href: "/tools/n12", label: "Fill in an N12 for free, dates checked" },
+  },
+  {
+    slug: "do-i-have-to-make-upgrades-my-tenant-asks-for",
+    question: "Do I have to make every repair or upgrade my tenant asks for?",
+    answer:
+      "Repairs, yes: keep the unit in good repair and what you supply working. Upgrades, no, since a replacement doesn't have to be newer or better.",
+    details: [
+      "This applies even if the tenant knew about a problem when they rented.",
+      "A broken stove can be replaced with a used one that works properly.",
+      "Tenants should ask for repairs in writing and keep a copy.",
+      "Not fixed in a reasonable time? The tenant can call the city or file a T6.",
+      "Damage the tenant caused, beyond normal wear and tear, is theirs to pay for.",
+      "A tenant can agree in writing to pay more for new equipment.",
+      "Answer each request in writing: a repair with a date, or a polite no.",
+    ],
+    sources: [
+      {
+        label: "Landlord and Tenant Board: Maintenance and Repairs",
+        url: "https://tribunalsontario.ca/documents/ltb/Brochures/Maintenance%20and%20Repairs.html",
+      },
+      LTB_GUIDE,
+    ],
+    related: { href: "/fix/repairs-and-emergencies", label: "Repairs without phone tag" },
+  },
+  {
+    slug: "tenant-leaving-with-less-than-60-days-notice",
+    question: "My tenant wants to leave with less than 60 days' notice. Should we sign an N11?",
+    answer:
+      "Yes, if the date works for you. A tenant's own notice needs at least 60 days. The N11 is the Board's form for agreeing in writing to end it sooner.",
+    details: [
+      "A monthly tenant's notice must end on the last day of a rental month.",
+      "On a fixed-term lease, their notice can't end before the lease does.",
+      "With an agreement, neither side has to give notice.",
+      "A spoken agreement counts, but a signed one is much safer.",
+      "If the tenant doesn't leave, file an L3 with the signed agreement.",
+      "You can file before the date, but no later than 30 days after it.",
+      "When you sign, book a walkthrough and a key handover time.",
+    ],
+    sources: [
+      LTB_GUIDE,
+      {
+        label: "Landlord and Tenant Board: L3 instructions",
+        url: "https://tribunalsontario.ca/documents/ltb/Landlord%20Applications%20&%20Instructions/L3_Instructions.html",
+      },
+      { label: "Landlord and Tenant Board: forms, filing and fees", url: "https://tribunalsontario.ca/ltb/forms-filing-and-fees/" },
+    ],
+    related: { href: "/fix/ltb-forms", label: "Board forms without the mistakes" },
+  },
+  {
+    slug: "can-i-give-an-n5-to-a-roommate-who-disturbs-others",
+    question: "One roommate keeps disturbing the others. Can I give them an N5?",
+    answer:
+      "Yes, if they substantially interfere with the other tenants' reasonable enjoyment. On a first N5, they get 7 days to stop. If they stop, the notice is void.",
+    details: [
+      "Describe what happened: dates, times, and who was affected.",
+      "Say clearly what they must do to void the notice.",
+      "The end date must be at least 20 days after you give it.",
+      "Still going after 7 days? From the 8th day, you can file an L2.",
+      "A second N5 within 6 months can't be voided and needs 14 days.",
+      "Use the September 2026 N5. Older versions are refused after November 30, 2026.",
+      "If the tenant shares a kitchen or bathroom with you, the Act doesn't apply.",
+    ],
+    sources: [
+      {
+        label: "Landlord and Tenant Board: N5 instructions",
+        url: "https://tribunalsontario.ca/documents/ltb/Notices%20of%20Termination%20&%20Instructions/N5_Instructions.html",
+      },
+      {
+        label: "Tribunals Ontario: LTB operational update, September 21, 2026",
+        url: "https://tribunalsontario.ca/2026/09/21/ltb-operational-update-legislative-changes-at-the-landlord-and-tenant-board-effective-september-21-2026/",
+      },
+      LTB_GUIDE,
+    ],
+    related: { href: "/fix/ltb-forms", label: "Board forms without the mistakes" },
   },
 ];
 
