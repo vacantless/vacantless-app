@@ -104,13 +104,9 @@ function assignedToggleClass(view: AssignedView, target: AssignedView) {
 }
 
 export default async function OverviewPage({ searchParams }: OverviewPageProps) {
-  const s841T0 = Date.now();
-  const s841Marks: string[] = [];
-  const timingMark = (name: string) => s841Marks.push(`${name}=${Date.now() - s841T0}`);
   const supabase = createClient();
   const org = await getCurrentOrg();
   if (!org) return null;
-  timingMark("org");
   const onboardingWizardEnabled = envFlagEnabled(
     process.env.ONBOARDING_WIZARD_ENABLED,
   );
@@ -141,7 +137,6 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     )?.[0]?.default_assigned_view;
     preferred = v === "team" || v === "mine" ? v : null;
   }
-  timingMark("agent");
   const assignedView = resolveAssignedView({
     hasLinkedAgent,
     param: searchParams?.assigned,
@@ -243,6 +238,47 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       .is("archived_at", null)
       .not("description", "is", null)
       .limit(100));
+  // S841b: the Today timing log on Agile (c3f647c) showed these waiting one
+  // after another, about 0.6 s of the page's 1.0 s. None needs another's
+  // answer, so they start here with the rest (lib/early.ts).
+  const weekAgoIsoEarly = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const weekViewingsEarly = early(Promise.all([
+    supabase
+      .from("showings")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
+      .gte("created_at", weekAgoIsoEarly),
+    supabase
+      .from("showings")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
+      .eq("outcome", "attended")
+      .gte("scheduled_at", weekAgoIsoEarly),
+  ]));
+  const turnoverStagesEarly = early(turnoverPropsEarly.then(({ data }) =>
+    latestStages(supabase, org.id, ((data ?? []) as { id: string }[]).map((r) => r.id)),
+  ));
+  const openViewingTimesEarly = early(countViewingTimes(supabase, org.id, timeZone));
+  // S805: an ad a site took down while the rental is still available.
+  const droppedAdsEarly = early(robotAccessEarly.then(async (access) => {
+    if (!access.setup) return null;
+    const coverage = await loadPostingCoverage(supabase, org.id, access.allowed);
+    const gapIds = coverage.rows.filter((r) => r.missingRobot.length > 0).map((r) => r.propertyId);
+    if (gapIds.length === 0) return null;
+    const { data: removedPosts } = await supabase
+      .from("listing_posts")
+      .select("property_id, portal, status, notes, created_at")
+      .eq("organization_id", org.id)
+      .eq("status", "removed")
+      .in("property_id", gapIds);
+    return { rows: coverage.rows, posts: removedPosts ?? [] };
+  }));
+  const renterEmailsEarly = early(robotAccessEarly.then((access) =>
+    access.setup
+      ? Promise.all([readRenterEmailEvents(supabase, org.id), readLiveEmailSites(supabase, org.id)])
+      : null,
+  ));
+  const phoneRepliesEarly = onboardingWizardEnabled ? early(hasPhoneReplyRenter(supabase, org.id)) : null;
   const [
     { data: leads },
     { count: propertyCount },
@@ -359,7 +395,6 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       .is("archived_at", null),
   ]);
 
-  timingMark("batch");
   // Open + urgent work-order counts for the Overview tile.
   const activeWorkOrders = (workOrderRows ?? []) as {
     id: string;
@@ -385,7 +420,6 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     org.id,
     allLeads.filter((l) => l.status === "new").map((l) => l.id),
   );
-  timingMark("answered");
   const openLeads = allLeads.filter((l) => OPEN_STATUSES.includes(l.status));
   // S710 audit: "Open inquiries 258" counted every renter since May. The tile
   // now counts open renters who asked in the last 30 days.
@@ -401,22 +435,8 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     (l) => new Date(l.created_at).getTime() >= weekAgo,
   );
   // S793: viewings booked and kept in the same 7 days, for the tile's hint.
-  const weekAgoIso = new Date(weekAgo).toISOString();
-  const [{ count: viewingsBookedWeek }, { count: viewingsKeptWeek }] = await Promise.all([
-    supabase
-      .from("showings")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", org.id)
-      .gte("created_at", weekAgoIso),
-    supabase
-      .from("showings")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", org.id)
-      .eq("outcome", "attended")
-      .gte("scheduled_at", weekAgoIso),
-  ]);
+  const [{ count: viewingsBookedWeek }, { count: viewingsKeptWeek }] = await weekViewingsEarly;
 
-  timingMark("week");
   // S792: the stage strip counts the last 30 days. All-time totals (109 New
   // since May) read as neglect; older renters stay in Renters.
   const recentLeads = allLeads.filter((l) => new Date(l.created_at).getTime() >= monthAgo);
@@ -427,8 +447,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   // S792: units in a turnover, with the same stage chip the Rentals list shows.
   const { data: turnoverProps } = await turnoverPropsEarly;
   const turnoverRows = (turnoverProps ?? []) as { id: string; address: string | null; status: string | null }[];
-  const turnoverStages = await latestStages(supabase, org.id, turnoverRows.map((r) => r.id));
-  timingMark("stages");
+  const turnoverStages = await turnoverStagesEarly;
   const chipNow = new Date();
   // S823b: live ads per unit, so a live unit never reads "Ready to post".
   const { data: turnoverLivePosts } = await turnoverLivePostsEarly;
@@ -486,7 +505,6 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
           .eq("organization_id", org.id)
           .in("tenancy_id", activeTenancyIds)
       : { data: [] };
-  timingMark("rentadj");
   const rentConfirmedTenancyIds = new Set(
     ((confirmedRentRows ?? []) as { tenancy_id: string | null }[])
       .map((row) => row.tenancy_id)
@@ -529,9 +547,9 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         today,
   ).length;
   // S740 (review item 1): live rentals with no viewing time open.
+  const viewingTimesCounted = await openViewingTimesEarly;
   const openViewingTimes =
-    (liveRentalCount ?? 0) > 0 ? await countViewingTimes(supabase, org.id, timeZone) : 1;
-  timingMark("viewtimes");
+    (liveRentalCount ?? 0) > 0 ? viewingTimesCounted : 1;
   // S828c: a landlord who books each viewing themselves is not asked to open times.
   const { data: byRequestRow } = await byRequestRowEarly;
   const viewingsByRequest =
@@ -547,7 +565,6 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     openViewingTimes === 0 ? await loadLastWeekTimes(supabase, org.id, timeZone) : [];
   const lastWeekSummary =
     lastWeekTimes.length > 0 ? repeatSummary(lastWeekTimes, await loadBuildingDays(supabase, org.id)) : null;
-  timingMark("lastweek");
   const presetNotice = presetOpenedNotice(
     searchParams?.opened ?? null,
     searchParams?.added != null ? Number(searchParams.added) : null,
@@ -580,7 +597,6 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     urgentWorkOrders: urgentWorkOrders.length,
   });
 
-  timingMark("counts");
   const checklist = buildLaunchChecklist({
     propertyCount: propertyCount ?? 0,
     listingOnlineCount: listingOnlineCount ?? 0,
@@ -617,7 +633,6 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   for (const t of siteTiles) if (!isHiddenForOrg(t.channel, org.id)) siteStateByChannel[t.channel] = t.state;
   const onboardingHasConnectedSite = onboardingWizardEnabled ? orgHasConnectedSite(siteStateByChannel) : false;
   const robotAccess = await robotAccessEarly;
-  timingMark("tiles");
   // S770 (REVIEW-S770 section 6): units a tenant is leaving. Two sources,
   // both the tenant's own word: a recorded move-out date, or "leaving" on the
   // renewal check-in. One pure rule (lib/coming-vacant) for the card and the
@@ -667,34 +682,22 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   });
   // S805: an ad a site took down while the rental is still available.
   let droppedAds: DroppedAdNotice[] = [];
-  if (robotAccess.setup) {
-    const dropCoverage = await loadPostingCoverage(supabase, org.id, robotAccess.allowed);
-    const gapIds = dropCoverage.rows.filter((r) => r.missingRobot.length > 0).map((r) => r.propertyId);
-    if (gapIds.length > 0) {
-      const { data: removedPosts } = await supabase
-        .from("listing_posts")
-        .select("property_id, portal, status, notes, created_at")
-        .eq("organization_id", org.id)
-        .eq("status", "removed")
-        .in("property_id", gapIds);
-      droppedAds = droppedAdNotices({
-        rows: dropCoverage.rows,
-        posts: (removedPosts ?? []) as Parameters<typeof droppedAdNotices>[0]["posts"],
-        shortAddress,
-        nowISO: new Date().toISOString(),
-      });
-    }
+  const droppedAdsData = await droppedAdsEarly;
+  if (droppedAdsData) {
+    droppedAds = droppedAdNotices({
+      rows: droppedAdsData.rows,
+      posts: droppedAdsData.posts as Parameters<typeof droppedAdNotices>[0]["posts"],
+      shortAddress,
+      nowISO: new Date().toISOString(),
+    });
   }
-  timingMark("coverage");
   // S806 (REVIEW-S805 finding 7): a site with a live ad whose renter emails
   // have never reached Vacantless.
   let renterEmailCards: RenterEmailNotice[] = [];
   let onboardingRenterEmails: boolean | undefined;
-  if (robotAccess.setup) {
-    const [emailEvents, liveEmailSites] = await Promise.all([
-      readRenterEmailEvents(supabase, org.id),
-      readLiveEmailSites(supabase, org.id),
-    ]);
+  const renterEmailData = await renterEmailsEarly;
+  if (renterEmailData) {
+    const [emailEvents, liveEmailSites] = renterEmailData;
     onboardingRenterEmails = hasRenterEmails(emailEvents);
     renterEmailCards = renterEmailNotices({
       liveSites: liveEmailSites,
@@ -702,7 +705,6 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       events: emailEvents,
     });
   }
-  timingMark("emails");
   // S830g: a dated line in a live rental's ad whose date has passed.
   const datedLineCards: { key: string; title: string; line: string; action: { href: string; label: string } }[] = [];
   {
@@ -721,7 +723,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     }
   }
   // S817d: "Answer renters from your phone" is done on the first renter saved from the phone.
-  const onboardingPhoneReplies = onboardingWizardEnabled ? await hasPhoneReplyRenter(supabase, org.id) : undefined;
+  const onboardingPhoneReplies = phoneRepliesEarly ? await phoneRepliesEarly : undefined;
   const onboardingWizardState = onboardingWizardEnabled
     ? computeOnboardingState({
         hasPhoneReplies: onboardingPhoneReplies,
@@ -752,7 +754,6 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       })
     : null;
 
-  timingMark("phone");
   // S712: a Free org over its one-rental cap (e.g. after a downgrade).
   const overCapNotice = overListingCapNotice(org?.plan, liveRentalCount ?? 0);
 
@@ -813,8 +814,6 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     />
   );
 
-  timingMark("end");
-  console.log(`[s841-today-timing] org=${org.id.slice(0, 8)} leads=${allLeads.length} ${s841Marks.join(" ")}`);
   return (
     <div>
       {showFullChecklistOnTop && (

@@ -48,7 +48,7 @@ async function main() {
   assert.ok(server.includes("supabase.auth.getUser()"), "still a real check with the auth server");
   assert.ok(readFileSync("app/dashboard/layout.tsx", "utf8").includes("await getRequestUser()"));
   for (const [file, least] of [
-    ["app/dashboard/page.tsx", 10],
+    ["app/dashboard/page.tsx", 15], // S841b: +5 (Today timing log)
     ["app/dashboard/properties/[id]/page.tsx", 28], // S840: +10 (REVIEW-S839 H block 1)
     ["app/dashboard/tenancies/[id]/page.tsx", 21],
   ] as const) {
