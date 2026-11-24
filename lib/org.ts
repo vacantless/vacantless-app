@@ -1,4 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getRequestUser } from "@/lib/supabase/server";
+import { perRequest } from "@/lib/request-cache";
 import { readSelectedOrgCookie, validateSelectedOrg } from "@/lib/selected-org";
 
 export type Org = {
@@ -111,11 +112,11 @@ export const ORG_COLUMNS =
 //
 // Historically this did a bare `.limit(1)` and let RLS surface an arbitrary one
 // of the caller's orgs; the cookie now makes the choice deterministic.
-export async function getCurrentOrg(): Promise<Org | null> {
+// S839c: asked once per page render (lib/request-cache.ts).
+export const getCurrentOrg = perRequest(loadCurrentOrg);
+async function loadCurrentOrg(): Promise<Org | null> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
   if (!user) return null;
 
   // The caller's membership org ids (RLS: only their own rows are readable).
@@ -143,11 +144,10 @@ export async function getCurrentOrg(): Promise<Org | null> {
 
 // The caller's orgs (id + name), for the org switcher. RLS on `organizations`
 // (id in user_org_ids()) scopes the read to just the orgs the caller belongs to.
-export async function listMyOrgs(): Promise<{ id: string; name: string }[]> {
+export const listMyOrgs = perRequest(loadMyOrgs);
+async function loadMyOrgs(): Promise<{ id: string; name: string }[]> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
   if (!user) return [];
   const { data } = await supabase
     .from("organizations")

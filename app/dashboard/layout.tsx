@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getRequestUser } from "@/lib/supabase/server";
 import { getCurrentOrg, listMyOrgs } from "@/lib/org";
 import { accessibleBrand, brandGradientCss } from "@/lib/brand-theme";
 import { DashboardNav } from "./dashboard-nav";
@@ -31,9 +31,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
   if (!user) redirect("/login");
 
   // S800: the shared demo login sees a read-only account (lib/demo-account.ts).

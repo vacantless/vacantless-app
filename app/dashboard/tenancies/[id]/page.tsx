@@ -3,6 +3,7 @@ import { SignedPapers } from "@/components/signed-papers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { early } from "@/lib/early";
 import {
   fixedTermEndISO,
   TENANCY_STATUSES,
@@ -520,16 +521,139 @@ export default async function TenancyDetailPage({
   const primary = tenants.find((x) => x.is_primary) ?? tenants[0] ?? null;
   const org = await getCurrentOrg();
   if (!org) return null;
+  // S839c: these do not depend on each other, so they start together here
+  // and are awaited where they are used (lib/early.ts).
+  const rotessaRowsEarly = early(supabase
+    .from("rotessa_accounts")
+    .select("connection_status, api_key_encrypted")
+    .eq("organization_id", org.id)
+    .limit(1));
+  const stripeConnectRowsEarly = early(supabase
+    .from("stripe_connect_accounts")
+    .select("connected_account_id, country, charges_enabled, onboarding_state")
+    .eq("organization_id", org.id)
+    .limit(1));
+  const nsfDataEarly = early(supabase
+    .from("tenancy_nsf_charges")
+    .select("id, incurred_on, bank_charge_cents, admin_charge_cents, note, source, paid_at")
+    .eq("tenancy_id", t.id)
+    .order("incurred_on", { ascending: false })
+    .limit(50));
+  const paymentRowsEarly = early(supabase
+    .from("rent_payments")
+    .select("id, amount_cents, method, paid_on, period_month, reference, note")
+    .eq("tenancy_id", t.id)
+    .order("paid_on", { ascending: false })
+    .order("created_at", { ascending: false }));
+  const woRowsEarly = early(supabase
+    .from("work_orders")
+    .select(
+      "id, title, status, priority, category, scheduled_for, quote_cents, expected_start, expected_finish, trade:trade_contacts(name)",
+    )
+    .eq("tenancy_id", t.id)
+    .order("created_at", { ascending: false }));
+  const templateRowsEarly = early(supabase
+    .from("tenant_message_templates")
+    .select("id, name, channel, subject, body")
+    .eq("organization_id", org.id)
+    .order("name", { ascending: true }));
+  const n4RowsEarly = early(supabase
+    .from("notices")
+    .select(
+      "id, status, service_token, total_owing_cents, termination_date, created_at, filed_document_id",
+    )
+    .eq("tenancy_id", params.id)
+    .eq("type", "N4")
+    .order("created_at", { ascending: false }));
+  const n12RowsEarly = early(supabase
+    .from("notices")
+    .select("id, status, termination_date, total_owing_cents, created_at, compensationRequired:snapshot->compensationRequired")
+    .eq("tenancy_id", params.id)
+    .eq("type", "N12")
+    .order("created_at", { ascending: false }));
+  const n13RowsEarly = early(supabase
+    .from("notices")
+    .select("id, status, termination_date, total_owing_cents, created_at, compensationRequired:snapshot->compensationRequired, reason:snapshot->reason")
+    .eq("tenancy_id", params.id)
+    .eq("type", "N13")
+    .order("created_at", { ascending: false }));
+  const n5RowsEarly = early(supabase
+    .from("notices")
+    .select("id, status, termination_date, created_at")
+    .eq("tenancy_id", params.id)
+    .eq("type", "N5")
+    .order("created_at", { ascending: false }));
+  const n6RowsEarly = early(supabase
+    .from("notices")
+    .select("id, status, termination_date, created_at")
+    .eq("tenancy_id", params.id)
+    .eq("type", "N6")
+    .order("created_at", { ascending: false }));
+  const n8RowsEarly = early(supabase
+    .from("notices")
+    .select("id, status, termination_date, created_at")
+    .eq("tenancy_id", params.id)
+    .eq("type", "N8")
+    .order("created_at", { ascending: false }));
+  const l2RowsEarly = early(supabase
+    .from("notices")
+    .select("id, type, status, termination_date, snapshot")
+    .eq("tenancy_id", params.id)
+    .in("type", ["N5", "N6", "N8", "N12", "N13"])
+    .in("status", ["served", "filed"])
+    .order("created_at", { ascending: false })
+    .limit(10));
+  const guidelineLookupEarly = early(loadGuidelineLookup(supabase));
+  const messageRowsEarly = early(supabase
+    .from("tenant_messages")
+    .select(
+      "id, channel, subject, body, recipient_count, sent_count, failed_count, skipped_count, created_at",
+    )
+    .eq("tenancy_id", t.id)
+    .order("created_at", { ascending: false })
+    .limit(20));
+  const leaseRowsEarly = early(supabase
+    .from("lease_documents")
+    .select("id, title, status, assembled_body, executed_clause_versions, created_at, executed_at")
+    .eq("tenancy_id", t.id)
+    .order("created_at", { ascending: false }));
+  const clauseRowsEarly = early(supabase
+    .from("lease_clauses")
+    .select("id, key, title, applicable_to, category, risk_level, notes_for_landlord")
+    .eq("organization_id", org.id)
+    .order("category", { ascending: true })
+    .order("key", { ascending: true }));
+  const clauseVersionRowsEarly = early(supabase
+    .from("lease_clause_versions")
+    .select("id, clause_id, version, is_current, body")
+    .eq("organization_id", org.id));
+  const insRowsEarly = early(supabase
+    .from("tenancy_insurance")
+    .select(
+      "id, provider, policy_number, coverage_amount_cents, effective_date, expiry_date, notes",
+    )
+    .eq("tenancy_id", t.id)
+    .order("expiry_date", { ascending: true }));
+  const vioRowsEarly = early(supabase
+    .from("tenancy_violations")
+    .select(
+      "id, violation_type, occurred_on, description, notice_type, notice_served_on, remedy_due_on, status, resolved_on, notes",
+    )
+    .eq("tenancy_id", t.id)
+    .order("created_at", { ascending: false }));
+  const inspRowsEarly = early(supabase
+    .from("tenancy_inspections")
+    .select(
+      "id, inspection_type, scheduled_for, status, completed_on, condition_notes, notes",
+    )
+    .eq("tenancy_id", t.id)
+    .order("created_at", { ascending: false }));
   const checklistEnabled = envFlagEnabled(process.env.MOVE_IN_CHECKLIST_ENABLED);
 
   // The selected org's Rotessa connection state. We surface whether rent
   // collection is connected so the Rent-collection card below can show the
   // right call-to-action; the stored key is never read here.
-  const { data: rotessaRows } = await supabase
-    .from("rotessa_accounts")
-    .select("connection_status, api_key_encrypted")
-    .eq("organization_id", org.id)
-    .limit(1);
+  const { data: rotessaRows } = await rotessaRowsEarly;
   const rotessaRow = rotessaRows?.[0] as
     | { connection_status: string; api_key_encrypted: string | null }
     | undefined;
@@ -546,11 +670,7 @@ export default async function TenancyDetailPage({
 
   // The selected org's Stripe Connect rent rail state (sibling of Rotessa).
   // Drives the Stripe rent-collection section below.
-  const { data: stripeConnectRows } = await supabase
-    .from("stripe_connect_accounts")
-    .select("connected_account_id, country, charges_enabled, onboarding_state")
-    .eq("organization_id", org.id)
-    .limit(1);
+  const { data: stripeConnectRows } = await stripeConnectRowsEarly;
   const stripeConnectRow = stripeConnectRows?.[0] as
     | { connected_account_id: string; country: string | null; charges_enabled: boolean; onboarding_state: string }
     | undefined;
@@ -561,12 +681,7 @@ export default async function TenancyDetailPage({
   );
   const rentLive = subscriptionIsLive(t.stripe_subscription_status) && !!t.stripe_subscription_id;
   // S835c: NSF charges on this tenancy, newest first.
-  const { data: nsfData } = await supabase
-    .from("tenancy_nsf_charges")
-    .select("id, incurred_on, bank_charge_cents, admin_charge_cents, note, source, paid_at")
-    .eq("tenancy_id", t.id)
-    .order("incurred_on", { ascending: false })
-    .limit(50);
+  const { data: nsfData } = await nsfDataEarly;
   const nsfRows = (nsfData ?? []) as NsfChargeRow[];
   // S835b (finding 4): the bank link waiting on the tenant, shown with a Copy
   // button. Read from Stripe only while the authorization is pending.
@@ -662,12 +777,7 @@ export default async function TenancyDetailPage({
 
   // Manual rent payments recorded against this tenancy (newest first). RLS
   // scopes to this org. We reconcile them against the monthly rent below.
-  const { data: paymentRows } = await supabase
-    .from("rent_payments")
-    .select("id, amount_cents, method, paid_on, period_month, reference, note")
-    .eq("tenancy_id", t.id)
-    .order("paid_on", { ascending: false })
-    .order("created_at", { ascending: false });
+  const { data: paymentRows } = await paymentRowsEarly;
   const payments = (paymentRows ?? []) as Payment[];
   const reconciliation = reconcilePayments(
     payments.map((p): PaymentRow => ({ amount_cents: p.amount_cents, period_month: p.period_month })),
@@ -702,13 +812,7 @@ export default async function TenancyDetailPage({
   // Maintenance work orders logged against this tenancy (newest first), for the
   // per-tenancy Maintenance panel (work-order module Slice 3). RLS scopes to
   // this org. Full management lives on /dashboard/maintenance.
-  const { data: woRows } = await supabase
-    .from("work_orders")
-    .select(
-      "id, title, status, priority, category, scheduled_for, quote_cents, expected_start, expected_finish, trade:trade_contacts(name)",
-    )
-    .eq("tenancy_id", t.id)
-    .order("created_at", { ascending: false });
+  const { data: woRows } = await woRowsEarly;
   const workOrders = (woRows ?? []) as unknown as {
     id: string;
     title: string;
@@ -725,11 +829,7 @@ export default async function TenancyDetailPage({
 
   // Selected-org saved message templates for the composer's "start from
   // template" picker.
-  const { data: templateRows } = await supabase
-    .from("tenant_message_templates")
-    .select("id, name, channel, subject, body")
-    .eq("organization_id", org.id)
-    .order("name", { ascending: true });
+  const { data: templateRows } = await templateRowsEarly;
   const templates = (templateRows ?? []) as ComposerTemplate[];
 
   // Comms tie-in (Slice 4): when deep-linked from a work-order status change
@@ -770,14 +870,7 @@ export default async function TenancyDetailPage({
 
   // LTB Form N4 (arrears termination) notices for this tenancy (N-form library
   // Slice C). Prepare-first; the operator serves themselves. Newest first.
-  const { data: n4Rows } = await supabase
-    .from("notices")
-    .select(
-      "id, status, service_token, total_owing_cents, termination_date, created_at, filed_document_id",
-    )
-    .eq("tenancy_id", params.id)
-    .eq("type", "N4")
-    .order("created_at", { ascending: false });
+  const { data: n4Rows } = await n4RowsEarly;
   const n4Notices: N4NoticeView[] = (n4Rows ?? []).map((r) => {
     const n = r as N4NoticeView;
     return {
@@ -791,12 +884,7 @@ export default async function TenancyDetailPage({
     };
   });
   // S748g: Form N12 notices for this tenancy. Newest first.
-  const { data: n12Rows } = await supabase
-    .from("notices")
-    .select("id, status, termination_date, total_owing_cents, created_at, compensationRequired:snapshot->compensationRequired")
-    .eq("tenancy_id", params.id)
-    .eq("type", "N12")
-    .order("created_at", { ascending: false });
+  const { data: n12Rows } = await n12RowsEarly;
   const n12Notices: N12NoticeView[] = (n12Rows ?? []).map((r) => {
     const n = r as unknown as {
       id: string;
@@ -816,12 +904,7 @@ export default async function TenancyDetailPage({
     };
   });
   // S751: Form N13 notices for this tenancy. Newest first.
-  const { data: n13Rows } = await supabase
-    .from("notices")
-    .select("id, status, termination_date, total_owing_cents, created_at, compensationRequired:snapshot->compensationRequired, reason:snapshot->reason")
-    .eq("tenancy_id", params.id)
-    .eq("type", "N13")
-    .order("created_at", { ascending: false });
+  const { data: n13Rows } = await n13RowsEarly;
   const n13Notices: N13NoticeView[] = (n13Rows ?? []).map((r) => {
     const n = r as unknown as {
       id: string;
@@ -843,28 +926,13 @@ export default async function TenancyDetailPage({
     };
   });
   // S748g: Form N5 notices for this tenancy. Newest first.
-  const { data: n5Rows } = await supabase
-    .from("notices")
-    .select("id, status, termination_date, created_at")
-    .eq("tenancy_id", params.id)
-    .eq("type", "N5")
-    .order("created_at", { ascending: false });
+  const { data: n5Rows } = await n5RowsEarly;
   const n5Notices: N5NoticeView[] = (n5Rows ?? []).map((r) => r as N5NoticeView);
   // S751: Form N6 notices for this tenancy. Newest first.
-  const { data: n6Rows } = await supabase
-    .from("notices")
-    .select("id, status, termination_date, created_at")
-    .eq("tenancy_id", params.id)
-    .eq("type", "N6")
-    .order("created_at", { ascending: false });
+  const { data: n6Rows } = await n6RowsEarly;
   const n6Notices: N6NoticeView[] = (n6Rows ?? []).map((r) => r as N6NoticeView);
   // S749: Form N8 notices for this tenancy, and the late payments the ledger shows.
-  const { data: n8Rows } = await supabase
-    .from("notices")
-    .select("id, status, termination_date, created_at")
-    .eq("tenancy_id", params.id)
-    .eq("type", "N8")
-    .order("created_at", { ascending: false });
+  const { data: n8Rows } = await n8RowsEarly;
   const n8Notices: N8NoticeView[] = (n8Rows ?? []).map((r) => r as N8NoticeView);
   const n8LatePeriods = t.rent_cents
     ? findLatePeriods({
@@ -874,14 +942,7 @@ export default async function TenancyDetailPage({
       })
     : [];
   // S749: served N5, N8, N12 and (S751) N6, N13 notices an L2 can be filed from. Newest first.
-  const { data: l2Rows } = await supabase
-    .from("notices")
-    .select("id, type, status, termination_date, snapshot")
-    .eq("tenancy_id", params.id)
-    .in("type", ["N5", "N6", "N8", "N12", "N13"])
-    .in("status", ["served", "filed"])
-    .order("created_at", { ascending: false })
-    .limit(10);
+  const { data: l2Rows } = await l2RowsEarly;
   const l2Notices: L2NoticeView[] = (l2Rows ?? []).map((r) => {
     const n = r as unknown as { id: string; type: "N5" | "N6" | "N8" | "N12" | "N13"; status: string; termination_date: string | null; snapshot: L2NoticeSnap | null };
     return {
@@ -924,7 +985,7 @@ export default async function TenancyDetailPage({
       : (l9Today.problems.find((p) => p !== "over_limit") ?? null);
   const n4AppUrl =
     process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
-  const guidelineLookup = await loadGuidelineLookup(supabase);
+  const guidelineLookup = await guidelineLookupEarly;
   const leaseTermShiftOn = leaseTermShiftEnabled();
   const rentLedgerConfirmed = leaseTermShiftOn
     ? await hasConfirmedRentLedger(supabase, t.id)
@@ -1099,14 +1160,7 @@ export default async function TenancyDetailPage({
   };
   const serveFlash = searchParams.serve ? (SERVE_FLASH[searchParams.serve] ?? null) : null;
 
-  const { data: messageRows } = await supabase
-    .from("tenant_messages")
-    .select(
-      "id, channel, subject, body, recipient_count, sent_count, failed_count, skipped_count, created_at",
-    )
-    .eq("tenancy_id", t.id)
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const { data: messageRows } = await messageRowsEarly;
   const messages = (messageRows ?? []) as TenantMessageRow[];
 
   let scheduledMessages: ScheduledTenantMessageRow[] = [];
@@ -1123,11 +1177,7 @@ export default async function TenancyDetailPage({
 
   // Generated lease documents for this tenancy (newest first). The two most
   // recent power the renewal diff (#11 slice 2).
-  const { data: leaseRows } = await supabase
-    .from("lease_documents")
-    .select("id, title, status, assembled_body, executed_clause_versions, created_at, executed_at")
-    .eq("tenancy_id", t.id)
-    .order("created_at", { ascending: false });
+  const { data: leaseRows } = await leaseRowsEarly;
   // Signers across all of this tenancy's leases (one query; grouped in code).
   // Selected-org signer rows power the per-signer status + magic-link UI.
   const { data: signerRows } = await supabase
@@ -1291,16 +1341,8 @@ export default async function TenancyDetailPage({
   // The selected-org clause library powers the clause-selection wizard (#11
   // slice 7). We resolve each clause to its current version and enrich with the
   // slice-6 display metadata (category / risk / landlord note) the wizard renders.
-  const { data: clauseRows } = await supabase
-    .from("lease_clauses")
-    .select("id, key, title, applicable_to, category, risk_level, notes_for_landlord")
-    .eq("organization_id", org.id)
-    .order("category", { ascending: true })
-    .order("key", { ascending: true });
-  const { data: clauseVersionRows } = await supabase
-    .from("lease_clause_versions")
-    .select("id, clause_id, version, is_current, body")
-    .eq("organization_id", org.id);
+  const { data: clauseRows } = await clauseRowsEarly;
+  const { data: clauseVersionRows } = await clauseVersionRowsEarly;
   const clauseMeta = new Map(
     ((clauseRows ?? []) as {
       id: string;
@@ -1660,13 +1702,7 @@ export default async function TenancyDetailPage({
   // tenancy. RLS scopes the read to this org. Each policy's status is computed
   // here (expiring within the lead window / lapsed past expiry) so the section
   // stays presentational and the collapsed header reflects what needs attention.
-  const { data: insRows } = await supabase
-    .from("tenancy_insurance")
-    .select(
-      "id, provider, policy_number, coverage_amount_cents, effective_date, expiry_date, notes",
-    )
-    .eq("tenancy_id", t.id)
-    .order("expiry_date", { ascending: true });
+  const { data: insRows } = await insRowsEarly;
   const insuranceViews: InsuranceView[] = ((insRows ?? []) as any[]).map((r) => ({
     id: r.id,
     provider: r.provider ?? null,
@@ -1694,13 +1730,7 @@ export default async function TenancyDetailPage({
   // RLS scopes the read to this org. The follow-up band (approaching/overdue, only
   // for OPEN records with a remedy deadline) is computed here so the section stays
   // presentational and the collapsed header reflects what needs attention.
-  const { data: vioRows } = await supabase
-    .from("tenancy_violations")
-    .select(
-      "id, violation_type, occurred_on, description, notice_type, notice_served_on, remedy_due_on, status, resolved_on, notes",
-    )
-    .eq("tenancy_id", t.id)
-    .order("created_at", { ascending: false });
+  const { data: vioRows } = await vioRowsEarly;
   const violationViews: ViolationView[] = ((vioRows ?? []) as any[]).map((r) => ({
     id: r.id,
     violation_type: r.violation_type ?? null,
@@ -1737,13 +1767,7 @@ export default async function TenancyDetailPage({
   // overdue, only for SCHEDULED records with a planned date) is computed here so
   // the section stays presentational and the collapsed header reflects what needs
   // attention.
-  const { data: inspRows } = await supabase
-    .from("tenancy_inspections")
-    .select(
-      "id, inspection_type, scheduled_for, status, completed_on, condition_notes, notes",
-    )
-    .eq("tenancy_id", t.id)
-    .order("created_at", { ascending: false });
+  const { data: inspRows } = await inspRowsEarly;
   const inspectionViews: InspectionView[] = ((inspRows ?? []) as any[]).map((r) => ({
     id: r.id,
     inspection_type: r.inspection_type ?? null,

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getRequestUser } from "@/lib/supabase/server";
+import { perRequest } from "@/lib/request-cache";
 import { normalizeRole, roleCan, type Capability, type OrgRole } from "@/lib/roles";
 import { readSelectedOrgCookie, validateSelectedOrg } from "@/lib/selected-org";
 
@@ -55,13 +56,13 @@ export function roleForActiveOrg(
 // acting on a run whose organization_id came from the run itself. Returns null if
 // they have no membership in that org (RLS lets a member read only their own
 // membership rows). Prevents one org's role standing in for another's.
-export async function getRoleForOrg(
+// S839c: asked once per account per page render (lib/request-cache.ts).
+export const getRoleForOrg = perRequest(loadRoleForOrg);
+async function loadRoleForOrg(
   organizationId: string,
 ): Promise<OrgRole | null> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
   if (!user) return null;
   const { data } = await supabase
     .from("memberships")

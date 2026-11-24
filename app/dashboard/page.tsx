@@ -2,7 +2,8 @@ import Link from "next/link";
 import { hasPhoneReplyRenter } from "@/lib/reply-kit-server";
 import { answeredLeadIds } from "@/lib/lead-answered";
 import { countViewingTimes } from "@/lib/viewing-times-count";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getRequestUser } from "@/lib/supabase/server";
+import { early } from "@/lib/early";
 import { getCurrentOrg } from "@/lib/org";
 import {
   PIPELINE_STAGES,
@@ -110,9 +111,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     process.env.ONBOARDING_WIZARD_ENABLED,
   );
   const timeZone = org.booking_timezone ?? "America/Toronto";
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser();
   const { data: myAgentRows } = org
     ? await supabase
         .from("showing_agents")
@@ -191,6 +190,54 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
 
   // RLS admits every org the caller belongs to; selected-org filtering keeps the
   // dashboard anchored to the active client/org.
+  // S839c: these do not depend on each other, so they start together here
+  // and are awaited where they are used (lib/early.ts).
+  const turnoverPropsEarly = early(supabase
+    .from("properties")
+    .select("id, address, status")
+    .eq("organization_id", org.id)
+    .is("archived_at", null)
+    .limit(300));
+  const turnoverLivePostsEarly = early(supabase
+    .from("listing_posts")
+    .select("property_id, url")
+    .eq("organization_id", org.id)
+    .eq("status", "live")
+    .limit(1000));
+  const overviewGuidelineEarly = early(loadGuidelineLookup(supabase));
+  const byRequestRowEarly = early(supabase
+    .from("organizations")
+    .select("viewings_by_request")
+    .eq("id", org.id)
+    .maybeSingle());
+  const agentCountEarly = early(supabase
+    .from("showing_agents")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", org.id)
+    .eq("archived", false));
+  const rentFailedCountEarly = early(supabase
+    .from("tenancies")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", org.id)
+    .in("stripe_subscription_status", ["past_due", "unpaid"]));
+  const siteTilesEarly = early(listChannelTileStatuses(org.id));
+  const robotAccessEarly = early(readRobotPostingAccess(supabase, org.id));
+  const leavingRowsEarly = early(supabase
+    .from("tenancies")
+    .select(
+      "id, property_id, start_date, end_date, renewal_intent, move_out_date, property:properties(id, address, status, available_date, viewing_earliest_date, archived_at)",
+    )
+    .eq("organization_id", org.id)
+    .eq("status", "active")
+    .or("renewal_intent.eq.leaving,move_out_date.not.is.null"));
+  const liveTextEarly = early(supabase
+      .from("properties")
+      .select("id, address, description")
+      .eq("organization_id", org.id)
+      .eq("status", "available")
+      .is("archived_at", null)
+      .not("description", "is", null)
+      .limit(100));
   const [
     { data: leads },
     { count: propertyCount },
@@ -370,22 +417,12 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   for (const l of recentLeads) counts[l.status] = (counts[l.status] ?? 0) + 1;
 
   // S792: units in a turnover, with the same stage chip the Rentals list shows.
-  const { data: turnoverProps } = await supabase
-    .from("properties")
-    .select("id, address, status")
-    .eq("organization_id", org.id)
-    .is("archived_at", null)
-    .limit(300);
+  const { data: turnoverProps } = await turnoverPropsEarly;
   const turnoverRows = (turnoverProps ?? []) as { id: string; address: string | null; status: string | null }[];
   const turnoverStages = await latestStages(supabase, org.id, turnoverRows.map((r) => r.id));
   const chipNow = new Date();
   // S823b: live ads per unit, so a live unit never reads "Ready to post".
-  const { data: turnoverLivePosts } = await supabase
-    .from("listing_posts")
-    .select("property_id, url")
-    .eq("organization_id", org.id)
-    .eq("status", "live")
-    .limit(1000);
+  const { data: turnoverLivePosts } = await turnoverLivePostsEarly;
   const turnoverLiveAds = new Map<string, number>();
   for (const r of (turnoverLivePosts ?? []) as { property_id: string | null; url: string | null }[]) {
     if (r.property_id && r.url?.trim()) turnoverLiveAds.set(r.property_id, (turnoverLiveAds.get(r.property_id) ?? 0) + 1);
@@ -446,7 +483,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       .filter((id): id is string => !!id),
   );
   // S466: back the guideline with the DB (0135) so the overview matches serveN1/the card.
-  const overviewGuideline = await loadGuidelineLookup(supabase);
+  const overviewGuideline = await overviewGuidelineEarly;
   const rentIncreaseAlerts = ((tenancyRows ?? []) as unknown as TenancyRow[])
     .flatMap((t) => {
       if (leaseTermShiftOn && !rentConfirmedTenancyIds.has(t.id)) return [];
@@ -485,11 +522,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   const openViewingTimes =
     (liveRentalCount ?? 0) > 0 ? await countViewingTimes(supabase, org.id, timeZone) : 1;
   // S828c: a landlord who books each viewing themselves is not asked to open times.
-  const { data: byRequestRow } = await supabase
-    .from("organizations")
-    .select("viewings_by_request")
-    .eq("id", org.id)
-    .maybeSingle();
+  const { data: byRequestRow } = await byRequestRowEarly;
   const viewingsByRequest =
     (byRequestRow as { viewings_by_request?: boolean } | null)?.viewings_by_request === true;
   const notBookedRecent = allLeads.filter(
@@ -507,18 +540,10 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     searchParams?.opened ?? null,
     searchParams?.added != null ? Number(searchParams.added) : null,
   );
-  const { count: agentCount } = await supabase
-    .from("showing_agents")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", org.id)
-    .eq("archived", false);
+  const { count: agentCount } = await agentCountEarly;
   const hasShowingAgents = (agentCount ?? 0) > 0;
   // S835b (REVIEW-S835 finding 5): rent debits that failed and are still unpaid.
-  const { count: rentFailedCount } = await supabase
-    .from("tenancies")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", org.id)
-    .in("stripe_subscription_status", ["past_due", "unpaid"]);
+  const { count: rentFailedCount } = await rentFailedCountEarly;
   const todayItems = buildTodayLane({
     rentPaymentsFailed: rentFailedCount ?? 0,
     noViewingTimes: openViewingTimes === 0 && !viewingsByRequest ? { waiting: notBookedRecent } : null,
@@ -574,23 +599,16 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
     : true;
   // S760: the "Connect your rental sites" step. S761: the same tile states
   // feed the "signed you out" cards above the lane.
-  const siteTiles = await listChannelTileStatuses(org.id);
+  const siteTiles = await siteTilesEarly;
   const siteStateByChannel: Record<string, string> = {};
   for (const t of siteTiles) if (!isHiddenForOrg(t.channel, org.id)) siteStateByChannel[t.channel] = t.state;
   const onboardingHasConnectedSite = onboardingWizardEnabled ? orgHasConnectedSite(siteStateByChannel) : false;
-  const robotAccess = await readRobotPostingAccess(supabase, org.id);
+  const robotAccess = await robotAccessEarly;
   // S770 (REVIEW-S770 section 6): units a tenant is leaving. Two sources,
   // both the tenant's own word: a recorded move-out date, or "leaving" on the
   // renewal check-in. One pure rule (lib/coming-vacant) for the card and the
   // click. Only active tenancies; the rule drops anything over 30 days past.
-  const { data: leavingRows } = await supabase
-    .from("tenancies")
-    .select(
-      "id, property_id, start_date, end_date, renewal_intent, move_out_date, property:properties(id, address, status, available_date, viewing_earliest_date, archived_at)",
-    )
-    .eq("organization_id", org.id)
-    .eq("status", "active")
-    .or("renewal_intent.eq.leaving,move_out_date.not.is.null");
+  const { data: leavingRows } = await leavingRowsEarly;
   const comingVacant: ComingVacant[] = [];
   for (const r of (leavingRows ?? []) as unknown as {
     id: string;
@@ -672,14 +690,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   // S830g: a dated line in a live rental's ad whose date has passed.
   const datedLineCards: { key: string; title: string; line: string; action: { href: string; label: string } }[] = [];
   {
-    const { data: liveText } = await supabase
-      .from("properties")
-      .select("id, address, description")
-      .eq("organization_id", org.id)
-      .eq("status", "available")
-      .is("archived_at", null)
-      .not("description", "is", null)
-      .limit(100);
+    const { data: liveText } = await liveTextEarly;
     const todayKey = new Date().toLocaleDateString("en-CA", { timeZone });
     for (const r of (liveText ?? []) as { id: string; address: string | null; description: string | null }[]) {
       const stale = expiredDatedLines(r.description, todayKey);

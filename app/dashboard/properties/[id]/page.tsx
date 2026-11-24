@@ -22,6 +22,7 @@ import { questionSheetFieldFacts } from "@/lib/question-sheet";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { early } from "@/lib/early";
 import { rentalHasViewingTimes } from "@/lib/rental-viewing-times";
 import { getCurrentOrg } from "@/lib/org";
 import { getRoleForOrg } from "@/lib/membership";
@@ -1113,32 +1114,121 @@ export default async function PropertyDetailPage({
     );
   }
   const p = property as Property;
-  const nowMs = Date.now();
-  // S790a: the unit's latest unit progress stage, shown as a chip in the header.
-  const unitArchived = Boolean((property as { archived_at?: string | null }).archived_at);
-  const latestUnitStage = unitArchived ? undefined : (await latestStages(supabase, p.organization_id, [p.id])).get(p.id);
-  // S789e: how many photos have a touched-up and an original copy, and which shows now.
-  const { data: touchRows } = await supabase
+  // S839c: these do not depend on each other, so they start together here
+  // and are awaited where they are used (lib/early.ts).
+  const touchRowsEarly = early(supabase
     .from("property_photos")
     .select("touched_up")
     .eq("property_id", params.id)
-    .not("original_url", "is", null);
-  const touchedNow = ((touchRows ?? []) as Array<{ touched_up: boolean }>).filter((r) => r.touched_up).length;
-  const originalsNow = ((touchRows ?? []) as Array<{ touched_up: boolean }>).length - touchedNow;
-  // S480: this page is scoped to ONE property = ONE org; every distribution
-  // account/proof read is filtered to THIS property's org (KI744 / Codex fold).
-  const propertyOrgId = p.organization_id;
-  const propertyRole = await getRoleForOrg(propertyOrgId);
-  const canManagePropertyDocuments =
-    propertyRole != null && roleCan(propertyRole, "manage_tenancies");
-
-  const { data: leads } = await supabase
+    .not("original_url", "is", null));
+  const propertyRoleEarly = early(getRoleForOrg(p.organization_id));
+  const leadsEarly = early(supabase
     .from("leads")
     .select(
       "id, name, email, phone, status, price_drop_notified_cents, listing_post_id, created_at, source, leased_date",
     )
     .eq("property_id", p.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false }));
+  const postsEarly = early(supabase
+    .from("listing_posts")
+    .select("id, portal, label, url, status, posted_on, created_at, notes")
+    .eq("property_id", p.id)
+    .order("created_at", { ascending: true }));
+  const rentalsCaLiveElsewhereEarly = early(supabase
+    .from("listing_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", p.organization_id)
+    .eq("portal", "rentals_ca")
+    .eq("status", "live")
+    .neq("property_id", p.id));
+  const slotRunsEarly = early(supabase
+    .from("distribution_runs")
+    .select("id")
+    .eq("organization_id", p.organization_id)
+    .eq("property_id", p.id));
+  const photosEarly = early(supabase
+    .from("property_photos")
+    .select("id, url, sort_order, is_cover, building_photo, copied_from, quality_flag")
+    .eq("property_id", p.id));
+  const availabilityOrgEarly = early(getCurrentOrg());
+  const tenancyRowsEarly = early(supabase
+    .from("tenancies")
+    .select("id, status")
+    .eq("property_id", p.id)
+    .order("start_date", { ascending: false }));
+  const orgTenancyCountEarly = early(supabase
+    .from("tenancies")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", p.organization_id));
+  const detectorRowsEarly = early(supabase
+    .from("unit_detectors")
+    .select(
+      "id, detector_type, location, install_date, install_year, service_life_years, quantity, notes",
+    )
+    .eq("property_id", params.id)
+    .order("created_at", { ascending: true }));
+  const equipmentRowsEarly = early(supabase
+    .from("unit_equipment")
+    .select(
+      "id, equipment_type, location, install_date, install_year, service_life_years, quantity, notes",
+    )
+    .eq("property_id", params.id)
+    .order("created_at", { ascending: true }));
+  const applianceRowsEarly = early(supabase
+    .from("unit_appliances")
+    .select(
+      "id, appliance_type, make, model, serial, location, purchase_date, install_year, quantity, " +
+        "warranty_months, notes",
+    )
+    .eq("property_id", params.id)
+    .order("created_at", { ascending: true }));
+  const waitlistRowsEarly = early(supabase
+    .from("waitlist_entries")
+    .select(
+      "id, name, email, phone, beds_min, max_rent_cents, move_in_by, message, notes, source, status, created_at, last_notified_at, property_id, last_notified_property_id",
+    )
+    .or(`property_id.eq.${p.id},property_id.is.null`)
+    .order("created_at", { ascending: true }));
+  const partnerRowsEarly = early(supabase
+    .from("distribution_partner_accounts")
+    .select(
+      "channel, status, feed_url, partner_contact, submitted_on, accepted_on, last_checked_on, notes",
+    )
+    .eq("organization_id", p.organization_id));
+  const channelAccountRowsEarly = early(supabase
+    .from("distribution_channel_accounts")
+    .select(
+      "channel, account_status, feed_url, external_account_label, transport, capabilities, automation_authorized, auto_submit_allowed, spend_authorized, spend_max_cents, spend_revoked_at",
+    )
+    .eq("organization_id", p.organization_id));
+  const activeRunRowEarly = early(supabase
+    .from("distribution_runs")
+    .select("id")
+    .eq("property_id", p.id)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle());
+  const autoAcctRowsEarly = early(supabase
+    .from("distribution_channel_accounts")
+    .select("channel")
+    .eq("organization_id", p.organization_id)
+    .eq("automation_authorized", true));
+  const nowMs = Date.now();
+  // S790a: the unit's latest unit progress stage, shown as a chip in the header.
+  const unitArchived = Boolean((property as { archived_at?: string | null }).archived_at);
+  const latestUnitStage = unitArchived ? undefined : (await latestStages(supabase, p.organization_id, [p.id])).get(p.id);
+  // S789e: how many photos have a touched-up and an original copy, and which shows now.
+  const { data: touchRows } = await touchRowsEarly;
+  const touchedNow = ((touchRows ?? []) as Array<{ touched_up: boolean }>).filter((r) => r.touched_up).length;
+  const originalsNow = ((touchRows ?? []) as Array<{ touched_up: boolean }>).length - touchedNow;
+  // S480: this page is scoped to ONE property = ONE org; every distribution
+  // account/proof read is filtered to THIS property's org (KI744 / Codex fold).
+  const propertyOrgId = p.organization_id;
+  const propertyRole = await propertyRoleEarly;
+  const canManagePropertyDocuments =
+    propertyRole != null && roleCan(propertyRole, "manage_tenancies");
+
+  const { data: leads } = await leadsEarly;
   const leadRows = (leads ?? []) as LeadRow[];
   const renterGroups = groupRenterRows(leadRows);
   // S734 (review item 3): which site brought each renter, on the rental.
@@ -1153,11 +1243,7 @@ export default async function PropertyDetailPage({
     })),
   );
 
-  const { data: posts } = await supabase
-    .from("listing_posts")
-    .select("id, portal, label, url, status, posted_on, created_at, notes")
-    .eq("property_id", p.id)
-    .order("created_at", { ascending: true });
+  const { data: posts } = await postsEarly;
   const postRows = (posts ?? []) as ListingPostRow[];
   const liveListingPostCount = postRows.filter(
     (row) => row.status === "live" && Boolean(row.url?.trim()),
@@ -1167,21 +1253,11 @@ export default async function PropertyDetailPage({
   const postCounts = countLeadsByPost(leadRows);
 
   // S723: Rentals.ca free accounts show 3 ads at a time; warn before a 4th.
-  const { count: rentalsCaLiveElsewhere } = await supabase
-    .from("listing_posts")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", p.organization_id)
-    .eq("portal", "rentals_ca")
-    .eq("status", "live")
-    .neq("property_id", p.id);
+  const { count: rentalsCaLiveElsewhere } = await rentalsCaLiveElsewhereEarly;
   const rentalsCaNote = rentalsCaCapNote(rentalsCaLiveElsewhere ?? 0);
   const capNotes: Record<string, string> = rentalsCaNote ? { rentals_ca: rentalsCaNote } : {};
   // S785: when the Rentals.ca free ads are full, offer to switch the weakest off.
-  const { data: slotRuns } = await supabase
-    .from("distribution_runs")
-    .select("id")
-    .eq("organization_id", p.organization_id)
-    .eq("property_id", p.id);
+  const { data: slotRuns } = await slotRunsEarly;
   const slotRunIds = ((slotRuns ?? []) as { id: string }[]).map((r) => r.id);
   const { data: slotWaitItem } = await supabase
     .from("distribution_run_items")
@@ -1200,16 +1276,13 @@ export default async function PropertyDetailPage({
   const madeRoomFor = (await loadMadeRoom(supabase, p.organization_id)).get(p.id) ?? null;
   const roomNotes: Record<string, string> = madeRoomFor ? { rentals_ca: madeRoomLine(madeRoomFor) } : {};
 
-  const { data: photos } = await supabase
-    .from("property_photos")
-    .select("id, url, sort_order, is_cover, building_photo, copied_from, quality_flag")
-    .eq("property_id", p.id);
+  const { data: photos } = await photosEarly;
   const photoRows = sortPhotos((photos ?? []) as PhotoRow[]);
 
   // Org-wide weekly viewing windows — one signal in the share-readiness check
   // below ("can a renter actually self-book a viewing once they land?").
   // S710: weekly windows OR dated hours still to come (lib/viewing-times-count).
-  const availabilityOrg = await getCurrentOrg();
+  const availabilityOrg = await availabilityOrgEarly;
   const availabilityCount = availabilityOrg
     ? await countViewingTimes(supabase, availabilityOrg.id, availabilityOrg.booking_timezone || undefined)
     : 0;
@@ -1223,11 +1296,7 @@ export default async function PropertyDetailPage({
   // The unit's tenancy (active preferred, else most recent) — lets the
   // lifecycle rail's Lease/Tenanted steps deep-link into THIS unit's tenancy
   // rather than the cross-unit hub (S282, IA G8 fix).
-  const { data: tenancyRows } = await supabase
-    .from("tenancies")
-    .select("id, status")
-    .eq("property_id", p.id)
-    .order("start_date", { ascending: false }); // most recent first
+  const { data: tenancyRows } = await tenancyRowsEarly;
   // Prefer an active tenancy, then an upcoming one, else the most recent (ended).
   // An active/upcoming tenancy is what makes the Lease/Tenanted steps true — so
   // the rail can never say "not tenanted" while an active tenancy exists.
@@ -1245,10 +1314,7 @@ export default async function PropertyDetailPage({
 
   // S808: an account with no tenancies anywhere in Vacantless ends the progress
   // line at Rented (lib/unit-journey tracksTenancies).
-  const { count: orgTenancyCount } = await supabase
-    .from("tenancies")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", p.organization_id);
+  const { count: orgTenancyCount } = await orgTenancyCountEarly;
   const tracksTenancies = tenancyList.length > 0 || (orgTenancyCount ?? 0) > 0;
 
   const eligibleCount = countEligible(leadRows, p.rent_cents);
@@ -1374,13 +1440,7 @@ export default async function PropertyDetailPage({
   // Detector inventory (S359): this unit's logged smoke/CO detectors + each one's
   // computed end-of-life date + status (against the org-local "today"). Shaped
   // here so the section component stays presentational. RLS scopes the read.
-  const { data: detectorRows } = await supabase
-    .from("unit_detectors")
-    .select(
-      "id, detector_type, location, install_date, install_year, service_life_years, quantity, notes",
-    )
-    .eq("property_id", params.id)
-    .order("created_at", { ascending: true });
+  const { data: detectorRows } = await detectorRowsEarly;
   const detectorToday = localDateString(
     Date.now(),
     org?.booking_timezone || "America/Toronto",
@@ -1414,13 +1474,7 @@ export default async function PropertyDetailPage({
   // + each one's computed end-of-life date + status (against the org-local
   // "today", using the per-type lead window). Shaped here so the section
   // component stays presentational. RLS scopes the read.
-  const { data: equipmentRows } = await supabase
-    .from("unit_equipment")
-    .select(
-      "id, equipment_type, location, install_date, install_year, service_life_years, quantity, notes",
-    )
-    .eq("property_id", params.id)
-    .order("created_at", { ascending: true });
+  const { data: equipmentRows } = await equipmentRowsEarly;
   const equipmentViews: EquipmentView[] = ((equipmentRows ?? []) as any[]).map((r) => {
     const input = {
       equipment_type: r.equipment_type as EquipmentType,
@@ -1450,14 +1504,7 @@ export default async function PropertyDetailPage({
   // the section stays presentational. RLS scopes the read. S389: recurring
   // consumables moved to their own child table (appliance_consumables) and are
   // attached below.
-  const { data: applianceRows } = await supabase
-    .from("unit_appliances")
-    .select(
-      "id, appliance_type, make, model, serial, location, purchase_date, install_year, quantity, " +
-        "warranty_months, notes",
-    )
-    .eq("property_id", params.id)
-    .order("created_at", { ascending: true });
+  const { data: applianceRows } = await applianceRowsEarly;
   const applianceViews: ApplianceView[] = ((applianceRows ?? []) as any[]).map((r) => {
     const input = {
       purchase_date: r.purchase_date ?? null,
@@ -1949,13 +1996,7 @@ export default async function PropertyDetailPage({
   // the read to the org; the entitlement gates the operator surface (the public
   // join still captures for ungated plans). matchingCount powers the notify CTA.
   const waitlistEnabled = canUseWaitlist(org?.plan ?? null);
-  const { data: waitlistRows } = await supabase
-    .from("waitlist_entries")
-    .select(
-      "id, name, email, phone, beds_min, max_rent_cents, move_in_by, message, notes, source, status, created_at, last_notified_at, property_id, last_notified_property_id",
-    )
-    .or(`property_id.eq.${p.id},property_id.is.null`)
-    .order("created_at", { ascending: true });
+  const { data: waitlistRows } = await waitlistRowsEarly;
   const waitlistEntries = (waitlistRows ?? []) as (WaitlistEntryView & {
     property_id: string | null;
     last_notified_property_id: string | null;
@@ -2141,12 +2182,7 @@ export default async function PropertyDetailPage({
   });
   const copyByKey = new Map(copyTabs.map((t) => [t.key, t]));
   // Org-level feed-partner accounts (Slice 3), keyed by channel.
-  const { data: partnerRows } = await supabase
-    .from("distribution_partner_accounts")
-    .select(
-      "channel, status, feed_url, partner_contact, submitted_on, accepted_on, last_checked_on, notes",
-    )
-    .eq("organization_id", propertyOrgId);
+  const { data: partnerRows } = await partnerRowsEarly;
   const partnerByChannel = new Map<string, PartnerAccountView>();
   for (const row of (partnerRows ?? []) as Array<{
     channel: string;
@@ -2172,12 +2208,7 @@ export default async function PropertyDetailPage({
   // then falls back to the existing feed-partner accounts (0106) so a channel is
   // "ready" if its partner route is already accepted, even before a new channel
   // account is recorded.
-  const { data: channelAccountRows } = await supabase
-    .from("distribution_channel_accounts")
-    .select(
-      "channel, account_status, feed_url, external_account_label, transport, capabilities, automation_authorized, auto_submit_allowed, spend_authorized, spend_max_cents, spend_revoked_at",
-    )
-    .eq("organization_id", propertyOrgId);
+  const { data: channelAccountRows } = await channelAccountRowsEarly;
   const channelAccountByKey = new Map<
     string,
     {
@@ -2368,13 +2399,7 @@ export default async function PropertyDetailPage({
     .filter((meta) => meta.defaultSelected)
     .map((meta) => meta.key)
     .filter(isPortalRequirementChannelKey);
-  const { data: activeRunRow } = await supabase
-    .from("distribution_runs")
-    .select("id")
-    .eq("property_id", p.id)
-    .eq("status", "active")
-    .limit(1)
-    .maybeSingle();
+  const { data: activeRunRow } = await activeRunRowEarly;
   const activeRun = activeRunRow ? { id: activeRunRow.id as string } : null;
   type RunItemRow = {
     id: string;
@@ -2445,11 +2470,7 @@ export default async function PropertyDetailPage({
     });
     if (line) siteFacts[ch] = line;
   }
-  const { data: autoAcctRows } = await supabase
-    .from("distribution_channel_accounts")
-    .select("channel")
-    .eq("organization_id", propertyOrgId)
-    .eq("automation_authorized", true);
+  const { data: autoAcctRows } = await autoAcctRowsEarly;
   const autopilotChannels = new Set(
     ((autoAcctRows ?? []) as { channel: string }[]).map((r) => r.channel),
   );
