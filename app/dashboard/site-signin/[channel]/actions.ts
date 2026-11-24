@@ -16,6 +16,7 @@ import {
   withQuery,
   siteSigninIsOpen,
   cleanSignupPrefill,
+  cleanSigninCode,
 } from "@/lib/site-signin";
 import { triggerSigninWindow } from "@/lib/site-signin-dispatch";
 import { triggerPostNow } from "@/lib/post-now";
@@ -193,4 +194,27 @@ export async function failStalledSiteSignin(id: string): Promise<void> {
     .eq("organization_id", who.orgId)
     .eq("status", "starting")
     .lt("created_at", new Date(Date.now() - 3 * 60_000).toISOString());
+}
+
+/**
+ * S840: the landlord pasted a one-time code (from an email or text) for the
+ * open window. Saved on the window's row; the worker types it where the
+ * cursor is and clears it. Codes only: cleanSigninCode refuses anything that
+ * could be a password.
+ */
+export async function sendSiteSigninCode(id: string, raw: string): Promise<"sent" | "not_a_code" | "failed"> {
+  const code = cleanSigninCode(raw);
+  if (!code) return "not_a_code";
+  const who = await allowed();
+  if (!who) return "failed";
+  const admin = createAdminClient();
+  if (!admin) return "failed";
+  const { data, error } = await admin
+    .from(TABLE)
+    .update({ type_code: code, type_code_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("organization_id", who.orgId)
+    .eq("status", "ready")
+    .select("id");
+  return error || !data || data.length === 0 ? "failed" : "sent";
 }

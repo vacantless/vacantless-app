@@ -182,7 +182,8 @@ export function siteSigninView(
       return {
         tone: "wait",
         title: "Opening a secure browser",
-        body: "This takes about a minute. Keep this page open.",
+        // S840: measured 95 s on 2026-11-24, so "about a minute" was short.
+        body: "This takes a minute or two. Keep this page open.",
       };
     case "ready":
       return {
@@ -190,7 +191,7 @@ export function siteSigninView(
         title: `Sign in to ${name}`,
         body:
           detail === "enter_code"
-            ? `${name} just emailed you a code. Type it into the box in the window. Then press Submit there. We do the rest.`
+            ? `${name} just emailed you a code. Paste it in the box below, or type it in the window. Then press Submit in the window. We do the rest.`
             : detail === "not_signed_in_yet"
               ? `We checked and ${name} does not show you as signed in yet. Finish signing in, then press the button again.`
               : detail === "signup_filled"
@@ -207,7 +208,8 @@ export function siteSigninView(
       return {
         tone: "ok",
         title: `${name} is ready`,
-        body: `From now on we post each ad to ${name} when it is ready. A paid ad waits for you at checkout.`,
+        // S840: the window tab kept "connecting" after a good sign-in; say it can go.
+        body: `From now on we post each ad to ${name} when it is ready. A paid ad waits for you at checkout. You can close the sign-in window tab.`,
       };
     case "expired":
       return {
@@ -330,4 +332,16 @@ export function cleanSignupPrefill(input: {
     email: email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email.toLowerCase() : null,
     phone: phone && phone.replace(/\D/g, "").length >= 10 ? phone : null,
   };
+}
+
+/**
+ * S840: a one-time code pasted on this page for the sign-in window (the
+ * window is a remote screen, so the clipboard does not reach it). Spaces and
+ * dashes are dropped; 4 to 12 letters or digits only, so the box can never
+ * carry a password. Null means: not a code. The worker checks it again
+ * (vacantless-worker src/signin-window-logic.ts cleanTypedCode).
+ */
+export function cleanSigninCode(raw: unknown): string | null {
+  const s = String(raw ?? "").replace(/[\s-]+/g, "");
+  return /^[A-Za-z0-9]{4,12}$/.test(s) ? s : null;
 }

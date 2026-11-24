@@ -14,6 +14,7 @@ import {
   confirmSiteSignin,
   failStalledSiteSignin,
   readSiteSigninWindow,
+  sendSiteSigninCode,
   startNextSiteSignin,
   type SiteSigninWindowRead,
 } from "./actions";
@@ -59,6 +60,10 @@ export function WindowPanel({
   }, [win.status, nextChannel, stopped, nextIn, propertyId]);
   const [pending, startTransition] = useTransition();
   const [asked, setAsked] = useState(false);
+  // S840: a code from an email or text, typed into the window for the landlord.
+  const [code, setCode] = useState("");
+  const [codeNote, setCodeNote] = useState<"sent" | "not_a_code" | "failed" | null>(null);
+  const [sendingCode, setSendingCode] = useState(false);
   const router = useRouter();
   // S724 (V251-23): when an open window ends (closed after 25 minutes, stopped,
   // failed or done) re-render the page, so "Try again" shows without a reload.
@@ -158,6 +163,63 @@ export function WindowPanel({
           <p className="text-xs text-gray-500">
             This opens {SITE_SIGNIN_LABEL[channel]} inside a Vacantless window.
           </p>
+          {/* S840: the window is a remote screen, so a copied code cannot be pasted into it. */}
+          <form
+            className="rounded-xl border border-gray-200 bg-white p-3"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (sendingCode) return;
+              setSendingCode(true);
+              const res = await sendSiteSigninCode(win.id, code);
+              setCodeNote(res);
+              if (res === "sent") setCode("");
+              setSendingCode(false);
+            }}
+          >
+            <label htmlFor="signin-code" className="block text-sm font-medium text-gray-800">
+              Got a code by email or text?
+            </label>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Click the code box in the window first. Then paste the code here. We type it in for you.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                id="signin-code"
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value);
+                  setCodeNote(null);
+                }}
+                inputMode="text"
+                autoComplete="one-time-code"
+                maxLength={20}
+                placeholder="Paste the code"
+                className="w-44 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+              <button
+                type="submit"
+                disabled={sendingCode || code.trim() === ""}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-60"
+              >
+                {sendingCode ? "Sending..." : "Type it in the window"}
+              </button>
+            </div>
+            {codeNote === "sent" && (
+              <p role="status" className="mt-2 text-xs text-green-700">
+                Sent. It shows in the window in a few seconds.
+              </p>
+            )}
+            {codeNote === "not_a_code" && (
+              <p role="status" className="mt-2 text-xs text-amber-700">
+                That does not look like a code. A code is 4 to 12 letters or numbers. Type your password in the window itself.
+              </p>
+            )}
+            {codeNote === "failed" && (
+              <p role="status" className="mt-2 text-xs text-amber-700">
+                We could not send it. Type the code in the window.
+              </p>
+            )}
+          </form>
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
               type="button"

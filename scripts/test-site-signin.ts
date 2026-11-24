@@ -119,7 +119,7 @@ async function main() {
   {
     const v = siteSigninView("rentals_ca", "ready", "enter_code");
     ok("enter_code: tells them the code was emailed", /emailed you a code/.test(v.body), v.body);
-    ok("enter_code: says where to type it", /box in the window/.test(v.body), v.body);
+    ok("enter_code: says where to type it", /box below, or type it in the window/.test(v.body), v.body);
     ok("enter_code: no em dash", !v.body.includes("\u2014"));
     ok("enter_code: still an action", v.tone === "action");
     const plain = siteSigninView("rentals_ca", "ready", null);
