@@ -52,7 +52,7 @@ ok("page passes facts", page.includes("siteFacts={siteFacts}"));
 
 const tw = readFileSync("tailwind.config.ts", "utf8");
 ok("tailwind scans lib (site mark colours)", tw.includes("./lib/**/"));
-ok("facts read live records on any run", page.includes("liveFactByChannel.get(ch)") && page.includes('.in("run_id", slotRunIds.length > 0'));
+ok("facts read live records on any run", page.includes("liveFactByChannel.get(ch)") && /const liveFactsEarly = early\([\s\S]{0,400}\.in\("run_id", ids\.length > 0/.test(page) /* S840: started early */);
 ok("facts prefer a record verified live", page.includes('r.verification_status === "verified_live"'));
 ok("seen live only when verified live", page.includes('verifiedAt: live?.verification_status === "verified_live" ? live.last_verified_at : null'));
 console.log(`site-row-facts: ${pass} passed, ${fail} failed`);

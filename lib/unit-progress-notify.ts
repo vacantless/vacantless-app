@@ -226,7 +226,7 @@ export async function runUnitProgressSweep(args: { admin: SupabaseClient; now?: 
       if (!org) continue;
       summary.orgs++;
       const cards = await unitCardsForOrg(admin, orgId);
-      const units: UnitState[] = cards.map((c) => ({ id: c.id, address: c.address, status: c.status, stage: c.stage, stageAt: c.stageAt, stageDate: c.stageDate }));
+      const units: UnitState[] = cards.map((c) => ({ id: c.id, address: c.address, status: c.status, stage: c.stage, stageAt: c.stageAt, stageDate: c.stageDate, stageById: c.stageById }));
       const crew: CrewLite[] = members
         .filter((m) => isCrewRole(m.role))
         .map((m) => ({ id: m.id, name: m.name, role: m.role as CrewLite["role"], email: emailFromContact(m.contact) }));
@@ -253,7 +253,8 @@ export async function runUnitProgressSweep(args: { admin: SupabaseClient; now?: 
             org_name: org.name ?? "",
             property_address: "",
             crew_name: person.name,
-            reminder_count: String(r.items.length),
+            // S840: the count carries its noun ("1 unit", "3 units") so the subject reads right.
+            reminder_count: unitsPhrase(r.items.length),
             reminder_lines: r.items.map((i) => i.line).join("\n"),
             crew_url: crewUrl,
           },
@@ -276,13 +277,19 @@ export async function runUnitProgressSweep(args: { admin: SupabaseClient; now?: 
       // 2. The landlord's one copy when a reminder sat 3 days with no update.
       const stuck = escalationsDue(sentRows, units, now);
       if (stuck.length > 0) {
-        const lines = new Map<string, string>();
+        // S840: a unit can now be asked of two people (deposit stages); name both once.
+        const askedByUnit = new Map<string, string[]>();
         for (const s of stuck) {
-          const u = units.find((x) => x.id === s.property_id);
+          if (!s.property_id) continue;
           const who = members.find((m) => m.id === s.crew_member_id)?.name ?? "your crew";
-          if (u && !lines.has(u.id)) {
-            lines.set(u.id, `${u.address}: ${u.stage ? STAGE_LABEL[u.stage].toLowerCase() : "no stage yet"}. Asked: ${who}.`);
-          }
+          const list = askedByUnit.get(s.property_id) ?? [];
+          if (!list.includes(who)) list.push(who);
+          askedByUnit.set(s.property_id, list);
+        }
+        const lines = new Map<string, string>();
+        for (const [propertyId, who] of askedByUnit) {
+          const u = units.find((x) => x.id === propertyId);
+          if (u) lines.set(u.id, `${u.address}: ${u.stage ? STAGE_LABEL[u.stage].toLowerCase() : "no stage yet"}. Asked: ${who.join(" and ")}.`);
         }
         const res = await sendOrgNotification({
           client: admin,
@@ -291,7 +298,7 @@ export async function runUnitProgressSweep(args: { admin: SupabaseClient; now?: 
           vars: {
             org_name: org.name ?? "",
             property_address: "",
-            unit_count: String(lines.size),
+            unit_count: unitsPhrase(lines.size),
             unit_lines: [...lines.values()].join("\n"),
             dashboard_url: `${APP_URL}/dashboard/crew`,
           },
@@ -316,3 +323,7 @@ export async function runUnitProgressSweep(args: { admin: SupabaseClient; now?: 
   return summary;
 }
 
+/** S840: "1 unit" / "3 units" for the crew email subjects (the Nov 24 email said "1 units"). */
+export function unitsPhrase(n: number): string {
+  return `${n} ${n === 1 ? "unit" : "units"}`;
+}

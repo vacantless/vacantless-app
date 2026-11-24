@@ -39,6 +39,18 @@ ok("deposit waiting 3 days goes to leasing only", (() => {
   const r = remindersDue({ units: [unit({ stage: "waiting_deposit", stageAt: ago(tuesday10, 3) })], crew, sent: [], now: tuesday10, timeZone: tz });
   return items(r, "a")[0]?.reason === "deposit_waiting" && items(r, "n").length === 0;
 })());
+// S840 (Noam, 2026-11-24): whoever set the deposit stage is asked too, when not the leasing person.
+ok("deposit set by the manager: leasing and manager both asked", (() => {
+  const r = remindersDue({ units: [unit({ stage: "waiting_deposit", stageAt: ago(tuesday10, 3), stageById: "n" })], crew, sent: [], now: tuesday10, timeZone: tz });
+  return items(r, "a")[0]?.reason === "deposit_waiting" && items(r, "n")[0]?.reason === "deposit_waiting" && items(r, "x").length === 0;
+})());
+ok("deposit set by leasing: no second person", (() => {
+  const r = remindersDue({ units: [unit({ stage: "waiting_deposit", stageAt: ago(tuesday10, 3), stageById: "a" })], crew, sent: [], now: tuesday10, timeZone: tz });
+  return items(r, "a").length === 1 && items(r, "n").length === 0;
+})());
+ok("clearing set by the manager: manager asked at 2 days", items(remindersDue({ units: [unit({ stage: "deposit_clearing", stageAt: ago(tuesday10, 2), stageById: "n" })], crew, sent: [], now: tuesday10, timeZone: tz }), "n")[0]?.reason === "deposit_clearing");
+ok("stage setter not asked about other stages", items(remindersDue({ units: [unit({ stage: "photos_in", stageAt: ago(tuesday10, 3), stageById: "n" })], crew, sent: [], now: tuesday10, timeZone: tz }), "n").length === 0);
+ok("setter already reminded is not asked again before the repeat", items(remindersDue({ units: [unit({ stage: "waiting_deposit", stageAt: ago(tuesday10, 5), stageById: "n" })], crew, sent: [{ crew_member_id: "n", property_id: "u1", reason: "deposit_waiting", sent_at: ago(tuesday10, 1) }], now: tuesday10, timeZone: tz }), "n").length === 0);
 ok("no leasing person: manager gets the deposit nudge", items(remindersDue({ units: [unit({ stage: "deposit_clearing", stageAt: ago(tuesday10, 2) })], crew: crew.filter((c) => c.role !== "leasing"), sent: [], now: tuesday10, timeZone: tz }), "n")[0]?.reason === "deposit_clearing");
 ok("move-out in 5 days: book the handover", items(remindersDue({ units: [unit({ stage: "notice_given", stageAt: ago(tuesday10, 20), stageDate: "2026-11-22" })], crew, sent: [], now: tuesday10, timeZone: tz }), "n")[0]?.reason === "moveout_soon");
 ok("move-out day passed: start the reno", items(remindersDue({ units: [unit({ stage: "notice_given", stageAt: ago(tuesday10, 40), stageDate: "2026-11-16" })], crew, sent: [], now: tuesday10, timeZone: tz }), "n")[0]?.reason === "moveout_today");

@@ -473,7 +473,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     description:
       "When we reminded your crew about a unit and nothing changed in 3 days, you get one note with the units and who was asked.",
     tokens: [...COMMON_TOKENS, "unit_count", "unit_lines", "dashboard_url"],
-    defaultSubject: "{{unit_count}} units have no update from your crew",
+    defaultSubject: "No update from your crew on {{unit_count}}",
     defaultBody:
       "We reminded your crew about these units 3 or more days ago. Nothing has changed since.\n\n{{unit_lines}}\n\nSee every unit: {{dashboard_url}}",
     defaultAccent: "#d97706",
@@ -487,7 +487,7 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     description:
       "Your manager, leasing person, contractor or cleaner gets a short note when a unit needs an update from them. At most one a day, only when something is waiting.",
     tokens: [...COMMON_TOKENS, "crew_name", "reminder_count", "reminder_lines", "crew_url"],
-    defaultSubject: "{{org_name}}: {{reminder_count}} units need an update",
+    defaultSubject: "{{org_name}}: {{reminder_count}} to update",
     defaultBody:
       "Hi {{crew_name}},\n\n{{reminder_lines}}\n\nTap where each unit is at: {{crew_url}}",
     defaultAccent: "#2563eb",

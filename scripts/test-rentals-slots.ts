@@ -34,7 +34,7 @@ ok("full notice unchanged", siteSetupNotice("needs_operator", "free_limit_reache
 
 const page = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
 ok("top summary names free ads full", page.includes('"site with free ads full"') && page.includes('item.errorCode === "free_limit_reached"'));
-ok("slots loaded only when this rental is stopped", page.includes('.in("run_id", slotRunIds') && page.includes("loadRentalsSlotChoice(supabase"));
+ok("slots loaded only when this rental is stopped", page.includes('.in("run_id", runIds.length > 0 ? runIds') /* S840: inside slotChoiceEarly */ && page.includes("loadRentalsSlotChoice(supabase"));
 const pe = readFileSync("app/dashboard/properties/[id]/publish-everywhere.tsx", "utf8");
 ok("chooser posts the switch action", pe.includes("<form action={switchRentalsSlot}") && pe.includes('name="weak_listing_post_id"'));
 ok("no approve button while choosing or waiting", pe.includes("item?.slotChoice || item?.waitingForSlot ? null"));

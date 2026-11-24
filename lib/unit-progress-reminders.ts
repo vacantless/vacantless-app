@@ -47,6 +47,8 @@ export type UnitState = {
   stage: Stage | null;
   stageAt: string | null;
   stageDate: string | null;
+  /** S840: the crew member who set the current stage, if a crew member did. */
+  stageById?: string | null;
 };
 export type CrewLite = { id: string; name: string; role: CrewRole; email: string | null };
 export type SentRow = { crew_member_id: string; property_id: string | null; reason: string; sent_at: string };
@@ -141,15 +143,20 @@ export function remindersDue(args: {
           if (until > 0 && until <= 7) add(u, "moveout_soon", `${u.address}: the tenant moves out ${fmtDate(u.stageDate)}. Book the key handover or a walkthrough.`);
           if (until <= 0) add(u, "moveout_today", `${u.address}: move-out day was ${fmtDate(u.stageDate)}. Tap Under construction when work starts.`);
         }
-        const depositPerson = c.role === "leasing" || !hasLeasing;
-        if (depositPerson && u.stage === "waiting_deposit" && age !== null && age >= 3)
-          add(u, "deposit_waiting", `${u.address}: waiting for the deposit for ${age} days.`);
-        if (depositPerson && u.stage === "deposit_clearing" && age !== null && age >= 2)
-          add(u, "deposit_clearing", `${u.address}: the deposit has been clearing for ${age} days.`);
         if (local.weekday === "Mon" && u.status !== "leased" && u.stage !== "on_hold" && (age === null || age >= 7)) {
           add(u, "weekly_stale", age === null ? `${u.address}: no stage yet.` : `${u.address}: no update in ${age} days. Still ${STAGE_LABEL[u.stage as Stage].toLowerCase()}?`);
         }
       }
+      // Deposit reminders go to the leasing person (the manager when there is
+      // none). S840 (Noam, 2026-11-24): also to whoever set the deposit stage,
+      // when that is someone else; they usually know whether the money came
+      // in (Unit 9: Narayan set it, only Aaliyah was asked).
+      const depositPerson =
+        c.role === "leasing" || (c.role === "manager" && !hasLeasing) || (!!u.stageById && u.stageById === c.id);
+      if (depositPerson && u.stage === "waiting_deposit" && age !== null && age >= 3)
+        add(u, "deposit_waiting", `${u.address}: waiting for the deposit for ${age} days.`);
+      if (depositPerson && u.stage === "deposit_clearing" && age !== null && age >= 2)
+        add(u, "deposit_clearing", `${u.address}: the deposit has been clearing for ${age} days.`);
       if (c.role === "contractor" || c.role === "cleaner") {
         if (u.stage === "under_construction" || u.stage === "being_cleaned") {
           if (u.stageDate && daysBetween(u.stageDate, local.date) >= 1) {

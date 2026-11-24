@@ -271,6 +271,8 @@ export type UnitCard = {
   stage: Stage | null;
   stageAt: string | null;
   stageBy: string | null;
+  /** S840: the crew member who set the current stage (null when set by a sign-in user). */
+  stageById: string | null;
   stageDate: string | null;
   /** S789b: the unit has a photo folder link saved. */
   hasPhotoFolder: boolean;
@@ -295,7 +297,7 @@ export async function unitCardsForOrg(admin: SupabaseClient, organizationId: str
   if (rows.length === 0) return [];
   const { data: evs } = await admin
     .from("unit_progress_events")
-    .select("property_id, stage, created_at, due_date, crew:crew_members(name)")
+    .select("property_id, stage, created_at, due_date, crew_member_id, crew:crew_members(name)")
     .eq("organization_id", organizationId)
     .in("property_id", rows.map((r) => r.id))
     .order("created_at", { ascending: false })
@@ -324,11 +326,11 @@ export async function unitCardsForOrg(admin: SupabaseClient, organizationId: str
   } catch {
     // a missing ad list never hides the units
   }
-  const latest = new Map<string, { stage: string; created_at: string; by: string | null; due: string | null }>();
-  for (const e of (evs ?? []) as Array<{ property_id: string; stage: string; created_at: string; due_date: string | null; crew: { name: string | null } | Array<{ name: string | null }> | null }>) {
+  const latest = new Map<string, { stage: string; created_at: string; by: string | null; byId: string | null; due: string | null }>();
+  for (const e of (evs ?? []) as Array<{ property_id: string; stage: string; created_at: string; due_date: string | null; crew_member_id: string | null; crew: { name: string | null } | Array<{ name: string | null }> | null }>) {
     if (latest.has(e.property_id) || !isStage(e.stage)) continue;
     const crew = Array.isArray(e.crew) ? e.crew[0] : e.crew;
-    latest.set(e.property_id, { stage: e.stage, created_at: e.created_at, by: crew?.name ?? null, due: e.due_date ?? null });
+    latest.set(e.property_id, { stage: e.stage, created_at: e.created_at, by: crew?.name ?? null, byId: e.crew_member_id ?? null, due: e.due_date ?? null });
   }
   return rows.map((r) => {
     const l = latest.get(r.id);
@@ -339,6 +341,7 @@ export async function unitCardsForOrg(admin: SupabaseClient, organizationId: str
       stage: l ? (l.stage as Stage) : null,
       stageAt: l?.created_at ?? null,
       stageBy: l?.by ?? null,
+      stageById: l?.byId ?? null,
       stageDate: l?.due ?? null,
       hasPhotoFolder: !!r.photo_source_url,
       shootLinkId: shoots.get(r.id)?.id ?? null,

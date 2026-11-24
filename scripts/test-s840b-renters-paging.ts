@@ -27,7 +27,7 @@ ok("Show all keeps the filters", page.includes("allHref={withAll(leadsHref(filte
 ok("chip counts still use every renter", /label=\{`All \(\$\{scoped\.length\}\)`\}/.test(page));
 
 const rental = readFileSync("app/dashboard/properties/[id]/page.tsx", "utf8");
-ok("rental page timing is logged, not shown", rental.includes('console.log("[s840-rental-timing]"') && !/timingMarks\}/.test(rental.split("console.log(\"[s840-rental-timing]\"")[1] ?? ""));
+ok("rental page timing log is gone (S840d)", !rental.includes("s840-rental-timing") && !rental.includes("timingMark"));
 
 console.log(`s840b renters paging: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

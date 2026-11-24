@@ -1074,11 +1074,6 @@ export default async function PropertyDetailPage({
   };
 }) {
   const supabase = createClient();
-  // S840 (REVIEW-S839 H): where the rental page's time goes, logged only
-  // (Vercel runtime logs, "[s840-rental-timing]"). Removed once read.
-  const timingT0 = Date.now();
-  const timingMarks: [string, number][] = [];
-  const timingMark = (name: string) => timingMarks.push([name, Date.now() - timingT0]);
   const { data: property } = await supabase
     .from("properties")
     .select(
@@ -1271,7 +1266,135 @@ export default async function PropertyDetailPage({
         : null,
     ),
   );
-  timingMark("property");
+  // S840 (REVIEW-S839 H): the same for the assets, documents, marketing and
+  // sites steps (+250 to 300 ms and +300 to 500 ms on Agile). Each waits only
+  // on the early answer it needs; the page awaits each where it used to ask.
+  const noIds = ["00000000-0000-0000-0000-000000000000"];
+  const earlyApplianceIds = applianceRowsEarly.then(({ data }) => ((data ?? []) as unknown as { id: string }[]).map((r) => r.id));
+  const consumablesEarly = early(
+    earlyApplianceIds.then((ids) =>
+      supabase
+        .from("appliance_consumables")
+        .select("id, appliance_id, label, interval_months, anchor_date, notes")
+        .in("appliance_id", ids.length > 0 ? ids : noIds)
+        .order("created_at", { ascending: true }),
+    ),
+  );
+  const receiptsEarly = early(
+    earlyApplianceIds.then((ids) =>
+      supabase
+        .from("documents")
+        .select("id, appliance_id, title, mime_type, storage_path, created_at")
+        .in("appliance_id", ids.length > 0 ? ids : noIds)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true }),
+    ),
+  );
+  const propertyDocsEarly = early(
+    propertyRoleEarly.then((role) =>
+      role != null && roleCan(role, "manage_tenancies") ? listDocumentsForProperty(supabase, p.organization_id, p.id) : [],
+    ),
+  );
+  const shareRowsEarly = early(
+    propertyDocsEarly.then((rows) => {
+      const ids = rows.map((d) => d.id);
+      return supabase
+        .from("document_share_links")
+        .select("id, document_id, token, expires_at, revoked_at")
+        .in("document_id", ids.length > 0 ? ids : noIds)
+        .order("created_at", { ascending: false });
+    }),
+  );
+  const buildingPolicyEarly = early(
+    getCurrentOrg().then(async (o) =>
+      o && p.building_key
+        ? (await supabase
+            .from("org_building_policies")
+            .select(POLICY_PROFILE_COLUMNS)
+            .eq("organization_id", o.id)
+            .eq("building_key", p.building_key)
+            .maybeSingle()).data
+        : null,
+    ),
+  );
+  const agentRowsEarly = early(
+    getCurrentOrg().then(async (o) => ({
+      data: o ? (await supabase.from("showing_agents").select("id, name, email, archived").eq("organization_id", o.id)).data : null,
+    })),
+  );
+  const sisterRowsEarly = early((async () => ({
+    data:
+      p.status === "draft"
+        ? (await supabase
+            .from("properties")
+            .select("id, address, rent_cents")
+            .eq("organization_id", p.organization_id)
+            .is("archived_at", null)
+            .neq("id", p.id)
+            .not("rent_cents", "is", null)
+            .limit(500)).data
+        : null,
+  }))());
+  const earlySince14 = new Date(Date.now() - 14 * 86_400_000).toISOString();
+  const earlySince7 = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const demandCountsEarly = early(
+    Promise.all([
+      supabase.from("leads").select("id", { count: "exact", head: true }).eq("property_id", p.id).gte("created_at", earlySince14),
+      supabase.from("leads").select("id", { count: "exact", head: true }).eq("property_id", p.id).gte("created_at", earlySince7),
+      supabase.from("showings").select("id", { count: "exact", head: true }).eq("property_id", p.id).gte("created_at", earlySince14),
+    ]),
+  );
+  const otherLiveCountEarly = early(
+    supabase
+      .from("properties")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", p.organization_id)
+      .eq("status", "available")
+      .is("archived_at", null)
+      .neq("id", p.id),
+  );
+  const reservedPostIdsEarly = early(
+    postsEarly.then(({ data }) =>
+      loadReservedListingPostIds((data ?? []) as ListingPostRow[], async (draftIds) => {
+        const { data: refRows } = await supabase
+          .from("distribution_run_items")
+          .select("listing_post_id")
+          .in("listing_post_id", draftIds);
+        return ((refRows ?? []) as { listing_post_id: string | null }[]).map((ref) => ref.listing_post_id);
+      }),
+    ),
+  );
+  const weeklyPostsEarly = early(
+    getCurrentOrg().then(async (o) => {
+      if (!o?.id) return { data: null, error: null };
+      const r = await supabase.from("organizations").select("page_weekly_posts").eq("id", o.id).maybeSingle();
+      return { data: r.data, error: r.error };
+    }),
+  );
+  const runItemsEarly = early(
+    activeRunRowEarly.then(async ({ data }) => ({
+      data: data
+        ? (await supabase
+            .from("distribution_run_items")
+            .select(
+              "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, error_code, audit_message, transport, verification_status, proof_url, concierge_requested_at, operator_submit_approved_at, stale_after, external_expires_at, last_verified_at",
+            )
+            .eq("run_id", (data as { id: string }).id)
+            .order("created_at", { ascending: true })).data
+        : null,
+    })),
+  );
+  const liveFactsEarly = early(
+    slotRunsEarly.then(({ data }) => {
+      const ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
+      return supabase
+        .from("distribution_run_items")
+        .select("channel, external_expires_at, last_verified_at, verification_status, updated_at")
+        .in("run_id", ids.length > 0 ? ids : noIds)
+        .eq("publish_status", "live")
+        .order("updated_at", { ascending: false });
+    }),
+  );
   const nowMs = Date.now();
   // S790a: the unit's latest unit progress stage, shown as a chip in the header.
   const unitArchived = Boolean((property as { archived_at?: string | null }).archived_at);
@@ -1316,8 +1439,8 @@ export default async function PropertyDetailPage({
   const rentalsCaNote = rentalsCaCapNote(rentalsCaLiveElsewhere ?? 0);
   const capNotes: Record<string, string> = rentalsCaNote ? { rentals_ca: rentalsCaNote } : {};
   // S785: when the Rentals.ca free ads are full, offer to switch the weakest off.
-  const { data: slotRuns } = await slotRunsEarly;
-  const slotRunIds = ((slotRuns ?? []) as { id: string }[]).map((r) => r.id);
+  // S840: the slot choice and the live-ad facts read these runs in their own chains.
+  await slotRunsEarly;
   const rentalsSlotChoice = await slotChoiceEarly;
   // S786: this rental gave its Rentals.ca slot to another; say so on the row.
   const madeRoom = await madeRoomEarly;
@@ -1472,7 +1595,6 @@ export default async function PropertyDetailPage({
   const accountLeadHours = (bookingCfg?.booking_lead_hours as number | null | undefined) ?? 0;
   const accountConfirms = bookingCfg?.booking_requires_confirmation === true;
   const accountOpenHouse = (bookingCfg as { allow_double_booking?: boolean } | null)?.allow_double_booking === true;
-  timingMark("leads_posts_photos_tenancy_org");
   // Detector inventory (S359): this unit's logged smoke/CO detectors + each one's
   // computed end-of-life date + status (against the org-local "today"). Shaped
   // here so the section component stays presentational. RLS scopes the read.
@@ -1572,14 +1694,7 @@ export default async function PropertyDetailPage({
   // purchase anchor) + status, then attach to its appliance view.
   if (applianceViews.length > 0) {
     const applianceById = new Map(applianceViews.map((a) => [a.id, a]));
-    const { data: consumableRows } = await supabase
-      .from("appliance_consumables")
-      .select("id, appliance_id, label, interval_months, anchor_date, notes")
-      .in(
-        "appliance_id",
-        applianceViews.map((a) => a.id),
-      )
-      .order("created_at", { ascending: true });
+    const { data: consumableRows } = await consumablesEarly;
     for (const c of (consumableRows ?? []) as any[]) {
       const appliance = applianceById.get(c.appliance_id);
       if (!appliance) continue;
@@ -1608,15 +1723,7 @@ export default async function PropertyDetailPage({
   // short-lived SIGNED URL minted server-side. One query for all of this unit's
   // appliances, one batched signed-URL mint, then attach to each appliance view.
   if (applianceViews.length > 0) {
-    const { data: receiptRows } = await supabase
-      .from("documents")
-      .select("id, appliance_id, title, mime_type, storage_path, created_at")
-      .in(
-        "appliance_id",
-        applianceViews.map((a) => a.id),
-      )
-      .is("deleted_at", null)
-      .order("created_at", { ascending: true });
+    const { data: receiptRows } = await receiptsEarly;
     const receipts = (receiptRows ?? []) as {
       id: string;
       appliance_id: string | null;
@@ -1654,11 +1761,7 @@ export default async function PropertyDetailPage({
 
   let propertyDocuments: PropertyDocumentView[] = [];
   if (canManagePropertyDocuments) {
-    const propertyDocRows = await listDocumentsForProperty(
-      supabase,
-      propertyOrgId,
-      p.id,
-    );
+    const propertyDocRows = await propertyDocsEarly;
 
     const workOrderIds = Array.from(
       new Set(
@@ -1682,17 +1785,7 @@ export default async function PropertyDetailPage({
       }
     }
 
-    const propertyDocIds = propertyDocRows.map((d) => d.id);
-    const { data: shareRows } = await supabase
-      .from("document_share_links")
-      .select("id, document_id, token, expires_at, revoked_at")
-      .in(
-        "document_id",
-        propertyDocIds.length > 0
-          ? propertyDocIds
-          : ["00000000-0000-0000-0000-000000000000"],
-      )
-      .order("created_at", { ascending: false });
+    const { data: shareRows } = await shareRowsEarly;
     const sharesByDoc = new Map<
       string,
       {
@@ -1762,12 +1855,7 @@ export default async function PropertyDetailPage({
   const orgProfile: PolicyProfile | null = org ? policyProfileFromRow(org as unknown as Record<string, unknown>) : null;
   let buildingProfile: PolicyProfile | null = null;
   if (org && p.building_key) {
-    const { data: bp } = await supabase
-      .from("org_building_policies")
-      .select(POLICY_PROFILE_COLUMNS)
-      .eq("organization_id", org.id)
-      .eq("building_key", p.building_key)
-      .maybeSingle();
+    const bp = await buildingPolicyEarly;
     buildingProfile = policyProfileFromRow(bp as Record<string, unknown> | null);
   }
   // Building-over-org resolved into a single profile (forward-compat path).
@@ -1893,10 +1981,7 @@ export default async function PropertyDetailPage({
   let marketplaceKit: MarketplaceKitData | null = null;
   const fbCopy = copyTabs.find((t) => t.key === "facebook");
   if (linkIsLive && fbCopy && org) {
-    const { data: agentRows } = await supabase
-      .from("showing_agents")
-      .select("id, name, email, archived")
-      .eq("organization_id", org.id);
+    const { data: agentRows } = await agentRowsEarly;
     // S736: one facts builder for every kit page.
     const facts = marketplaceKitFacts(p);
     // S736 (review item 9): the phone half. A signed no-sign-in link to the
@@ -1992,14 +2077,7 @@ export default async function PropertyDetailPage({
   // empty facts from a sister unit in the same building (lib/sister-unit-fill).
   let sisterUnits: Array<{ id: string; address: string }> = [];
   if (p.status === "draft" && needsSisterFill(p as unknown as UnitFacts)) {
-    const { data: sib } = await supabase
-      .from("properties")
-      .select("id, address, rent_cents")
-      .eq("organization_id", p.organization_id)
-      .is("archived_at", null)
-      .neq("id", p.id)
-      .not("rent_cents", "is", null)
-      .limit(500);
+    const { data: sib } = await sisterRowsEarly;
     sisterUnits = ((sib ?? []) as Array<{ id: string; address: string | null }>)
       .filter((r) => sameBuilding(r.address, p.address))
       .map((r) => ({ id: r.id, address: r.address ?? "" }))
@@ -2011,13 +2089,8 @@ export default async function PropertyDetailPage({
   // renters and booked viewings, so it works in every city (lib/demand-check).
   let demand: DemandCheck | null = null;
   if (p.status === "available") {
-    const since14 = new Date(Date.now() - 14 * 86_400_000).toISOString();
-    const since7 = new Date(Date.now() - 7 * 86_400_000).toISOString();
-    const [r14, r7, b14] = await Promise.all([
-      supabase.from("leads").select("id", { count: "exact", head: true }).eq("property_id", p.id).gte("created_at", since14),
-      supabase.from("leads").select("id", { count: "exact", head: true }).eq("property_id", p.id).gte("created_at", since7),
-      supabase.from("showings").select("id", { count: "exact", head: true }).eq("property_id", p.id).gte("created_at", since14),
-    ]);
+    const demandCounts = await demandCountsEarly;
+    const [r14, r7, b14] = demandCounts;
     demand = demandCheck({
       daysLive: daysSince(p.available_since ?? null),
       renters14: r14.count ?? 0,
@@ -2125,13 +2198,7 @@ export default async function PropertyDetailPage({
   const publishPlanCap = listingCapForPlan(org?.plan);
   let otherLiveListingCount = 0;
   if (!linkIsLive && publishPlanCap != null) {
-    const { count } = await supabase
-      .from("properties")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", p.organization_id)
-      .eq("status", "available")
-      .is("archived_at", null)
-      .neq("id", p.id);
+    const { count } = await otherLiveCountEarly;
     otherLiveListingCount = count ?? 0;
   }
   const readinessBlockerLabels = (opts?: { includeLive?: boolean }) =>
@@ -2187,18 +2254,7 @@ export default async function PropertyDetailPage({
   // S681: the SAME rule now decides hardDeletable in properties/actions.ts and
   // the Delete control on the list page. Keep all three on
   // lib/listing-post-reservations so they can never drift again.
-  const reservedPlumbingPostIds = await loadReservedListingPostIds(
-    postRows,
-    async (draftIds) => {
-      const { data: refRows } = await supabase
-        .from("distribution_run_items")
-        .select("listing_post_id")
-        .in("listing_post_id", draftIds);
-      return ((refRows ?? []) as { listing_post_id: string | null }[]).map(
-        (ref) => ref.listing_post_id,
-      );
-    },
-  );
+  const reservedPlumbingPostIds = await reservedPostIdsEarly;
   const postsByPortal = new Map<PortalKey, ListingPostRow[]>();
   for (const post of postRows) {
     if (reservedPlumbingPostIds.has(post.id)) continue;
@@ -2217,7 +2273,6 @@ export default async function PropertyDetailPage({
     inquiryCount: postCounts.get(post.id) ?? 0,
   });
   const copyByKey = new Map(copyTabs.map((t) => [t.key, t]));
-  timingMark("assets_docs_marketing");
   // Org-level feed-partner accounts (Slice 3), keyed by channel.
   const { data: partnerRows } = await partnerRowsEarly;
   const partnerByChannel = new Map<string, PartnerAccountView>();
@@ -2300,11 +2355,7 @@ export default async function PropertyDetailPage({
   // S702i: read on its own so the page still loads before migration 0233.
   let pageWeeklyPostsOn = false;
   if (org?.id) {
-    const { data: pw, error: pwErr } = await supabase
-      .from("organizations")
-      .select("page_weekly_posts")
-      .eq("id", org.id)
-      .maybeSingle();
+    const { data: pw, error: pwErr } = await weeklyPostsEarly;
     pageWeeklyPostsOn =
       !pwErr && (pw as { page_weekly_posts?: boolean } | null)?.page_weekly_posts === true;
   }
@@ -2463,23 +2514,12 @@ export default async function PropertyDetailPage({
   };
   let runItemRows: RunItemRow[] = [];
   if (activeRun) {
-    const { data: ri } = await supabase
-      .from("distribution_run_items")
-      .select(
-        "id, channel, status, publish_status, mode, blockers, external_url, notes, listing_post_id, operator_action_url, error_message, error_code, audit_message, transport, verification_status, proof_url, concierge_requested_at, operator_submit_approved_at, stale_after, external_expires_at, last_verified_at",
-      )
-      .eq("run_id", activeRun.id)
-      .order("created_at", { ascending: true });
+    const { data: ri } = await runItemsEarly;
     runItemRows = (ri ?? []) as RunItemRow[];
   }
   // S786c: one line under each live site: its renters, days left, last seen live.
   // S786d: a live ad can sit on an older run, so read each site's latest live record on any run for this rental.
-  const { data: liveFactData } = await supabase
-    .from("distribution_run_items")
-    .select("channel, external_expires_at, last_verified_at, verification_status, updated_at")
-    .in("run_id", slotRunIds.length > 0 ? slotRunIds : ["00000000-0000-0000-0000-000000000000"])
-    .eq("publish_status", "live")
-    .order("updated_at", { ascending: false });
+  const { data: liveFactData } = await liveFactsEarly;
   // S787: an old ad can stay "live" in a record the checker has since marked stale (expired). Prefer a record verified live.
   type LiveFact = { external_expires_at: string | null; last_verified_at: string | null; verification_status: string | null };
   const liveFactByChannel = new Map<string, LiveFact>();
@@ -3287,8 +3327,6 @@ export default async function PropertyDetailPage({
   const vacancyUnit = vacancyModel.units[0] ?? null;
   const vacancyLostLabel = formatMoney(vacancyUnit?.lostCents ?? null);
 
-  timingMark("channels_and_rest");
-  console.log("[s840-rental-timing]", JSON.stringify({ org: p.organization_id.slice(0, 8), marks: timingMarks }));
   return (
     <div>
       <Link
