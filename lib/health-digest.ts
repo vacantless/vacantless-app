@@ -54,7 +54,21 @@ export type HealthInput = {
  * much of it is used. At 90% Decodo takes the next GB ($4) from the Wallet;
  * a short Wallet pauses Pay As You Go and the robot's proxy fails (KI1756).
  */
-export type ProxyStatus = { checked: boolean; usedGb?: number | null; limitGb?: number | null; note?: string | null };
+export type ProxyStatus = { checked: boolean; usedGb?: number | null; limitGb?: number | null; note?: string | null; periodDays?: number | null };
+
+/** S840: Decodo traffic totals are bytes; GB here is 1,000,000,000 bytes. */
+export function decodoGb(bytes: number): number {
+  return Math.round((bytes / 1e9) * 100) / 100;
+}
+
+/** S840: the "Checked:" words for the proxy. Pay As You Go has no GB block, so it shows use over the period. */
+export function proxyCheckedText(p: ProxyStatus | null | undefined): string {
+  if (!p?.checked) return "";
+  if (typeof p.usedGb === "number" && (p.limitGb == null || !(p.limitGb > 0))) {
+    return `, the proxy's GB use (${p.usedGb.toFixed(2)} GB in ${p.periodDays ?? 30} days)`;
+  }
+  return ", the proxy's GB use";
+}
 
 /** The connection errors the robot records when its proxy is down (worker submit-logic). */
 export function proxyFailed(error: string | null | undefined): boolean {
@@ -238,7 +252,7 @@ export function buildHealthDigest(input: HealthInput): { subject: string; body: 
   const gaps = coverageSection(input);
   if (gaps) parts.push(gaps);
   parts.push(
-    `Checked: ${okRuns} of ${runs} sweeps, email delivery${input.emails.checked ? "" : " (not checked)"}, site inquiries, robot posts, sign-ins${input.appErrors ? ", page crashes" : ""}${input.proxy?.checked ? ", the proxy's GB use" : ""}. Not checked: ${input.appErrors ? "errors no page showed" : "app errors in Vercel's logs"}${input.proxy?.checked ? "" : `, the proxy's GB use${input.proxy?.note ? ` (${input.proxy.note})` : ""}`}. The Decodo Wallet itself can only be read on its dashboard.`,
+    `Checked: ${okRuns} of ${runs} sweeps, email delivery${input.emails.checked ? "" : " (not checked)"}, site inquiries, robot posts, sign-ins${input.appErrors ? ", page crashes" : ""}${proxyCheckedText(input.proxy)}. Not checked: ${input.appErrors ? "errors no page showed" : "app errors in Vercel's logs"}${input.proxy?.checked ? "" : `, the proxy's GB use${input.proxy?.note ? ` (${input.proxy.note})` : ""}`}. The Decodo Wallet itself can only be read on its dashboard.`,
   );
   // S736: the Node2Shell watch (lib/image-url-import nodeHasBrotliFix). S769:
   // the fix landed and the Stripe key was rotated 2026-11-06, so the email

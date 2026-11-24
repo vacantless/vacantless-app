@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { setSelectedOrg } from "./org-actions";
+import { Icons } from "@/components/icons";
 
 // ============================================================================
 // Dashboard navigation - IA v2 (S427).
@@ -137,6 +138,18 @@ const DISTRIBUTION_WIZARD: NavItem = {
 // the caller actually belongs to more than one org (a real agent), so a
 // single-org landlord never sees it even after the flag flips.
 const AGENT_BOOK: NavItem = { href: "/agent", label: "All clients" };
+
+// S840 (REVIEW-S839 step G): on a phone the daily places sit in a bar at the
+// bottom, one tap each, the same bar the app will have. More opens the full
+// menu. Hidden on lg+ (the top bar has them) and on the step pages that put
+// their own Back / Next bar at the bottom.
+export const PHONE_BAR: (NavItem & { icon: "home" | "chat" | "calendar" | "building" })[] = [
+  { href: "/dashboard", label: "Today", icon: "home" },
+  { href: "/dashboard/leads", label: "Renters", icon: "chat", match: ["/dashboard/leasing", "/dashboard/reports"] },
+  { href: "/dashboard/showings", label: "Viewings", icon: "calendar", match: ["/dashboard/availability", "/dashboard/showing-agents"] },
+  { href: "/dashboard/properties", label: "Rentals", icon: "building" },
+];
+export const PHONE_BAR_HIDDEN_ON = ["/dashboard/add-details", "/dashboard/send-live", "/dashboard/after-live"];
 
 function isActive(pathname: string, item: NavItem) {
   if (item.href === "/dashboard") return pathname === "/dashboard";
@@ -417,6 +430,52 @@ export function DashboardNav({
             </form>
           </nav>
         </div>
+      )}
+
+      {/* S840: phone bottom bar (PHONE_BAR). */}
+      {!PHONE_BAR_HIDDEN_ON.some((p) => pathname.startsWith(p)) && (
+        <nav
+          aria-label="Daily work"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] text-gray-600 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] backdrop-blur print:hidden lg:hidden"
+        >
+          <ul className="mx-auto grid max-w-lg grid-cols-5">
+            {PHONE_BAR.map((item) => {
+              const Icon = Icons[item.icon];
+              const active = !open && isActive(pathname, item);
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${
+                      active ? "text-brand" : "hover:text-gray-900"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                </li>
+              );
+            })}
+            <li>
+              <button
+                type="button"
+                aria-expanded={open}
+                onClick={() => {
+                  // The menu opens under the header, so bring the header into view.
+                  if (!open) window.scrollTo({ top: 0, behavior: "smooth" });
+                  setOpen((v) => !v);
+                }}
+                className={`flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${
+                  open ? "text-brand" : "hover:text-gray-900"
+                }`}
+              >
+                <span aria-hidden className="text-lg leading-5">{open ? "×" : "⋯"}</span>
+                {open ? "Close" : "More"}
+              </button>
+            </li>
+          </ul>
+        </nav>
       )}
     </>
   );

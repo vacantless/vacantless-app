@@ -163,7 +163,8 @@ export default async function DashboardLayout({
           </div>
         </div>
       )}
-      <main className="relative z-10 mx-auto max-w-5xl px-6 py-8">{children}</main>
+      {/* S840: pb-28 below lg leaves room for the phone bottom bar (dashboard-nav PHONE_BAR). */}
+      <main className="relative z-10 mx-auto max-w-5xl px-6 pb-28 pt-8 lg:pb-8">{children}</main>
       {adEvents.length > 0 && (
         <AdConversionFire cfg={adCfg} events={adEvents} record={recordAdConversions} />
       )}

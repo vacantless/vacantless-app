@@ -739,6 +739,63 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   // S712: a Free org over its one-rental cap (e.g. after a downgrade).
   const overCapNotice = overListingCapNotice(org?.plan, liveRentalCount ?? 0);
 
+  // S840 (REVIEW-S839 step G): on a phone the renter waiting for a reply sat
+  // under Getting started and the site cards. When the lane has something to
+  // do it now comes first, right under the title; an empty lane ("all caught
+  // up" or the first-run pointer to setup) keeps its place below the cards.
+  const todayLane = (
+    <TodayLane
+      items={todayItems}
+      firstRun={showFullChecklistOnTop}
+      noViewingTimesActions={
+        <div>
+          <p className="mb-2 text-sm text-gray-700">Open times in one tap. You can change them any time.</p>
+          <div className="flex flex-wrap gap-2">
+            {lastWeekSummary && (
+              <form action={openLastWeekTimes}>
+                <button
+                  type="submit"
+                  title={lastWeekSummary}
+                  className="rounded-lg border border-brand bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
+                >
+                  Same as last week
+                  <span className="ml-1 font-normal text-white/80">{lastWeekSummary}</span>
+                </button>
+              </form>
+            )}
+            {VIEWING_PRESETS.map((p) => (
+              <form key={p.key} action={openViewingPreset}>
+                <input type="hidden" name="preset" value={p.key} />
+                <button
+                  type="submit"
+                  title={p.detail}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-900 hover:bg-gray-50"
+                >
+                  {p.label}
+                  <span className="ml-1 font-normal text-gray-500">{p.detail}</span>
+                </button>
+              </form>
+            ))}
+            <Link
+              href="/dashboard/availability"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-brand hover:underline"
+            >
+              Pick my own times
+            </Link>
+            {hasShowingAgents && (
+              <Link
+                href="/dashboard/showing-agents"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-brand hover:underline"
+              >
+                Have a showing agent cover them
+              </Link>
+            )}
+          </div>
+        </div>
+      }
+    />
+  );
+
   return (
     <div>
       {showFullChecklistOnTop && (
@@ -751,6 +808,17 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
         title="Today"
         subtitle="What needs your attention now across your rentals, renters, and viewings."
       />
+
+      {presetNotice && (
+        <div role="status" className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+          {presetNotice}{" "}
+          <Link href="/dashboard/availability" className="font-medium underline">
+            Adjust the times
+          </Link>
+        </div>
+      )}
+
+      {todayItems.length > 0 && todayLane}
 
       {onboardingWizardState && (
         <GettingStartedCard state={onboardingWizardState} />
@@ -771,65 +839,7 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
       <NeedsYouCards notices={[...needsYou, ...droppedAds, ...readyToPostCards, ...datedLineCards, ...renterEmailCards]} />
       <ComingVacantCards items={comingVacant} />
 
-      {presetNotice && (
-        <div role="status" className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
-          {presetNotice}{" "}
-          <Link href="/dashboard/availability" className="font-medium underline">
-            Adjust the times
-          </Link>
-        </div>
-      )}
-
-      <TodayLane
-        items={todayItems}
-        firstRun={showFullChecklistOnTop}
-        noViewingTimesActions={
-          <div>
-            <p className="mb-2 text-sm text-gray-700">Open times in one tap. You can change them any time.</p>
-            <div className="flex flex-wrap gap-2">
-              {lastWeekSummary && (
-                <form action={openLastWeekTimes}>
-                  <button
-                    type="submit"
-                    title={lastWeekSummary}
-                    className="rounded-lg border border-brand bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
-                  >
-                    Same as last week
-                    <span className="ml-1 font-normal text-white/80">{lastWeekSummary}</span>
-                  </button>
-                </form>
-              )}
-              {VIEWING_PRESETS.map((p) => (
-                <form key={p.key} action={openViewingPreset}>
-                  <input type="hidden" name="preset" value={p.key} />
-                  <button
-                    type="submit"
-                    title={p.detail}
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-900 hover:bg-gray-50"
-                  >
-                    {p.label}
-                    <span className="ml-1 font-normal text-gray-500">{p.detail}</span>
-                  </button>
-                </form>
-              ))}
-              <Link
-                href="/dashboard/availability"
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-brand hover:underline"
-              >
-                Pick my own times
-              </Link>
-              {hasShowingAgents && (
-                <Link
-                  href="/dashboard/showing-agents"
-                  className="rounded-lg px-3 py-1.5 text-sm font-medium text-brand hover:underline"
-                >
-                  Have a showing agent cover them
-                </Link>
-              )}
-            </div>
-          </div>
-        }
-      />
+      {todayItems.length === 0 && todayLane}
 
       {showCompactChecklist && (
         <LaunchChecklist checklist={checklist} variant="compact" />

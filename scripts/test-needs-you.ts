@@ -32,7 +32,13 @@ ok("hidden site, no card", needsYouNotices({ postingAllowed: true, tileStateByCh
 const today = readFileSync("app/dashboard/page.tsx", "utf8");
 ok("Today reads the notices", /needsYouNotices\(/.test(today));
 ok("Today renders NeedsYouCards", /<NeedsYouCards/.test(today));
-ok("cards come before the lane", today.indexOf("<NeedsYouCards") < today.indexOf("<TodayLane"));
+// S840 (REVIEW-S839 G): a lane with work comes first, above Getting started and
+// the site cards; an empty lane stays below the cards.
+const ret = today.indexOf("  return (\n    <div>");
+const body = today.slice(ret);
+ok("lane with work comes before Getting started and the cards", body.indexOf("{todayItems.length > 0 && todayLane}") > 0 && body.indexOf("{todayItems.length > 0 && todayLane}") < body.indexOf("<GettingStartedCard") && body.indexOf("<GettingStartedCard") < body.indexOf("<NeedsYouCards"));
+ok("empty lane stays below the cards", body.indexOf("<NeedsYouCards") < body.indexOf("{todayItems.length === 0 && todayLane}"));
+ok("one lane element", (today.match(/<TodayLane\b/g) ?? []).length === 1);
 
 console.log(`needs-you: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

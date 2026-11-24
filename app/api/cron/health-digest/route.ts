@@ -10,6 +10,7 @@ import { nodeHasBrotliFix } from "@/lib/image-url-import";
 import {
   DIGEST_LOCAL_HOUR,
   buildHealthDigest,
+  decodoGb,
   robotRowIsProblem,
   portalOutcomeIsProblem,
   torontoDateHour,
@@ -58,11 +59,43 @@ async function decodoProxy(): Promise<ProxyStatus> {
     const row = rows.find((r) => String(r?.service_type ?? "").includes("residential")) ?? rows[0];
     const used = Number(row?.traffic_per_period);
     const limit = Number(row?.traffic_limit);
-    if (!Number.isFinite(used) || !Number.isFinite(limit)) return { checked: false, note: "Decodo sent no traffic figures" };
-    return { checked: true, usedGb: used, limitGb: limit };
+    if (Number.isFinite(used) && Number.isFinite(limit) && row?.traffic_limit != null) {
+      return { checked: true, usedGb: used, limitGb: limit };
+    }
+    // S840: Pay As You Go has no GB block, so the subscription sends no
+    // figures (2026-11-24 email: "Decodo sent no traffic figures"). Read the
+    // last 30 days of use from the traffic statistics instead.
+    return await decodoTraffic30d(key);
   } catch {
     return { checked: false, note: "Decodo did not answer" };
   }
+}
+
+function decodoDate(d: Date): string {
+  return d.toISOString().slice(0, 19).replace("T", " ");
+}
+
+async function decodoTraffic30d(key: string): Promise<ProxyStatus> {
+  const end = new Date();
+  const start = new Date(end.getTime() - 30 * 86_400_000);
+  const res = await fetch("https://api.decodo.com/api/v2/statistics/traffic", {
+    method: "POST",
+    headers: { Authorization: key, accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify({
+      proxyType: "residential_proxies",
+      startDate: decodoDate(start),
+      endDate: decodoDate(end),
+      groupBy: "month",
+      limit: 12,
+    }),
+    signal: AbortSignal.timeout(8_000),
+    cache: "no-store",
+  });
+  if (!res.ok) return { checked: false, note: `Decodo traffic answered ${res.status}` };
+  const body = (await res.json()) as { metadata?: { totals?: { total_rx_tx?: unknown } } };
+  const bytes = Number(body?.metadata?.totals?.total_rx_tx);
+  if (!Number.isFinite(bytes)) return { checked: false, note: "Decodo sent no traffic figures" };
+  return { checked: true, usedGb: decodoGb(bytes), limitGb: null, periodDays: 30 };
 }
 
 async function brevoProblems(): Promise<HealthInput["emails"]> {

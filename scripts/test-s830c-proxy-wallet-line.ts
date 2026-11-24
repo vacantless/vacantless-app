@@ -2,7 +2,7 @@
 // Run: npx tsx scripts/test-s830c-proxy-wallet-line.ts
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildHealthDigest, proxyFailed, proxyLines, type HealthInput } from "../lib/health-digest";
+import { buildHealthDigest, decodoGb, proxyCheckedText, proxyFailed, proxyLines, type HealthInput } from "../lib/health-digest";
 
 let n = 0;
 const ok = (c: boolean, m: string) => {
@@ -41,5 +41,15 @@ ok(!/[—–]/.test(noKey + l1.join("") + proxyLines(near).join("")), "no dashes
 const route = readFileSync("app/api/cron/health-digest/route.ts", "utf8");
 ok(route.includes("process.env.DECODO_API_KEY") && route.includes("api.decodo.com/v2/subscriptions"), "route reads Decodo with the Vercel key");
 ok(!/DECODO_API_KEY\s*=\s*["']/.test(route), "no key in the code");
+
+// S840: Pay As You Go has no GB block; the route reads 30 days of traffic instead.
+ok(decodoGb(200_659_604) === 0.2, "bytes to GB, two places");
+const payg = { ...base, proxy: { checked: true, usedGb: 0.42, limitGb: null, periodDays: 30 } };
+ok(proxyCheckedText(payg.proxy) === ", the proxy's GB use (0.42 GB in 30 days)", "Pay As You Go shows use over 30 days");
+ok(proxyLines(payg).length === 0, "no limit, no warning line");
+const paygBody = buildHealthDigest(payg).body;
+ok(paygBody.includes("0.42 GB in 30 days") && !paygBody.includes("Not checked: errors no page showed, the proxy"), "checked, not in Not checked");
+ok(proxyCheckedText({ checked: true, usedGb: 0.3, limitGb: 1 }) === ", the proxy's GB use", "a GB block keeps the old words");
+ok(route.includes("api.decodo.com/api/v2/statistics/traffic") && route.includes("total_rx_tx"), "route falls back to the traffic statistics");
 
 console.log(`s830c proxy wallet line: ${n} passed, 0 failed`);
