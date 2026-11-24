@@ -13,7 +13,7 @@ ok("short date", shortDate("2026-11-12") === "Nov 12");
 // Agile's Pillette 33 on 2026-10-27: Marketplace renewed Oct 19.
 const r = keepFreshRows(
   [
-    card("facebook", "Facebook Marketplace", "2026-10-19"),
+    card("facebook", "Facebook Marketplace", "2026-10-21"),
     card("kijiji", "Kijiji", "2026-10-12"),
     card("rentals_ca", "Rentals.ca", "2026-10-11"),
     card("zumper", "Zumper", "2026-09-06"),
@@ -23,7 +23,7 @@ const r = keepFreshRows(
   { today, rentalsRobotRenews: true },
 );
 // S775: Facebook runs its own Renew clock; the app never counts down to it.
-ok("S775: marketplace day 8 gives its age, no countdown, no button", row(r, "facebook")?.line.startsWith("Posted 8 days ago. Open your Marketplace ads.") === true && !row(r, "facebook")?.line.includes("Renew opens in") && !row(r, "facebook")?.renew, row(r, "facebook"));
+ok("S775/S838: marketplace day 6 gives its age, no countdown, no button", row(r, "facebook")?.line.startsWith("Posted 6 days ago. Open your Marketplace ads.") === true && !row(r, "facebook")?.line.includes("Renew opens in") && !row(r, "facebook")?.renew, row(r, "facebook"));
 ok("kijiji end date", row(r, "kijiji")?.line === "Ad ends Nov 12." && !row(r, "kijiji")?.renew, row(r, "kijiji"));
 ok("rentals.ca renews itself", row(r, "rentals_ca")?.line.startsWith("We renew this free ad") === true && !row(r, "rentals_ca")?.renew);
 ok("zumper stays up", row(r, "zumper")?.line === "Stays up while the rental is open." && !row(r, "zumper")?.renew);

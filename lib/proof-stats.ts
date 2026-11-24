@@ -7,11 +7,14 @@
 // not of all inquiries; every label says so (S752, outside review). Update
 // PROOF only, from the database, never from memory; everything below reads
 // from it.
+// S838 recount (2026-11-23, same rule: leads; renters with any showing; first
+// showing booked within an hour of the lead): 331 leads, 122 with a viewing,
+// 107 of the 122 within an hour (88%, still "nearly 9 in 10").
 export const PROOF = {
-  inquiries: 289,
-  viewings: 116,
+  inquiries: 331,
+  viewings: 122,
   withinHour: "Nearly 9 in 10",
-  countedOn: "2026-11-05",
+  countedOn: "2026-11-23",
 } as const;
 
 export const LEASING_PROOF_STATS: readonly { value: string; label: string }[] = [
@@ -29,11 +32,13 @@ export const POSTING_OFFER_PROOF = `Our first customer has five rentals in Winds
 // live, removed or expired); 276 leads, 112 renters with a viewing; 97 of the
 // 112 booked within an hour of their first inquiry (86.6%, "nearly 9 in 10").
 // Update from the database, never from memory. Every figure must stay true.
+// S838 recount 2026-11-23: 25 ads (listing_posts on kijiji, rentals_ca, zumper
+// with status live, removed or expired) for Agile.
 export const POSTING_PROOF = {
   title: "What Posting does for our first customer",
   lines: [
     "Five rentals in Windsor.",
-    "We posted 16 ads to Kijiji, Rentals.ca and Zumper for them.",
+    "We posted 25 ads to Kijiji, Rentals.ca and Zumper for them.",
     "We check them daily and tell you when a site drops one.",
     "Nobody retyped an ad.",
   ],

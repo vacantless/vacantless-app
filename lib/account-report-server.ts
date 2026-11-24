@@ -3,6 +3,7 @@
 // sweep) and with a signed-in client (the Reports page): every read is scoped
 // to the one account. Books come from the same income statement model and the
 // same rows as Money > Income statement, so the two always agree.
+import { loadTimedLeads } from "@/lib/response-times-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildAccountReport, type AccountReport } from "@/lib/account-report";
 import { canUseBooks } from "@/lib/billing";
@@ -110,6 +111,11 @@ export async function loadAccountReport(
   }
 
   const adsDown = await loadAdsDown(db, orgId);
+  // S838: reply and viewing times for the month's renters.
+  const monthLeads = ((leadsRes.data ?? []) as { id: string; source: string | null; created_at: string }[]).filter(
+    (l) => !!l.created_at && l.created_at.slice(0, 10) >= range.monthStart && l.created_at.slice(0, 10) < range.monthEnd,
+  );
+  const timedLeads = await loadTimedLeads(db, monthLeads).catch(() => []);
 
   return buildAccountReport({
     orgName: org.name,
@@ -133,6 +139,7 @@ export async function loadAccountReport(
     viewingsByRequest: org.viewings_by_request === true,
     adsDown,
     rentalUrl: (id) => `${APP_URL}/dashboard/properties/${id}`,
+    timedLeads,
     expenseReportUrl: `${APP_URL}/dashboard/money/expense-report?preset=custom&from=${range.monthStart.slice(0, 4)}-01-01&to=${lastDayBefore(range.monthEnd)}`,
   });
 }

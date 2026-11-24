@@ -1459,7 +1459,10 @@ export const DEFAULT_REFRESH_DAYS = 14;
 //   - facebook (Marketplace): renewing bumps the ad back up. S737: Facebook
 //     offers Renew about 9 days after the last renewal (read live 2026-10-26:
 //     renewed Oct 19, "Renew (2 days)" on Oct 26), so 7 sent people to a
-//     greyed-out button.
+//     greyed-out button. S838 (KI1793): Facebook now opens Renew at day 5
+//     to 7 (Noam saw it open at day 7 on 2026-11-23), so the window is back
+//     to 7. The email and card only say "check Renew", never that it is open,
+//     and helper 1.2.6 still moves the date to Facebook's own Renew day.
 //   - zumper: never on age. Free Zumper ads stay up; the listing-post live
 //     check marks them removed when the site drops them.
 //   - rentals_ca: never on age for the landlord. A free Limited plan ends
@@ -1470,7 +1473,7 @@ export const DEFAULT_REFRESH_DAYS = 14;
 // Anything else keeps DEFAULT_REFRESH_DAYS. null means "never stale by age".
 export const CHANNEL_REFRESH_DAYS: Readonly<Record<string, number | null>> = {
   kijiji: 28,
-  facebook: 9,
+  facebook: 7,
   zumper: null,
   rentals_ca: null,
 };

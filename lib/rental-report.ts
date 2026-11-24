@@ -5,6 +5,7 @@
 // a plain caveat; nothing is guessed. Pure and tested in
 // scripts/test-s831-rental-report.ts; the sweep is app/api/cron/rental-report.
 import { portalLabel } from "@/lib/listing-distribution";
+import { responseFacts, responseLines, type TimedLead } from "@/lib/response-times";
 
 export type ReportPost = { portal: string | null; status: string | null; url: string | null; createdAt: string | null };
 export type ReportCost = { portal: string | null; label: string | null; amountCents: number; spentOn: string };
@@ -34,6 +35,8 @@ export type RentalReportInput = {
   pageUrl?: string | null;
   /** The landlord books viewings themselves (S828c); none recorded is not news. */
   viewingsByRequest?: boolean;
+  /** S838: renters who wrote in during the month, with reply and viewing times. */
+  timedLeads?: readonly TimedLead[];
   orgName: string | null;
 };
 
@@ -187,6 +190,8 @@ export function buildRentalReport(input: RentalReportInput): RentalReport {
       ? `No renters wrote in during ${month}. ${input.leads.length} in total since the ads went up.`
       : `${leadsMonth.length} ${leadsMonth.length === 1 ? "renter" : "renters"} wrote in during ${month} (${words(srcList)}), ${input.leads.length} in total since the ads went up. Some only ask a quick question, so this is not a count of qualified applicants.`;
   s2.push({ kind: "p", text: rentersLine, html: esc(rentersLine).replace(/^(\d+ renters?|No renters)/, "<strong>$1</strong>") });
+  // S838: how fast they heard back and how soon they got a viewing.
+  for (const line of responseLines(responseFacts(input.timedLeads ?? []))) s2.push({ kind: "p", text: line, html: esc(line) });
   const vLine =
     showMonth.length === 0
       ? `No viewings were booked for ${month}.`

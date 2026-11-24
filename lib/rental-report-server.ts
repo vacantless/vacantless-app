@@ -1,6 +1,7 @@
 // S831: read one rental's records for the monthly report (lib/rental-report.ts).
 // Service-role reads, scoped to the rental and its account.
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { loadTimedLeads } from "@/lib/response-times-server";
 import { buildRentalReport, type RentalReport, type ReportCost, type ReportLead, type ReportPost, type ReportShowing } from "@/lib/rental-report";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com";
@@ -32,14 +33,18 @@ export async function loadRentalReport(
       .is("property_id", null)
       .gte("spent_on", range.monthStart)
       .lt("spent_on", range.monthEnd),
-    admin.from("leads").select("source, created_at").eq("property_id", p.id),
+    admin.from("leads").select("id, source, created_at").eq("property_id", p.id),
     admin.from("showings").select("scheduled_at, outcome").eq("property_id", p.id).gte("scheduled_at", range.monthStart).lt("scheduled_at", range.monthEnd),
   ]);
   // Renters "to date" count this vacancy: since it became available, else all.
   const since = p.available_since ? p.available_since.slice(0, 10) : null;
-  const leads = ((leadsRes.data ?? []) as { source: string | null; created_at: string }[])
-    .filter((l) => !since || l.created_at.slice(0, 10) >= since)
-    .map<ReportLead>((l) => ({ source: l.source, createdAt: l.created_at }));
+  const leadRows = ((leadsRes.data ?? []) as { id: string; source: string | null; created_at: string }[])
+    .filter((l) => !since || l.created_at.slice(0, 10) >= since);
+  const leads = leadRows.map<ReportLead>((l) => ({ source: l.source, createdAt: l.created_at }));
+  // S838: reply and viewing times for the month's renters. Toronto-month edges
+  // follow the report's own day test (YYYY-MM-DD of created_at).
+  const monthRows = leadRows.filter((l) => l.created_at.slice(0, 10) >= range.monthStart && l.created_at.slice(0, 10) < range.monthEnd);
+  const timedLeads = await loadTimedLeads(admin, monthRows).catch(() => []);
   return buildRentalReport({
     address: p.address,
     rentCents: p.rent_cents,
@@ -62,6 +67,7 @@ export async function loadRentalReport(
     rentalUrl: `${APP_URL}/dashboard/properties/${p.id}`,
     pageUrl: `${APP_URL}/r/${p.id}`,
     viewingsByRequest,
+    timedLeads,
     orgName,
   });
 }

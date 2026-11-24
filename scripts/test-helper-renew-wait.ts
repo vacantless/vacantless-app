@@ -30,15 +30,15 @@ ok("keeps one reading per ad, the latest", clean.length === 1 && clean[0].days =
 ok("not a list -> nothing", cleanRenewWaits("x", now).length === 0);
 
 const fb = refreshDaysForChannel("facebook");
-ok("Facebook refreshes at 9 days", fb === 9);
+ok("S838: Facebook refreshes at 7 days", fb === 7);
 // Pillette Unit 3 on 2026-11-17: posted 11-08 in Vacantless, Facebook says Renew in 7 days.
 const moved = renewWaitPostedOn("2026-11-08", "2026-11-17", 7, fb);
-ok("Unit 3: posted date moves so it is due when Renew opens", moved === "2026-11-15", moved);
+ok("Unit 3: posted date moves so it is due when Renew opens", moved === "2026-11-17", moved);
 const status = computeChannelStatus({ linkIsLive: true, blockers: [], channel: "facebook", today: "2026-11-17", posts: [{ status: "live", url: "https://www.facebook.com/marketplace/item/1", posted_on: moved, inquiryCount: 0 }] } as never);
 ok("Unit 3 no longer reads as needing a refresh today", status.value === "posted", status);
 const due = computeChannelStatus({ linkIsLive: true, blockers: [], channel: "facebook", today: "2026-11-24", posts: [{ status: "live", url: "https://www.facebook.com/marketplace/item/1", posted_on: moved, inquiryCount: 0 }] } as never);
 ok("and needs it on 2026-11-24, the day Facebook opens Renew", due.value === "needs_refresh", due);
-ok("never backwards", renewWaitPostedOn("2026-11-16", "2026-11-17", 7, fb) === null);
+ok("never backwards", renewWaitPostedOn("2026-11-16", "2026-11-17", 5, fb) === null);
 ok("never after the day it was seen", renewWaitPostedOn("2026-11-01", "2026-11-17", 30, fb) === "2026-11-17");
 ok("blank posted date gets the implied day", renewWaitPostedOn(null, "2026-11-17", 9, fb) === "2026-11-17");
 ok("no refresh rule -> no change", renewWaitPostedOn("2026-11-01", "2026-11-17", 7, null) === null);

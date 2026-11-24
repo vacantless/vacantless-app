@@ -7,6 +7,7 @@
 // scripts/test-s836b-account-report.ts. Every number comes from our own
 // records; where we have none, it says so instead of showing $0.
 import { buildChannelReport, type LeadLite } from "@/lib/reports";
+import { responseFacts, responseLines, type TimedLead } from "@/lib/response-times";
 import { buildCostAdvice, buildSiteCosts, dollars, firstPaidBySite, type CostLite, type SiteCostRow } from "@/lib/channel-costs";
 import { monthName, shortAddr } from "@/lib/rental-report";
 import type { AdsDownUnit } from "@/lib/ads-down";
@@ -84,6 +85,8 @@ export type AccountReportInput = {
   expenseReportUrl?: string;
   /** Link to a rental, for the "for rent, no ads up" list. */
   rentalUrl?: (propertyId: string) => string;
+  /** S838: renters who wrote in during the month, with reply and viewing times. */
+  timedLeads?: readonly TimedLead[];
 };
 
 export type UnitLine = {
@@ -340,6 +343,9 @@ export function buildAccountReport(input: AccountReportInput & { adExpenses?: re
   } else {
     h.push(`<p style="font-size:14px;margin:0">No unit was on the market or rented in ${esc(monthOnly)}.</p>`);
   }
+  // S838: how fast renters heard back and how soon they got a viewing.
+  const responseText = responseLines(responseFacts(input.timedLeads ?? []));
+  if (responseText.length) h.push(`<p style="font-size:14px;margin:12px 0 0">${esc(responseText.join(" "))}</p>`);
 
   // S836d: for rent, but no ads up.
   const adsDown = input.adsDown ?? [];
@@ -418,6 +424,7 @@ export function buildAccountReport(input: AccountReportInput & { adExpenses?: re
   for (const u of units) {
     t.push(`- ${u.address}: ${u.state === "rented" ? `rented${u.rentedOn ? ` ${niceDay(u.rentedOn)}` : ""}` : "on the market"}, ${u.days ?? "-"} days, ${u.inquiriesMonth} inquiries (${u.inquiriesToDate} to date), ${u.showingsBooked} showings booked, ${u.showingsHeld} held`);
   }
+  if (responseText.length) t.push(responseText.join(" "));
   for (const u of adsDown) t.push(`For rent, no ads up: ${u.address}. ${u.line}`);
   if (money?.hasRecords) t.push(`Net in ${monthOnly}: ${signedDollars(money.month.netCents)}. This year: ${signedDollars(money.ytd.netCents)}.`);
   t.push(`Site costs: ${dollars(adsMonthCents)} in ${monthOnly}, ${dollars(adsYtdCents)} this year.`);

@@ -213,8 +213,8 @@ function post(over: Partial<ListingHealthPost> = {}): ListingHealthPost {
 
 // S740: an alert sent before the ad was due does not hold back the due-day alert.
 {
-  // Facebook, 9-day rule. Renewed 2026-10-19, emailed 2026-10-25 at day 7 (old
-  // rule), due 2026-10-28. On 10-28 it must alert again despite the cooldown.
+  // Facebook (S838: 7-day rule). Renewed 2026-10-19, emailed 2026-10-24 by an
+  // older rule, due 2026-10-26. On 10-26 it must alert again despite the cooldown.
   const early = listingHealthChannels({
     posts: [
       post({
@@ -222,11 +222,11 @@ function post(over: Partial<ListingHealthPost> = {}): ListingHealthPost {
         portal: "facebook",
         url: "https://facebook.com/marketplace/item/1",
         postedOn: "2026-10-19",
-        lastHealthAlertedAt: "2026-10-26T00:00:02.000Z",
+        lastHealthAlertedAt: "2026-10-24T00:00:02.000Z",
       }),
     ],
-    today: "2026-10-28",
-    nowISO: "2026-10-28T12:00:00.000Z",
+    today: "2026-10-26",
+    nowISO: "2026-10-26T12:00:00.000Z",
   });
   ok("S740: alert before the due date does not block the due-day alert", alertableListingHealthChannels(early).length === 1);
 

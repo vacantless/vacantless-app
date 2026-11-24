@@ -496,6 +496,8 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img?: stri
     title: "Every renter answered and booked.",
     points: [
       "A reply with your booking link within seconds, day or night",
+      // S838 (REVIEW-S837 3.1): Send to Vacantless, the Marketplace answer.
+      "Renter wrote on Marketplace? Share the chat screenshot from your phone. They land in your list and the right reply is copied, ready to paste",
       "Renters pick a time from your viewing hours. Group viewings let several come at once",
       "A confirmation, and a reminder email the day before. On paid plans, a text from your own number too",
       "They confirm with one tap, or reply YES to the text",
@@ -552,6 +554,8 @@ const AUTOMATIONS: { kicker: string; title: string; points: string[]; img?: stri
     points: [
       "Rent by pre-authorized debit through your own Stripe or Rotessa account, or log e-transfers; you see who paid and who owes",
       "Costs come in from a bank file, from repairs, or typed in",
+      // S838 (REVIEW-S837 3.2): the monthly report and account summary.
+      "A summary by email on the first of each month, for you or your owner: rent in, costs out, renters and viewings per unit, and what each site cost",
       "One owner statement per building, and your T776 rental tax summary line by line",
       "One zip for your accountant: ledger, T776, statements, rent roll and QuickBooks or Xero files",
     ],

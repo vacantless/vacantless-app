@@ -4,6 +4,7 @@
 //
 // The windows match lib/distribution-channels CHANNEL_REFRESH_DAYS and what was
 // read live: Facebook Marketplace offers Renew about 9 days after the last
+// (S838: now 5 to 7 days, so the card asks from day 7)
 // renewal (S737; S775: Facebook decides, so the app only says when to check); a paid Kijiji Lite ad runs 31 days; a free Rentals.ca ad
 // ends after 21 days, and the robot renews it in place 3 days before (S739);
 // Zumper free ads stay up.
@@ -29,7 +30,7 @@ export type KeepFreshRow = {
   url?: string | null;
 };
 
-const FACEBOOK_RENEW_DAYS = 9;
+const FACEBOOK_RENEW_DAYS = 7; // S838: matches CHANNEL_REFRESH_DAYS.facebook (KI1793)
 const KIJIJI_AD_DAYS = 31;
 const RENTALS_FREE_DAYS = 21;
 const RENTALS_ROBOT_RENEW_DAYS = 18;
@@ -75,7 +76,7 @@ export function keepFreshRows(
       case "facebook": {
         // S775: Facebook runs its own Renew clock and Vacantless cannot see it,
         // so no line says Renew is open or counts down to it (lib/facebook-renew).
-        // From day 9 the row asks the landlord to check, never to renew.
+        // From day 7 (S838) the row asks the landlord to check, never to renew.
         const posted = age === null ? "" : `Posted ${age === 0 ? "today" : `${plural(age, "day")} ago`}. `;
         line = `${posted}${FACEBOOK_RENEW_HOW}`;
         renew = stale || (age !== null && age >= FACEBOOK_RENEW_DAYS);

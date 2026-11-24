@@ -10,6 +10,7 @@ import { GuidelineForm } from "./guideline-form";
 import { setOrgFeatureFlagAsAdmin } from "./actions";
 import { PlatformSwitchesSection } from "./platform-switches-section";
 import { StrangerFunnelSection } from "./stranger-funnel-section";
+import { SigninLifetimeSection } from "./signin-lifetime-section";
 import { OrgSmsNumbersSection } from "./org-sms-numbers-section";
 import { envFlagEnabled } from "@/lib/auto-listing-copy";
 import {
@@ -151,6 +152,8 @@ export default async function AdminConsolePage({
       </header>
 
       <StrangerFunnelSection admin={admin} />
+
+      <SigninLifetimeSection admin={admin} />
 
       <OnboardLandlordForm />
 
