@@ -63,8 +63,10 @@ export function siteMailCopySubject(siteName: string, subject: string): string {
 }
 
 /** The one line above the site's own email in the copy. */
-export function siteMailCopyLead(siteName: string, confirmed = false): string {
+export function siteMailCopyLead(siteName: string, confirmed = false, codeTyped = false): string {
   const base = `${siteName} sent this to your Vacantless address. It is not from a renter, so we passed it on to you.`;
+  // S841g: the sign-in code went straight into the open window.
+  if (codeTyped) return `${base} We already typed the code into your open sign-in window. If the window still asks for it, type it there yourself.`;
   return confirmed
     ? `${base} We already opened its confirm link for you. If ${siteName} still says your email is not confirmed, use the button below.`
     : base;
@@ -123,3 +125,42 @@ export function siteConfirmLink(input: {
   return null;
 }
 
+
+// ---------------------------------------------------------------------------
+// S841g: the site's one-time sign-in code. A site account made with "Make my
+// account" uses the Vacantless address, so Rentals.ca's login code lands here
+// while the landlord is in the sign-in window. Read only from Rentals.ca's
+// "Login Verification" email (real copy read 2026-11-25: "please enter the
+// one-time passcode below", six digits on their own line, "expire in fifteen
+// minutes"). Never from a password reset. Other sites: not yet, no sample.
+// ---------------------------------------------------------------------------
+
+/** The robot site a mail domain signs in to, or null. */
+export const SIGNIN_CODE_CHANNEL: Readonly<Record<string, string>> = { "rentals.ca": "rentals_ca" };
+
+const CODE_SUBJECT = /\b(verification required|login verification)\b/i;
+const CODE_INTRO = /one-time passcode/i;
+
+export function siteSigninCode(input: {
+  domain: string;
+  subject: string;
+  text: string | null;
+  html: string | null;
+}): { channel: string; code: string } | null {
+  const channel = SIGNIN_CODE_CHANNEL[input.domain];
+  if (!channel) return null;
+  const subject = input.subject.replace(/\s+/g, " ");
+  if (!CODE_SUBJECT.test(subject) || NOT_CONFIRM_SUBJECT.test(subject)) return null;
+  const text =
+    input.text && input.text.trim()
+      ? input.text
+      : (input.html ?? "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|td|tr|span|h\d)>/gi, "\n").replace(/<[^>]+>/g, " ");
+  const at = text.search(CODE_INTRO);
+  if (at < 0) return null;
+  // The first line after the intro that is exactly six digits.
+  for (const line of text.slice(at).split(/\n/).slice(1, 12)) {
+    const t = line.replace(/&nbsp;/g, " ").trim();
+    if (/^\d{6}$/.test(t)) return { channel, code: t };
+  }
+  return null;
+}

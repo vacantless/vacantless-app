@@ -13,14 +13,15 @@ import {
   cancelSiteSignin,
   confirmSiteSignin,
   failStalledSiteSignin,
+  prestartSiteSignin,
   readSiteSigninWindow,
   sendSiteSigninCode,
   startNextSiteSignin,
   type SiteSigninWindowRead,
 } from "./actions";
 
-/** S735: seconds between "done" and the next site's window opening. */
-const NEXT_DELAY_S = 6;
+/** S735: seconds between "done" and the next site's window opening. S841g: it is already starting, so 3. */
+const NEXT_DELAY_S = 3;
 
 /** S728: how long "starting" may last before the page gives up on it. */
 const STARTING_LIMIT_MS = 3 * 60_000;
@@ -48,6 +49,18 @@ export function WindowPanel({
   // S735: count down, then open the next site's window. "Stop here" cancels it.
   const [nextIn, setNextIn] = useState<number | null>(null);
   const [stopped, setStopped] = useState(false);
+  // S841g: the next site's window starts while this one is open, so it is
+  // ready when the landlord gets to it. "Stop here" closes it again.
+  const prestarted = useRef<string | null>(null);
+  const prestarting = useRef(false);
+  useEffect(() => {
+    if (!nextChannel || stopped || prestarting.current) return;
+    if (win.status !== "ready" && win.status !== "saving" && win.status !== "done") return;
+    prestarting.current = true;
+    void prestartSiteSignin(nextChannel).then((id) => {
+      prestarted.current = id;
+    });
+  }, [win.status, nextChannel, stopped]);
   useEffect(() => {
     if (win.status !== "done" || !nextChannel || stopped) return;
     if (nextIn == null) setNextIn(NEXT_DELAY_S);
@@ -125,7 +138,14 @@ export function WindowPanel({
           >
             Open it now
           </button>
-          <button type="button" onClick={() => setStopped(true)} className="text-sm text-gray-500 underline">
+          <button
+            type="button"
+            onClick={() => {
+              setStopped(true);
+              if (prestarted.current) void cancelSiteSignin(prestarted.current);
+            }}
+            className="text-sm text-gray-500 underline"
+          >
             Stop here
           </button>
         </div>

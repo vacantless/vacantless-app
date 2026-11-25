@@ -5,6 +5,8 @@ import { sendNotificationEmail } from "@/lib/email";
 import { adminEmails } from "@/lib/provisioning-server";
 import { canSetUpRobotSites } from "@/lib/billing";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
+import { loadSiteWork } from "@/lib/site-work-waiting-server";
+import { isSiteSigninChannel } from "@/lib/site-signin";
 import { coverageHealthLines } from "@/lib/posting-coverage";
 import { nodeHasBrotliFix } from "@/lib/image-url-import";
 import {
@@ -267,6 +269,31 @@ export async function GET(req: NextRequest) {
       .filter((s) => orgs.get(s.organization_id)?.robot && !isQuietNotificationOrg(s.organization_id))
       .map((s) => ({ org: orgName(s.organization_id), channel: s.channel, code: s.last_check_code })),
   };
+
+  // S841g: a signed-out site with nothing waiting there (S841d) is not a
+  // problem yet: the ads stay up and the landlord is asked once an ad waits.
+  // It still shows on the Sites page. Read only for accounts with a sign-out.
+  const workByOrg = new Map<string, Awaited<ReturnType<typeof loadSiteWork>>>();
+  const keptSignIns: typeof input.signIns = [];
+  const signOutRows = ((sessionRes.data ?? []) as { organization_id: string; channel: string }[]).filter(
+    (s) => orgs.get(s.organization_id)?.robot && !isQuietNotificationOrg(s.organization_id),
+  );
+  for (let i = 0; i < signOutRows.length; i++) {
+    const s = signOutRows[i];
+    const line = input.signIns[i];
+    if (!line) continue;
+    if (!isSiteSigninChannel(s.channel)) {
+      keptSignIns.push(line);
+      continue;
+    }
+    try {
+      if (!workByOrg.has(s.organization_id)) workByOrg.set(s.organization_id, await loadSiteWork(admin, s.organization_id));
+      if (workByOrg.get(s.organization_id)![s.channel].waiting) keptSignIns.push(line);
+    } catch {
+      keptSignIns.push(line); // a read error keeps the line (lean toward telling)
+    }
+  }
+  input.signIns = keptSignIns;
 
   // S754: available rentals missing from a site the account can post to.
   // Paying accounts only (Posting, or Agile), never Noam's quiet test accounts.

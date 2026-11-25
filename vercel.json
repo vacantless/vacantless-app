@@ -10,10 +10,6 @@
     {
       "path": "/api/cron/distribution-freshness",
       "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/warm",
-      "schedule": "*/5 * * * *"
     }
   ]
 }

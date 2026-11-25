@@ -112,6 +112,48 @@ export async function startSiteSignin(formData: FormData): Promise<void> {
   redirect(here(siteSigninHref(channel, propertyId)));
 }
 
+/**
+ * S841g: in one sitting, start the NEXT site's window while the landlord is
+ * still signing in to this one, so it is ready (about 60 to 95 seconds) when
+ * they get there. Same checks as startSiteSignin; reuses a window that is
+ * already open. Returns its id, or null. Never redirects.
+ */
+export async function prestartSiteSignin(channel: string): Promise<string | null> {
+  if (!isSiteSigninChannel(channel)) return null;
+  const who = await allowed();
+  if (!who || isHiddenForOrg(channel, who.orgId)) return null;
+  const access = await readRobotPostingAccess(createClient(), who.orgId);
+  if (!access.setup) return null;
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data: open } = await admin
+    .from(TABLE)
+    .select("id, status, expires_at")
+    .eq("organization_id", who.orgId)
+    .eq("channel", channel)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (open && siteSigninIsOpen(open.status as string) && Date.parse(open.expires_at as string) > Date.now()) {
+    return open.id as string;
+  }
+  const { data: created, error } = await admin
+    .from(TABLE)
+    .insert({ organization_id: who.orgId, channel, requested_by: who.userId, status: "starting", mode: "signin", prefill: null })
+    .select("id")
+    .single();
+  if (error || !created) return null;
+  const dispatched = await triggerSigninWindow(created.id as string, channel);
+  if (!dispatched) {
+    await admin
+      .from(TABLE)
+      .update({ status: "failed", detail: "dispatch", updated_at: new Date().toISOString() })
+      .eq("id", created.id);
+    return null;
+  }
+  return created.id as string;
+}
+
 /** S735: the window panel opens the next site in the chain (a client call, so it builds the form itself). */
 export async function startNextSiteSignin(channel: string, propertyId: string | null): Promise<void> {
   const fd = new FormData();

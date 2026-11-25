@@ -6,7 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getUserByIdCached } from "./auth-email-cache";
 import { loadExtraRecipients, withExtras } from "./message-recipients-server";
 import { sendSiteMailCopy } from "./email";
-import { linkOnSite, siteConfirmLink, siteMailCopyLead, siteMailCopySubject } from "./site-mail-pass";
+import { linkOnSite, siteConfirmLink, siteMailCopyLead, siteMailCopySubject, siteSigninCode } from "./site-mail-pass";
 
 /**
  * S817c: open a site's confirm link from the server, the way a click would.
@@ -43,6 +43,39 @@ export async function openSiteConfirmLink(
 
 const MAX_COPIES = 5;
 
+/** S841g: a code email older than its window's start is not for it; 30 minutes covers a 25-minute window. */
+const CODE_WINDOW_MINUTES = 30;
+
+/**
+ * S841g: type a site's emailed sign-in code into the landlord's open window,
+ * only when that window is showing the site's code box (detail enter_code).
+ * The worker types it into the box and clears it (S840 type_code). Never throws.
+ */
+export async function typeCodeIntoOpenWindow(
+  admin: SupabaseClient,
+  opts: { orgId: string; domain: string; subject: string; text: string | null; html: string | null },
+): Promise<boolean> {
+  try {
+    const found = siteSigninCode({ domain: opts.domain, subject: opts.subject, text: opts.text, html: opts.html });
+    if (!found) return false;
+    const since = new Date(Date.now() - CODE_WINDOW_MINUTES * 60_000).toISOString();
+    const { data } = await admin
+      .from("site_signin_windows")
+      .update({ type_code: found.code, type_code_at: new Date().toISOString() })
+      .eq("organization_id", opts.orgId)
+      .eq("channel", found.channel)
+      .eq("status", "ready")
+      .eq("detail", "enter_code")
+      .gte("created_at", since)
+      .select("id");
+    const typed = (data ?? []).length > 0;
+    console.log("site-mail-pass: sign-in code", { org: opts.orgId, site: opts.domain, typed });
+    return typed;
+  } catch {
+    return false;
+  }
+}
+
 export async function passSiteMailToOwners(
   admin: SupabaseClient,
   opts: {
@@ -56,7 +89,7 @@ export async function passSiteMailToOwners(
     text: string | null;
   },
   deps: { fetchImpl?: typeof fetch } = {},
-): Promise<{ sent: number; attempted: number; confirmed?: boolean }> {
+): Promise<{ sent: number; attempted: number; confirmed?: boolean; codeTyped?: boolean }> {
   try {
     // S817c: a "confirm your email" from the site: open its link for the landlord.
     let confirmed = false;
@@ -68,6 +101,10 @@ export async function passSiteMailToOwners(
         console.log("site-mail-pass: confirm link", { org: opts.orgId, site: opts.domain, opened: r.opened, status: r.status, host: r.host });
       }
     }
+    // S841g: a sign-in code for a window that is waiting on it.
+    const codeTyped = opts.domain
+      ? await typeCodeIntoOpenWindow(admin, { orgId: opts.orgId, domain: opts.domain, subject: opts.subject, text: opts.text, html: opts.html })
+      : false;
     const { data: org } = await admin
       .from("organizations")
       .select("name, reply_to_email, closed_by")
@@ -106,7 +143,7 @@ export async function passSiteMailToOwners(
           org_name: (org as { name: string | null } | null)?.name ?? null,
           site_name: opts.siteName,
           subject: siteMailCopySubject(opts.siteName, opts.subject),
-          lead_line: siteMailCopyLead(opts.siteName, confirmed),
+          lead_line: siteMailCopyLead(opts.siteName, confirmed, codeTyped),
           original_from: opts.from,
           html: opts.html,
           text: opts.text,
@@ -114,7 +151,7 @@ export async function passSiteMailToOwners(
       ),
     );
     const sent = results.filter((r) => r.status === "fulfilled" && r.value.sent).length;
-    return { sent, attempted: to.length, confirmed };
+    return { sent, attempted: to.length, confirmed, codeTyped };
   } catch (err) {
     console.error("site-mail-pass: copy failed", { error: err instanceof Error ? err.message : String(err) });
     return { sent: 0, attempted: 0 };

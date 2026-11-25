@@ -37,7 +37,6 @@ ok("form posts never move", r("www.vacantless.com", "/signup", "", "POST") === n
 ok("api never moves", r("www.vacantless.com", "/api/cron/sweep-all") === null && r("vacantless-app.vercel.app", "/api/x") === null);
 ok("the app host itself is served", r("app.vacantless.com", "/dashboard") === null);
 ok("host case does not matter", r("WWW.Vacantless.com", "/login") === "https://app.vacantless.com/login");
-ok("keep-warm page is never moved (S841c)", r("vacantless-app.vercel.app", "/warm") === null && r("www.vacantless.com", "/warm") === null);
 ok("unknown hosts (previews) are served", r("vacantless-app-git-x.vercel.app", "/dashboard") === null);
 
 // S700 behaviour kept: the old Vercel host moves every page.
