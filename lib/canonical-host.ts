@@ -14,6 +14,8 @@
 // ============================================================================
 
 export const LEGACY_APP_HOST = "vacantless-app.vercel.app";
+/** S841c: the page Vercel's cron opens every 5 minutes (app/warm/page.tsx). */
+export const WARM_PATH = "/warm";
 export const MARKETING_HOSTS = ["www.vacantless.com", "vacantless.com"] as const;
 
 /** Paths that need the visitor's login, or create it. */
@@ -49,6 +51,8 @@ export function canonicalRedirect(input: {
   const canonical = input.canonicalHost.toLowerCase();
   if (input.method !== "GET" && input.method !== "HEAD") return null;
   if (input.pathname.startsWith("/api/")) return null;
+  // S841c: the keep-warm ping is served on whatever host Vercel's cron calls.
+  if (input.pathname === WARM_PATH) return null;
   if (host === canonical) return null;
   const target = `https://${canonical}${input.pathname}${input.search}`;
   if (host === LEGACY_APP_HOST) return target;

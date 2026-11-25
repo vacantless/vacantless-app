@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
   const rules = {
     userAgent: "*",
     allow: "/",
-    disallow: ["/dashboard", "/api", "/kit"],
+    disallow: ["/dashboard", "/api", "/kit", "/warm"],
   };
 
   if (process.env.BROWSE_SURFACE_ENABLED !== "true") {

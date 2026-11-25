@@ -1,0 +1,29 @@
+// S841c: a 5-minute cron opens /warm so the server copy the dashboard uses
+// stays awake. Run: npx tsx scripts/test-s841c-keep-warm.ts
+import { readFileSync } from "node:fs";
+
+let pass = 0;
+let fail = 0;
+function ok(name: string, cond: boolean) {
+  if (cond) pass++;
+  else {
+    fail++;
+    console.error(`FAIL: ${name}`);
+  }
+}
+
+const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as { crons: { path: string; schedule: string }[] };
+const warm = vercel.crons.filter((c) => c.path === "/warm");
+ok("one /warm cron", warm.length === 1);
+ok("every 5 minutes", warm[0]?.schedule === "*/5 * * * *");
+ok("the other crons are kept", vercel.crons.some((c) => c.path === "/api/cron/reminders") && vercel.crons.some((c) => c.path === "/api/cron/distribution-freshness"));
+
+const page = readFileSync("app/warm/page.tsx", "utf8");
+ok("page is dynamic (a cached page wakes nothing)", page.includes('export const dynamic = "force-dynamic";'));
+ok("page is not indexed", page.includes("index: false"));
+ok("page reads nothing", !/supabase|createClient|fetch\(|await /.test(page.replace(/\/\/.*$/gm, "")));
+ok("robots keeps it out", readFileSync("app/robots.ts", "utf8").includes('"/warm"'));
+ok("host redirect skips it", readFileSync("lib/canonical-host.ts", "utf8").includes("if (input.pathname === WARM_PATH) return null;"));
+
+console.log(`s841c keep warm: ${pass} passed, ${fail} failed`);
+if (fail > 0) process.exit(1);

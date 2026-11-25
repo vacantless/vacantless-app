@@ -46,7 +46,7 @@ const loading = readFileSync("app/dashboard/loading.tsx", "utf8");
 assert.ok(loading.includes('aria-busy="true"'));
 const vercel = JSON.parse(readFileSync("vercel.json", "utf8"));
 assert.deepEqual(vercel.regions, ["yul1"]);
-assert.equal(vercel.crons.length, 2, "crons kept");
+assert.equal(vercel.crons.length, 3, "crons kept (S841c added /warm)");
 
 // S839b: a loading screen at the top only shows when the top section changes.
 // A link inside a section (Rentals list to one rental) needs one in that section.
