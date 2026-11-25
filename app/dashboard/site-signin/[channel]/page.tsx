@@ -197,7 +197,8 @@ export default async function SiteSigninPage({
         </div>
       )}
 
-      {access.allowed && recent && (
+      {/* S842b: every account may sign in (setup), so every account sees its window. */}
+      {access.setup && recent && (
         <WindowPanel
           channel={channel}
           nextChannel={nextChannel}

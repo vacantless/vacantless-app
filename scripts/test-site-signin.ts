@@ -126,6 +126,14 @@ async function main() {
     ok("no detail: normal sign-in copy", /sign in to your Rentals\.ca account/.test(plain.body), plain.body);
   }
 
+  {
+    // S842b: a Free account could start a window (setup) but never saw it
+    // (the panel needed the Posting add-on). The panel follows setup.
+    const page = readFileSync("app/dashboard/site-signin/[channel]/page.tsx", "utf8");
+    ok("window panel shows for every account that may sign in", page.includes("{access.setup && recent && ("));
+    ok("window panel no longer needs the add-on", !page.includes("{access.allowed && recent && ("));
+  }
+
   console.log(`\nsite-signin: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

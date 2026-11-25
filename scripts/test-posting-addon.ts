@@ -183,7 +183,8 @@ ok("relist refresh skips orgs without the add-on", fresh.includes('reason: "post
 const signinActions = read("app/dashboard/site-signin/[channel]/actions.ts");
 ok("sign-in start gated", signinActions.includes("readRobotPostingAccess") && signinActions.indexOf("readRobotPostingAccess") < signinActions.indexOf("triggerSigninWindow(created.id"));
 const signinPage = read("app/dashboard/site-signin/[channel]/page.tsx");
-ok("sign-in page shows the note, not the form", signinPage.includes("access.allowed &&") && signinPage.includes("POSTING_ADDON_NOTE"));
+// S842b: since S832b every account may sign in (setup); the add-on note shows only when it may not.
+ok("sign-in page shows the note, not the form", signinPage.includes("{!access.setup && (") && signinPage.includes("POSTING_ADDON_NOTE"));
 
 const pe = read("app/dashboard/properties/[id]/publish-everywhere.tsx");
 ok("site rows get the add-on lock", pe.includes("const locked = (row: ResolvedRow) => !robotPostingAllowed && isRobotPostedChannel(row.key);") && pe.includes("addonLocked={locked(row)}"));
