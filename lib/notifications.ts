@@ -679,9 +679,10 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     active: true,
   },
   // Pre-showing UNCONFIRMED nudge (S440, showing routing Slice 3). Audience
-  // operator; the mirror of the outcome nudge. When an assigned viewing is coming
-  // up (within ~24h) and hasn't been confirmed with the renter yet, the ASSIGNED
-  // AGENT gets ONE reminder with a one-tap {{agent_url}} link to their shared
+  // operator; the mirror of the outcome nudge. S843a: ONE list per agent per day,
+  // sent when their first unconfirmed viewing of the day is within ~3h (was one
+  // email per viewing at ~24h, which fired before the renter could answer). The
+  // ASSIGNED AGENT gets the list with a {{agent_url}} link to their shared
   // calendar, so an unconfirmed viewing doesn't silently slip and the lead agent
   // doesn't have to chase. Defaults to the assigned agent (always included via
   // audienceEmail, like leasing.showing_assigned); add recipients to CC the lead
@@ -694,11 +695,21 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     audience: "operator",
     label: "Unconfirmed viewing reminder",
     description:
-      "Before an assigned viewing, if it hasn't been confirmed with the renter yet, the assigned agent gets a one-tap reminder to confirm it - so nothing slips through the cracks. Defaults to the assigned agent; add recipients below to CC the lead agent for oversight. Off until you turn it on.",
-    tokens: [...COMMON_TOKENS, "agent_name", "lead_name", "showing_time", "agent_url"],
-    defaultSubject: "Please confirm your viewing - {{lead_name}} at {{property_address}}",
+      "About 3 hours before a showing agent's first viewing of the day that the renter has not confirmed, the agent gets one list of that day's viewings: who has not confirmed, with a phone number to text or call, and who has. One email for the day, not one per viewing. Defaults to the assigned agent; add recipients below to CC the lead agent. Off until you turn it on.",
+    tokens: [
+      ...COMMON_TOKENS,
+      "agent_name",
+      "day_label",
+      "count_label",
+      "unconfirmed_list",
+      "confirmed_list",
+      "agent_url",
+      "lead_name",
+      "showing_time",
+    ],
+    defaultSubject: "{{count_label}} not confirmed yet - {{day_label}}",
     defaultBody:
-      "Hi {{agent_name}}, your viewing with {{lead_name}} at {{property_address}} ({{showing_time}}) is coming up and hasn't been confirmed with the renter yet.\n\nConfirm it in one tap from your viewings page: {{agent_url}}\n\nThis lets the lead agent know the viewing is covered.",
+      "Hi {{agent_name}}, these renters have not confirmed their viewing on {{day_label}}. Text or call them, or expect a possible no-show.\n\nNot confirmed:\n{{unconfirmed_list}}\n\nConfirmed:\n{{confirmed_list}}\n\nYour viewings page has each renter's details and a one-tap Confirm: {{agent_url}}",
     defaultAccent: "#d97706",
     active: true,
   },

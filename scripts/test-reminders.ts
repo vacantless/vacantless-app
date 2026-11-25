@@ -208,7 +208,7 @@ ok("confirmation nudge route queries unresponded pending proposals",
     confirmationRoute.includes('.is("responded_at", null)'));
 ok("confirmation nudge route filters before one-shot stamp loop",
   confirmationRoute.indexOf("pendingRescheduleShowingIds") <
-    confirmationRoute.indexOf("for (const raw of eligibleRows as any[])"));
+    confirmationRoute.indexOf("for (const batch of batches)"));
 
 console.log(`\nreminders: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

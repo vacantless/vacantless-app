@@ -336,8 +336,11 @@ export const OUTCOME_NUDGE_SENT_COLUMN = "outcome_nudge_sent_at";
 // confirmation_nudge_sent_at after send so a re-run never double-sends.
 // ---------------------------------------------------------------------------
 
-// Nudge inside the 24h before a viewing's start.
-export const CONFIRMATION_NUDGE_LEAD_MS = 24 * HOUR_MS;
+// S843a: the nudge fires inside the 3h before a viewing's start (was 24h). At
+// 24h it went out in the same minute as the renter's own reminder, so it fired
+// on nearly every viewing before the renter could answer. At 3h the renter has
+// had the 24h and same-day reminders, and "still not confirmed" means something.
+export const CONFIRMATION_NUDGE_LEAD_MS = 3 * HOUR_MS;
 
 export type ConfirmationNudgeDueInput = {
   scheduledAtMs: number;
@@ -384,6 +387,111 @@ export function confirmationNudgeDue(input: ConfirmationNudgeDueInput): boolean 
 }
 
 export const CONFIRMATION_NUDGE_SENT_COLUMN = "confirmation_nudge_sent_at";
+
+// ---------------------------------------------------------------------------
+// S843a: ONE list per agent per day, not one email per viewing.
+//
+// Viewings come in blocks (six in two hours is normal). The agent gets a single
+// email when their first still-unconfirmed viewing of the day comes inside the
+// lead window, listing every viewing of theirs that same local day: the ones the
+// renter has not confirmed (to text or call) and the confirmed ones for context.
+// Every unconfirmed viewing in the list is stamped, so a later viewing of the
+// same day does not send a second email; one booked after the list went gets its
+// own when it comes due.
+// ---------------------------------------------------------------------------
+
+export type ConfirmationListRow = {
+  id: string;
+  agentId: string | null;
+  scheduledAtMs: number;
+  confirmed: boolean;
+  outcome: string | null;
+  alreadySent: boolean;
+};
+
+export type ConfirmationListBatch = {
+  agentId: string;
+  dayKey: string; // YYYY-MM-DD in the account's time zone
+  unconfirmed: string[]; // showing ids to stamp and list, earliest first
+  confirmed: string[]; // showing ids listed for context, earliest first
+};
+
+/** The local calendar day (YYYY-MM-DD) of an instant in a time zone. */
+export function localDayKey(ms: number, tz: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(ms));
+}
+
+export function confirmationListBatches(
+  rows: ConfirmationListRow[],
+  nowMs: number,
+  tz: string,
+  leadMs: number = CONFIRMATION_NUDGE_LEAD_MS,
+): ConfirmationListBatch[] {
+  const byAgent = new Map<string, ConfirmationListRow[]>();
+  for (const r of rows) {
+    if (!r.agentId) continue;
+    if (!Number.isFinite(r.scheduledAtMs)) continue;
+    if (r.outcome !== null && r.outcome !== "scheduled") continue; // closed
+    if (r.scheduledAtMs < nowMs) continue; // started or past
+    const list = byAgent.get(r.agentId) ?? [];
+    list.push(r);
+    byAgent.set(r.agentId, list);
+  }
+  const out: ConfirmationListBatch[] = [];
+  for (const [agentId, list] of byAgent) {
+    list.sort((a, b) => a.scheduledAtMs - b.scheduledAtMs);
+    const trigger = list.find((r) =>
+      confirmationNudgeDue({
+        scheduledAtMs: r.scheduledAtMs,
+        nowMs,
+        assigned: true,
+        confirmed: r.confirmed,
+        outcome: r.outcome,
+        alreadySent: r.alreadySent,
+        leadMs,
+      }),
+    );
+    if (!trigger) continue;
+    const dayKey = localDayKey(trigger.scheduledAtMs, tz);
+    const sameDay = list.filter((r) => localDayKey(r.scheduledAtMs, tz) === dayKey);
+    out.push({
+      agentId,
+      dayKey,
+      unconfirmed: sameDay.filter((r) => !r.confirmed && !r.alreadySent).map((r) => r.id),
+      confirmed: sameDay.filter((r) => r.confirmed).map((r) => r.id),
+    });
+  }
+  return out;
+}
+
+/** "4 of 6 viewings" for the list email's subject. */
+export function confirmationCountLabel(unconfirmed: number, total: number): string {
+  return `${unconfirmed} of ${total} viewing${total === 1 ? "" : "s"}`;
+}
+
+/** "1551 Assumption St, Unit 9" from a full address (street and unit only). */
+export function shortViewingAddress(address: string | null | undefined): string {
+  const parts = (address ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  if (parts.length === 0) return "the property";
+  return parts.slice(0, 2).join(", ");
+}
+
+/** One line of the list: "5:00 PM  Hagar, 1551 Assumption St, Unit 9 (519-555-0100)". */
+export function confirmationListLine(input: {
+  time: string;
+  name: string | null | undefined;
+  address: string | null | undefined;
+  contact?: string | null;
+}): string {
+  const name = input.name?.trim() || "A renter";
+  const contact = input.contact?.trim();
+  return `${input.time}  ${name}, ${shortViewingAddress(input.address)}${contact ? ` (${contact})` : ""}`;
+}
 
 // ---------------------------------------------------------------------------
 // Operator confirmation modes + auto-release (S522).

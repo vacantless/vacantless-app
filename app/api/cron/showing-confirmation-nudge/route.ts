@@ -13,14 +13,25 @@ import {
 import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
 import {
-  confirmationNudgeDue,
-  CONFIRMATION_NUDGE_LEAD_MS,
+  confirmationCountLabel,
+  confirmationListBatches,
+  confirmationListLine,
   CONFIRMATION_NUDGE_SENT_COLUMN,
+  HOUR_MS,
   pendingRescheduleShowingIds,
+  shortViewingAddress,
+  type ConfirmationListRow,
   type PendingRescheduleProposalRow,
 } from "@/lib/reminders";
 import { claimNull, releaseClaim } from "@/lib/claim-stamp";
 
+// S843a: this sweep now sends ONE LIST per agent per day, about 3 hours before
+// their first viewing of the day the renter has not confirmed: every viewing of
+// theirs that local day, unconfirmed ones first with a phone number, so they can
+// text or call before a no-show. It used to send one email per viewing at 24h,
+// in the same minute as the renter's own reminder, so it fired on nearly every
+// viewing. The notes below describe the original shape where they still hold.
+//
 // Pre-showing UNCONFIRMED-nudge sweep (S440, showing routing Slice 3) — the
 // mirror of the post-showing outcome nudge. When an assigned viewing is coming up
 // (within 24h) and still hasn't been confirmed with the renter, the ASSIGNED
@@ -80,6 +91,27 @@ function one<T>(rel: T | T[] | null | undefined): T | null {
   return (rel as T) ?? null;
 }
 
+// Read far enough ahead to hold the whole local day of a viewing that is due.
+const LIST_HORIZON_MS = 30 * HOUR_MS;
+
+function fmtTimeOnly(iso: string, tz: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(iso));
+}
+
+function fmtDayLabel(iso: string, tz: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(iso));
+}
+
 function fmtShowingTime(iso: string | null, tz: string): string {
   if (!iso) return "the scheduled time";
   return new Intl.DateTimeFormat("en-US", {
@@ -99,7 +131,8 @@ type ShowingRow = {
   outcome: string | null;
   confirmed_at: string | null;
   assigned_agent_id: string | null;
-  lead: { name: string | null } | null;
+  confirmation_nudge_sent_at: string | null;
+  lead: { name: string | null; phone: string | null; email: string | null } | null;
   property: { address: string | null } | null;
   assigned_agent: {
     name: string | null;
@@ -149,9 +182,10 @@ export async function GET(req: NextRequest) {
   }
 
   const nowMs = Date.now();
-  // The pre-showing band: scheduled_at in [now, now+LEAD] — future, within 24h.
+  // S843a: every open assigned viewing from now to 30h out, so one sweep holds
+  // the whole local day of whichever viewing has come due.
   const soonestIso = new Date(nowMs).toISOString();
-  const latestIso = new Date(nowMs + CONFIRMATION_NUDGE_LEAD_MS).toISOString();
+  const latestIso = new Date(nowMs + LIST_HORIZON_MS).toISOString();
 
   const summary: Summary = { ok: true, scanned: (orgs ?? []).length, sent: 0, skipped: 0, errors: 0, details: [] };
 
@@ -173,24 +207,20 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Upcoming assigned viewings in the band, unconfirmed, with an open outcome
-      // and (unless forced) no nudge sent yet. Per-row confirmationNudgeDue
-      // re-checks precisely.
-      let q = admin
+      // Confirmed and already-listed viewings are read too: confirmed ones ride
+      // along in the list, and the stamp decides what still needs a list.
+      const { data: showRows } = await admin
         .from("showings")
         .select(
-          "id, scheduled_at, outcome, confirmed_at, assigned_agent_id, " +
-            "lead:leads(name), property:properties(address), " +
+          "id, scheduled_at, outcome, confirmed_at, assigned_agent_id, confirmation_nudge_sent_at, " +
+            "lead:leads(name, phone, email), property:properties(address), " +
             "assigned_agent:showing_agents(name, email, agent_token, archived)",
         )
         .eq("organization_id", org.id)
         .not("assigned_agent_id", "is", null)
-        .is("confirmed_at", null)
         .gte("scheduled_at", soonestIso)
         .lte("scheduled_at", latestIso)
         .or("outcome.is.null,outcome.eq.scheduled");
-      if (!force) q = q.is("confirmation_nudge_sent_at", null);
-      const { data: showRows } = await q;
       const candidateRows = showRows ?? [];
       const candidateIds = (candidateRows as any[])
         .map((row) => row.id)
@@ -216,6 +246,26 @@ export async function GET(req: NextRequest) {
         );
       }
 
+      const byId = new Map<string, ShowingRow>();
+      const listRows: ConfirmationListRow[] = [];
+      for (const row of eligibleRows as unknown as ShowingRow[]) {
+        if (!row.scheduled_at) continue;
+        byId.set(row.id, row);
+        listRows.push({
+          id: row.id,
+          agentId: row.assigned_agent_id,
+          scheduledAtMs: new Date(row.scheduled_at).getTime(),
+          confirmed: row.confirmed_at != null,
+          outcome: row.outcome,
+          alreadySent: force ? false : row.confirmation_nudge_sent_at != null,
+        });
+      }
+      const batches = confirmationListBatches(listRows, nowMs, tz);
+      if (batches.length === 0) {
+        summary.skipped++;
+        continue;
+      }
+
       // Operator members, resolved once per org and only if needed (the fallback
       // for an assigned agent with no email on file).
       let operatorMembers: string[] | null = null;
@@ -237,65 +287,88 @@ export async function GET(req: NextRequest) {
         return operatorMembers;
       };
 
-      for (const raw of eligibleRows as any[]) {
-        const row = raw as ShowingRow;
+      for (const batch of batches) {
+        const claimed: string[] = [];
         try {
-          const scheduledAt = row.scheduled_at;
-          if (!scheduledAt) {
+          const first = byId.get(batch.unconfirmed[0] ?? "");
+          if (!first || !first.scheduled_at) {
             summary.skipped++;
             continue;
           }
-          const due = confirmationNudgeDue({
-            scheduledAtMs: new Date(scheduledAt).getTime(),
-            nowMs,
-            assigned: row.assigned_agent_id != null,
-            confirmed: row.confirmed_at != null,
-            outcome: row.outcome,
-            alreadySent: false, // SQL already excluded sent rows (or force re-sends)
-          });
-          if (!due) {
-            summary.skipped++;
-            continue;
-          }
-
-          const lead = one<{ name: string | null }>(row.lead);
-          const prop = one<{ address: string | null }>(row.property);
           const agent = one<{
             name: string | null;
             email: string | null;
             agent_token: string | null;
             archived: boolean | null;
-          }>(row.assigned_agent);
+          }>(first.assigned_agent);
           // An ARCHIVED agent's link is revoked (the /agent/[token] page 404s for
-          // it), so never send them the nudge or consume the one allowed send:
-          // skip WITHOUT stamping, so if the agent is un-archived (or the viewing
-          // reassigned) a later sweep still nudges. The lead agent already sees the
-          // viewing on the Overview awaiting-confirmation count. (Codex S440 P2.)
+          // it), so never send them the list or consume the stamps: skip WITHOUT
+          // stamping, so if the agent is un-archived (or the viewings reassigned)
+          // a later sweep still sends. (Codex S440 P2.)
           if (agent?.archived) {
             summary.skipped++;
             continue;
           }
-          // Without a token there is no /agent link to send — skip (defensive; the
+          // Without a token there is no /agent link to send; skip (defensive; the
           // 0117 backfill gives every agent a token).
           if (!agent?.agent_token) {
             summary.skipped++;
             continue;
           }
-          const leadName = lead?.name?.trim() || "a renter";
-          const address = prop?.address?.trim() || "the property";
+
+          // S742c: claim before sending, one stamp per listed viewing; released
+          // below when nothing was delivered. ?force=1 and ?dry=1 list without
+          // claiming (a forced row is already stamped; a dry run changes nothing).
+          let listIds: string[] = batch.unconfirmed;
+          if (!dry && !force) {
+            for (const id of batch.unconfirmed) {
+              const claim = await claimNull(admin, "showings", { id }, CONFIRMATION_NUDGE_SENT_COLUMN);
+              if (claim.outcome === "claimed") claimed.push(id);
+            }
+            listIds = claimed;
+          }
+          if (listIds.length === 0) {
+            summary.skipped++;
+            summary.details.push({ org: org.id, agent: batch.agentId, skipped: "already_claimed" });
+            continue;
+          }
+
+          const line = (id: string, withContact: boolean): string | null => {
+            const r = byId.get(id);
+            if (!r?.scheduled_at) return null;
+            const lead = one<{ name: string | null; phone: string | null; email: string | null }>(r.lead);
+            const prop = one<{ address: string | null }>(r.property);
+            return confirmationListLine({
+              time: fmtTimeOnly(r.scheduled_at, tz),
+              name: lead?.name,
+              address: prop?.address,
+              contact: withContact ? lead?.phone?.trim() || lead?.email?.trim() || "no phone on file" : null,
+            });
+          };
+          const unconfirmedLines = listIds.map((id) => line(id, true)).filter((x): x is string => !!x);
+          const confirmedLines = batch.confirmed.map((id) => line(id, false)).filter((x): x is string => !!x);
+          const firstListed = byId.get(listIds[0]) ?? first;
+          const firstLead = one<{ name: string | null }>(firstListed.lead);
+          const firstProp = one<{ address: string | null }>(firstListed.property);
+          const firstName = firstLead?.name?.trim() || "a renter";
           const agentEmail = agent.email?.trim() || null;
           const vars: Record<string, string> = {
             org_name: org.name ?? "",
-            property_address: address,
-            lead_name: leadName,
             agent_name: agent.name?.trim() || "there",
-            showing_time: fmtShowingTime(scheduledAt, tz),
+            day_label: fmtDayLabel(first.scheduled_at, tz),
+            count_label: confirmationCountLabel(listIds.length, listIds.length + confirmedLines.length),
+            unconfirmed_list: unconfirmedLines.join("\n"),
+            confirmed_list: confirmedLines.length > 0 ? confirmedLines.join("\n") : "None yet.",
             agent_url: `${APP_URL}/agent/${agent.agent_token}`,
+            // Kept for an account that customized the old one-viewing wording.
+            property_address: shortViewingAddress(firstProp?.address),
+            lead_name: listIds.length > 1 ? `${firstName} and ${listIds.length - 1} more` : firstName,
+            showing_time: fmtShowingTime(firstListed.scheduled_at, tz),
           };
 
           // The assigned agent is the natural recipient (audienceEmail = always
           // included). Only fall back to operator members when the agent has no
-          // email, so a routine confirmation reminder doesn't spam the whole team.
+          // email, so a routine reminder doesn't spam the whole team.
           const fallback = agentEmail ? [] : await ensureMembers();
 
           if (dry) {
@@ -309,24 +382,18 @@ export async function GET(req: NextRequest) {
             summary.sent++; // "would send"
             summary.details.push({
               org: org.id,
-              showing: row.id,
+              agent: batch.agentId,
+              showings: listIds,
               dry: true,
               enabled: isEventEnabled(setting),
               recipients,
               subject: rendered.subject,
+              body: rendered.body,
               agent_url: vars.agent_url,
             });
             continue;
           }
 
-          // S742c: claim the one allowed nudge before sending; released below
-          // when nothing was delivered, so the retry-once rule still holds.
-          const claim = await claimNull(admin, "showings", { id: row.id }, CONFIRMATION_NUDGE_SENT_COLUMN);
-          if (claim.outcome !== "claimed") {
-            summary.skipped++;
-            summary.details.push({ org: org.id, showing: row.id, skipped: claim.outcome === "taken" ? "already_claimed" : `claim_failed:${claim.error}` });
-            continue;
-          }
           const result = await sendOrgNotification({
             client: admin,
             org: {
@@ -340,19 +407,21 @@ export async function GET(req: NextRequest) {
             audienceEmail: agentEmail,
             operatorFallback: fallback,
             vars,
-            action: { label: "Confirm the viewing", url: vars.agent_url },
+            action: { label: "Open my viewings", url: vars.agent_url },
           });
 
-          // The email IS the product action, so only stamp confirmation_nudge_sent_at
-          // when at least one email actually sent. A provider failure / empty
-          // recipient resolution must NOT consume the one allowed nudge — leave the
-          // row unstamped so the next sweep retries once the cause clears.
+          // The email IS the product action, so the stamps stand only when at
+          // least one email actually sent. A provider failure / empty recipient
+          // resolution must NOT consume them: release so the next sweep retries.
           if (!result.delivered) {
-            await releaseClaim(admin, "showings", { id: row.id }, { [CONFIRMATION_NUDGE_SENT_COLUMN]: null });
+            for (const id of claimed) {
+              await releaseClaim(admin, "showings", { id }, { [CONFIRMATION_NUDGE_SENT_COLUMN]: null });
+            }
             summary.skipped++;
             summary.details.push({
               org: org.id,
-              showing: row.id,
+              agent: batch.agentId,
+              showings: listIds,
               sent: false,
               not_stamped: true,
               reason: result.skipped ?? "send_failed",
@@ -362,10 +431,16 @@ export async function GET(req: NextRequest) {
           }
 
           summary.sent++;
-          summary.details.push({ org: org.id, showing: row.id, sent: true });
+          summary.details.push({ org: org.id, agent: batch.agentId, showings: listIds, sent: true });
         } catch (e: any) {
+          // A throw after claiming must not eat the day's list: hand the stamps back.
+          for (const id of claimed) {
+            try {
+              await releaseClaim(admin, "showings", { id }, { [CONFIRMATION_NUDGE_SENT_COLUMN]: null });
+            } catch {}
+          }
           summary.errors++;
-          summary.details.push({ org: org.id, showing: row?.id, error: `row_threw:${String(e?.message ?? e)}` });
+          summary.details.push({ org: org.id, agent: batch.agentId, error: `batch_threw:${String(e?.message ?? e)}` });
         }
       }
     } catch (e: any) {
