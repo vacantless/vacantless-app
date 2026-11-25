@@ -79,11 +79,16 @@ export function publicLeadSubmitEffects(input: {
   leadHasShowing?: boolean;
   hasSlot: boolean;
   outcome: "submitted" | "booked" | "booking_failed";
+  // S842a: a returning renter (S710, attached within 60 days) who already
+  // holds a future viewing on this rental. No second booking, no auto-reply
+  // with a booking link; the page names the viewing they have.
+  heldShowingAt?: string | null;
 }): PublicLeadSubmitEffects {
+  const held = Boolean(input.heldShowingAt);
   return {
     attemptBooking:
-      input.hasSlot && !(input.leadReused && input.leadHasShowing === true),
+      input.hasSlot && !held && !(input.leadReused && input.leadHasShowing === true),
     notifyNewLead: !input.leadReused,
-    sendAutoReply: !input.leadReused && input.outcome !== "booked",
+    sendAutoReply: !input.leadReused && !held && input.outcome !== "booked",
   };
 }

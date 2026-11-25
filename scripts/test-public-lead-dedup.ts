@@ -131,5 +131,32 @@ ok(
   migrationSource.includes("v_norm_email := nullif(lower(btrim(p_email)), '')"),
 );
 
+// S842a: a returning renter holding a future viewing does not book a second.
+{
+  const held = publicLeadSubmitEffects({
+    leadReused: false,
+    leadHasShowing: false,
+    hasSlot: true,
+    outcome: "submitted",
+    heldShowingAt: "2026-11-26T22:15:00.000Z",
+  });
+  ok("held viewing: no second booking", held.attemptBooking === false);
+  ok("held viewing: no auto-reply with a booking link", held.sendAutoReply === false);
+  ok("held viewing: team still hears the renter wrote again", held.notifyNewLead === true);
+  const none = publicLeadSubmitEffects({
+    leadReused: false,
+    leadHasShowing: false,
+    hasSlot: true,
+    outcome: "submitted",
+    heldShowingAt: null,
+  });
+  ok("no held viewing: returning renter still books (0334)", none.attemptBooking === true);
+  const actionsSource = readFileSync("app/r/[propertyId]/actions.ts", "utf8");
+  ok("action checks a held viewing only for returning renters", actionsSource.includes("lead_returning === true") && actionsSource.includes('.eq("outcome", "scheduled")'));
+  ok("action sends a held viewing to the already page", actionsSource.includes("submitted=already&at="));
+  const pageSource = readFileSync("app/r/[propertyId]/page.tsx", "utf8");
+  ok("page names the held viewing", pageSource.includes("You already have a viewing booked"));
+}
+
 console.log(`\npublic-lead-dedup: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

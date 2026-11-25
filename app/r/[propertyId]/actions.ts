@@ -524,6 +524,35 @@ export async function submitLead(formData: FormData) {
   const leadReused = payload.lead_reused === true;
   const leadHasShowing = payload.lead_has_showing === true;
 
+  // S842a: a returning renter (attached by S710 within 60 days) who already
+  // holds a future viewing on this rental must not book a second one by
+  // sending the form again (0334 opened booking to returning renters).
+  let heldShowingAt: string | null = null;
+  if (
+    !leadReused &&
+    slot.length > 0 &&
+    (payload as { lead_returning?: boolean }).lead_returning === true
+  ) {
+    try {
+      const heldAdmin = createAdminClient();
+      if (heldAdmin) {
+        const { data: held } = await heldAdmin
+          .from("showings")
+          .select("scheduled_at")
+          .eq("lead_id", payload.lead_id)
+          .eq("property_id", propertyId)
+          .eq("outcome", "scheduled")
+          .gt("scheduled_at", new Date().toISOString())
+          .order("scheduled_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        heldShowingAt = (held as { scheduled_at?: string } | null)?.scheduled_at ?? null;
+      }
+    } catch {
+      heldShowingAt = null;
+    }
+  }
+
   // S767: a renter who first wrote in the Marketplace chat (saved by the
   // helper or Quick replies, name only) and now books with the link: this new
   // lead takes that place, so there is one renter, not two. Best effort.
@@ -538,6 +567,7 @@ export async function submitLead(formData: FormData) {
     leadHasShowing,
     hasSlot: slot.length > 0,
     outcome,
+    heldShowingAt,
   });
 
   // Tell the leasing team a new lead landed (best-effort; never blocks the
@@ -578,6 +608,7 @@ export async function submitLead(formData: FormData) {
     leadHasShowing,
     hasSlot: slot.length > 0,
     outcome,
+    heldShowingAt,
   });
 
   // --- Auto-reply path (no slot, or booking failed) -----------------------
@@ -633,8 +664,19 @@ export async function submitLead(formData: FormData) {
   }
 
   // A booked viewing closes the retry loop — drop the saved-lead cookie.
-  if (outcome === "booked") {
+  if (outcome === "booked" || heldShowingAt) {
     cookies().delete(savedLeadCookieName(propertyId));
+  }
+
+  if (heldShowingAt) {
+    redirect(
+      withTracking(
+        `/r/${propertyId}?submitted=already&at=${encodeURIComponent(heldShowingAt)}`,
+        listingPostId,
+        sourceHint,
+        utmSource,
+      ),
+    );
   }
 
   const submittedState =

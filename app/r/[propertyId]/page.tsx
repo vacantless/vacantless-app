@@ -10,7 +10,7 @@ import { hasEntitlement } from "@/lib/billing";
 import { submitLead, rebookSavedLead, joinWaitlist } from "./actions";
 import { InquiryForm } from "./inquiry-form";
 import { PhotoGallery } from "./photo-gallery";
-import { generateSlots, type Availability } from "@/lib/booking";
+import { formatSlotLong, generateSlots, type Availability } from "@/lib/booking";
 import { affordabilityHintIncomeCents } from "@/lib/screening";
 import { accessibleBrand, brandGradientCss, DEFAULT_BRAND_COLOR } from "@/lib/brand-theme";
 import { Icons } from "@/components/icons";
@@ -262,6 +262,7 @@ export default async function PublicListingPage({
   params: { propertyId: string };
   searchParams: {
     submitted?: string;
+    at?: string;
     texted?: string;
     error?: string;
     p?: string;
@@ -471,6 +472,13 @@ export default async function PublicListingPage({
   ];
 
   const booked = searchParams.submitted === "booked";
+  // S842a: a returning renter sent the form again while holding a viewing.
+  const alreadyAt =
+    searchParams.submitted === "already" &&
+    typeof searchParams.at === "string" &&
+    Number.isFinite(Date.parse(searchParams.at))
+      ? searchParams.at
+      : null;
   const bookingRequiresConfirmation =
     l.booking_requires_confirmation === true;
   // The renter's chosen time was taken before we could book it (audit B1). Their
@@ -892,14 +900,18 @@ export default async function PublicListingPage({
                 <Icons.check className="h-6 w-6" />
               </span>
               <h2 className="text-xl font-bold text-gray-900">
-                {booked
+                {alreadyAt
+                  ? "You already have a viewing booked"
+                  : booked
                   ? bookingRequiresConfirmation
                     ? "Your viewing request is in!"
                     : "Your viewing is booked!"
                   : "Thanks, we got your inquiry!"}
               </h2>
               <p className="mt-2 text-sm text-gray-600">
-                {booked
+                {alreadyAt
+                  ? `Your viewing is on ${formatSlotLong(alreadyAt, av?.timezone || "America/Toronto")}. To change it, use the link in your confirmation email or reply to it.`
+                  : booked
                   ? bookingRequiresConfirmation
                     ? `${searchParams.texted === "1" ? "We've emailed and texted you the details." : "We've emailed you the details."} Someone from ${l.org_name} will reach out to confirm before your viewing.`
                     : `${searchParams.texted === "1" ? "We've emailed and texted you the details." : "We've emailed you the details."} ${l.org_name} will see you then.`
