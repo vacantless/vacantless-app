@@ -21,7 +21,10 @@ ok("the other crons are kept", vercel.crons.some((c) => c.path === "/api/cron/re
 const page = readFileSync("app/warm/page.tsx", "utf8");
 ok("page is dynamic (a cached page wakes nothing)", page.includes('export const dynamic = "force-dynamic";'));
 ok("page is not indexed", page.includes("index: false"));
-ok("page reads nothing", !/supabase|createClient|fetch\(|await /.test(page.replace(/\/\/.*$/gm, "")));
+// S841f: it now touches the database and the sign-in service, and shows none of it.
+ok("page asks the database one tiny question", page.includes('select("id", { count: "exact", head: true }).limit(1)'));
+ok("page asks the sign-in service if it is up", page.includes("/auth/v1/health"));
+ok("page shows nothing it read", page.includes("return <p>ok</p>;") && (page.match(/return </g) ?? []).length === 1);
 ok("robots keeps it out", readFileSync("app/robots.ts", "utf8").includes('"/warm"'));
 ok("host redirect skips it", readFileSync("lib/canonical-host.ts", "utf8").includes("if (input.pathname === WARM_PATH) return null;"));
 
