@@ -110,6 +110,12 @@ async function attemptBooking(
       );
       if (bookErr) {
         slotTaken = true;
+        // S841h: say why in the logs. For three weeks every returning renter
+        // was refused ("Booking not allowed") and the page only said the time
+        // was taken, so nobody saw it. No renter details in the line.
+        if (!/just taken/i.test(bookErr.message ?? "")) {
+          console.error("[public-booking] refused", { property: propertyId, reason: (bookErr.message ?? "").slice(0, 120) });
+        }
       }
       if (!bookErr && bookData) {
         booked = true;
