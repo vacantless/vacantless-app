@@ -32,6 +32,11 @@ const got = siteSigninCode({ domain: "rentals.ca", subject, text, html: null });
 ok("reads the six-digit code", got?.code === "482913" && got?.channel === "rentals_ca", got);
 const html = `<p>Login Verification</p><p>please enter the one-time passcode below when prompted</p><span style="letter-spacing:10px">482913</span><p>Copyright 2026</p>`;
 ok("reads it from the html when there is no text", siteSigninCode({ domain: "rentals.ca", subject, text: null, html })?.code === "482913");
+// S842c: the real text part from Postmark, decoded (2026-11-25, code changed): one paragraph.
+const oneLine = "Login Verification You are receiving this email because there was a recent login attempt on your Rentals.ca account. For your security, and to prevent abusive login attempts, we require two-factor authentication. To confirm you are an authorized user, please enter the one-time passcode below when prompted on the page. 530617 Please note that this code will expire in fifteen minutes. If you have received this code in error, we recommend changing the password on your account. Rentals.ca - 191 Niagara Street Unit 100 Toronto, ON, M5V 1C9 Copyright \u00a9 2026 Rentals.ca , Inc.";
+ok("reads the code from the one-paragraph text part", siteSigninCode({ domain: "rentals.ca", subject: "Your Rentals.ca Listing - Verification Required", text: oneLine, html: null })?.code === "530617");
+ok("falls back to the html when the text has no code", siteSigninCode({ domain: "rentals.ca", subject, text: "Login Verification. Open the html version.", html })?.code === "482913");
+ok("never a longer number", siteSigninCode({ domain: "rentals.ca", subject, text: "the one-time passcode below 1234567 and M5V 1C9", html: null }) === null);
 ok("never the copyright year", siteSigninCode({ domain: "rentals.ca", subject, text: text.replace("482913", ""), html: null }) === null);
 ok("not from another site yet", siteSigninCode({ domain: "zumper.com", subject, text, html: null }) === null);
 ok("not from a password reset", siteSigninCode({ domain: "rentals.ca", subject: "Reset your password - Verification Required", text, html: null }) === null);

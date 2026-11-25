@@ -151,16 +151,20 @@ export function siteSigninCode(input: {
   if (!channel) return null;
   const subject = input.subject.replace(/\s+/g, " ");
   if (!CODE_SUBJECT.test(subject) || NOT_CONFIRM_SUBJECT.test(subject)) return null;
-  const text =
-    input.text && input.text.trim()
-      ? input.text
-      : (input.html ?? "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|td|tr|span|h\d)>/gi, "\n").replace(/<[^>]+>/g, " ");
-  const at = text.search(CODE_INTRO);
-  if (at < 0) return null;
-  // The first line after the intro that is exactly six digits.
-  for (const line of text.slice(at).split(/\n/).slice(1, 12)) {
-    const t = line.replace(/&nbsp;/g, " ").trim();
-    if (/^\d{6}$/.test(t)) return { channel, code: t };
+  // S842c: try the text part, then the html. Rentals.ca's real text part is
+  // ONE paragraph ("...when prompted on the page. 117704 Please note..."), so
+  // the code is the first six-digit word after the intro, own line or not.
+  const fromHtml = (input.html ?? "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|td|tr|span|h\d)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ");
+  for (const body of [input.text ?? "", fromHtml]) {
+    if (!body.trim()) continue;
+    const at = body.search(CODE_INTRO);
+    if (at < 0) continue;
+    const after = body.slice(at).replace(/&nbsp;/g, " ").slice(0, 600);
+    const m = after.match(/(?:^|\s)(\d{6})(?=\s|$)/);
+    if (m) return { channel, code: m[1] };
   }
   return null;
 }
