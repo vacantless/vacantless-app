@@ -1,3 +1,4 @@
+import { bootMark } from "@/lib/boot-mark";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient, getRequestUser } from "@/lib/supabase/server";
@@ -30,6 +31,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  console.log(bootMark("dashboard"));
   const supabase = createClient();
   const user = await getRequestUser();
   if (!user) redirect("/login");

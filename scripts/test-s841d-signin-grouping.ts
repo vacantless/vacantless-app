@@ -140,5 +140,11 @@ const server = readFileSync("lib/site-work-waiting-server.ts", "utf8");
 ok("reads live ads and open jobs only", server.includes('.eq("status", "live")') && server.includes('"needs_login"'));
 ok("sign-in pages carry due-soon sites", readFileSync("app/dashboard/site-signin/page.tsx", "utf8").includes("loadDueSoonSites(") && readFileSync("app/dashboard/site-signin/[channel]/page.tsx", "utf8").includes("loadDueSoonSites("));
 
+// S841e: a finished sign-in starts the site's other waiting work at once.
+const act = readFileSync("app/dashboard/site-signin/[channel]/actions.ts", "utf8");
+ok("a finished sign-in still starts posts", act.includes("void triggerPostNow();"));
+ok("and the site's renewals, edits and takedowns", act.includes("signinOpensAtHome(ch) ? triggerRentalsTakedown() : triggerTakedownNow()"));
+ok("the window read knows its site", act.includes("expires_at, updated_at, channel"));
+
 console.log(`s841d signin grouping: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -5,10 +5,12 @@
 // Vercel's cron opens this tiny page every 5 minutes (vercel.json) to keep one
 // copy awake. It reads nothing and is not indexed.
 import type { Metadata } from "next";
+import { bootMark } from "@/lib/boot-mark";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 export default function WarmPage() {
+  console.log(bootMark("warm"));
   return <p>ok</p>;
 }

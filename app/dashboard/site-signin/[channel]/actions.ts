@@ -19,7 +19,8 @@ import {
   cleanSigninCode,
 } from "@/lib/site-signin";
 import { triggerSigninWindow } from "@/lib/site-signin-dispatch";
-import { triggerPostNow } from "@/lib/post-now";
+import { triggerPostNow, triggerRentalsTakedown, triggerTakedownNow } from "@/lib/post-now";
+import { signinOpensAtHome } from "@/lib/site-signin";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 
 const FORBIDDEN = "/dashboard/properties?forbidden=1";
@@ -134,7 +135,7 @@ export async function readSiteSigninWindow(id: string): Promise<SiteSigninWindow
   const supabase = createClient();
   const { data } = await supabase
     .from(TABLE)
-    .select("id, status, view_url, detail, expires_at, updated_at")
+    .select("id, status, view_url, detail, expires_at, updated_at, channel")
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
@@ -144,7 +145,15 @@ export async function readSiteSigninWindow(id: string): Promise<SiteSigninWindow
   // keep starting it. Never blocks the read.
   if (data.status === "done") {
     const at = Date.parse(String(data.updated_at ?? ""));
-    if (!Number.isNaN(at) && Date.now() - at < 120_000) void triggerPostNow();
+    if (!Number.isNaN(at) && Date.now() - at < 120_000) {
+      void triggerPostNow();
+      // S841e: a sign-in is short-lived (Rentals.ca: 2 to 3 days), so use it at
+      // once for everything else waiting on that site, not only new posts.
+      // Rentals.ca: the home check (renewals, takedowns, slot switches).
+      // Kijiji and Zumper: edits and takedowns.
+      const ch = String(data.channel ?? "");
+      if (isSiteSigninChannel(ch)) void (signinOpensAtHome(ch) ? triggerRentalsTakedown() : triggerTakedownNow());
+    }
   }
   return {
     id: data.id as string,

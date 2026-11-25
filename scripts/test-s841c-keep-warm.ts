@@ -25,5 +25,9 @@ ok("page reads nothing", !/supabase|createClient|fetch\(|await /.test(page.repla
 ok("robots keeps it out", readFileSync("app/robots.ts", "utf8").includes('"/warm"'));
 ok("host redirect skips it", readFileSync("lib/canonical-host.ts", "utf8").includes("if (input.pathname === WARM_PATH) return null;"));
 
+// S841e: boot marks while the cold start is measured (flip to "gone" when read).
+ok("warm logs its boot mark", page.includes('bootMark("warm")'));
+ok("dashboard logs its boot mark", readFileSync("app/dashboard/layout.tsx", "utf8").includes('bootMark("dashboard")'));
+
 console.log(`s841c keep warm: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
