@@ -51,6 +51,8 @@ import { isHiddenForOrg } from "@/lib/posting-lanes";
 import { droppedAdNotices, type DroppedAdNotice } from "@/lib/site-row-notes";
 import { loadPostingCoverage } from "@/lib/posting-coverage-load";
 import { needsYouNotices } from "@/lib/needs-you";
+import { loadSiteWork } from "@/lib/site-work-waiting-server";
+import { isSiteSigninChannel } from "@/lib/site-signin";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { hasRenterEmails, renterEmailNotices, type RenterEmailNotice } from "@/lib/renter-emails";
 import { readLiveEmailSites, readRenterEmailEvents } from "@/lib/renter-emails-read";
@@ -675,10 +677,16 @@ export default async function OverviewPage({ searchParams }: OverviewPageProps) 
   }
   comingVacant.sort((a, b) => a.daysUntilVacant - b.daysUntilVacant);
 
+  // S841d: a signed-out site earns its card only when an ad is waiting to go
+  // up, change, come down or renew there (lib/site-work-waiting). Read only
+  // when a site is signed out, so a normal day costs no extra question.
+  const anySiteSignedOut = Object.values(siteStateByChannel).some((st) => st === "dead_session");
+  const siteWork = robotAccess.setup && anySiteSignedOut ? await loadSiteWork(supabase, org.id, timeZone) : null;
   const needsYou = needsYouNotices({
     postingAllowed: robotAccess.setup,
     tileStateByChannel: siteStateByChannel,
     hiddenFor: (c) => isHiddenForOrg(c, org.id),
+    nothingWaiting: (c) => (siteWork && isSiteSigninChannel(c) ? !siteWork[c].waiting : false),
   });
   // S805: an ad a site took down while the rental is still available.
   let droppedAds: DroppedAdNotice[] = [];

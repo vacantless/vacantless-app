@@ -1,3 +1,4 @@
+import { loadDueSoonSites } from "@/lib/site-work-waiting-server";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ensureIngestAddress } from "@/lib/ingest-address-server";
@@ -100,7 +101,9 @@ export default async function SiteSigninPage({
     const tiles = await listChannelTileStatuses(org.id);
     const stateByChannel: Record<string, string> = {};
     for (const t of tiles) stateByChannel[t.channel] = t.state;
-    chainSteps = buildSigninChain(stateByChannel, (c) => isHiddenForOrg(c, org.id));
+    // S841d: a site late in a sign-in that usually ends soon joins the sitting.
+    const dueSoon = await loadDueSoonSites(supabase, org.id);
+    chainSteps = buildSigninChain(stateByChannel, (c) => isHiddenForOrg(c, org.id), dueSoon.map((d) => d.channel));
     nextChannel = nextSigninChannel(chainSteps, channel);
   }
   const intro = siteSigninView(channel, null);

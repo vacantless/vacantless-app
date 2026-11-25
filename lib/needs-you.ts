@@ -27,6 +27,8 @@ export type NeedsYouInput = {
   /** Tile state by channel key (linked, not_linked, dead_session, checking, ...). */
   tileStateByChannel: Readonly<Record<string, string | null | undefined>>;
   hiddenFor?: (channel: string) => boolean;
+  /** S841d: a signed-out site with nothing to post, change, take down or renew needs nobody yet (lib/site-work-waiting). */
+  nothingWaiting?: (channel: string) => boolean;
 };
 
 /**
@@ -40,6 +42,7 @@ export function needsYouNotices(input: NeedsYouInput): NeedsYouNotice[] {
   for (const channel of SITE_SIGNIN_ORDER) {
     if (hidden(channel)) continue;
     if (input.tileStateByChannel[channel] !== "dead_session") continue;
+    if (input.nothingWaiting?.(channel)) continue;
     const name = SITE_SIGNIN_LABEL[channel];
     out.push({
       channel,

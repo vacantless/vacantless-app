@@ -18,6 +18,8 @@ import { listChannelTileStatuses } from "@/app/dashboard/properties/actions";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
 import { POSTING_ADDON_HREF, POSTING_ADDON_NOTE } from "@/lib/billing";
 import { startSiteSignin } from "./[channel]/actions";
+import { loadDueSoonSites } from "@/lib/site-work-waiting-server";
+import { dueSoonLine } from "@/lib/site-work-waiting";
 
 export const dynamic = "force-dynamic";
 
@@ -51,13 +53,16 @@ export default async function SiteSigninChainPage({
     if (owned?.id) propertyId = owned.id as string;
   }
 
-  const [tiles, access] = await Promise.all([
+  const [tiles, access, dueSoon] = await Promise.all([
     listChannelTileStatuses(org.id),
     readRobotPostingAccess(supabase, org.id),
+    loadDueSoonSites(supabase, org.id),
   ]);
   const stateByChannel: Record<string, string> = {};
   for (const t of tiles) stateByChannel[t.channel] = t.state;
-  const chain = buildSigninChain(stateByChannel, (c) => isHiddenForOrg(c, org.id));
+  // S841d: a site late in a sign-in that usually ends soon joins the sitting.
+  const chain = buildSigninChain(stateByChannel, (c) => isHiddenForOrg(c, org.id), dueSoon.map((d) => d.channel));
+  const soonBy = new Map(dueSoon.map((d) => [d.channel, d]));
   const first = nextSigninChannel(chain, null);
   const shown = chain.filter((s) => s.state !== "off");
   const backHref = propertyId ? `/dashboard/sites?property=${propertyId}` : "/dashboard/sites";
@@ -98,7 +103,14 @@ export default async function SiteSigninChainPage({
               >
                 {step.state === "done" ? "✓" : i + 1}
               </span>
-              <span className="font-semibold text-gray-900">{step.label}</span>
+              <span>
+                <span className="font-semibold text-gray-900">{step.label}</span>
+                {step.soon && soonBy.get(step.channel) && (
+                  <span className="mt-0.5 block text-xs text-gray-600">
+                    {dueSoonLine(step.label, soonBy.get(step.channel)!.ageDays, soonBy.get(step.channel)!.usualDays)} Worth doing now.
+                  </span>
+                )}
+              </span>
             </span>
             <span className="text-xs text-gray-600">
               {step.state === "done" ? (
@@ -126,7 +138,7 @@ export default async function SiteSigninChainPage({
           <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             You need an account on each site first.{" "}
             {shown
-              .filter((s) => s.state === "todo")
+              .filter((s) => s.state === "todo" && !s.soon)
               .map((s) => (
                 <a
                   key={s.channel}

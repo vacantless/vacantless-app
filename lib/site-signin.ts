@@ -258,6 +258,8 @@ export type SiteSigninChainStep = {
   label: string;
   /** done = a session we can post from; todo = needs a sign-in; off = hidden for this org. */
   state: "done" | "todo" | "off";
+  /** S841d: still signed in, but late in a sign-in that usually ends soon; offered in the same sitting. */
+  soon?: true;
 };
 
 /** A tile state that means "no usable session yet". */
@@ -268,12 +270,15 @@ export function signinNeeded(tileState: string | null | undefined): boolean {
 export function buildSigninChain(
   tileStateByChannel: Readonly<Record<string, string | null | undefined>>,
   hiddenFor: (channel: SiteSigninChannel) => boolean = () => false,
+  dueSoon: readonly SiteSigninChannel[] = [],
 ): SiteSigninChainStep[] {
-  return SITE_SIGNIN_ORDER.map((channel) => ({
-    channel,
-    label: SITE_SIGNIN_LABEL[channel],
-    state: hiddenFor(channel) ? "off" : signinNeeded(tileStateByChannel[channel]) ? "todo" : "done",
-  }));
+  return SITE_SIGNIN_ORDER.map((channel) => {
+    if (hiddenFor(channel)) return { channel, label: SITE_SIGNIN_LABEL[channel], state: "off" as const };
+    if (signinNeeded(tileStateByChannel[channel])) return { channel, label: SITE_SIGNIN_LABEL[channel], state: "todo" as const };
+    // S841d: a site that still works but is due to sign out soon joins the sitting.
+    if (dueSoon.includes(channel)) return { channel, label: SITE_SIGNIN_LABEL[channel], state: "todo" as const, soon: true as const };
+    return { channel, label: SITE_SIGNIN_LABEL[channel], state: "done" as const };
+  });
 }
 
 /** The next site still to sign in to, after `after` (or the first one when `after` is null). */

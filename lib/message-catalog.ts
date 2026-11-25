@@ -456,7 +456,7 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
     group: "you",
     goesTo: "Account owners and admins.",
     title: "A rental site signed you out",
-    when: "Once, when Kijiji, Zumper or Rentals.ca signs out the robot. A text too on Growth with your mobile saved.",
+    when: "When a rental site signs out the robot and an ad is waiting there. One email names every site that needs you. A text too on Growth with your mobile saved.",
     channels: ["email", "text"],
     textNeedsTexting: true,
     control: { type: "always" },

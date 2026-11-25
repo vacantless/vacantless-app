@@ -64,11 +64,11 @@ ok("no auto-open over an open window", !shouldAutoOpenSignin({ openParam: "1", c
 ok("no auto-open right after a finished sign-in", !shouldAutoOpenSignin({ openParam: "1", canStart: true, recentStatus: "done" }));
 ok("auto-opens again after an expired window", shouldAutoOpenSignin({ openParam: "1", canStart: true, recentStatus: "expired" }));
 ok("window is 25 minutes", SIGNIN_WINDOW_MINUTES === 25);
-ok("email and text use the one-tap link", route.includes("siteSigninOpenHref(r.channel)"));
-ok("text claims its own stamp", route.includes('"lost_texted_at",'));
+ok("email and text use the one-tap link", route.includes("siteSigninOpenHref(first)"));
+ok("text claims its own stamp", route.includes('stampWhere(r), "lost_texted_at")'));
 ok("text only on Growth with texting on", route.includes("canUseRenterSms(org.plan)") && route.includes("org.sms_enabled === true"));
 ok("text respects quiet hours", route.includes("isWithinQuietHours("));
-ok("text goes from the account's number", route.includes("organizationId: r.organization_id"));
+ok("text goes from the account's number", route.includes("organizationId: orgId"));
 const page = readFileSync("app/dashboard/site-signin/[channel]/page.tsx", "utf8");
 ok("page auto-opens from the link", page.includes("shouldAutoOpenSignin(") && page.includes('<AutoSubmit formId="site-signin-start" />') && page.includes('id="site-signin-start"'));
 ok("no page says 10 minutes", !page.includes("10 minutes") && !readFileSync("app/dashboard/site-signin/page.tsx", "utf8").includes("10 minutes"));
