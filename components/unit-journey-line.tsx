@@ -11,12 +11,17 @@ export function UnitJourneyLine({ journey, compact = false }: { journey: Journey
             {i > 0 && <span aria-hidden className="text-gray-300">›</span>}
             <span
               className={
-                s.state === "done"
-                  ? "text-gray-400"
-                  : s.state === "current"
-                    ? "rounded-full bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-800"
-                    : "text-gray-300"
+                // S845: an amber step is the NEXT step. When every step is done
+                // the last one turns green, so a rented unit reads as rented.
+                journey.current == null && i === journey.steps.length - 1
+                  ? "rounded-full bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700"
+                  : s.state === "done"
+                    ? "text-gray-400"
+                    : s.state === "current"
+                      ? "rounded-full bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-800"
+                      : "text-gray-300"
               }
+              title={s.state === "current" ? "Next step" : undefined}
             >
               {s.label}
             </span>

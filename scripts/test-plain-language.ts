@@ -99,6 +99,7 @@ const SURFACES: Surface[] = [
   { file: "lib/trade-ratings.ts", mode: "ui" },
   { file: "app/dashboard/properties/[id]/next-action-card.tsx", mode: "ui" },
   { file: "app/dashboard/properties/[id]/ads-still-up-card.tsx", mode: "ui" },
+  { file: "app/dashboard/properties/[id]/mark-rented-card.tsx", mode: "ui" },
   // S734: the results card after posting and the Posting offer text.
   { file: "app/dashboard/properties/[id]/posted-results-card.tsx", mode: "ui" },
   { file: "lib/posted-results.ts", mode: "ui" },

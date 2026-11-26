@@ -263,6 +263,9 @@ const STAGE_TONE: Record<Stage, StageTone> = {
 /** Stages that end a turnover: the chip goes away 14 days after them. */
 const FINISHING: readonly Stage[] = ["live", "put_back_up", "rented", "lease_signed", "moved_in"];
 
+/** S845: taps that already say the unit is rented, or start the next turnover. */
+const AFTER_RENTED: readonly Stage[] = ["rented", "lease_signed", "moved_in", "notice_given", "under_construction", "being_cleaned"];
+
 /** Stages that come after the turnover work and before the ads go up. */
 const BEFORE_POSTING: Stage[] = ["ready_for_photos", "photographer_booked", "photos_in", "touch_up", "ready_to_post"];
 
@@ -297,7 +300,7 @@ export function daysAgoText(at: string, now: Date = new Date()): string {
 export function stageChip(
   latest: LatestStage | null | undefined,
   now: Date = new Date(),
-  opts: { liveAds?: number } = {},
+  opts: { liveAds?: number; leased?: boolean } = {},
 ): StageChip | null {
   if (!latest || !isStage(latest.stage)) return null;
   const stage = latest.stage;
@@ -310,6 +313,16 @@ export function stageChip(
   // Agile's Unit 3 read "Ready to post" and Unit 36 "Photos are in" while both
   // had live ads, because nobody tapped "Ads are up". With a live ad saved, a
   // before-posting stage shows as "Ads are up".
+  // S845: same rule for a rental marked leased. Unit 9 read "Waiting for
+  // deposit" on the Rentals list after it was leased.
+  if (opts.leased && !AFTER_RENTED.includes(stage)) {
+    return {
+      label: STAGE_LABEL.rented,
+      detail: "",
+      title: `Rented. The last tap was "${STAGE_LABEL[stage]}", ${daysAgoText(latest.at, now)}.`,
+      tone: STAGE_TONE.rented,
+    };
+  }
   if ((opts.liveAds ?? 0) > 0 && BEFORE_POSTING.includes(stage)) {
     return {
       label: STAGE_LABEL.live,

@@ -42,5 +42,7 @@ export async function markAdTakenDown(formData: FormData) {
     await resetLiveRunItemsForPost(supabase, org.id, row.id);
   }
   revalidatePath(back);
-  redirect(`${back}?ad=down#ads-still-up`);
+  // S845: name the post, so a second press lands on a new address and the
+  // card refreshes (the same URL twice left the Zumper row showing).
+  redirect(`${back}?ad=down&post=${encodeURIComponent(postId)}#ads-still-up`);
 }

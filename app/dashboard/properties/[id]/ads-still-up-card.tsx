@@ -1,5 +1,5 @@
 // S723: ads that still show a rental that has left the market (lib/ads-still-up.ts).
-import { siteName, type StillUpPost } from "@/lib/ads-still-up";
+import { handReason, siteName, type StillUpPost } from "@/lib/ads-still-up";
 import { markAdTakenDown } from "./ads-still-up-actions";
 
 export function AdsStillUpCard({
@@ -9,6 +9,7 @@ export function AdsStillUpCard({
   justMarked,
   facebookTakenDown,
   robotPending,
+  robotStuck,
 }: {
   propertyId: string;
   statusPhrase: string;
@@ -18,10 +19,13 @@ export function AdsStillUpCard({
   facebookTakenDown?: boolean;
   /** S754: sites where the robot is taking the ad down (a queued takedown item). */
   robotPending?: string[];
+  /** S845: sites where the robot tried and could not remove the ad (needs_operator). */
+  robotStuck?: string[];
 }) {
   const pending = new Set(robotPending ?? []);
   const robotPosts = posts.filter((p) => pending.has(p.portal));
   const handPosts = posts.filter((p) => !pending.has(p.portal));
+  const stuck = new Set(robotStuck ?? []);
   if (posts.length === 0) {
     return justMarked || facebookTakenDown ? (
       <p
@@ -52,14 +56,14 @@ export function AdsStillUpCard({
       )}
       {handPosts.length > 0 && (
         <p className="mt-1 text-amber-800">
-          {handPosts.length === 1 ? "This ad is" : "These ads are"} on your own site account, so only you can delete {handPosts.length === 1 ? "it" : "them"}. Open each one and delete
-          it on that site. Then press &quot;I took it down&quot;.
+          {robotPosts.length > 0 ? "For the rest, open" : "Open"} each ad below, delete it on that site, then press &quot;I took it down&quot;.
         </p>
       )}
       <ul className="mt-3 space-y-2">
         {handPosts.map((post) => (
           <li key={post.id} className="flex flex-wrap items-center gap-3">
             <span className="font-medium">{siteName(post.portal)}</span>
+            <span className="text-xs text-amber-800">{handReason(post.portal, stuck.has(post.portal))}</span>
             <a
               href={post.url ?? "#"}
               target="_blank"
@@ -90,3 +94,4 @@ export function AdsStillUpCard({
     </div>
   );
 }
+

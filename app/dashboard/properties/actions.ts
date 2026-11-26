@@ -2462,6 +2462,47 @@ export async function archiveProperty(formData: FormData) {
   redirect("/dashboard/properties?archived=1");
 }
 
+/** S845: one press from the rental page. The same steps, in the same order, as
+ * a crew "Rented" tap (lib/unit-progress-server markRentedAndTakeDown). */
+export async function markPropertyRented(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect("/dashboard/properties");
+  const back = `/dashboard/properties/${encodeURIComponent(id)}`;
+  await requireCapability("manage_properties", `${back}?forbidden=1`);
+  const org = await getCurrentOrg();
+  if (!org) redirect("/onboarding");
+  const supabase = createClient();
+  const { data: updated } = await supabase
+    .from("properties")
+    .update({ status: "leased" })
+    .eq("id", id)
+    .eq("organization_id", org.id)
+    .eq("status", "available")
+    .is("archived_at", null)
+    .select("id");
+  if (updated && updated.length > 0) {
+    const steps: Array<() => Promise<unknown>> = [
+      () => markLeaseWinner({ client: supabase, organizationId: org.id, propertyId: id }),
+      () => takeDownFacebookPagePosts({ supabase, organizationId: org.id, propertyId: id }),
+      () => queueRobotTakedowns({ supabase, organizationId: org.id, propertyId: id }),
+      () => notifyAdsStillUp({ supabase, org, propertyId: id }),
+      () => handleLeaseupAdLifecycle({ supabase, org, propertyId: id }),
+      () => notifyWaitingRentersRented({ client: supabase, org, propertyId: id }),
+      () => closeStaleConciergeItems(supabase, { organizationId: org.id, propertyId: id, trigger: "leased" }),
+    ];
+    for (const step of steps) {
+      try {
+        await step();
+      } catch (err) {
+        console.error("[mark-rented] step failed", err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+  revalidatePropertyList();
+  revalidatePath(back);
+  redirect(`${back}?rented=1#ads-still-up`);
+}
+
 export async function unarchiveProperty(formData: FormData) {
   await requireCapability("manage_properties", "/dashboard/properties?forbidden=1");
   const id = String(formData.get("id") ?? "");

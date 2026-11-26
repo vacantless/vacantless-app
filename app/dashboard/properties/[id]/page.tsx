@@ -149,6 +149,7 @@ import {
   parkingFeeLabel,
 } from "@/lib/listing-details";
 import { UnitJourneyLine } from "@/components/unit-journey-line";
+import { MarkRentedCard } from "./mark-rented-card";
 import {
   LAUNDRY_OPTIONS,
   laundryLabel,
@@ -1022,6 +1023,8 @@ export default async function PropertyDetailPage({
     published?: string;
     /** S734: we deleted the Facebook Page post when the rental left the market. */
     fbdown?: string;
+    /** S845: just marked rented from the rental page. */
+    rented?: string;
     /** S761: sites updating after an edit ("rentals_ca,zumper,hand:kijiji"). */
     adupdate?: string;
     dated?: string; // S830g: dated-line fix result
@@ -1431,7 +1434,7 @@ export default async function PropertyDetailPage({
     (row) => row.status === "live" && Boolean(row.url?.trim()),
   ).length;
   // S823b: a live ad outranks a before-posting crew tap on the chip.
-  const unitStage = unitArchived ? null : stageChip(latestUnitStage, new Date(nowMs), { liveAds: liveListingPostCount });
+  const unitStage = unitArchived ? null : stageChip(latestUnitStage, new Date(nowMs), { liveAds: liveListingPostCount, leased: p.status === "leased" });
   const postCounts = countLeadsByPost(leadRows);
 
   // S723: Rentals.ca free accounts show 3 ads at a time; warn before a 4th.
@@ -3341,10 +3344,13 @@ export default async function PropertyDetailPage({
           propertyId={p.id}
           statusPhrase={adsStatusPhrase(p.status, !!(p as { archived_at?: string | null }).archived_at)}
           posts={adsStillUp(postRows)}
-          justMarked={searchParams.ad === "down"}
+          justMarked={searchParams.ad === "down" || searchParams.rented === "1"}
           facebookTakenDown={searchParams.fbdown === "1"}
           robotPending={runItemRows
             .filter((r) => r.transport === "takedown" && (r.publish_status === "queued" || r.publish_status === "submitting"))
+            .map((r) => r.channel)}
+          robotStuck={runItemRows
+            .filter((r) => r.transport === "takedown" && r.publish_status === "needs_operator")
             .map((r) => r.channel)}
         />
       )}
@@ -3729,6 +3735,15 @@ export default async function PropertyDetailPage({
 
       {journey && <UnitJourneyLine journey={journey} />}
 
+      {p.status === "available" && !unitArchived && (
+        <MarkRentedCard
+          propertyId={p.id}
+          organizationId={p.organization_id}
+          posts={postRows}
+          crewMarked={!!journey?.gap?.includes("marked it rented")}
+        />
+      )}
+
       {/* S810: the demand check sits under the progress line, so how the ad
           is doing is read next to where the rental is (was in the Details tab). */}
       {demand && (
@@ -4098,6 +4113,11 @@ export default async function PropertyDetailPage({
                 </option>
               ))}
             </select>
+            {p.status === "available" && (
+              <p className="mt-1 text-xs text-amber-800">
+                Marking it rented takes your ads down. Waiting renters get the rented notice.
+              </p>
+            )}
           </div>
         </div>
         <details className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">

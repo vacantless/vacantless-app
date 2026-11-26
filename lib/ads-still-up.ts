@@ -102,3 +102,14 @@ export function rentalsCaCapNote(liveElsewhere: number): string | null {
   if (liveElsewhere < RENTALS_CA_FREE_LIVE_CAP) return null;
   return `You already have ${liveElsewhere} ads live on Rentals.ca. A free Rentals.ca account shows only 3 at a time, so this one would stay hidden. Take one down first, or move to a paid plan on Rentals.ca.`;
 }
+
+/** S845: why this one ad is the landlord's to delete, in plain words. */
+export function handReason(portal: string | null | undefined, robotTried: boolean): string {
+  if (robotTried) return "Our robot tried and could not remove it this time.";
+  if (portal === "facebook_feed") return "Your Facebook Page is not connected here, so we cannot delete the post.";
+  if (portal === "facebook") return "Facebook lets no app delete a Marketplace ad on a personal profile.";
+  if (portal === "kijiji" || portal === "zumper" || portal === "rentals_ca") {
+    return "This site is not signed in here, so our robot cannot reach the ad.";
+  }
+  return "We do not post to this site, so it is yours to delete.";
+}

@@ -571,7 +571,7 @@ export default async function PropertiesPage({
         statusLabel,
         statusTone,
         cover: coverByProperty.get(p.id) ?? null,
-        stage: stageChip(stageByProperty.get(p.id), chipNow, { liveAds: livePostCount }),
+        stage: stageChip(stageByProperty.get(p.id), chipNow, { liveAds: livePostCount, leased: p.status === "leased" }),
         journey: archivedView
           ? null
           : (() => {
