@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   MARKETPLACE_HELPER_AD_LIST_MIN_VERSION,
   MARKETPLACE_HELPER_APP_SOURCE,
+  MARKETPLACE_HELPER_MARKED_RENTED_MIN_VERSION,
   MARKETPLACE_HELPER_REJECT_MIN_VERSION,
   MARKETPLACE_HELPER_RENEW_MIN_VERSION,
   MARKETPLACE_HELPER_RENEW_WAIT_MIN_VERSION,
@@ -34,6 +35,7 @@ export function MarketplaceHelperSync({
   saveRenewWaits,
   saveRejected,
   saveReplied,
+  saveMarkedRented,
 }: {
   loadAds: () => Promise<HelperAdEntry[]>;
   saveCaptured: (items: unknown) => Promise<{ done: string[] }>;
@@ -41,6 +43,8 @@ export function MarketplaceHelperSync({
   saveRenewWaits: (items: unknown) => Promise<{ done: string[] }>;
   saveRejected: (items: unknown) => Promise<{ done: string[]; rentals: { propertyId: string; rental: string }[] }>;
   saveReplied: (items: unknown) => Promise<{ done: string[] }>;
+  /** S845: ads the landlord marked rented on Facebook (helper 1.2.8+). */
+  saveMarkedRented: (items: unknown) => Promise<{ done: string[] }>;
 }) {
   const router = useRouter();
   const [removed, setRemoved] = useState<{ propertyId: string; rental: string }[]>([]);
@@ -64,6 +68,20 @@ export function MarketplaceHelperSync({
         if (versionAtLeast(data.version, MARKETPLACE_HELPER_RENEW_WAIT_MIN_VERSION)) post({ type: "get_renew_waits" });
         if (versionAtLeast(data.version, MARKETPLACE_HELPER_REJECT_MIN_VERSION)) post({ type: "get_rejected" });
         if (versionAtLeast(data.version, MARKETPLACE_HELPER_REPLIED_MIN_VERSION)) post({ type: "get_replied" });
+        if (versionAtLeast(data.version, MARKETPLACE_HELPER_MARKED_RENTED_MIN_VERSION)) post({ type: "get_marked_rented" });
+        return;
+      }
+      if (isHelperMessage(data, "marked_rented_ads")) {
+        try {
+          const { done } = await saveMarkedRented(data.items);
+          if (done.length > 0) {
+            post({ type: "marked_rented_saved", itemIds: done });
+            post({ type: "ad_list", ads: await loadAds(), at: Date.now() });
+            router.refresh();
+          }
+        } catch {
+          /* kept by the helper; tried again on the next page */
+        }
         return;
       }
       if (isHelperMessage(data, "replied_chats")) {
@@ -135,6 +153,8 @@ export function MarketplaceHelperSync({
     // a reload (it used to wait for the next page they opened).
     const onBack = () => {
       if (synced && document.visibilityState === "visible") post({ type: "get_captured" });
+      // S845: back from pressing Mark as rented on Facebook: clear the row now.
+      if (synced && document.visibilityState === "visible") post({ type: "get_marked_rented" });
     };
     document.addEventListener("visibilitychange", onBack);
     window.addEventListener("focus", onBack);
@@ -146,7 +166,7 @@ export function MarketplaceHelperSync({
       window.removeEventListener("focus", onBack);
       timers.forEach((t) => window.clearTimeout(t));
     };
-  }, [loadAds, saveCaptured, saveRenewed, saveRenewWaits, saveRejected, saveReplied, router]);
+  }, [loadAds, saveCaptured, saveRenewed, saveRenewWaits, saveRejected, saveReplied, saveMarkedRented, router]);
   const banner = rejectedAdsBanner(removed.map((r) => r.rental));
   if (!banner) return null;
   return (

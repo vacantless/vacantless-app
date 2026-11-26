@@ -107,7 +107,7 @@ export function rentalsCaCapNote(liveElsewhere: number): string | null {
 export function handReason(portal: string | null | undefined, robotTried: boolean): string {
   if (robotTried) return "Our robot tried and could not remove it this time.";
   if (portal === "facebook_feed") return "Your Facebook Page is not connected here, so we cannot delete the post.";
-  if (portal === "facebook") return "Facebook lets no app delete a Marketplace ad on a personal profile.";
+  if (portal === "facebook") return "Facebook lets no app delete a Marketplace ad on a personal profile. With the Vacantless helper, press Mark as rented there and this clears.";
   if (portal === "kijiji" || portal === "zumper" || portal === "rentals_ca") {
     return "This site is not signed in here, so our robot cannot reach the ad.";
   }

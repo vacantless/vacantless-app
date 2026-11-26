@@ -7,6 +7,7 @@ import {
   helperOrgIds,
   loadHelperAdList,
   saveHelperCapturedAds,
+  saveHelperMarkedRented,
   saveHelperRejectedAds,
   saveHelperRenewedAds,
   saveHelperRenewWaits,
@@ -85,4 +86,14 @@ export async function helperSaveRepliedChats(raw: unknown): Promise<{ done: stri
   const admin = createAdminClient();
   if (!orgIds || !admin) return { done: [] };
   return { done: await saveHelperRepliedChats(admin, orgIds, items) };
+}
+
+// S845: the landlord's own "Mark as rented" presses on Facebook (helper 1.2.8).
+export async function helperSaveMarkedRented(raw: unknown): Promise<{ done: string[] }> {
+  const items = cleanRejectedAds(raw);
+  if (items.length === 0) return { done: [] };
+  const orgIds = await signedInOrgIds();
+  const admin = createAdminClient();
+  if (!orgIds || !admin) return { done: [] };
+  return { done: await saveHelperMarkedRented(admin, orgIds, items) };
 }

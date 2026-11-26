@@ -3,6 +3,9 @@ import { buildTrackedLink } from "@/lib/listing-distribution";
 import { recordMarketplaceAd } from "@/lib/marketplace-kit-server";
 import { roleCan } from "@/lib/roles";
 import { localDateString } from "@/lib/leasing-snapshot";
+import { isUnavailableStatus } from "@/lib/ads-still-up";
+import { closeTakedownItems, resetLiveRunItemsForPost } from "@/lib/facebook-page-takedown";
+import { markedRentedNote } from "@/lib/marketplace-helper";
 import { rentalHasViewingTimes } from "@/lib/rental-viewing-times";
 import {
   helperReplyTemplate,
@@ -273,6 +276,59 @@ export async function saveHelperRenewWaits(
       if (!next) continue;
       const { error: upErr } = await admin.from("listing_posts").update({ posted_on: next }).eq("id", r.id);
       if (upErr) failed = true;
+    }
+    if (!failed) done.push(item.itemId);
+  }
+  return done;
+}
+
+/**
+ * S845: the landlord pressed Facebook's own "Mark as rented" on an ad whose
+ * rental is off the market here. Mark that ad taken down, the same writes as
+ * "I took it down" on the rental page. An ad on a rental that is still
+ * available is left alone (and forgotten), so a stray report can never hide a
+ * live ad. Returns the item ids the helper may forget.
+ */
+export async function saveHelperMarkedRented(
+  admin: SupabaseClient,
+  orgIds: string[],
+  items: { itemId: string; at: number }[],
+): Promise<string[]> {
+  const done: string[] = [];
+  if (orgIds.length === 0) return done;
+  const { data: orgs } = await admin.from("organizations").select("id, booking_timezone").in("id", orgIds);
+  const tzByOrg = new Map(
+    ((orgs ?? []) as { id: string; booking_timezone: string | null }[]).map((o) => [o.id, o.booking_timezone || "America/Toronto"]),
+  );
+  for (const item of items) {
+    const { data: rows, error } = await admin
+      .from("listing_posts")
+      .select("id, organization_id, property_id, notes")
+      .in("organization_id", orgIds)
+      .eq("portal", "facebook")
+      .eq("status", "live")
+      .ilike("url", `%/marketplace/item/${item.itemId}%`)
+      .limit(5);
+    if (error) continue; // kept by the helper, tried again on the next page
+    let failed = false;
+    for (const r of (rows ?? []) as { id: string; organization_id: string; property_id: string | null; notes: string | null }[]) {
+      if (!r.property_id) continue;
+      const { data: prop } = await admin.from("properties").select("status, archived_at").eq("id", r.property_id).maybeSingle();
+      const p = prop as { status: string | null; archived_at: string | null } | null;
+      if (!p || !(isUnavailableStatus(p.status) || !!p.archived_at)) continue;
+      const day = localDateString(item.at, tzByOrg.get(r.organization_id) ?? "America/Toronto");
+      const note = markedRentedNote(day);
+      const { error: upErr } = await admin
+        .from("listing_posts")
+        .update({ status: "removed", notes: r.notes ? `${r.notes}\n${note}` : note })
+        .eq("id", r.id)
+        .eq("status", "live");
+      if (upErr) {
+        failed = true;
+        continue;
+      }
+      await closeTakedownItems(admin, r.organization_id, r.id, "the landlord pressed Mark as rented on Facebook");
+      await resetLiveRunItemsForPost(admin, r.organization_id, r.id);
     }
     if (!failed) done.push(item.itemId);
   }

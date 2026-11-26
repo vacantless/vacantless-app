@@ -399,6 +399,14 @@ export function marketplaceUpdateKit(kit: MarketplaceHelperKit, itemId: string |
 // S764: Marketplace ads Facebook removed, as the helper saw them.
 export type HelperRejectedAd = { itemId: string; at: number };
 
+/** S845: helper 1.2.8 and up reports the landlord's own "Mark as rented" press on a rented rental's ad. */
+export const MARKETPLACE_HELPER_MARKED_RENTED_MIN_VERSION = "1.2.8";
+
+/** The note on a Marketplace ad marked down because the landlord pressed Mark as rented on Facebook. */
+export function markedRentedNote(day: string): string {
+  return `Marked as rented on Facebook by the landlord on ${day} (seen by the Vacantless helper).`;
+}
+
 /** Helper 1.2.4 and up reports ads Facebook removed. */
 export const MARKETPLACE_HELPER_REJECT_MIN_VERSION = "1.2.4";
 

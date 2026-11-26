@@ -17,6 +17,7 @@ import { PageHelp } from "@/components/page-help";
 import {
   helperAdList,
   helperSaveCapturedAds,
+  helperSaveMarkedRented,
   helperSaveRejectedAds,
   helperSaveRenewedAds,
   helperSaveRenewWaits,
@@ -174,6 +175,7 @@ export default async function DashboardLayout({
         saveRenewed={helperSaveRenewedAds}
         saveRenewWaits={helperSaveRenewWaits}
         saveRejected={helperSaveRejectedAds}
+        saveMarkedRented={helperSaveMarkedRented}
         saveReplied={helperSaveRepliedChats}
       />
     </div>
