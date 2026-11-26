@@ -5,7 +5,7 @@ import { roleCan } from "@/lib/roles";
 import { addAskedAgainNote, saveChatRenter } from "@/lib/chat-leads-server";
 import { cleanRenterName, CHAT_LEAD_MATCH_DAYS } from "@/lib/chat-leads";
 import { openRentalsForOrg, readScreenshotWithAi } from "@/lib/ai-enquiry-server";
-import { hashSendKey, nextWindow, planSend, rentedForReader, sendResultLine, sendSource } from "@/lib/send-shortcut";
+import { hashSendKey, nextWindow, othersForRented, planSend, rentedChatReply, rentedForReader, sendResultLine, sendSource, soldAdRental } from "@/lib/send-shortcut";
 import type { EnquiryRental } from "@/lib/ai-enquiry";
 
 /** S830e: the account's rented rentals (not archived), for the reader's list. */
@@ -23,6 +23,24 @@ async function rentedRentalsForOrg(admin: SupabaseClient, orgId: string): Promis
     rentDollars: typeof p.rent_cents === "number" ? Math.round(p.rent_cents / 100) : null,
     beds: p.beds,
   }));
+}
+
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.vacantless.com").replace(/\/+$/, "");
+
+/** S845c: an account's rented rentals whose Marketplace ad came down in the last 30 days. */
+async function soldAdCandidates(admin: SupabaseClient, orgId: string, rented: EnquiryRental[]): Promise<EnquiryRental[]> {
+  if (rented.length === 0) return [];
+  const since = new Date(Date.now() - 30 * 24 * 3600_000).toISOString();
+  const { data } = await admin
+    .from("listing_posts")
+    .select("property_id")
+    .eq("organization_id", orgId)
+    .eq("portal", "facebook")
+    .eq("status", "removed")
+    .gte("down_at", since)
+    .in("property_id", rented.map((r) => r.id));
+  const ids = new Set(((data ?? []) as { property_id: string | null }[]).map((r) => r.property_id));
+  return rented.filter((r) => ids.has(r.id));
 }
 
 // S816l: the server half of "Send to Vacantless". Everything here runs with
@@ -88,6 +106,8 @@ export type SendSaved = {
   question?: string | null;
   site?: string | null;
   name?: string | null;
+  /** S845c: the chat is about a rented rental; this is the reply to copy. */
+  rentedReply?: string | null;
 };
 
 /** Read the screenshot and save the renter. Returns the line the Shortcut shows. */
@@ -114,10 +134,10 @@ export async function saveRenterFromShortcut(
   ).flat();
   // S830e: rented units too (never one that shares a rent with an open one),
   // so a chat about a rented unit says so instead of saving a stray renter.
-  const rented = rentedForReader(
-    rentals,
-    (await Promise.all(orgIds.map((id) => rentedRentalsForOrg(admin, id).catch(() => [] as EnquiryRental[])))).flat(),
-  );
+  const rentedByOrg = await Promise.all(orgIds.map((id) => rentedRentalsForOrg(admin, id).catch(() => [] as EnquiryRental[])));
+  rentedByOrg.forEach((list, i) => list.forEach((r) => rentalOrg.set(r.id, orgIds[i])));
+  const allRented = rentedByOrg.flat();
+  const rented = rentedForReader(rentals, allRented);
   const rentedIds = new Set(rented.map((r) => r.id));
   const read = await readScreenshotWithAi(image, [...rentals, ...rented]);
   if (!read) return { line: sendResultLine({ outcome: "unreadable" }), leadId: null };
@@ -126,16 +146,23 @@ export async function saveRenterFromShortcut(
     `[shortcut/renter] read org=${owner.orgId} name=${Boolean(read.name)} email=${Boolean(read.email)} phone=${Boolean(read.phone)} rental=${Boolean(read.rentalId)} site=${read.site ?? "none"} topic=${read.topic ?? "none"} not_renter=${Boolean(read.notRenter)}`,
   );
 
-  if (read.rentalId && rentedIds.has(read.rentalId)) {
-    const r = rented.find((x) => x.id === read.rentalId);
-    const label = r?.address.replace(/, rented now$/, "") ?? null;
-    return { line: sendResultLine({ outcome: "rented", rental: label }), leadId: null };
+  // S845c (Noam's choice, 2026-11-26): a chat about a rented rental still saves
+  // the renter, on that rental, and copies a reply that says it is rented and
+  // names what is open. A SOLD listing line with no price is matched to the one
+  // rented rental whose Marketplace ad came down lately.
+  let rentedHit: EnquiryRental | null =
+    read.rentalId && rentedIds.has(read.rentalId) ? allRented.find((x) => x.id === read.rentalId) ?? null : null;
+  if (!rentedHit && read.adSold) {
+    const down = (await Promise.all(orgIds.map((id, i) => soldAdCandidates(admin, id, rentedByOrg[i]).catch(() => [] as EnquiryRental[])))).flat();
+    rentedHit = soldAdRental(true, down);
+    // A SOLD line carries no price, so a pick of an open rental is a guess.
+    if (!rentedHit) read.rentalId = null;
   }
 
   const name = cleanRenterName(read.name);
   const email = normalizeEmail(read.email ?? "") || null;
   const phone = (read.phone ?? "").trim().slice(0, 40) || null;
-  const rental = read.rentalId ? rentals.find((r) => r.id === read.rentalId) ?? null : null;
+  const rental = rentedHit ?? (read.rentalId ? rentals.find((r) => r.id === read.rentalId) ?? null : null);
   const rentalLabel = rental?.address ?? null;
   const orgId = (rental && rentalOrg.get(rental.id)) || owner.orgId;
   const question = (read.question ?? "").trim().slice(0, 400);
@@ -144,7 +171,17 @@ export async function saveRenterFromShortcut(
     .filter(Boolean)
     .join("\n");
 
-  const ctx = { orgId, rentalId: rental?.id ?? null, question: question || null, topic: read.topic ?? null, site: read.site ?? null, name };
+  const rentedReply = rentedHit
+    ? rentedChatReply({
+        rentalName: rentedHit.address,
+        renterName: name,
+        others: othersForRented(
+          rentedHit.beds,
+          rentals.filter((r) => rentalOrg.get(r.id) === orgId),
+        ).map((r) => ({ address: r.address, rentDollars: r.rentDollars, url: `${APP_URL}/r/${r.id}` })),
+      })
+    : null;
+  const ctx = { orgId, rentalId: rental?.id ?? null, question: question || null, topic: read.topic ?? null, site: read.site ?? null, name, rentedReply };
   const plan = planSend({ name, email, phone, rentalId: rental?.id ?? null, notRenter: read.notRenter });
   // S830b: nothing saved and nothing copied for an agent, seller or spam.
   if (plan.kind === "not_renter") return { line: sendResultLine({ outcome: "not_renter" }), leadId: null };

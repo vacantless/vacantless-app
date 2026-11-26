@@ -73,7 +73,11 @@ async function handle(request: Request, v2: boolean): Promise<NextResponse> {
     // The same reply Quick replies would give. A failed read only skips the copy.
     let reply: string | null = null;
     let replyLine: string | null = null;
-    if (r.rentalId || r.name) {
+    if (r.rentedReply) {
+      // S845c: the rental is rented; the reply says so and names what is open.
+      reply = r.rentedReply;
+      replyLine = "That rental is rented. Your reply says so and is copied. Paste it in the chat.";
+    } else if (r.rentalId || r.name) {
       try {
         const orgId = r.orgId ?? owner.owner.orgId;
         const [cards, { data: orgRow }] = await Promise.all([

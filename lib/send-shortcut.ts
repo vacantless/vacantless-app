@@ -8,6 +8,7 @@ import { screenshotSource } from "./ai-screenshot-lead";
 import { replyKitText, type ReplyKitCard } from "./reply-kit";
 import { answerReplyText, REPLY_ANSWER_KEYS, type ReplyAnswerKey } from "./reply-answers";
 import type { EnquiryRental } from "./ai-enquiry";
+import { replyUnitPhrase, shortRentalName } from "./marketplace-helper";
 
 export const SEND_KEY_PREFIX = "vl_";
 /** Screenshots read per key per hour. Each one is an AI read. */
@@ -269,4 +270,40 @@ export function shortcutReplyLine(why: "ok" | "no_rental" | "no_answer"): string
   if (why === "ok") return "Your reply is copied. Paste it in the chat.";
   if (why === "no_answer") return "There is no answer on file for that question, so nothing was copied. Answer it on Quick replies.";
   return "Pick the rental on Quick replies to copy a reply. We could not tell which one it was.";
+}
+
+/**
+ * S845c: Facebook shows "SOLD - 1 Bed 1 Bath Apartment" on a chat once the ad
+ * is taken down, with no price, so the price rule cannot tell which rental it
+ * was (Tammy, Unit 9, 2026-11-26). The one rented rental whose Marketplace ad
+ * came down in the last 30 days is that rental. Two or more: we cannot tell.
+ */
+export function soldAdRental<T extends { id: string }>(adSold: boolean | undefined, recentlyDown: readonly T[]): T | null {
+  if (!adSold) return null;
+  const uniq = [...new Map(recentlyDown.map((r) => [r.id, r])).values()];
+  return uniq.length === 1 ? uniq[0] : null;
+}
+
+/** S845c: the reply for a chat about a rented rental: it is rented, here is what is open. */
+export function rentedChatReply(input: {
+  rentalName: string | null;
+  renterName: string | null;
+  others: { address: string; rentDollars: number | null; url: string }[];
+}): string {
+  const first = (input.renterName ?? "").trim().split(/\s+/)[0] ?? "";
+  const unit = replyUnitPhrase(shortRentalName(input.rentalName)) ?? "This one";
+  const head = `${first ? `Hi ${first}` : "Hi"}, thanks for asking. ${unit} is rented now.`;
+  const others = input.others.slice(0, 3);
+  if (others.length === 0) return head;
+  const list = others
+    .map((o) => `${replyUnitPhrase(shortRentalName(o.address)) ?? o.address}${o.rentDollars ? `, $${o.rentDollars.toLocaleString("en-CA")} a month` : ""}: ${o.url}`)
+    .join(" ");
+  return `${head} ${others.length === 1 ? "This one is open" : "These are open"}. ${list}`;
+}
+
+/** S845c: open rentals to offer in place of a rented one: same bedrooms first. */
+export function othersForRented<T extends { beds: number | null; rentDollars: number | null }>(rentedBeds: number | null, open: readonly T[]): T[] {
+  const same = rentedBeds == null ? [] : open.filter((r) => r.beds === rentedBeds);
+  const pool = same.length > 0 ? same : [...open];
+  return [...pool].sort((a, b) => (a.rentDollars ?? 1e9) - (b.rentDollars ?? 1e9)).slice(0, 3);
 }

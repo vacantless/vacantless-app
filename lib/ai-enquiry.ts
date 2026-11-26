@@ -40,6 +40,8 @@ export type EnquiryRead = {
   topic?: string | null;
   /** S830b: the screenshot reader says the sender is not a renter. */
   notRenter?: boolean;
+  /** S845c: the Marketplace listing line reads SOLD (the ad was taken down). */
+  adSold?: boolean;
 };
 
 /** Words that mark a forwarded email as a rental enquiry worth reading. */
@@ -162,6 +164,7 @@ export function normalizeEnquiryRead(
     site: cleanStr(raw.site, 60),
     topic: cleanStr(raw.topic, 20)?.toLowerCase() ?? null,
     notRenter: raw.not_renter === true,
+    adSold: raw.ad_sold === true,
   };
 }
 

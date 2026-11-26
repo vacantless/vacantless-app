@@ -14,7 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { TAKEDOWN_TRANSPORT } from "@/lib/distribution-worker";
 import { isRobotPostedChannel } from "@/lib/posting-lanes";
 import { readRobotPostingAccess } from "@/lib/robot-posting-access";
-import { siteName } from "@/lib/ads-still-up";
+import { UNAVAILABLE_STATUSES, siteName } from "@/lib/ads-still-up";
 import { triggerTakedownNow } from "@/lib/post-now";
 
 export type RobotTakedownQueued = { portal: string; listingPostId: string; runItemId: string };
@@ -160,5 +160,79 @@ export async function robotTakedownPending(args: {
     return ((data ?? []) as { channel: string }[]).map((r) => r.channel).filter((c) => isRobotPostedChannel(c));
   } catch {
     return [];
+  }
+}
+
+/** Pure (S845b): rentals whose ad on this site should come down now that the site is signed in. */
+export function takedownsOwedAfterSignin(input: {
+  posts: { propertyId: string | null; status: string | null; url: string | null }[];
+  offMarketIds: readonly string[];
+  /** Rentals with a takedown item on this site touched in the last 30 minutes. */
+  recentlyTriedIds: readonly string[];
+}): string[] {
+  const off = new Set(input.offMarketIds);
+  const tried = new Set(input.recentlyTriedIds);
+  const out = new Set<string>();
+  for (const p of input.posts) {
+    if (p.status !== "live" || !p.url?.trim() || !p.propertyId) continue;
+    if (off.has(p.propertyId) && !tried.has(p.propertyId)) out.add(p.propertyId);
+  }
+  return [...out];
+}
+
+/**
+ * S845b: a site was signed out when its rental was marked rented, so no
+ * takedown was queued (the robot could not reach it). The sign-in ask already
+ * goes out for that ad (lib/site-work-waiting "takedown"); when the landlord
+ * signs in, queue the takedown so the sign-in is used at once. A rental whose
+ * takedown on this site was tried in the last 30 minutes is left alone, so a
+ * failed try is not repeated by every poll. Best-effort: never throws.
+ */
+export async function queueTakedownsAfterSignin(args: {
+  supabase: SupabaseClient;
+  organizationId: string;
+  channel: string;
+}): Promise<number> {
+  try {
+    const { supabase, organizationId, channel } = args;
+    if (!isRobotPostedChannel(channel)) return 0;
+    const { data: posts } = await supabase
+      .from("listing_posts")
+      .select("property_id, status, url")
+      .eq("organization_id", organizationId)
+      .eq("portal", channel)
+      .eq("status", "live");
+    const rows = ((posts ?? []) as { property_id: string | null; status: string | null; url: string | null }[]).map((r) => ({
+      propertyId: r.property_id,
+      status: r.status,
+      url: r.url,
+    }));
+    const ids = [...new Set(rows.map((r) => r.propertyId).filter((x): x is string => !!x))];
+    if (ids.length === 0) return 0;
+    const [{ data: props }, { data: items }] = await Promise.all([
+      supabase.from("properties").select("id, status, archived_at").eq("organization_id", organizationId).in("id", ids),
+      supabase
+        .from("distribution_run_items")
+        .select("run_id, distribution_runs!inner(property_id)")
+        .eq("organization_id", organizationId)
+        .eq("channel", channel)
+        .eq("transport", TAKEDOWN_TRANSPORT)
+        .gte("updated_at", new Date(Date.now() - 30 * 60_000).toISOString()),
+    ]);
+    const offMarketIds = ((props ?? []) as { id: string; status: string | null; archived_at: string | null }[])
+      .filter((p) => !!p.archived_at || (UNAVAILABLE_STATUSES as readonly string[]).includes(String(p.status ?? "")))
+      .map((p) => p.id);
+    const recentlyTriedIds = ((items ?? []) as unknown as { distribution_runs: { property_id: string } | { property_id: string }[] }[])
+      .flatMap((i) => (Array.isArray(i.distribution_runs) ? i.distribution_runs : [i.distribution_runs]))
+      .map((r) => r?.property_id)
+      .filter((x): x is string => !!x);
+    let queued = 0;
+    for (const propertyId of takedownsOwedAfterSignin({ posts: rows, offMarketIds, recentlyTriedIds })) {
+      const q = await queueRobotTakedowns({ supabase, organizationId, propertyId, portals: [channel] });
+      queued += q.length;
+    }
+    return queued;
+  } catch {
+    return 0;
   }
 }

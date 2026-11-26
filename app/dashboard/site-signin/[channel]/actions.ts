@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentOrg } from "@/lib/org";
+import { queueTakedownsAfterSignin } from "@/lib/robot-takedown";
 import { requireCapability } from "@/lib/membership";
 import { adminEmails } from "@/lib/provisioning-server";
 import { isAdminEmail } from "@/lib/provisioning";
@@ -194,7 +195,12 @@ export async function readSiteSigninWindow(id: string): Promise<SiteSigninWindow
       // Rentals.ca: the home check (renewals, takedowns, slot switches).
       // Kijiji and Zumper: edits and takedowns.
       const ch = String(data.channel ?? "");
-      if (isSiteSigninChannel(ch)) void (signinOpensAtHome(ch) ? triggerRentalsTakedown() : triggerTakedownNow());
+      if (isSiteSigninChannel(ch)) {
+        // S845b: ads on rented rentals that waited on this sign-in come down now.
+        const orgNow = await getCurrentOrg();
+        if (orgNow) await queueTakedownsAfterSignin({ supabase, organizationId: orgNow.id, channel: ch });
+        void (signinOpensAtHome(ch) ? triggerRentalsTakedown() : triggerTakedownNow());
+      }
     }
   }
   return {
