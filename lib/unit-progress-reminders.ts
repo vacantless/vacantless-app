@@ -10,6 +10,8 @@
 //   contractor, cleaner  the day after a ready-by date passes; every 5 days in
 //                     reno or cleaning with no ready-by date.
 // The landlord gets one copy when a reminder sat 3 days with no update.
+// S843b (Noam, 2026-11-26): a unit with a live ad skips the Monday check-in,
+// and a Monday check-in about it is not escalated.
 import { STAGE_LABEL, type CrewRole, type Stage } from "@/lib/unit-progress";
 
 export const REMINDER_REASONS = [
@@ -49,6 +51,8 @@ export type UnitState = {
   stageDate: string | null;
   /** S840: the crew member who set the current stage, if a crew member did. */
   stageById?: string | null;
+  /** S843b: live ads on the unit (undefined: not counted). */
+  liveAds?: number;
 };
 export type CrewLite = { id: string; name: string; role: CrewRole; email: string | null };
 export type SentRow = { crew_member_id: string; property_id: string | null; reason: string; sent_at: string };
@@ -143,7 +147,9 @@ export function remindersDue(args: {
           if (until > 0 && until <= 7) add(u, "moveout_soon", `${u.address}: the tenant moves out ${fmtDate(u.stageDate)}. Book the key handover or a walkthrough.`);
           if (until <= 0) add(u, "moveout_today", `${u.address}: move-out day was ${fmtDate(u.stageDate)}. Tap Under construction when work starts.`);
         }
-        if (local.weekday === "Mon" && u.status !== "leased" && u.stage !== "on_hold" && (age === null || age >= 7)) {
+        // S843b: a unit with a live ad skips the Monday check. Its ads say where it
+        // is; the next news (a booking, a deposit, Rented) comes from leasing.
+        if (local.weekday === "Mon" && u.status !== "leased" && u.stage !== "on_hold" && !((u.liveAds ?? 0) > 0) && (age === null || age >= 7)) {
           add(u, "weekly_stale", age === null ? `${u.address}: no stage yet.` : `${u.address}: no update in ${age} days. Still ${STAGE_LABEL[u.stage as Stage].toLowerCase()}?`);
         }
       }
@@ -184,6 +190,8 @@ export function escalationsDue(rows: EscalationRow[], units: UnitState[], now: D
     if (nowMs - sentMs < ESCALATE_AFTER_DAYS * DAY) return false;
     const u = byId.get(r.property_id);
     if (!u || u.status === "leased") return false;
+    // S843b: a Monday check-in about a unit whose ads are now live is answered.
+    if (r.reason === "weekly_stale" && (u.liveAds ?? 0) > 0) return false;
     const stageMs = u.stageAt ? Date.parse(u.stageAt) || 0 : 0;
     return stageMs <= sentMs;
   });

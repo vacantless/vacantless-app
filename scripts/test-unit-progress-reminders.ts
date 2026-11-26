@@ -1,6 +1,8 @@
 // Run with: npx tsx scripts/test-unit-progress-reminders.ts
 // S788d: the crew reminder cadence.
 import { remindersDue, escalationsDue, emailFromContact, type UnitState, type CrewLite } from "../lib/unit-progress-reminders";
+import { effectiveStage } from "../lib/unit-progress";
+import { readFileSync } from "node:fs";
 
 let pass = 0;
 let fail = 0;
@@ -62,6 +64,30 @@ ok("no email address, no reminder", remindersDue({ units: [unit({})], crew: [{ i
 ok("lines have no dashes", remindersDue({ units: [unit({})], crew, sent: [], now: monday10, timeZone: tz }).every((c) => c.items.every((i) => !/[–—]/.test(i.line))));
 
 const row = (o: Partial<Parameters<typeof escalationsDue>[0][number]>) => ({ id: "r", crew_member_id: "x", property_id: "u1", reason: "reno_no_date", sent_at: ago(tuesday10, 4), escalated_at: null, ...o });
+// S843b (Noam, 2026-11-26): advertised units are not asked about on Monday.
+ok("Monday: a unit with live ads skips the check-in",
+  remindersDue({ units: [unit({ stage: "live", stageAt: ago(monday10, 10), liveAds: 3 })], crew, sent: [], now: monday10, timeZone: tz }).length === 0);
+ok("Monday: same unit with no ads is still asked",
+  items(remindersDue({ units: [unit({ stage: "photos_in", stageAt: ago(monday10, 10), liveAds: 0 })], crew, sent: [], now: monday10, timeZone: tz }), "n")[0]?.reason === "weekly_stale");
+ok("live ads do not stop deposit reminders",
+  items(remindersDue({ units: [unit({ stage: "waiting_deposit", stageAt: ago(tuesday10, 3), liveAds: 2 })], crew, sent: [], now: tuesday10, timeZone: tz }), "a")[0]?.reason === "deposit_waiting");
+ok("effective stage: photos in + live ads reads Ads are up", effectiveStage("photos_in", 3) === "live");
+ok("effective stage: ready to post + live ads reads Ads are up", effectiveStage("ready_to_post", 1) === "live");
+ok("effective stage: no ads keeps the tap", effectiveStage("photos_in", 0) === "photos_in");
+ok("effective stage: deposit stage is kept with ads", effectiveStage("waiting_deposit", 2) === "waiting_deposit");
+ok("effective stage: no stage stays none", effectiveStage(null, 2) === null);
+{
+  const stale = { id: "w", crew_member_id: "n", property_id: "u1", reason: "weekly_stale", sent_at: ago(tuesday10, 4), escalated_at: null };
+  ok("no escalation of a Monday check-in once the unit has live ads",
+    escalationsDue([stale], [unit({ stage: "live", stageAt: ago(tuesday10, 12), liveAds: 3 })], tuesday10).length === 0);
+  ok("a Monday check-in on a unit with no ads still escalates",
+    escalationsDue([stale], [unit({ stage: "photos_in", stageAt: ago(tuesday10, 12), liveAds: 0 })], tuesday10).length === 1);
+  ok("a deposit reminder still escalates with live ads",
+    escalationsDue([{ ...stale, reason: "deposit_waiting" }], [unit({ stage: "waiting_deposit", stageAt: ago(tuesday10, 12), liveAds: 2 })], tuesday10).length === 1);
+  const notify = readFileSync(new URL("../lib/unit-progress-notify.ts", import.meta.url), "utf8");
+  ok("the sweep passes live ads and the effective stage",
+    notify.includes("effectiveStage(c.stage, c.liveSites.length)") && notify.includes("liveAds: c.liveSites.length"));
+}
 ok("escalate: 4 days, no change", escalationsDue([row({})], [unit({ stage: "being_cleaned", stageAt: ago(tuesday10, 12) })], tuesday10).length === 1);
 ok("no escalation when the unit moved", escalationsDue([row({})], [unit({ stage: "photos_in", stageAt: ago(tuesday10, 1) })], tuesday10).length === 0);
 ok("no escalation before 3 days", escalationsDue([row({ sent_at: ago(tuesday10, 2) })], [unit({ stage: "being_cleaned", stageAt: ago(tuesday10, 12) })], tuesday10).length === 0);

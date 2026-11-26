@@ -266,6 +266,16 @@ const FINISHING: readonly Stage[] = ["live", "put_back_up", "rented", "lease_sig
 /** Stages that come after the turnover work and before the ads go up. */
 const BEFORE_POSTING: Stage[] = ["ready_for_photos", "photographer_booked", "photos_in", "touch_up", "ready_to_post"];
 
+/**
+ * S843b: the stage the facts show. A before-posting tap with a live ad saved
+ * reads as "Ads are up" (the same rule as the chip, S823b), so reminders and
+ * the landlord's "no update" copy do not ask about photos on an advertised unit.
+ */
+export function effectiveStage(stage: Stage | null, liveAds: number | undefined): Stage | null {
+  if (stage && (liveAds ?? 0) > 0 && BEFORE_POSTING.includes(stage)) return "live";
+  return stage;
+}
+
 export type LatestStage = { stage: string; at: string; date: string | null; by: string | null };
 export type StageChip = { label: string; detail: string; title: string; tone: StageTone };
 

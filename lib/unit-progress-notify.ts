@@ -13,7 +13,7 @@ import { getUserByIdCached } from "@/lib/auth-email-cache";
 import { resolveLeadNotifyEmails } from "@/lib/leads-notify";
 import type { NotifyMember } from "@/lib/incident-reports";
 import { drivePullLine, type DrivePullResult } from "@/lib/drive-import";
-import { STAGE_LABEL, isCrewRole, stageDateLine, tenancyEffectAction, rentedLine, type Stage, type TenancyEffect } from "@/lib/unit-progress";
+import { STAGE_LABEL, effectiveStage, isCrewRole, stageDateLine, tenancyEffectAction, rentedLine, type Stage, type TenancyEffect } from "@/lib/unit-progress";
 import { unitCardsForOrg } from "@/lib/unit-progress-server";
 import { digestCountLabel, photosAlreadyLine, readyDigests, tapLine, type PendingTap } from "@/lib/unit-progress-digest";
 import {
@@ -226,7 +226,18 @@ export async function runUnitProgressSweep(args: { admin: SupabaseClient; now?: 
       if (!org) continue;
       summary.orgs++;
       const cards = await unitCardsForOrg(admin, orgId);
-      const units: UnitState[] = cards.map((c) => ({ id: c.id, address: c.address, status: c.status, stage: c.stage, stageAt: c.stageAt, stageDate: c.stageDate, stageById: c.stageById }));
+      // S843b: the stage the facts show, and the live-ad count, so an advertised
+      // unit is neither asked about nor reported as "photos are in".
+      const units: UnitState[] = cards.map((c) => ({
+        id: c.id,
+        address: c.address,
+        status: c.status,
+        stage: effectiveStage(c.stage, c.liveSites.length),
+        stageAt: c.stageAt,
+        stageDate: c.stageDate,
+        stageById: c.stageById,
+        liveAds: c.liveSites.length,
+      }));
       const crew: CrewLite[] = members
         .filter((m) => isCrewRole(m.role))
         .map((m) => ({ id: m.id, name: m.name, role: m.role as CrewLite["role"], email: emailFromContact(m.contact) }));
