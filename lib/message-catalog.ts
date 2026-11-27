@@ -126,6 +126,17 @@ export const CATALOG_MESSAGES: CatalogMessage[] = [
     code: { send: ["sendShowingAutoReleased"] },
   },
   {
+    id: "renter-cancelled-by-team",
+    group: "renters",
+    goesTo: "The renter who booked.",
+    includes: "The address and time. If the unit is rented, it says so. They can reply to hear what is open.",
+    title: "Your viewing is cancelled",
+    when: "When your team cancels a booked viewing on Viewings, confirmed or not.",
+    channels: ["email"],
+    control: { type: "button", where: "Viewings, Cancel viewing" },
+    code: { send: ["sendShowingCancelledByTeam"] },
+  },
+  {
     id: "renter-rescheduled",
     group: "renters",
     goesTo: "The renter who booked.",

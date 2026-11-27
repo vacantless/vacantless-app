@@ -738,6 +738,23 @@ const NOTIFICATION_EVENTS_BASE: readonly NotificationEvent[] = [
     defaultAccent: "#d97706",
     active: true,
   },
+  // S846 (KI1823): the team cancelled a booked viewing (confirmed or not) from
+  // the Viewings page, with a reason. Same recipients as the release alert: the
+  // assigned agent, else the leasing team. The renter gets their own email.
+  {
+    key: "leasing.showing_cancelled_by_team",
+    family: "leasing",
+    audience: "operator",
+    label: "Viewing cancelled by your team",
+    description:
+      "When someone on your team cancels a booked viewing from Viewings (for example because the unit is rented), the assigned agent or leasing team is told who cancelled it and why.",
+    tokens: [...COMMON_TOKENS, "agent_name", "lead_name", "showing_time", "cancelled_by", "reason_label", "dashboard_url"],
+    defaultSubject: "Viewing cancelled - {{lead_name}} at {{property_address}}",
+    defaultBody:
+      "Hi {{agent_name}}, the viewing for {{lead_name}} at {{property_address}} ({{showing_time}}) was cancelled by {{cancelled_by}} because {{reason_label}}.\n\nThe renter has been emailed and the time slot is free again.\n\nOpen the inquiry: {{dashboard_url}}",
+    defaultAccent: "#d97706",
+    active: true,
+  },
   // Agent can't make it (S729). Audience operator; fired when a showing agent
   // taps "Can't make it" on their no-login viewings page (/agent/[token]). The
   // viewing is handed back unassigned with its time kept; the renter is NOT
@@ -1303,6 +1320,7 @@ const LEASING_OPERATOR_LANE: Readonly<Record<string, NotificationLane>> = {
   "leasing.reschedule_accepted": "showing",
   "leasing.showing_unconfirmed_nudge": "showing",
   "leasing.showing_auto_released": "showing",
+  "leasing.showing_cancelled_by_team": "showing",
   "leasing.agent_cant_make_it": "showing",
   "leasing.daily_snapshot": "showing",
   "leasing.viewing_availability_reminder": "showing",

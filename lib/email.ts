@@ -1390,6 +1390,88 @@ export async function sendShowingAutoReleased(
   }
 }
 
+// S846 (KI1823): the team cancelled a booked viewing, confirmed or not. Its
+// own wording, so a renter who confirmed is never told it was "unconfirmed".
+export type ShowingCancelledByTeamPayload = ShowingAutoReleasedPayload & {
+  reason: "unit_rented" | "other";
+};
+
+export function cancelledByTeamSubject(p: Pick<ShowingCancelledByTeamPayload, "property_address">): string {
+  return p.property_address ? `Your viewing at ${p.property_address} is cancelled` : "Your viewing is cancelled";
+}
+
+export function cancelledByTeamHtml(p: ShowingCancelledByTeamPayload): string {
+  const brand = p.brand_color || DEFAULT_BRAND_COLOR;
+  const org = escapeHtml(p.org_name || "Our leasing team");
+  const hi = escapeHtml(firstName(p.renter_name));
+  const addr = p.property_address ? escapeHtml(p.property_address) : "the property";
+  const when = escapeHtml(p.when_label);
+  const rented = p.reason === "unit_rented";
+  const renterUrl = !rented ? p.renter_url?.trim() || null : null;
+  const logo = p.logo_url
+    ? `<img src="${escapeHtml(p.logo_url)}" alt="${org}" style="max-height:48px;margin-bottom:16px;" />`
+    : "";
+  const lead = rented
+    ? `This home has been rented, so your viewing is cancelled. We are sorry for the change.`
+    : `We had to cancel your viewing. We are sorry for the change.`;
+  const next = rented
+    ? `If you are still looking, reply to this email and we will tell you what else is available.`
+    : `If you still want to see the home, reply to this email or book another available time.`;
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5;padding:24px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#18181b;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+    <div style="height:6px;background:${escapeHtml(brand)};"></div>
+    <div style="padding:28px 28px 24px;">
+      ${logo}
+      <p style="margin:0 0 16px;font-size:16px;">Hi ${hi},</p>
+      <p style="margin:0 0 16px;">${lead}</p>
+      <div style="margin:0 0 16px;padding:16px;border-radius:10px;background:#fafafa;border:1px solid #e4e4e7;">
+        <p style="margin:0 0 6px;"><strong>${addr}</strong></p>
+        <p style="margin:0;color:#3f3f46;">${when}</p>
+      </div>
+      <p style="margin:0 0 16px;">${next}</p>
+      ${
+        renterUrl
+          ? `<p style="margin:0 0 16px;text-align:center;">
+        <a href="${escapeHtml(renterUrl)}" style="display:inline-block;background:${escapeHtml(brand)};color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:9px;font-weight:700;">Book another time</a>
+      </p>`
+          : ""
+      }
+      <p style="margin:24px 0 0;color:#52525b;">Thanks,<br/><strong>${org}</strong></p>
+    </div>
+  </div>
+</body></html>`;
+}
+
+export async function sendShowingCancelledByTeam(p: ShowingCancelledByTeamPayload): Promise<SendResult> {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { sent: false, reason: "no_api_key" };
+  if (!p.renter_email) return { sent: false, reason: "no_renter_email" };
+  const subject = cancelledByTeamSubject(p);
+  const body = {
+    sender: senderOf(p.mail_alias, p.org_name),
+    to: [{ email: p.renter_email, ...(p.renter_name ? { name: p.renter_name } : {}) }],
+    replyTo: replyToOf(p.reply_to_email, p.org_name),
+    subject,
+    htmlContent: cancelledByTeamHtml(p),
+    tags: ["kind:showing_cancelled_by_team"],
+  };
+  try {
+    const res = await brevoFetch({
+      method: "POST",
+      headers: { "api-key": apiKey, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { sent: false, reason: `brevo_${res.status}:${detail.slice(0, 200)}` };
+    }
+    return { sent: true, subject };
+  } catch (e) {
+    return { sent: false, reason: `fetch_error:${(e as Error).message}` };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Post-showing feedback request (M5). Sent a few hours after an attended
 // showing, inviting the renter to rate the visit on the public /f page.

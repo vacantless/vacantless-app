@@ -197,6 +197,7 @@ export async function saveRenterFromShortcut(
       listingPostId: null,
       note,
       question: question || null,
+      allowRented: Boolean(rentedHit),
     });
     return {
       line: sendResultLine({

@@ -154,6 +154,22 @@ export function findExistingChatLead(
 }
 
 /**
+ * S846: a renter saved earlier with no rental (the chat did not show which),
+ * same name, still open, last 14 days. Only when exactly one such renter
+ * exists, so a second chat puts them on the rental instead of a new row.
+ */
+export function findUnplacedChatLead(
+  candidates: ChatLeadCandidate[],
+  input: { name: string; now?: number },
+): ChatLeadCandidate | null {
+  const nowMs = input.now ?? Date.now();
+  const hits = candidates.filter(
+    (c) => c.propertyId == null && OPEN.has(String(c.status)) && recent(c, nowMs) && sameRenterName(c.name, input.name),
+  );
+  return hits.length === 1 ? hits[0] : null;
+}
+
+/**
  * The chat renter a new booking should take the place of: on the same rental,
  * same renter by name, still open, last 14 days, and only when exactly one
  * such chat renter exists (two "Tess" chats: leave both, never guess).

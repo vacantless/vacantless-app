@@ -9,6 +9,7 @@ import {
   cleanRenterName,
   findChatPlaceholderToMerge,
   findExistingChatLead,
+  findUnplacedChatLead,
   mergedChatNote,
   type ChatLeadCandidate,
   type HelperRepliedChat,
@@ -50,6 +51,21 @@ async function recentLeads(admin: SupabaseClient, orgId: string, propertyId: str
     .select("id, property_id, name, email, phone, status, notes, created_at")
     .eq("organization_id", orgId)
     .eq("property_id", propertyId)
+    .gte("created_at", since)
+    .order("created_at", { ascending: true })
+    .limit(300);
+  if (error) return null;
+  return ((data ?? []) as LeadRow[]).map(toCandidate);
+}
+
+/** S846: recent renters on the account with no rental yet. */
+async function unplacedLeads(admin: SupabaseClient, orgId: string): Promise<ChatLeadCandidate[] | null> {
+  const since = new Date(Date.now() - CHAT_LEAD_MATCH_DAYS * 24 * 60 * 60_000).toISOString();
+  const { data, error } = await admin
+    .from("leads")
+    .select("id, property_id, name, email, phone, status, notes, created_at")
+    .eq("organization_id", orgId)
+    .is("property_id", null)
     .gte("created_at", since)
     .order("created_at", { ascending: true })
     .limit(300);
@@ -111,6 +127,8 @@ export async function saveChatRenter(
     note: string;
     /** S824a: kept on the existing renter's page when they are already saved. */
     question?: string | null;
+    /** S846: S845c saves a chat about a rented rental on it (Tammy, Unit 9). */
+    allowRented?: boolean;
   },
 ): Promise<"saved" | "exists" | "not_available" | "failed"> {
   const name = cleanRenterName(input.name);
@@ -122,13 +140,29 @@ export async function saveChatRenter(
     .eq("organization_id", input.orgId)
     .maybeSingle();
   const p = prop as { status: string | null; archived_at: string | null } | null;
-  if (!p || p.archived_at || p.status !== "available") return "not_available";
+  const okStatus = p?.status === "available" || (input.allowRented === true && p?.status === "leased");
+  if (!p || p.archived_at || !okStatus) return "not_available";
   const leads = await recentLeads(admin, input.orgId, input.propertyId);
   if (!leads) return "failed";
   const existing = findExistingChatLead(leads, { propertyId: input.propertyId, name });
   if (existing) {
     if (input.question) await addAskedAgainNote(admin, input.orgId, existing.id, input.question);
     return "exists";
+  }
+  // S846: the same renter saved earlier with no rental goes on this one.
+  const unplaced = await unplacedLeads(admin, input.orgId);
+  const earlier = unplaced ? findUnplacedChatLead(unplaced, { name }) : null;
+  if (earlier) {
+    const { error: linkErr } = await admin
+      .from("leads")
+      .update({ property_id: input.propertyId })
+      .eq("id", earlier.id)
+      .eq("organization_id", input.orgId)
+      .is("property_id", null);
+    if (!linkErr) {
+      if (input.question) await addAskedAgainNote(admin, input.orgId, earlier.id, input.question);
+      return "exists";
+    }
   }
   const { error } = await admin.from("leads").insert({
     organization_id: input.orgId,

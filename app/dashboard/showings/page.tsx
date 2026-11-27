@@ -30,6 +30,7 @@ import { OutcomeSelect } from "./outcome-select";
 import { AssignSelect } from "./assign-select";
 import { ConfirmControl } from "./confirm-control";
 import { RescheduleControl } from "./reschedule-control";
+import { CancelControl } from "./cancel-control";
 import {
   SuggestTimeControl,
   type SuggestTimeSlotOption,
@@ -828,6 +829,7 @@ function Section({
                         minLocalValue={nowLocalValue ?? ""}
                       />
                     )}
+                    {showReschedule && s.scheduled_at && <CancelControl showingId={s.id} />}
                     {showSuggestTimes && s.scheduled_at && s.property?.id && (
                       <SuggestTimeControl
                         showingId={s.id}
@@ -893,6 +895,7 @@ function Section({
                             minLocalValue={nowLocalValue ?? ""}
                           />
                         )}
+                        {showReschedule && s.scheduled_at && <CancelControl showingId={s.id} />}
                         {showSuggestTimes && s.scheduled_at && s.property?.id && (
                           <SuggestTimeControl
                             showingId={s.id}

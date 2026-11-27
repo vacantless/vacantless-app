@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { formatSlotLong } from "@/lib/booking";
-import { sendShowingAutoReleased } from "@/lib/email";
+import { sendShowingAutoReleased, sendShowingCancelledByTeam } from "@/lib/email";
+import { canTeamCancel, teamCancelNote, teamCancelReasonLabel, type TeamCancelReason } from "@/lib/showing-cancel";
 import { sendOrgNotification } from "@/lib/notifications-server";
 
 export type ReleaseShowingOrg = {
@@ -152,4 +153,124 @@ export async function releaseUnconfirmedShowing(
   });
 
   return { released: true };
+}
+
+export type CancelShowingByTeamResult = {
+  cancelled: boolean;
+  reason?: "empty_id" | "not_found" | "not_open" | "update_missed" | "update_error";
+};
+
+/**
+ * S846 (KI1823): the team cancels a booked viewing, confirmed or not, with a
+ * reason. The renter gets their own wording (never "unconfirmed"), the note
+ * names who did it, and the assigned agent (else the leasing team) is told.
+ */
+export async function cancelShowingByTeam(
+  client: SupabaseClient,
+  args: {
+    org: ReleaseShowingOrg;
+    showingId: string;
+    appUrl: string;
+    reason: TeamCancelReason;
+    actor: string;
+    nowIso?: string;
+  },
+): Promise<CancelShowingByTeamResult> {
+  const showingId = args.showingId.trim();
+  if (!showingId) return { cancelled: false, reason: "empty_id" };
+  const nowIso = args.nowIso ?? new Date().toISOString();
+  const { data: row } = await client
+    .from("showings")
+    .select(
+      "id, outcome, scheduled_at, lead_id, " +
+        "lead:leads(id, name, email), property:properties(id, address), " +
+        "assigned_agent:showing_agents(id, name, email)",
+    )
+    .eq("id", showingId)
+    .eq("organization_id", args.org.id)
+    .maybeSingle();
+  if (!row) return { cancelled: false, reason: "not_found" };
+  const showing = row as unknown as {
+    id: string;
+    outcome: string | null;
+    scheduled_at: string | null;
+    lead_id: string | null;
+    lead: { id: string; name: string | null; email: string | null } | null;
+    property: { id: string; address: string | null } | null;
+    assigned_agent: { id: string; name: string | null; email: string | null } | null;
+  };
+  if (!canTeamCancel(showing, new Date(nowIso).getTime())) return { cancelled: false, reason: "not_open" };
+
+  const { data: updated, error: updateErr } = await client
+    .from("showings")
+    .update({ outcome: "cancelled" })
+    .eq("id", showing.id)
+    .eq("organization_id", args.org.id)
+    .or("outcome.is.null,outcome.eq.scheduled")
+    .gt("scheduled_at", nowIso)
+    .select("id")
+    .maybeSingle();
+  if (updateErr) return { cancelled: false, reason: "update_error" };
+  if (!updated) return { cancelled: false, reason: "update_missed" };
+
+  const lead = one(showing.lead);
+  const property = one(showing.property);
+  const agent = one(showing.assigned_agent);
+  const tz = args.org.booking_timezone || "America/Toronto";
+  const whenLabel = formatSlotLong(showing.scheduled_at!, tz);
+  const address = property?.address?.trim() || "the property";
+
+  if (showing.lead_id) {
+    await client.from("messages").insert({
+      organization_id: args.org.id,
+      lead_id: showing.lead_id,
+      channel: "note",
+      direction: "outbound",
+      body: teamCancelNote({ reason: args.reason, actor: args.actor, whenLabel }),
+    });
+  }
+
+  await sendShowingCancelledByTeam({
+    reason: args.reason,
+    renter_name: lead?.name ?? null,
+    renter_email: lead?.email ?? null,
+    org_name: args.org.name,
+    brand_color: args.org.brand_color,
+    logo_url: args.org.logo_url,
+    mail_alias: args.org.mail_alias ?? null,
+    reply_to_email: args.org.reply_to_email,
+    property_address: property?.address ?? null,
+    when_label: whenLabel,
+    renter_url: property?.id ? `${args.appUrl}/r/${property.id}` : null,
+  });
+
+  const leadUrl = showing.lead_id ? `${args.appUrl}/dashboard/leads/${showing.lead_id}` : `${args.appUrl}/dashboard/showings`;
+  await sendOrgNotification({
+    client,
+    org: {
+      id: args.org.id,
+      name: args.org.name,
+      brand_color: args.org.brand_color,
+      logo_url: args.org.logo_url,
+      reply_to_email: args.org.reply_to_email,
+    },
+    eventKey: "leasing.showing_cancelled_by_team",
+    audienceEmail: agent?.email ?? null,
+    operatorFallback: [args.org.reply_to_email, args.org.public_contact_email]
+      .filter((email): email is string => typeof email === "string" && email.includes("@"))
+      .slice(0, 2),
+    vars: {
+      org_name: args.org.name ?? "",
+      property_address: address,
+      lead_name: lead?.name?.trim() || lead?.email?.trim() || "A renter",
+      agent_name: agent?.name?.trim() || "there",
+      showing_time: whenLabel,
+      cancelled_by: args.actor,
+      reason_label: teamCancelReasonLabel(args.reason),
+      dashboard_url: leadUrl,
+    },
+    action: { label: showing.lead_id ? "Open the inquiry" : "Open viewings", url: leadUrl },
+  });
+
+  return { cancelled: true };
 }

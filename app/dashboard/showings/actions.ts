@@ -29,7 +29,8 @@ import { normalizeProposedSlots } from "@/lib/reschedule-proposals";
 import { sendOrgNotification } from "@/lib/notifications-server";
 import { viewingCalendarUrl } from "@/lib/viewing-calendar-server";
 import { resolveArrivalPhone } from "@/lib/showing-contact";
-import { releaseUnconfirmedShowing } from "@/lib/showing-release";
+import { cancelShowingByTeam, releaseUnconfirmedShowing } from "@/lib/showing-release";
+import { actorLabel, isTeamCancelReason, operatorReleaseNote } from "@/lib/showing-cancel";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://vacantless-app.vercel.app";
 
@@ -798,14 +799,49 @@ export async function releaseUnconfirmedShowingByOperator(formData: FormData) {
   const org = await getCurrentOrg();
   if (!org || org.showing_confirm_mode !== "agent") return;
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const result = await releaseUnconfirmedShowing(supabase, {
     org,
     showingId: id,
     appUrl: APP_URL,
-    noteBody: "Viewing released by the operator because it was still unconfirmed.",
+    // S846 (KI1823): the note names who released it.
+    noteBody: operatorReleaseNote(actorLabel(user)),
   });
   if (!result.released) return;
 
+  revalidatePath("/dashboard/showings");
+  revalidatePath("/dashboard");
+}
+
+// S846 (KI1823): cancel a booked viewing, confirmed or not, with a reason
+// ("unit rented" or other). Emails the renter in plain words, tells the
+// assigned agent (else the leasing team), and notes who did it.
+export async function cancelShowingByTeamAction(formData: FormData) {
+  await requireCapability("manage_leads", "/dashboard/showings?forbidden=1");
+  const id = String(formData.get("id") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "");
+  if (!id || !isTeamCancelReason(reason)) return;
+
+  const supabase = createClient();
+  const org = await getCurrentOrg();
+  if (!org) return;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const result = await cancelShowingByTeam(supabase, {
+    org,
+    showingId: id,
+    appUrl: APP_URL,
+    reason,
+    actor: actorLabel(user),
+  });
+  if (!result.cancelled) return;
+
+  const { data: row } = await supabase.from("showings").select("lead_id").eq("id", id).maybeSingle();
+  const leadId = (row as { lead_id: string | null } | null)?.lead_id;
+  if (leadId) revalidatePath(`/dashboard/leads/${leadId}`);
   revalidatePath("/dashboard/showings");
   revalidatePath("/dashboard");
 }
